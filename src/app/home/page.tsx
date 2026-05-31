@@ -268,7 +268,7 @@ function HomeContent() {
               暂无日程安排
             </p>
             <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
-              在灵感助手中输入"明天下午3点开会"，<br />AI 会帮你自动提取并添加日程
+              在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
             </p>
             <button
               onClick={() => handleNavigate("capture")}

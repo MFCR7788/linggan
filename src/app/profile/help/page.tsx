@@ -668,7 +668,7 @@ function HelpContent() {
                   </div>
                   <div>
                     <p style={{ color: '#E5E7EB', fontSize: 12 }}>官方公众号</p>
-                    <p style={{ color: '#6B7280', fontSize: 11 }}>搜索"灵集 AI 创作"</p>
+                    <p style={{ color: '#6B7280', fontSize: 11 }}>搜索&ldquo;灵集 AI 创作&rdquo;</p>
                   </div>
                 </div>
               </div>
