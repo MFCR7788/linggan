@@ -1104,7 +1104,7 @@ function HotspotRadarInner() {
             {searchResults.length > 0 && (
               <div>
                 <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 10 }}>
-                  搜索 "{searchQuery}" · 共 {searchResults.length} 条结果
+                  搜索 &ldquo;{searchQuery}&rdquo; · 共 {searchResults.length} 条结果
                 </p>
                 <div className="space-y-3">
                   {searchResults.map((r, i) => (
