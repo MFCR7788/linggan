@@ -5,8 +5,8 @@ const config: CapacitorConfig = {
   appName: '灵集',
   webDir: 'capacitor-preview',
   server: {
-    // Vercel 部署后替换为实际 URL
-    url: 'https://linggan.vercel.app',
+    // Vercel 生产部署 URL
+    url: 'https://linggan-two.vercel.app',
     cleartext: false,
   },
   plugins: {
