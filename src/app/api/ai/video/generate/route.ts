@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
-import { submitVideoTask, submitI2VTask, getVideoTaskStatus, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
+import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, QUALITY_TIERS, type StoryboardScene, type VideoProvider } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { storyboard, inspirations } = await request.json();
+    const { storyboard, inspirations, qualityTier } = await request.json();
+    const tier = qualityTier || 'standard';
 
     if (!storyboard || !Array.isArray(storyboard) || storyboard.length === 0) {
       return createApiError('请提供分镜脚本', 400);
@@ -31,39 +32,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['standard'];
+
     // 并行提交所有分段
     const segments = await Promise.all(
       (storyboard as StoryboardScene[]).map(async (scene, i) => {
-        // 找对应的图片素材（简单分配：第 i 段用第 i 个图片素材）
         const insp = inspirations?.[i];
         const imageUrl = (insp?.type === 'image' && insp?.media_urls?.[0])
           ? insp.media_urls[0]
           : undefined;
 
         const duration = Math.min(Math.max(scene.duration, 3), 10);
+        const modelConfig = imageUrl ? qt.i2v : qt.t2v;
 
-        if (imageUrl) {
-          const result = await submitI2VTask(imageUrl, scene.visualPrompt, duration);
-          return {
-            index: scene.index,
-            taskId: result.taskId,
-            model: 'happyhorse-1.0-i2v' as const,
-            status: result.status === 'queued' ? 'queued' as const : 'error' as const,
-            duration,
-            materialType: 'image' as const,
-            imageUrl,
-          };
-        } else {
-          const result = await submitVideoTask(scene.visualPrompt, duration);
-          return {
-            index: scene.index,
-            taskId: result.taskId,
-            model: 'happyhorse-1.0-t2v' as const,
-            status: result.status === 'queued' ? 'queued' as const : 'error' as const,
-            duration,
-            materialType: 'text' as const,
-          };
-        }
+        const result = await submitVideoGenerationTask(
+          tier,
+          scene.visualPrompt,
+          duration,
+          imageUrl
+        );
+
+        return {
+          index: scene.index,
+          taskId: result.taskId,
+          model: result.model,
+          provider: result.provider,
+          status: result.status === 'queued' ? 'queued' as const : 'error' as const,
+          duration,
+          materialType: imageUrl ? 'image' as const : 'text' as const,
+          imageUrl,
+        };
       })
     );
 
@@ -121,8 +119,11 @@ export async function GET(request: NextRequest) {
 
     // 如果没有 batchId，走单任务查询（兼容旧逻辑）
     const taskId = searchParams.get('taskId');
+    const singleProvider = searchParams.get('provider');
     if (taskId && !searchParams.get('taskIds')) {
-      const result = await getVideoTaskStatus(taskId);
+      const result = singleProvider
+        ? await getVideoTaskStatusUniversal(taskId, singleProvider as VideoProvider)
+        : await getVideoTaskStatus(taskId);
       return createApiResponse(result);
     }
 
@@ -133,11 +134,15 @@ export async function GET(request: NextRequest) {
     }
 
     const taskIds = taskIdsParam.split(',');
+    // 可选的 providers 参数，与 taskIds 一一对应
+    const providersParam = searchParams.get('providers');
+    const providers = providersParam ? providersParam.split(',') : [];
 
     const resultsArray = await Promise.all(
-      taskIds.map(async (id) => {
+      taskIds.map(async (id, idx) => {
         try {
-          const result = await getVideoTaskStatus(id);
+          const provider = (providers[idx] || 'dashscope') as VideoProvider;
+          const result = await getVideoTaskStatusUniversal(id, provider);
           return { taskId: id, ...result };
         } catch {
           return { taskId: id, status: 'error', message: '查询失败' };

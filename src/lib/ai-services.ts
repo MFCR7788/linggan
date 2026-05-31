@@ -41,14 +41,7 @@ interface ImageResult {
   size: string;
 }
 
-interface VideoTaskResult {
-  taskId: string | null;
-  status: string;
-  message: string;
-  videoUrl?: string;
-}
-
-// ====== DeepSeek API ======
+export type VideoTaskResult = { taskId: string | null; status: string; message: string; videoUrl?: string };
 
 export async function callDeepSeek(
   prompt: string,
@@ -322,10 +315,95 @@ export async function generateImage(
   };
 }
 
+// ====== 视频模型注册表 ======
+
+export type VideoProvider = 'dashscope' | 'ark';
+
+export interface VideoModelConfig {
+  provider: VideoProvider;
+  model: string;
+  resolution?: string;        // DashScope: '720P' / ARK: '720p'/'1080p'
+  size?: string;              // Wan 专用: '1280*720'
+  price?: string;             // 展示用
+  extraParams?: Record<string, unknown>;
+}
+
+export interface QualityTier {
+  value: string;
+  label: string;
+  icon: string;
+  description: string;
+  t2v: VideoModelConfig;
+  i2v: VideoModelConfig;
+}
+
+export const QUALITY_TIERS: Record<string, QualityTier> = {
+  fast: {
+    value: 'fast',
+    label: '流畅',
+    icon: '⚡',
+    description: '快速省流 · 适合批量生成',
+    t2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_FAST_MODEL_ID || 'doubao-seedance-1-0-pro-fast-251015',
+      resolution: '720p',
+      price: '约¥0.16/秒',
+    },
+    i2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_LITE_I2V_MODEL_ID || 'doubao-seedance-1-0-lite-i2v-250428',
+      resolution: '720p',
+      price: '约¥0.3/秒',
+    },
+  },
+  standard: {
+    value: 'standard',
+    label: '标准',
+    icon: '🎯',
+    description: '均衡画质 · Wan 2.6 引擎',
+    t2v: {
+      provider: 'dashscope',
+      model: 'wan2.6-t2v',
+      resolution: '720P',
+      size: '1280*720',
+      extraParams: { prompt_extend: true, shot_type: 'multi' },
+      price: '约¥0.5/秒',
+    },
+    i2v: {
+      provider: 'dashscope',
+      model: 'wan2.6-i2v',
+      resolution: '720P',
+      size: '1280*720',
+      extraParams: { prompt_extend: true, shot_type: 'multi' },
+      price: '约¥0.5/秒',
+    },
+  },
+  premium: {
+    value: 'premium',
+    label: '高清',
+    icon: '💎',
+    description: '大片画质 · 最佳效果',
+    t2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
+      resolution: '1080p',
+      price: '约¥0.56/秒',
+    },
+    i2v: {
+      provider: 'dashscope',
+      model: 'happyhorse-1.0-i2v',
+      resolution: '720P',
+      price: '约¥0.9/秒',
+    },
+  },
+};
+
 // ====== HappyHorse 视频生成（百炼 DashScope） ======
 
 const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY || 'sk-c270f05ccab6430aa50ed96ac3d7790b';
 const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
+
+const DOUBAO_BASE_URL = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
 
 export async function submitVideoTask(
   prompt: string,
@@ -671,6 +749,193 @@ export async function getVideoTaskStatus(
     console.error('HappyHorse query task error:', error);
     return { status: 'error', message: '网络错误' };
   }
+}
+
+// ====== 通用 DashScope 视频提交（HappyHorse + Wan 2.6） ======
+
+async function submitDashScopeVideoTask(
+  config: VideoModelConfig,
+  prompt: string,
+  duration: number = 5,
+  imageUrl?: string
+): Promise<{ taskId: string | null; status: string; message: string }> {
+  const finalPrompt = await optimizePrompt(prompt, 'video');
+  const isWan = config.model.includes('wan');
+
+  const input: Record<string, unknown> = { prompt: finalPrompt };
+  if (imageUrl) {
+    if (isWan) {
+      input.img_url = imageUrl;
+    } else {
+      input.media = [{ type: 'first_frame', url: imageUrl }];
+    }
+  }
+
+  const parameters: Record<string, unknown> = {
+    duration: Math.min(Math.max(duration, 3), 10),
+    watermark: false,
+  };
+
+  if (isWan && config.size) {
+    parameters.size = config.size;
+    if (config.extraParams) Object.assign(parameters, config.extraParams);
+  } else {
+    parameters.resolution = config.resolution || '720P';
+    parameters.ratio = '16:9';
+  }
+
+  try {
+    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify({ model: config.model, input, parameters }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[DashScope:${config.model}] API 错误:`, response.status, errText.substring(0, 500));
+      return { taskId: null, status: 'error', message: `视频服务错误: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const taskId = data.output?.task_id;
+    if (!taskId) {
+      return { taskId: null, status: 'error', message: '未获取到任务ID' };
+    }
+    return { taskId, status: 'queued', message: '任务已提交' };
+  } catch (error) {
+    console.error(`[DashScope:${config.model}] 提交错误:`, error);
+    return { taskId: null, status: 'error', message: '网络错误' };
+  }
+}
+
+// ====== Seedance 视频提交（ARK） ======
+
+async function submitSeedanceTask(
+  config: VideoModelConfig,
+  prompt: string,
+  duration: number = 5,
+  imageUrl?: string
+): Promise<{ taskId: string | null; status: string; message: string }> {
+  const finalPrompt = await optimizePrompt(prompt, 'video');
+  const apiKey = process.env.DOUBAO_API_KEY;
+  if (!apiKey) return { taskId: null, status: 'error', message: 'DOUBAO_API_KEY 未配置' };
+
+  const content: Record<string, unknown>[] = [
+    { type: 'text', text: finalPrompt },
+  ];
+  if (imageUrl) {
+    content.push({
+      type: 'image_url',
+      image_url: { url: imageUrl },
+      role: 'first_frame',
+    });
+  }
+
+  try {
+    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        content,
+        resolution: config.resolution || '720p',
+        ratio: '16:9',
+        duration: Math.min(Math.max(duration, 4), 15),
+        watermark: false,
+        service_tier: 'default',
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Seedance:${config.model}] API 错误:`, response.status, errText.substring(0, 500));
+      return { taskId: null, status: 'error', message: `Seedance 服务错误: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const taskId = data.id;
+    if (!taskId) {
+      return { taskId: null, status: 'error', message: '未获取到任务ID' };
+    }
+    return { taskId, status: 'queued', message: '任务已提交' };
+  } catch (error) {
+    console.error(`[Seedance:${config.model}] 提交错误:`, error);
+    return { taskId: null, status: 'error', message: '网络错误' };
+  }
+}
+
+// ====== Seedance 任务状态查询 ======
+
+async function getSeedanceTaskStatus(
+  taskId: string
+): Promise<{ status: string; videoUrl?: string; message?: string }> {
+  const apiKey = process.env.DOUBAO_API_KEY;
+  if (!apiKey) return { status: 'error', message: 'DOUBAO_API_KEY 未配置' };
+
+  try {
+    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!response.ok) {
+      return { status: 'error', message: '查询失败' };
+    }
+
+    const data = await response.json();
+
+    if (data.status === 'succeeded') {
+      const videoUrl = data.content?.video_url;
+      return { status: 'succeeded', videoUrl, message: '生成完成' };
+    }
+
+    if (data.status === 'failed') {
+      return { status: 'failed', message: data.error?.message || data.message || '生成失败' };
+    }
+
+    return { status: 'running', message: '生成中...' };
+  } catch (error) {
+    console.error('Seedance query task error:', error);
+    return { status: 'error', message: '网络错误' };
+  }
+}
+
+// ====== 通用视频生成入口 ======
+
+export async function submitVideoGenerationTask(
+  tier: string,
+  prompt: string,
+  duration: number = 5,
+  imageUrl?: string
+): Promise<VideoTaskResult & { model: string; provider: VideoProvider }> {
+  const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['standard'];
+  const config = imageUrl ? qt.i2v : qt.t2v;
+
+  let result: VideoTaskResult;
+  if (config.provider === 'ark') {
+    result = await submitSeedanceTask(config, prompt, duration, imageUrl);
+  } else {
+    result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl);
+  }
+
+  return { ...result, model: config.model, provider: config.provider };
+}
+
+export async function getVideoTaskStatusUniversal(
+  taskId: string,
+  provider: VideoProvider
+): Promise<{ status: string; videoUrl?: string; message?: string }> {
+  if (provider === 'ark') {
+    return getSeedanceTaskStatus(taskId);
+  }
+  return getVideoTaskStatus(taskId);
 }
 
 export async function generateVideo(prompt: string, duration: number = 5) {
