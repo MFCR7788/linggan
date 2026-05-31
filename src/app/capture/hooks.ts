@@ -308,12 +308,38 @@ export function useMessageActions() {
     }
   }, [createInspiration]);
 
-  const addToSchedule = useCallback(async (msg: Message) => {
+  const addToSchedule = useCallback(async (msg: Message, allMessages: Message[]) => {
     const list = msg.schedules || (msg.schedule ? [msg.schedule] : null);
     if (!list) return;
     setSchedulingId(msg.id);
     try {
       syncDevAuthCookie();
+
+      // 找到该 AI 消息前面的用户消息作为原素材
+      const idx = allMessages.findIndex(m => m.id === msg.id);
+      let userMsg: Message | null = null;
+      if (idx > 0) {
+        for (let i = idx - 1; i >= 0; i--) {
+          if (allMessages[i].type === 'user') {
+            userMsg = allMessages[i];
+            break;
+          }
+        }
+      }
+      const originalText = userMsg ? userMsg.content : '';
+
+      // 1. 先保存 AI 分析内容为灵感（content_item）
+      const createdInspiration = await createInspiration.mutateAsync({
+        type: 'text' as any,
+        title: list[0]?.title || (originalText.length > 20 ? originalText.substring(0, 20) + '...' : originalText),
+        original_text: originalText,
+        summary: msg.content, // AI 分析全文作为 ai_summary
+        tags: ['日程分析'],
+      });
+      if (!createdInspiration) throw new Error('保存灵感失败');
+      const contentId = createdInspiration.id;
+
+      // 2. 创建日程并关联灵感
       for (const s of list) {
         await createSchedule.mutateAsync({
           title: s.title,
@@ -323,6 +349,7 @@ export function useMessageActions() {
           color: '#8B5CF6',
           remind_before: 30,
           suggestions: s.suggestions?.length ? s.suggestions : undefined,
+          source_content_id: contentId,
         });
       }
       showToast(`已成功添加 ${list.length} 条日程到首页和日程库`, 'success');
@@ -333,7 +360,7 @@ export function useMessageActions() {
       showToast('添加日程失败: ' + errMsg, 'error');
       setSchedulingId(null);
     }
-  }, [createSchedule]);
+  }, [createInspiration, createSchedule]);
 
   return {
     copiedId, regeneratingId, savingId, schedulingId, speakingId,

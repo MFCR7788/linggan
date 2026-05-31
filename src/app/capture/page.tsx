@@ -811,7 +811,7 @@ function CaptureContent() {
                   ))}
                 </div>
                 <button
-                  onClick={() => addToSchedule(msg)}
+                  onClick={() => addToSchedule(msg, messages)}
                   className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80"
                   style={{ background: 'rgba(139,92,246,0.4)' }}
                 >
@@ -863,7 +863,7 @@ function CaptureContent() {
                     </div>
                   )}
                   <button
-                    onClick={() => addToSchedule(msg)}
+                    onClick={() => addToSchedule(msg, messages)}
                     className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80"
                     style={{ background: 'rgba(139,92,246,0.4)' }}
                   >
@@ -904,7 +904,7 @@ function CaptureContent() {
                     onShare={shareMessage}
                     onRegenerate={handleRegenerate}
                     onSave={(msg: any) => saveToInspiration(msg, messages)}
-                    onAddToSchedule={addToSchedule}
+                    onAddToSchedule={(msg) => addToSchedule(msg, messages)}
                     onDelete={handleDelete}
                   />
                 )}
