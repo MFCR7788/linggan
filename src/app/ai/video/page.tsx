@@ -73,6 +73,15 @@ const STEPS = ['确定方向', '分镜预览', '生成下载'];
 
 const stylePresets = Object.entries(STYLE_PRESETS);
 
+function getModelDisplayName(model: string): string {
+  if (model.includes('wan')) return 'Wan 2.6';
+  if (model.includes('happyhorse')) return 'HappyHorse';
+  if (model.includes('fast')) return 'Seedance Fast';
+  if (model.includes('1-5-pro')) return 'Seedance 1.5 Pro';
+  if (model.includes('lite')) return 'Seedance Lite';
+  return model.substring(0, 14);
+}
+
 function AIVideoContent() {
   const router = useRouter();
 
@@ -471,42 +480,47 @@ function AIVideoContent() {
       {/* 画质档位选择 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#22C55E' }}>画质</span> · 选择生成模型
+          <span style={{ color: '#F59E0B' }}>画质</span> · 选择生成模型
         </p>
         <div className="grid grid-cols-3 gap-2">
-          {Object.values(QUALITY_TIERS).map((tier: QualityTier) => (
-            <button
-              key={tier.value}
-              onClick={() => setQualityTier(tier.value)}
-              className="flex flex-col items-center gap-1 p-3 rounded-xl transition-all"
-              style={{
-                background: qualityTier === tier.value ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
-                border: qualityTier === tier.value ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.1)',
-              }}
-            >
-              <span style={{ fontSize: 22 }}>{tier.icon}</span>
-              <span style={{
-                color: qualityTier === tier.value ? '#86EFAC' : '#E5E7EB',
-                fontSize: 13, fontWeight: 700,
-              }}>
-                {tier.label}
-              </span>
-              <span style={{ color: '#9CA3AF', fontSize: 9, textAlign: 'center', lineHeight: 1.3 }}>
-                {tier.description}
-              </span>
-              <div className="flex flex-col gap-0.5 mt-1">
-                <span style={{ color: qualityTier === tier.value ? '#86EFAC' : '#6B7280', fontSize: 9 }}>
-                  T2V: {tier.t2v.model.includes('wan') ? 'Wan 2.6' : tier.t2v.model.includes('1-5-pro') ? 'Seedance 1.5 Pro' : tier.t2v.model.includes('fast') ? 'Seedance Fast' : tier.t2v.model}
+          {Object.values(QUALITY_TIERS).map((tier: QualityTier) => {
+            const t2vName = getModelDisplayName(tier.t2v.model);
+            const i2vName = getModelDisplayName(tier.i2v.model);
+            return (
+              <button
+                key={tier.value}
+                onClick={() => setQualityTier(tier.value)}
+                className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
+                style={{
+                  background: qualityTier === tier.value ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: qualityTier === tier.value ? '1px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                <span style={{ fontSize: 20 }}>{tier.icon}</span>
+                <span style={{
+                  color: qualityTier === tier.value ? '#FCD34D' : '#E5E7EB',
+                  fontSize: 13, fontWeight: 700,
+                }}>
+                  {tier.label}
                 </span>
-                <span style={{ color: qualityTier === tier.value ? '#86EFAC' : '#6B7280', fontSize: 9 }}>
-                  I2V: {tier.i2v.model.includes('wan') ? 'Wan 2.6' : tier.i2v.model.includes('happyhorse') ? 'HappyHorse' : tier.i2v.model.includes('lite') ? 'Seedance Lite' : tier.i2v.model}
+                <span style={{ color: '#9CA3AF', fontSize: 9 }}>
+                  {tier.description}
                 </span>
-              </div>
-              <span style={{ color: qualityTier === tier.value ? '#6EE7B7' : '#6B7280', fontSize: 9, marginTop: 2 }}>
-                {tier.t2v.price}
-              </span>
-            </button>
-          ))}
+                <span style={{
+                  color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
+                  fontSize: 9, lineHeight: 1.4, textAlign: 'center',
+                }}>
+                  {t2vName}<br />{i2vName}
+                </span>
+                <span style={{
+                  color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
+                  fontSize: 9, fontWeight: 600,
+                }}>
+                  {tier.t2v.price}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </GlassCard>
 
@@ -781,7 +795,7 @@ function AIVideoContent() {
 
                   {seg.model && (
                     <p style={{ color: '#6B7280', fontSize: 9, marginBottom: 4 }}>
-                      {seg.model.includes('wan') ? 'Wan 2.6' : seg.model.includes('happyhorse') ? 'HappyHorse' : seg.model.includes('fast') ? 'Seedance Fast' : seg.model.includes('1-5-pro') ? 'SD 1.5 Pro' : seg.model.includes('lite') ? 'SD Lite' : seg.model.substring(0, 14)}
+                      {getModelDisplayName(seg.model)}
                     </p>
                   )}
 
@@ -930,7 +944,7 @@ function AIVideoContent() {
                   </span>
                   {seg.model && (
                     <span style={{ color: '#6B7280', fontSize: 9, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {seg.model.includes('wan') ? 'Wan 2.6' : seg.model.includes('happyhorse') ? 'HappyHorse' : seg.model.includes('fast') ? 'Seedance Fast' : seg.model.includes('1-5-pro') ? 'SD 1.5 Pro' : seg.model.includes('lite') ? 'SD Lite' : seg.model.substring(0, 12)}
+                      {getModelDisplayName(seg.model)}
                     </span>
                   )}
                   <span style={{ color: seg.status === 'succeeded' ? '#22C55E' : seg.status === 'failed' ? '#EF4444' : '#FBBF24', fontSize: 11, marginLeft: 'auto' }}>
