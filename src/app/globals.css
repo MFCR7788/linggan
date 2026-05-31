@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* 玻璃拟态效果 */
+.glass {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 主按钮霓虹发光效果 */
+.primary-glow {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+}
+
+/* 星空背景粒子效果 */
+.stars-bg {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* 渐变背景 */
+.gradient-bg {
+  background: linear-gradient(135deg, #0A1629 0%, #1A365D 100%);
+}
+
+/* ───── 通用工具类 ───── */
+
+/* 半透明背景层 */
+.bg-glass {
+  background: rgba(255, 255, 255, 0.06);
+}
+.bg-glass-muted {
+  background: rgba(255, 255, 255, 0.07);
+}
+.bg-glass-hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 玻璃边框 */
+.border-glass {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.border-glass-light {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.border-glass-primary {
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+/* 文本颜色快捷 */
+.text-muted {
+  color: #9CA3AF;
+}
+.text-primary-light {
+  color: #93C5FD;
+}
+
+/* 主按钮风格 */
+.btn-primary-glass {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93C5FD;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.btn-primary-glass:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+/* 渐变背景快捷 */
+.bg-gradient-blue-purple {
+  background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+}

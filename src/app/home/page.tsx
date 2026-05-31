@@ -1,0 +1,463 @@
+"use client";
+
+
+import { Search, Bell, Zap, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { GlassCard, GlassBadge } from "@/components/GlassCard";
+import { TopNav } from "@/components/TopNav";
+import { BottomNav, PageKey } from "@/components/BottomNav";
+import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
+import { useRouter } from "next/navigation";
+import { useInspirations } from "@/hooks/use-inspiration";
+import { useSchedules } from "@/hooks/use-schedule";
+import { TYPE_EMOJIS, TYPE_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
+import type { ContentItem } from "@/types";
+
+interface HotTopic {
+  id: number;
+  heat: string;
+  title: string;
+  platform: string;
+  platformColor: string;
+}
+
+const platformColors: Record<string, string> = {
+  weibo: '#E0534A', 微博: '#E0534A',
+  zhihu: '#3B82F6', 知乎: '#3B82F6',
+  xiaohongshu: '#F43F5E', 小红书: '#F43F5E',
+  douyin: '#1C1C1C', 抖音: '#1C1C1C',
+  bilibili: '#FB7299', B站: '#FB7299',
+};
+
+function HomeContent() {
+  const router = useRouter();
+  const { data: inspirationsData, isLoading } = useInspirations({ limit: 50 });
+  const { data: schedulesData } = useSchedules({ limit: 50 });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const handleSearchInput = (value: string) => {
+    setInputValue(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearchQuery(value), 300);
+  };
+  const clearSearch = () => {
+    setInputValue("");
+    setSearchQuery("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
+  const [hotTopics, setHotTopics] = useState<HotTopic[]>([]);
+  const [hotLoading, setHotLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/hotspot?limit=5')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data) {
+          setHotTopics(data.data.map((item: any, i: number) => ({
+            id: item.id || i + 1,
+            heat: item.heatScore ? `🔥 ${item.heatScore.toFixed(1)}` : '🔥 热门',
+            title: item.title,
+            platform: item.platform || '通用',
+            platformColor: platformColors[item.platform] || '#9CA3AF',
+          })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHotLoading(false));
+  }, []);
+
+  const recentInspirations = useMemo(() => inspirationsData || [], [inspirationsData]);
+
+  // 日程按 scheduled_at 降序排列（最近的排前面）
+  const sortedSchedules = useMemo(() => {
+    if (!schedulesData || schedulesData.length === 0) return [];
+    return [...schedulesData].sort((a, b) =>
+      new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime()
+    );
+  }, [schedulesData]);
+
+  // 过滤灵感（使用 useMemo 避免每次渲染重复计算）
+  const filteredInspirations = useMemo(() => {
+    if (searchQuery.trim() === "") return recentInspirations;
+    const query = searchQuery.toLowerCase();
+    return recentInspirations.filter(item =>
+      (item.title && item.title.toLowerCase().includes(query)) ||
+      (item.original_text && item.original_text.toLowerCase().includes(query)) ||
+      (item.ai_summary && item.ai_summary.toLowerCase().includes(query)) ||
+      (item.type && item.type.toLowerCase().includes(query))
+    );
+  }, [searchQuery, recentInspirations]);
+
+  // 过滤热点
+  const filteredHotTopics = useMemo(() => {
+    if (searchQuery.trim() === "") return hotTopics;
+    const query = searchQuery.toLowerCase();
+    return hotTopics.filter(item =>
+      item.title.toLowerCase().includes(query) ||
+      item.platform.toLowerCase().includes(query)
+    );
+  }, [searchQuery, hotTopics]);
+
+  // 检查是否有搜索结果
+  const hasSearchResults = searchQuery.trim() !== "" && (filteredInspirations.length > 0 || filteredHotTopics.length > 0);
+  const hasNoResults = searchQuery.trim() !== "" && filteredInspirations.length === 0 && filteredHotTopics.length === 0;
+
+  const handleNavigate = (page: PageKey) => {
+    router.push(PAGE_ROUTES[page] || "/home");
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <TopNav
+        title={
+          <div className="flex items-center gap-2">
+            <span style={{ color: "#3B82F6", fontWeight: 700, fontSize: 20 }}>灵集</span>
+          </div>
+        }
+        right={
+          <button onClick={() => handleNavigate("notification")} className="relative p-1">
+            <Bell size={22} color="#E5E7EB" />
+            <span className="absolute top-0 right-0 w-2 h-2 rounded-full" style={{ background: "#EF4444" }} />
+          </button>
+        }
+      />
+
+      <div className="flex-1 px-4 pt-4 pb-24 space-y-5">
+        {/* 问候语 */}
+        <div className="px-1">
+          <h2 style={{ color: "#FFFFFF", fontSize: 24, fontWeight: 700 }}>
+            你好，创作者
+          </h2>
+          <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 4 }}>
+            今天有什么灵感？
+          </p>
+        </div>
+
+        {/* 快捷入口 2x2 网格 */}
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { key: "inspiration", label: "灵感库", Icon: BookOpen, color: "#3B82F6", desc: "管理你的灵感" },
+            { key: "hotspot", label: "热点雷达", Icon: Radio, color: "#EF4444", desc: "追踪热门话题" },
+            { key: "ai", label: "AI创作", Icon: Sparkles, color: "#8B5CF6", desc: "AI 辅助创作" },
+            { key: "schedule", label: "日程管理", Icon: Calendar, color: "#10B981", desc: "查看日程安排" },
+          ].map(({ key, label, Icon, color, desc }) => (
+            <button
+              key={key}
+              onClick={() => handleNavigate(key as PageKey)}
+              className="flex flex-col items-start p-4 rounded-xl text-left transition-all active:scale-95"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                style={{
+                  background: `${color}22`,
+                  border: `1px solid ${color}44`,
+                }}
+              >
+                <Icon size={22} color={color} />
+              </div>
+              <span style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }}>{label}</span>
+              <span style={{ color: "#9CA3AF", fontSize: 12, marginTop: 2 }}>{desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* 日程安排 */}
+        {sortedSchedules.length > 0 && !searchQuery && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
+                日程安排
+              </h3>
+              <button
+                onClick={() => handleNavigate("schedule")}
+                className="flex items-center gap-1"
+                style={{ color: "#3B82F6", fontSize: 13 }}
+              >
+                查看全部 <ChevronRight size={14} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {sortedSchedules.map((schedule) => {
+                const scheduleDate = new Date(schedule.scheduled_at);
+                const isPast = scheduleDate < new Date();
+                const isToday = scheduleDate.toDateString() === new Date().toDateString();
+                const statusColor =
+                  schedule.status === "completed" ? "success" :
+                  schedule.status === "cancelled" ? "error" :
+                  "primary";
+                const statusLabel =
+                  schedule.status === "completed" ? "已完成" :
+                  schedule.status === "cancelled" ? "已取消" :
+                  "待处理";
+
+                return (
+                  <GlassCard
+                    key={schedule.id}
+                    hover
+                    onClick={() => router.push("/schedule")}
+                    className="!p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* 日期徽章 */}
+                      <div
+                        className="flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center"
+                        style={{
+                          background: `${schedule.color || "#3B82F6"}22`,
+                          border: `1px solid ${schedule.color || "#3B82F6"}44`,
+                        }}
+                      >
+                        <span style={{ fontSize: 16, fontWeight: 700, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+                          {scheduleDate.getDate()}
+                        </span>
+                        <span style={{ fontSize: 10, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+                          {scheduleDate.toLocaleDateString("zh-CN", { month: "short" })}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <p
+                            style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
+                            className="truncate"
+                          >
+                            {schedule.title}
+                          </p>
+                          <GlassBadge color={statusColor as "success" | "error" | "primary"}>
+                            {statusLabel}
+                          </GlassBadge>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            style={{
+                              color: isPast && schedule.status === "pending" ? "#EF4444" : "#9CA3AF",
+                              fontSize: 12,
+                            }}
+                          >
+                            {isToday ? "今天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
+                            {" "}
+                            {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          {schedule.location && (
+                            <>
+                              <span style={{ color: "#4B5563" }}>·</span>
+                              <span style={{ color: "#9CA3AF", fontSize: 12 }} className="truncate">
+                                {schedule.location}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Search */}
+        <div
+          className="flex items-center gap-3 px-4 rounded-xl"
+          style={{
+            background: "rgba(255,255,255,0.1)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            height: 44,
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <Search size={18} color="#9CA3AF" />
+          <input
+            type="text"
+            placeholder="搜索灵感和热点..."
+            value={inputValue}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            className="flex-1 bg-transparent outline-none"
+            style={{
+              color: "#E5E7EB",
+              fontSize: 14,
+              border: "none",
+              background: "transparent"
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={clearSearch}
+              className="p-1 rounded-full hover:bg-white/10"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1 1L13 13M1 13L13 1" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* 搜索结果提示 */}
+        {searchQuery && (
+          <div className="px-2">
+            <p style={{ color: "#9CA3AF", fontSize: 12 }}>
+              搜索 &quot;{searchQuery}&quot; 的结果
+            </p>
+          </div>
+        )}
+
+        {/* Recent Inspirations */}
+        <div style={{ display: searchQuery && filteredInspirations.length === 0 ? "none" : "block" }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
+              {searchQuery ? "灵感搜索结果" : "最近灵感"}
+            </h3>
+            <button
+              onClick={() => handleNavigate("inspiration")}
+              className="flex items-center gap-1"
+              style={{ color: "#3B82F6", fontSize: 13 }}
+            >
+              查看全部 <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div className="py-8">
+              <LoadingSpinner text="加载中..." />
+            </div>
+          ) : filteredInspirations.length === 0 && !searchQuery ? (
+            <EmptyState
+              icon={<FileText size={32} color="#9CA3AF" />}
+              title="还没有灵感"
+              description="点击下方按钮，开始记录你的第一个灵感"
+            />
+          ) : filteredInspirations.length > 0 ? (
+            <div className="space-y-3">
+              {filteredInspirations.map((item: ContentItem) => (
+                <GlassCard
+                  key={item.id}
+                  hover
+                  onClick={() => {
+                    console.log('首页点击灵感卡片，ID:', item.id, '数据:', item);
+                    router.push(`/inspiration/detail?id=${item.id}`);
+                  }}
+                  className="!p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span style={{ fontSize: 28 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <GlassBadge color="primary">{TYPE_LABELS[item.type] || "灵感"}</GlassBadge>
+                        <button
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs"
+                          style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD", border: "1px solid rgba(59,130,246,0.3)" }}
+                          onClick={(e) => { e.stopPropagation(); handleNavigate("ai-copywriting"); }}
+                        >
+                          <Zap size={12} /> 一键生成
+                        </button>
+                      </div>
+                      <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }} className="truncate">
+                        {item.title || item.ai_summary?.substring(0, 30) || item.original_text?.substring(0, 30) || "未命名灵感"}
+                      </p>
+                      <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
+                        {item.ai_summary || item.original_text || "暂无描述"}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {(item as unknown as { content_tags?: Array<{ id: string; tags?: { name: string } }> }).content_tags?.map((ct) => (
+                            <GlassBadge key={ct.id}>{ct.tags?.name}</GlassBadge>
+                          ))}
+                        </div>
+                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>
+                          {new Date(item.created_at).toLocaleDateString("zh-CN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </GlassCard>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Hot Topics */}
+        <div style={{ display: searchQuery && filteredHotTopics.length === 0 ? "none" : "block" }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
+              {searchQuery ? "热点搜索结果" : "最新热点"}
+            </h3>
+            <button
+              onClick={() => handleNavigate("hotspot")}
+              className="flex items-center gap-1"
+              style={{ color: "#3B82F6", fontSize: 13 }}
+            >
+              查看全部 <ChevronRight size={14} />
+            </button>
+          </div>
+          {filteredHotTopics.length > 0 ? (
+            <div className="space-y-3">
+              {filteredHotTopics.map((item) => (
+                <GlassCard
+                  key={item.id}
+                  hover
+                  onClick={() => handleNavigate("hotspot-detail")}
+                  className="!p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span style={{ fontSize: 28 }}>🔥</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex gap-1.5">
+                          <span style={{ fontSize: 12, color: "#EF4444", fontWeight: 600 }}>{item.heat}</span>
+                          <GlassBadge style={{ background: item.platformColor + "33", color: item.platformColor, border: `1px solid ${item.platformColor}44` }}>
+                            {item.platform}
+                          </GlassBadge>
+                        </div>
+                        <button
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs"
+                          style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD", border: "1px solid rgba(59,130,246,0.3)" }}
+                          onClick={(e) => { e.stopPropagation(); handleNavigate("inspiration"); }}
+                        >
+                          <TrendingUp size={12} /> 一键转灵感
+                        </button>
+                      </div>
+                      <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }} className="line-clamp-2">
+                        {item.title}
+                      </p>
+                    </div>
+                  </div>
+                </GlassCard>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {/* 无搜索结果提示 */}
+        {hasNoResults && (
+          <GlassCard className="!p-6 text-center">
+            <Search size={32} color="#9CA3AF" className="mx-auto mb-3" />
+            <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+              没有找到相关结果
+            </p>
+            <p style={{ color: "#9CA3AF", fontSize: 12 }}>
+              试试其他关键词
+            </p>
+          </GlassCard>
+        )}
+      </div>
+
+      <BottomNav
+        activePage="home"
+        onNavigate={handleNavigate}
+      />
+    </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <ProtectedRoute>
+      <HomeContent />
+    </ProtectedRoute>
+  );
+}

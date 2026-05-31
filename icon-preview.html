@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>灵集 LingJi - 图标预览</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; padding: 40px 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #7C3AED; text-align: center; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #6b7280; margin-bottom: 40px; }
+        .section { background: white; border-radius: 16px; padding: 30px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .section h2 { color: #374151; margin-bottom: 20px; font-size: 1.25rem; }
+        .logo-grid { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; }
+        .logo-item { text-align: center; }
+        .logo-item svg { width: 180px; height: 180px; object-fit: contain; border-radius: 12px; background: white; border: 1px solid #e5e7eb; }
+        .logo-item p { margin-top: 10px; color: #6b7280; }
+        .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px; }
+        .icon-item { text-align: center; padding: 20px; background: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb; transition: transform 0.2s; }
+        .icon-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .icon-item svg { width: 80px; height: 80px; margin-bottom: 12px; }
+        .icon-item p { color: #374151; font-size: 0.9rem; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>灵集 LingJi</h1>
+        <p class="subtitle">图标资源预览 - SVG 矢量格式</p>
+
+        <div class="section">
+            <h2>LOGO</h2>
+            <div class="logo-grid">
+                <div class="logo-item">
+                    <svg width="180" height="180" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="64" cy="64" r="56" fill="url(#logo-gradient)"/>
+                      <path d="M64 36V76" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                      <path d="M48 52C48 43.1634 55.1634 36 64 36C72.8366 36 80 43.1634 80 52" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                      <path d="M42 52C42 39.8497 51.8497 30 64 30C76.1503 30 86 39.8497 86 52" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                      <path d="M56 76H72" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                      <path d="M50 84H78" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                      <circle cx="56" cy="84" r="3" fill="white"/>
+                      <circle cx="72" cy="84" r="3" fill="white"/>
+                      <defs>
+                        <linearGradient id="logo-gradient" x1="0" y1="0" x2="128" y2="128">
+                          <stop offset="0%" stop-color="#7C3AED"/>
+                          <stop offset="100%" stop-color="#3B82F6"/>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <p>lingji-logo.svg</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>功能图标</h2>
+            <div class="icon-grid">
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="12" y="14" width="40" height="36" rx="4" fill="#F3F4F6"/>
+                      <rect x="18" y="22" width="22" height="3" rx="1.5" fill="#374151"/>
+                      <rect x="18" y="30" width="28" height="3" rx="1.5" fill="#374151"/>
+                      <rect x="18" y="38" width="16" height="3" rx="1.5" fill="#374151"/>
+                      <path d="M50 14L46 10L40 16" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <p>文字记录</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="32" cy="28" r="12" fill="#7C3AED" fill-opacity="0.1"/>
+                      <path d="M32 12V44" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M20 28C20 21.3726 25.3726 16 32 16C38.6274 16 44 21.3726 44 28" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M14 28C14 18.0589 22.0589 10 32 10C41.9411 10 50 18.0589 50 28" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <rect x="29" y="44" width="6" height="8" rx="3" fill="#7C3AED"/>
+                      <path d="M25 52L39 52" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                    <p>语音记录</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M18 26C18 21.5817 21.5817 18 26 18H32C32.5523 18 33 17.5523 33 17V17C33 16.4477 32.5523 16 32 16H26C20.4772 16 16 20.4772 16 26V38C16 43.5228 20.4772 48 26 48H32C32.5523 48 33 47.5523 33 47V47C33 46.4477 32.5523 46 32 46H26C21.5817 46 18 42.4183 18 38V26Z" fill="#7C3AED" fill-opacity="0.15"/>
+                      <path d="M46 26C46 21.5817 42.4183 18 38 18H32C31.4477 18 31 18.4477 31 19V19C31 19.5523 31.4477 20 32 20H38C42.4183 20 46 23.5817 46 28V38C46 42.4183 42.4183 46 38 46H32C31.4477 46 31 46.4477 31 47V47C31 47.5523 31.4477 48 32 48H38C43.5228 48 48 43.5228 48 38V26Z" fill="#7C3AED" fill-opacity="0.15"/>
+                      <path d="M22 32L42 32" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                    <p>链接解析</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="8" y="10" width="48" height="44" rx="4" fill="#F3F4F6"/>
+                      <rect x="12" y="14" width="40" height="36" rx="2" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+                      <circle cx="20" cy="24" r="5" fill="#7C3AED"/>
+                      <path d="M12 44L22 34L32 42L48 24L52 28L52 50L12 50Z" fill="#7C3AED" fill-opacity="0.2"/>
+                    </svg>
+                    <p>图片上传</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="10" y="12" width="44" height="40" rx="6" fill="#F3F4F6"/>
+                      <rect x="14" y="16" width="36" height="32" rx="4" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+                      <path d="M26 28L38 32L26 36V28Z" fill="#7C3AED"/>
+                      <rect x="18" y="42" width="12" height="4" rx="2" fill="#E5E7EB"/>
+                      <rect x="18" y="42" width="6" height="4" rx="2" fill="#7C3AED"/>
+                    </svg>
+                    <p>视频上传</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="32" cy="28" r="14" fill="#7C3AED" fill-opacity="0.1"/>
+                      <path d="M32 14V42" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M25 21L39 35" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M39 21L25 35" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M22 50H42" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <circle cx="22" cy="50" r="2" fill="#7C3AED"/>
+                      <circle cx="42" cy="50" r="2" fill="#7C3AED"/>
+                    </svg>
+                    <p>AI总结</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="28" cy="28" r="14" stroke="#7C3AED" stroke-width="3"/>
+                      <path d="M38 38L48 48" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                    <p>搜索</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 24C12 18.4772 16.4772 14 22 14H44C50.6274 14 56 19.3726 56 26V42C56 47.5228 51.5228 52 46 52H24C18.4772 52 14 47.5228 14 42V24Z" fill="#7C3AED" fill-opacity="0.1"/>
+                      <path d="M12 24C12 18.4772 16.4772 14 22 14H44C50.6274 14 56 19.3726 56 26V42C56 47.5228 51.5228 52 46 52H24C18.4772 52 14 47.5228 14 42V24Z" stroke="#7C3AED" stroke-width="2"/>
+                      <circle cx="26" cy="28" r="4" fill="#7C3AED"/>
+                      <path d="M34 36H48" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <p>标签</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M32 10L38 26L54 26L41 36L45 52L32 42L19 52L23 36L10 26L26 26L32 10Z" fill="#7C3AED"/>
+                      <path d="M32 14L37 24L48 24L39 31L42 44L32 37L22 44L25 31L16 24L27 24L32 14Z" fill="white"/>
+                    </svg>
+                    <p>订阅</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M48 12L52 16L42 26L38 22L48 12Z" fill="#7C3AED"/>
+                      <path d="M14 44L18 50L24 46L14 44Z" fill="#7C3AED"/>
+                      <path d="M42 20L24 38L26 42L30 40L48 22L46 18L42 20Z" fill="#7C3AED" fill-opacity="0.3"/>
+                      <path d="M22 36L42 16" stroke="#7C3AED" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <p>写作</p>
+                </div>
+                <div class="icon-item">
+                    <svg width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="22" cy="26" r="8" fill="#7C3AED"/>
+                      <circle cx="42" cy="26" r="8" fill="#7C3AED" fill-opacity="0.6"/>
+                      <path d="M12 46C12 39.9249 16.9249 35 23 35C26.8688 35 30.3438 36.9892 32 40" stroke="#7C3AED" stroke-width="3" stroke-linecap="round"/>
+                      <path d="M32 46C32 39.9249 36.9249 35 43 35C46.8688 35 50.3438 36.9892 52 40" stroke="#7C3AED" stroke-width="3" stroke-linecap="round" fill-opacity="0.6"/>
+                    </svg>
+                    <p>协作</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

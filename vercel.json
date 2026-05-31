@@ -1,0 +1,25 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/api/ai/video/merge/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/ai/video/generate/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/ai/extract-video-text/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/check-hotspots",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="1200" viewBox="0 0 2600 1200">
+  <defs>
+    <linearGradient id="pageBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfaf6"/>
+      <stop offset="1" stop-color="#eef8f7"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18d7c1"/>
+      <stop offset="1" stop-color="#1197a6"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="28" flood-color="#142024" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .font { font-family: "PingFang SC", "STHeiti", "Microsoft YaHei", sans-serif; }
+      .title { font-size: 42px; font-weight: 800; fill: #111820; }
+      .sub { font-size: 18px; fill: #647174; }
+      .h1 { font-size: 32px; font-weight: 800; fill: #111820; }
+      .h2 { font-size: 22px; font-weight: 800; fill: #111820; }
+      .body { font-size: 16px; fill: #536165; }
+      .small { font-size: 13px; fill: #7b898d; }
+      .tiny { font-size: 11px; fill: #7b898d; }
+      .chip { font-size: 13px; font-weight: 700; fill: #0a7773; }
+      .nav { font-size: 15px; font-weight: 700; fill: #5f6d70; }
+      .navOn { font-size: 15px; font-weight: 800; fill: #111820; }
+      .inverse { fill: #ffffff; }
+      .white { fill: #ffffff; }
+      .ink { fill: #111820; }
+      .muted { fill: #eef3f1; }
+      .line { stroke: #e2e9e7; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="2600" height="1200" fill="url(#pageBg)"/>
+  <text x="60" y="72" class="font title">灵集 UI 设计稿 v1</text>
+  <text x="60" y="106" class="font sub">Web + 移动端 H5 MVP｜简洁、科技、时尚｜功能图标来自 RunComfy 生图资产</text>
+
+  <!-- Desktop dashboard -->
+  <g transform="translate(60 150)">
+    <rect width="1080" height="720" rx="34" fill="#ffffff" filter="url(#softShadow)"/>
+    <rect x="0" y="0" width="250" height="720" rx="34" fill="#f8faf8"/>
+    <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/brand/logo-lingji-icon-minimal/lingji-icon-with-text.png" x="34" y="28" width="88" height="88"/>
+    <text x="126" y="68" class="font h2">灵集</text>
+    <text x="126" y="94" class="font small">AI 灵感素材库</text>
+    <rect x="28" y="142" width="194" height="48" rx="16" fill="#111820"/>
+    <text x="72" y="172" class="font navOn inverse">收集台</text>
+    <text x="72" y="228" class="font nav">灵感库</text>
+    <text x="72" y="282" class="font nav">AI 创作</text>
+    <text x="72" y="336" class="font nav">分类标签</text>
+    <text x="72" y="390" class="font nav">订阅用量</text>
+    <rect x="28" y="600" width="194" height="84" rx="22" fill="#e9fbf7"/>
+    <text x="50" y="632" class="font chip">Pro 试用</text>
+    <text x="50" y="658" class="font small">本月 AI 额度 62%</text>
+
+    <text x="300" y="66" class="font h1">今天有什么新灵感？</text>
+    <text x="300" y="96" class="font body">语音、文字、链接、图片、视频，发给灵集后自动总结归类。</text>
+    <rect x="300" y="132" width="720" height="156" rx="26" fill="#f7fbfa" stroke="#e2e9e7"/>
+    <text x="330" y="172" class="font body">粘贴链接、输入灵感，或拖入素材...</text>
+    <rect x="330" y="218" width="120" height="42" rx="14" fill="#111820"/>
+    <text x="362" y="245" class="font navOn inverse">保存</text>
+    <rect x="466" y="218" width="132" height="42" rx="14" fill="#e9fbf7"/>
+    <text x="494" y="245" class="font chip">AI 总结</text>
+
+    <g transform="translate(300 324)">
+      <rect width="150" height="118" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/icons/generated/voice.png" x="42" y="14" width="66" height="66"/>
+      <text x="48" y="92" class="font navOn">语音</text>
+    </g>
+    <g transform="translate(470 324)">
+      <rect width="150" height="118" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/icons/generated/text.png" x="42" y="14" width="66" height="66"/>
+      <text x="48" y="92" class="font navOn">文字</text>
+    </g>
+    <g transform="translate(640 324)">
+      <rect width="150" height="118" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/icons/generated/link.png" x="42" y="14" width="66" height="66"/>
+      <text x="48" y="92" class="font navOn">链接</text>
+    </g>
+    <g transform="translate(810 324)">
+      <rect width="150" height="118" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/icons/generated/image.png" x="42" y="14" width="66" height="66"/>
+      <text x="42" y="92" class="font navOn">图片</text>
+    </g>
+
+    <text x="300" y="496" class="font h2">最近归档</text>
+    <rect x="300" y="524" width="330" height="128" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="328" y="560" class="font h2">小红书标题结构</text>
+    <text x="328" y="588" class="font body">AI 已提取 5 个高频钩子...</text>
+    <text x="328" y="626" class="font small">#小红书 #选题 #文案</text>
+    <rect x="660" y="524" width="330" height="128" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="688" y="560" class="font h2">短视频口播案例</text>
+    <text x="688" y="588" class="font body">视频摘要、金句和脚本...</text>
+    <text x="688" y="626" class="font small">#短视频 #脚本 #素材</text>
+  </g>
+
+  <!-- Mobile collect -->
+  <g transform="translate(1180 150)">
+    <rect width="390" height="844" rx="42" fill="#111820" filter="url(#softShadow)"/>
+    <rect x="14" y="14" width="362" height="816" rx="34" fill="#fbfaf6"/>
+    <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/brand/logo-lingji-icon-minimal/lingji-icon-with-text.png" x="30" y="36" width="58" height="58"/>
+    <text x="98" y="70" class="font h2">灵集</text>
+    <text x="30" y="128" class="font h1">随手收集</text>
+    <text x="30" y="158" class="font body">灵感先放进来，整理交给 AI。</text>
+    <rect x="30" y="190" width="330" height="154" rx="26" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="232" class="font body">写下灵感，或粘贴链接...</text>
+    <rect x="54" y="284" width="116" height="38" rx="14" fill="#111820"/>
+    <text x="82" y="309" class="font navOn inverse">记录</text>
+    <rect x="184" y="284" width="132" height="38" rx="14" fill="#e9fbf7"/>
+    <text x="213" y="309" class="font chip">上传素材</text>
+    <text x="30" y="388" class="font h2">快速入口</text>
+    <g transform="translate(30 414)">
+      <rect width="150" height="116" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <text x="26" y="42" class="font h2">语音</text>
+      <text x="26" y="72" class="font small">边走边记</text>
+    </g>
+    <g transform="translate(210 414)">
+      <rect width="150" height="116" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <text x="26" y="42" class="font h2">链接</text>
+      <text x="26" y="72" class="font small">自动提文案</text>
+    </g>
+    <g transform="translate(30 550)">
+      <rect width="150" height="116" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <text x="26" y="42" class="font h2">图片</text>
+      <text x="26" y="72" class="font small">截图总结</text>
+    </g>
+    <g transform="translate(210 550)">
+      <rect width="150" height="116" rx="24" fill="#ffffff" stroke="#e2e9e7"/>
+      <text x="26" y="42" class="font h2">视频</text>
+      <text x="26" y="72" class="font small">提字幕归类</text>
+    </g>
+    <rect x="30" y="708" width="330" height="72" rx="24" fill="#111820"/>
+    <text x="58" y="752" class="font navOn inverse">AI 今日已整理 12 条灵感</text>
+  </g>
+
+  <!-- Detail summary -->
+  <g transform="translate(1600 150)">
+    <rect width="390" height="844" rx="42" fill="#111820" filter="url(#softShadow)"/>
+    <rect x="14" y="14" width="362" height="816" rx="34" fill="#fbfaf6"/>
+    <text x="30" y="70" class="font h2">灵感详情</text>
+    <rect x="30" y="98" width="330" height="172" rx="28" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="136" class="font h2">小红书爆款标题截图</text>
+    <text x="54" y="168" class="font body">来源：图片上传</text>
+    <rect x="54" y="198" width="74" height="28" rx="14" fill="#e9fbf7"/>
+    <text x="73" y="217" class="font chip">文案</text>
+    <rect x="138" y="198" width="74" height="28" rx="14" fill="#fff4d8"/>
+    <text x="157" y="217" class="font chip" fill="#946b00">选题</text>
+    <text x="30" y="316" class="font h2">AI 总结</text>
+    <rect x="30" y="342" width="330" height="166" rx="26" fill="#111820"/>
+    <text x="54" y="382" class="font body inverse">这组标题共同点是“痛点 + 结果 +</text>
+    <text x="54" y="410" class="font body inverse">具体人群”，适合改写成内容</text>
+    <text x="54" y="438" class="font body inverse">运营、AI 工具、效率提升类选题。</text>
+    <text x="30" y="552" class="font h2">关键要点</text>
+    <rect x="30" y="578" width="330" height="54" rx="18" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="612" class="font body">标题要有明确收益</text>
+    <rect x="30" y="646" width="330" height="54" rx="18" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="680" class="font body">开头 3 秒给具体场景</text>
+    <rect x="30" y="714" width="330" height="54" rx="18" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="748" class="font body">可生成 5 条小红书选题</text>
+  </g>
+
+  <!-- AI writing -->
+  <g transform="translate(2020 150)">
+    <rect width="390" height="844" rx="42" fill="#111820" filter="url(#softShadow)"/>
+    <rect x="14" y="14" width="362" height="816" rx="34" fill="#fbfaf6"/>
+    <text x="30" y="70" class="font h2">AI 创作</text>
+    <text x="30" y="106" class="font body">选择素材，一键生成去 AI 味文案。</text>
+    <rect x="30" y="138" width="330" height="74" rx="22" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="168" class="font navOn">小红书文案</text>
+    <text x="54" y="194" class="font small">真实口语｜种草｜标题 5 条</text>
+    <rect x="30" y="232" width="330" height="74" rx="22" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="262" class="font navOn">短视频脚本</text>
+    <text x="54" y="288" class="font small">开头钩子｜口播｜分镜</text>
+    <rect x="30" y="326" width="330" height="74" rx="22" fill="#ffffff" stroke="#e2e9e7"/>
+    <text x="54" y="356" class="font navOn">公众号大纲</text>
+    <text x="54" y="382" class="font small">标题｜结构｜开头段落</text>
+    <text x="30" y="452" class="font h2">输出预览</text>
+    <rect x="30" y="478" width="330" height="210" rx="26" fill="#111820"/>
+    <text x="54" y="520" class="font body inverse">别再把灵感散落在聊天框里。</text>
+    <text x="54" y="550" class="font body inverse">我现在会把看到的截图、链接</text>
+    <text x="54" y="580" class="font body inverse">和视频都丢进灵集，让 AI 先</text>
+    <text x="54" y="610" class="font body inverse">帮我整理成能复用的选题库。</text>
+    <rect x="30" y="724" width="330" height="56" rx="20" fill="url(#teal)"/>
+    <text x="132" y="759" class="font navOn inverse">生成文案</text>
+  </g>
+
+  <!-- Icon asset strip -->
+  <g transform="translate(60 930)">
+    <text x="0" y="0" class="font h2">AI 生成图标资产</text>
+    <text x="0" y="30" class="font body">用于后续功能入口：语音、文字、链接、图片、视频、AI总结、分类、搜索、写作、订阅。</text>
+    <image href="/Users/aplle/Documents/Zjsifan/Tools/linggan/assets/icons/generated/lingji-function-icons-sheet/ca441687-1ac6-4774-98cb-186fe217cdb0.png" x="0" y="56" width="620" height="310"/>
+  </g>
+</svg>

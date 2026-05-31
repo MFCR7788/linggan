@@ -1,0 +1,826 @@
+// AI Services - DeepSeek, Doubao/ARK, Seedance
+
+import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
+
+// ====== Types ======
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | ChatContentPart[];
+}
+
+type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'video_url'; video_url: { url: string } };
+
+interface ChatOptions {
+  temperature?: number;
+  maxTokens?: number;
+  model?: string;
+}
+
+interface VisionResult {
+  description: string;
+  text: string;
+  tags: string[];
+}
+
+interface SummaryResult {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  tags: string[];
+  creationSuggestions: string[];
+  reuseScore: number;
+}
+
+interface ImageResult {
+  imageUrl: string;
+  prompt: string;
+  size: string;
+}
+
+interface VideoTaskResult {
+  taskId: string | null;
+  status: string;
+  message: string;
+  videoUrl?: string;
+}
+
+// ====== DeepSeek API ======
+
+export async function callDeepSeek(
+  prompt: string,
+  options: ChatOptions = {}
+): Promise<string> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    throw new Error('DEEPSEEK_API_KEY is not configured');
+  }
+
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: options.model || 'deepseek-chat',
+      messages: [
+        { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('DeepSeek API error:', error);
+    throw new Error('DeepSeek API call failed');
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// ====== 通义千问 / DashScope API ======
+
+export async function callQwen(
+  messages: ChatMessage[],
+  options: ChatOptions = {}
+): Promise<string> {
+  const apiKey = process.env.DASHSCOPE_API_KEY || process.env.QWEN_API_KEY;
+  if (!apiKey) {
+    throw new Error('DASHSCOPE_API_KEY is not configured');
+  }
+
+  // 验证并规范化模型名称
+  const validQwenModels = ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-vl-plus', 'qwen-vl-max', 'qwen3.7-max'];
+  let modelName = options.model || 'qwen-plus';
+  
+  // 如果模型名称不在有效列表中，使用默认值
+  if (!validQwenModels.includes(modelName)) {
+    console.warn(`Invalid model name "${modelName}", falling back to "qwen-plus"`);
+    modelName = 'qwen-plus';
+  }
+
+  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('DashScope API error:', error);
+    throw new Error('DashScope API call failed');
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// ====== Doubao/ARK API ======
+
+export async function callDoubaoChat(
+  messages: ChatMessage[],
+  options: ChatOptions = {}
+): Promise<string> {
+  const apiKey = process.env.DOUBAO_API_KEY;
+  const baseUrl = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
+  if (!apiKey) {
+    throw new Error('DOUBAO_API_KEY is not configured');
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-mini',
+      messages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Doubao API error:', error);
+    throw new Error('Doubao API call failed');
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// ====== Doubao Vision API ======
+
+export async function callDoubaoVision(
+  imageUrl: string,
+  prompt: string = '描述这张图片的内容'
+): Promise<VisionResult> {
+  try {
+    const content = await callDoubaoChat(
+      [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: imageUrl } },
+          ],
+        },
+      ],
+      { temperature: 0.3 }
+    );
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]) as VisionResult;
+      } catch {
+        // fall through to fallback
+      }
+    }
+
+    return {
+      description: content,
+      text: '',
+      tags: extractTags(content),
+    };
+  } catch (error) {
+    console.error('Doubao vision analysis failed:', error);
+    return {
+      description: '图片描述（AI分析暂不可用）',
+      text: '',
+      tags: ['图片', '待分析'],
+    };
+  }
+}
+
+// ====== Prompt 优化（生图/生视频前调用） ======
+
+async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promise<string> {
+  if (!rawPrompt || rawPrompt.length < 5) return rawPrompt;
+
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return rawPrompt;
+
+  const systemPrompt = type === 'image'
+    ? `You are an expert AI image prompt engineer. Enhance the given prompt by adding vivid visual details: subject, scene, lighting, colors, style, composition, mood, and atmosphere. Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`
+    : `You are an expert AI video prompt engineer. Enhance the given prompt by adding details about scene, motion, camera movement, atmosphere, lighting transitions, and temporal progression. Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
+
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Enhance this prompt for AI ${type} generation:\n\n${rawPrompt}` },
+        ],
+        temperature: 0.7,
+        max_tokens: 400,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Prompt optimization API error:', response.status);
+      return rawPrompt;
+    }
+
+    const data = await response.json();
+    const enhanced = data.choices?.[0]?.message?.content?.trim();
+    if (!enhanced) return rawPrompt;
+
+    return enhanced.replace(/^["']|["']$/g, '').trim();
+  } catch (e) {
+    console.warn('Prompt optimization failed, using original:', e);
+    return rawPrompt;
+  }
+}
+
+// ====== Seedance Image Generation ======
+
+function getSizeForRatio(ratio: string): string {
+  const minPixels = 1920 * 1920;
+  switch (ratio) {
+    case '1:1':
+      return '1920x1920';
+    case '16:9':
+      return '2560x1440';
+    case '9:16':
+      return '1440x2560';
+    case '4:3':
+      return '2216x1662';
+    case '3:4':
+      return '1662x2216';
+    default:
+      return '1920x1920';
+  }
+}
+
+export async function generateImage(
+  prompt: string,
+  options: { ratio?: string } = {}
+): Promise<ImageResult> {
+  // 先优化提示词
+  const finalPrompt = await optimizePrompt(prompt, 'image');
+  console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
+
+  const apiKey = process.env.DOUBAO_API_KEY;
+  const baseUrl = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
+  const imageModelArkId = process.env.SEEDANCE_IMAGE_MODEL_ARK_ID;
+
+  if (!apiKey) throw new Error('DOUBAO_API_KEY is not configured');
+  if (!imageModelArkId) throw new Error('SEEDANCE_IMAGE_MODEL_ARK_ID is not configured');
+
+  const size = getSizeForRatio(options.ratio || '1:1');
+
+  const response = await fetch(`${baseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: imageModelArkId,
+      prompt: finalPrompt,
+      n: 1,
+      size,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Seedance image API error:', response.status, errorText);
+    throw new Error(`图片生成失败: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  return {
+    imageUrl: data.data[0].url,
+    prompt: finalPrompt,
+    size,
+  };
+}
+
+// ====== HappyHorse 视频生成（百炼 DashScope） ======
+
+const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY || 'sk-c270f05ccab6430aa50ed96ac3d7790b';
+const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
+
+export async function submitVideoTask(
+  prompt: string,
+  duration: number = 5,
+  ratio: string = '16:9'
+): Promise<VideoTaskResult> {
+  // 先优化提示词
+  const finalPrompt = await optimizePrompt(prompt, 'video');
+  console.log(`[Video] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
+
+  try {
+    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify({
+        model: 'happyhorse-1.0-t2v',
+        input: { prompt: finalPrompt },
+        parameters: {
+          resolution: '720P',
+          ratio,
+          duration: Math.min(Math.max(duration, 3), 10),
+          watermark: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[Video] API 返回错误:', response.status, errText.substring(0, 500));
+      return { taskId: null, status: 'error', message: `视频服务错误: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const taskId = data.output?.task_id;
+    if (!taskId) {
+      return { taskId: null, status: 'error', message: '未获取到任务ID' };
+    }
+    return { taskId, status: 'queued', message: '任务已提交' };
+  } catch (error) {
+    console.error('HappyHorse submit task error:', error);
+    return { taskId: null, status: 'error', message: '网络错误' };
+  }
+}
+
+// ====== HappyHorse I2V（图生视频） ======
+
+interface I2VTaskResult {
+  taskId: string | null;
+  status: string;
+  message: string;
+}
+
+export async function submitI2VTask(
+  imageUrl: string,
+  prompt: string,
+  duration: number = 10
+): Promise<I2VTaskResult> {
+  const finalPrompt = await optimizePrompt(prompt, 'video');
+  console.log(`[I2V] 图生视频: "${finalPrompt.substring(0, 60)}..."`);
+
+  try {
+    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify({
+        model: 'happyhorse-1.0-i2v',
+        input: {
+          prompt: finalPrompt,
+          media: [{ type: 'first_frame', url: imageUrl }],
+        },
+        parameters: {
+          resolution: '720P',
+          duration: Math.min(Math.max(duration, 3), 10),
+          watermark: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[I2V] API 返回错误:', response.status, errText.substring(0, 500));
+      return { taskId: null, status: 'error', message: `图生视频服务错误: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const taskId = data.output?.task_id;
+    if (!taskId) {
+      return { taskId: null, status: 'error', message: '未获取到任务ID' };
+    }
+    return { taskId, status: 'queued', message: '图生视频任务已提交' };
+  } catch (error) {
+    console.error('HappyHorse I2V submit task error:', error);
+    return { taskId: null, status: 'error', message: '网络错误' };
+  }
+}
+
+// ====== AI 分镜脚本生成 ======
+
+export interface StoryboardScene {
+  index: number;
+  timeStart: number;
+  timeEnd: number;
+  duration: number;
+  visualPrompt: string;
+  subtitle: string;
+  transition: string;
+}
+
+/** 按目标时长计算分段 */
+export function calcSegmentDurations(totalDuration: number): number[] {
+  const numSegments = Math.ceil(totalDuration / 10);
+  const baseDuration = Math.floor(totalDuration / numSegments);
+  const remainder = totalDuration - baseDuration * numSegments;
+  const durations: number[] = [];
+  for (let i = 0; i < numSegments; i++) {
+    durations.push(baseDuration + (i < remainder ? 1 : 0));
+  }
+  return durations;
+}
+
+/** 调用 DeepSeek 将脚本拆分为分镜 */
+export async function generateStoryboard(
+  scriptText: string,
+  totalDuration: number
+): Promise<StoryboardScene[]> {
+  const durations = calcSegmentDurations(totalDuration);
+  const numSegments = durations.length;
+
+  const prompt = `你是一个专业视频分镜师。将以下脚本拆分为${numSegments}个分镜片段，用于AI视频生成。
+
+原始脚本：
+${scriptText}
+
+目标分段数：${numSegments}
+每段时长（秒）：${durations.join(', ')}
+
+要求：
+1. 每段画面描述用英文，详细描述画面内容、光线、色彩、风格、运镜
+2. 字幕用中文，简短有力（每段1-2句）
+3. 转场用英文（fade/cut/dissolve/wipe）
+
+请严格以JSON数组格式输出，不要其他文字：
+[
+  {
+    "visualPrompt": "Opening shot of... cinematic lighting, warm colors, slow push in...",
+    "subtitle": "开场字幕文本",
+    "transition": "fade"
+  },
+  ...
+]`;
+
+  try {
+    const result = await callDeepSeek(prompt, { temperature: 0.7, maxTokens: 1500 });
+    const jsonMatch = result.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const scenes = JSON.parse(jsonMatch[0]) as Array<{
+        visualPrompt: string;
+        subtitle: string;
+        transition: string;
+      }>;
+
+      // 补全时间和索引
+      let accumulated = 0;
+      return scenes.map((scene, i) => {
+        const start = accumulated;
+        accumulated += durations[i] || 10;
+        return {
+          index: i,
+          timeStart: start,
+          timeEnd: accumulated,
+          duration: durations[i] || 10,
+          visualPrompt: scene.visualPrompt || 'A beautiful cinematic scene',
+          subtitle: scene.subtitle || '',
+          transition: scene.transition || 'cut',
+        };
+      });
+    }
+  } catch (e) {
+    console.error('Storyboard generation failed:', e);
+  }
+
+  // 降级：按时间段均匀切分
+  let accumulated = 0;
+  return durations.map((dur, i) => {
+    const start = accumulated;
+    accumulated += dur;
+    return {
+      index: i,
+      timeStart: start,
+      timeEnd: accumulated,
+      duration: dur,
+      visualPrompt: `Segment ${i + 1}: ${scriptText.substring(0, 100)}`,
+      subtitle: `第${i + 1}段`,
+      transition: 'cut',
+    };
+  });
+}
+
+// Input type for generateStoryboardV2
+interface InspireInput {
+  id: string | number;
+  title?: string;
+  type?: string;
+  original_text?: string;
+  ai_summary?: string;
+  media_urls?: string[];
+}
+
+/** 一步生成分镜：素材 + 风格 + 时长 + 主题 + 语言 → storyboard[]（含 visualPrompt + subtitle） */
+export async function generateStoryboardV2(params: {
+  inspirations: InspireInput[];
+  stylePreset: string;
+  duration: number;
+  topic?: string;
+  language?: string;
+}): Promise<StoryboardScene[]> {
+  const { inspirations, stylePreset, duration, topic, language = 'zh' } = params;
+  const preset = STYLE_PRESETS[stylePreset] || STYLE_PRESETS.random;
+  const durations = calcSegmentDurations(duration);
+  const numSegments = durations.length;
+
+  // 语言配置
+  const langOpt = LANGUAGE_OPTIONS.find((l) => l.value === language) || LANGUAGE_OPTIONS[0];
+  const subtitleLang = langOpt.label;
+
+  // 构建素材上下文
+  let materialContext = '';
+  if (inspirations.length > 0) {
+    const parts = inspirations.map((insp, i) => {
+      const lines: string[] = [`素材${i + 1}（类型：${insp.type || 'text'}）：`];
+      if (insp.title) lines.push(`标题：${insp.title}`);
+      if (insp.original_text) lines.push(`原文：${insp.original_text}`);
+      if (insp.ai_summary) lines.push(`摘要：${insp.ai_summary}`);
+      return lines.join('\n');
+    });
+    materialContext = `\n参考素材：\n${parts.join('\n\n')}\n`;
+  }
+
+  const prompt = `你是一个专业短视频导演和分镜师。请根据以下要求生成${numSegments}个分镜片段。
+
+视频风格：${preset.label} — ${preset.visualStyle}
+总时长：${duration}秒
+分段数：${numSegments}
+每段时长（秒）：${durations.join(', ')}
+${topic ? `主题方向：${topic}` : ''}${materialContext}
+要求：
+1. visualPrompt 用${subtitleLang}，详细描述画面内容、光线、色彩、风格、运镜（<150词），融入"${preset.visualStyle}"的风格特征
+2. subtitle 用${subtitleLang}，简短有力（每段1-2句），${langOpt.promptInstruction}
+3. transition 用英文（fade/cut/dissolve/wipe），根据画面节奏选择
+
+请严格以JSON数组格式输出，不要其他文字：
+[
+  {
+    "visualPrompt": "Opening shot... cinematic lighting, warm colors, slow push in...",
+    "subtitle": "字幕文本（使用${subtitleLang}）",
+    "transition": "fade"
+  },
+  ...
+]`;
+
+  try {
+    const result = await callDeepSeek(prompt, { temperature: 0.8, maxTokens: 2000 });
+    const jsonMatch = result.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const scenes = JSON.parse(jsonMatch[0]) as Array<{
+        visualPrompt: string;
+        subtitle: string;
+        transition: string;
+      }>;
+
+      let accumulated = 0;
+      return scenes.map((scene, i) => {
+        const start = accumulated;
+        accumulated += durations[i] || 10;
+        return {
+          index: i,
+          timeStart: start,
+          timeEnd: accumulated,
+          duration: durations[i] || 10,
+          visualPrompt: scene.visualPrompt || 'A beautiful cinematic scene',
+          subtitle: scene.subtitle || '',
+          transition: scene.transition || 'cut',
+        };
+      });
+    }
+  } catch (e) {
+    console.error('StoryboardV2 generation failed:', e);
+  }
+
+  // 降级：按时间段均匀切分
+  let accumulated = 0;
+  return durations.map((dur, i) => {
+    const start = accumulated;
+    accumulated += dur;
+    const insp = inspirations[i];
+    const fallbackTitle = insp?.title || insp?.original_text?.substring(0, 80) || `片段${i + 1}`;
+    return {
+      index: i,
+      timeStart: start,
+      timeEnd: accumulated,
+      duration: dur,
+      visualPrompt: `Segment ${i + 1}: cinematic scene inspired by ${fallbackTitle}, ${preset.visualStyle}`,
+      subtitle: insp?.ai_summary?.substring(0, 100) || insp?.title || `第${i + 1}段`,
+      transition: 'cut',
+    };
+  });
+}
+
+export async function getVideoTaskStatus(
+  taskId: string
+): Promise<{ status: string; videoUrl?: string; message?: string }> {
+  try {
+    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
+    });
+
+    if (!response.ok) {
+      return { status: 'error', message: '查询失败' };
+    }
+
+    const data = await response.json();
+    const taskStatus = data.output?.task_status;
+
+    if (taskStatus === 'SUCCEEDED') {
+      const videoUrl = data.output?.video_url || data.output?.videos?.[0]?.url;
+      return { status: 'succeeded', videoUrl, message: '生成完成' };
+    }
+
+    if (taskStatus === 'FAILED') {
+      return { status: 'failed', message: data.output?.message || data.message || '生成失败' };
+    }
+
+    return { status: 'running', message: '生成中...' };
+  } catch (error) {
+    console.error('HappyHorse query task error:', error);
+    return { status: 'error', message: '网络错误' };
+  }
+}
+
+export async function generateVideo(prompt: string, duration: number = 5) {
+  const result = await submitVideoTask(prompt, duration);
+  if (result.taskId) {
+    return { videoUrl: null, prompt, duration, taskId: result.taskId, status: 'queued' };
+  }
+  return { videoUrl: `https://picsum.photos/seed/${Date.now()}/800/600`, prompt, duration };
+}
+
+// ====== AI 总结灵感内容 ======
+
+export async function summarizeContent(
+  content: string,
+  contentType: string
+): Promise<SummaryResult> {
+  const prompt = `请对以下${contentType}内容进行分析和总结：
+
+${content}
+
+请以JSON格式返回以下内容：
+{
+  "title": "自动生成的标题",
+  "summary": "内容的详细总结",
+  "keyPoints": ["要点1", "要点2", "要点3"],
+  "tags": ["相关标签1", "相关标签2"],
+  "creationSuggestions": ["创作建议1", "创作建议2"],
+  "reuseScore": 80
+}
+
+只返回JSON，不要有其他文字。`;
+
+  try {
+    const result = await callDeepSeek(prompt, { temperature: 0.3, maxTokens: 1500 });
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]) as SummaryResult;
+    }
+  } catch (e) {
+    console.error('AI summarization failed:', e);
+  }
+
+  return {
+    title: '内容标题',
+    summary: content.substring(0, 200),
+    keyPoints: ['要点1', '要点2'],
+    tags: ['灵感'],
+    creationSuggestions: ['可以基于此内容创作小红书文案'],
+    reuseScore: 70,
+  };
+}
+
+// ====== AI 生成文案 ======
+
+export async function generateCopywriting(
+  inspirations: { title?: string; originalText?: string; aiSummary?: string }[],
+  type: string,
+  style: string,
+  noAiTaste: boolean = false
+): Promise<string> {
+  const inspirationText = inspirations.map((i) => {
+    const parts: string[] = [];
+    if (i.title) parts.push(`【标题】${i.title}`);
+    if (i.aiSummary) parts.push(`【AI分析摘要】${i.aiSummary}`);
+    if (i.originalText && !i.aiSummary) parts.push(`【原文】${i.originalText}`);
+    return parts.join('\n');
+  }).join('\n\n---\n\n');
+
+  let styleInstruction = '';
+  if (noAiTaste) {
+    styleInstruction =
+      '要求：去掉AI味，使用更自然的口语化表达，增加个人化的语气，避免过于工整的排比和模板化表达。';
+  }
+
+  const prompt = `请基于以下灵感内容创作一篇${type}，风格要求：${style}。
+
+灵感内容：
+${inspirationText}
+
+${styleInstruction}
+
+请直接输出最终文案内容。`;
+
+  try {
+    return await callDeepSeek(prompt, { temperature: 0.8, maxTokens: 1500 });
+  } catch (e) {
+    console.error('Copywriting generation failed:', e);
+    return '✨ 这是一篇精彩的文案内容（模拟数据）...';
+  }
+}
+
+// ====== Usage Recording ======
+
+type AiTaskType = 'ai_summary' | 'copywriting' | 'image' | 'video';
+
+export async function logAiUsage(
+  userId: string,
+  taskType: AiTaskType,
+  tokensUsed: number
+): Promise<void> {
+  try {
+    const { createAdminClient } = await import('./supabase-server');
+    const supabase = createAdminClient();
+    const month = new Date().toISOString().substring(0, 7);
+
+    const { data: existing } = await supabase
+      .from('usage_records')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('month', month)
+      .single();
+
+    const fieldMap: Record<AiTaskType, string> = {
+      ai_summary: 'ai_summary_count',
+      copywriting: 'ai_writing_count',
+      image: 'image_count',
+      video: 'video_count',
+    };
+
+    if (existing) {
+      const field = fieldMap[taskType];
+      await supabase
+        .from('usage_records')
+        .update({
+          [field]: (existing as any)[field] + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase.from('usage_records').insert({
+        user_id: userId,
+        month,
+        ai_summary_count: taskType === 'ai_summary' ? 1 : 0,
+        ai_writing_count: taskType === 'copywriting' ? 1 : 0,
+        image_count: taskType === 'image' ? 1 : 0,
+        video_count: taskType === 'video' ? 1 : 0,
+        link_parse_count: 0,
+        video_minutes: 0,
+        audio_minutes: 0,
+        storage_used_mb: 0,
+      });
+    }
+  } catch (e) {
+    console.error('Failed to log AI usage:', e);
+  }
+}
+
+// ====== Helpers ======
+
+function extractTags(text: string): string[] {
+  const commonTags = ['AI', '科技', '创意', '设计', '灵感', '创作', '工具', '趋势'];
+  return commonTags.filter((tag) => text.includes(tag)).slice(0, 3);
+}
