@@ -340,6 +340,7 @@ function AIVideoContent() {
         throw new Error(mergeData.error || '合并返回无视频地址');
       }
     } catch (e: any) {
+      console.error('[handleMerge] 合并失败:', e);
       setMergeError(e.message || '合并失败');
       setMergePhase('error');
     }

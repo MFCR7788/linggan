@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
 import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration } from "@/hooks/use-inspiration";
 import { useTags } from "@/hooks/use-categories";
+import { useSchedules } from "@/hooks/use-schedule";
 import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
 
 // ====== 常量 ======
@@ -186,6 +187,8 @@ function InspirationLibraryContent() {
   const createInspiration = useCreateInspiration();
   const deleteInspiration = useDeleteInspiration();
   const batchDelete = useBatchDeleteInspiration();
+
+  const { data: schedules = [] } = useSchedules({ limit: 10 });
 
   const items = inspirations || [];
 
@@ -400,6 +403,41 @@ function InspirationLibraryContent() {
     return (
       <div className="space-y-4">
         <SimpleCalendar events={calendarEvents} onDateClick={(date) => setCalendarSelectedDate(date)} />
+
+        {/* 日程明细卡片 */}
+        <GlassCard>
+          <h4 style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <Clock size={15} color="#A78BFA" /> 日程明细
+          </h4>
+          {schedules.length === 0 ? (
+            <p style={{ color: "#6B7280", fontSize: 13, textAlign: "center", padding: "12px 0" }}>暂无日程记录</p>
+          ) : (
+            <div className="space-y-2">
+              {schedules.map((schedule: any) => (
+                <div key={schedule.id} className="flex items-start gap-3 p-2.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="truncate" style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 500 }}>{schedule.title}</span>
+                      <GlassBadge>{schedule.status === 'completed' ? '已完成' : schedule.status === 'cancelled' ? '已取消' : '待办'}</GlassBadge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs" style={{ color: "#9CA3AF" }}>
+                      <span className="flex items-center gap-1">
+                        <Clock size={11} />
+                        {new Date(schedule.scheduled_at).toLocaleString("zh-CN", { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {schedule.location && (
+                        <span className="flex items-center gap-1 truncate">
+                          <MapPin size={11} />
+                          {schedule.location}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
 
         {calendarSelectedDate && (
           <div>

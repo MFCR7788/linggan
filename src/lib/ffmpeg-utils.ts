@@ -1,10 +1,24 @@
 // FFmpeg 视频处理工具
-import { execSync, exec } from 'child_process';
+import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+
+/** 执行 ffmpeg 命令，捕获 stderr 便于排查 */
+function ffmpegExec(cmd: string): void {
+  try {
+    execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
+  } catch (e: any) {
+    const stderr = e.stderr?.toString() || '';
+    const stdout = e.stdout?.toString() || '';
+    const detail = (stderr + stdout).trim() || e.message;
+    console.error('[ffmpeg] 命令失败:', cmd.substring(0, 120));
+    console.error('[ffmpeg] 错误:', detail);
+    throw new Error(`ffmpeg 执行失败: ${detail.substring(0, 300)}`);
+  }
+}
 
 // ─── 字幕样式映射 ────────────────────────────────────────
 
@@ -76,8 +90,8 @@ export function concatVideos(inputPaths: string[], outputPath: string): string {
   writeFileSync(filelistPath, content);
 
   try {
-    execSync(
-      `${FFMPEG_PATH} -y -f concat -safe 0 -i "${filelistPath}" -c copy "${outputPath}" 2>/dev/null`
+    ffmpegExec(
+      `${FFMPEG_PATH} -y -f concat -safe 0 -i "${filelistPath}" -c copy "${outputPath}"`
     );
     return outputPath;
   } finally {
@@ -119,10 +133,10 @@ export function addBGM(
   const volumeMap: Record<string, string> = { tech: '0.25', chill: '0.3', hype: '0.2' };
   const volume = volumeMap[bgmStyle] || '0.25';
 
-  execSync(
+  ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" -i "${bgmPath}" ` +
     `-filter_complex "[1:a]volume=${volume},afade=t=in:d=2,afade=t=out:st=9999:d=2[a]" ` +
-    `-map 0:v -map "[a]" -c:v copy -shortest "${outputPath}" 2>/dev/null`
+    `-map 0:v -map "[a]" -c:v copy -shortest "${outputPath}"`
   );
   return outputPath;
 }
@@ -138,18 +152,18 @@ export function burnSubtitles(
   const styleStr = SUBTITLE_STYLE_MAP[subtitleStyle] || SUBTITLE_STYLE_MAP['白色粗体'];
   const positionStr = SUBTITLE_POSITION_MAP[subtitlePosition] || SUBTITLE_POSITION_MAP['底部'];
 
-  execSync(
+  ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" ` +
     `-vf "subtitles=${srtPath}:force_style='${styleStr},${positionStr}'" ` +
-    `-c:a copy "${outputPath}" 2>/dev/null`
+    `-c:a copy "${outputPath}"`
   );
   return outputPath;
 }
 
 /** 从视频中提取缩略图（第1秒帧） */
 export function extractThumbnail(videoPath: string, outputPath: string): string {
-  execSync(
-    `${FFMPEG_PATH} -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -q:v 2 "${outputPath}" 2>/dev/null`
+  ffmpegExec(
+    `${FFMPEG_PATH} -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -q:v 2 "${outputPath}"`
   );
   return outputPath;
 }
