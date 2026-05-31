@@ -2,7 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useCreateInspiration } from '@/hooks/use-inspiration';
+import { useCreateSchedule } from '@/hooks/use-schedule';
 import { syncDevAuthCookie } from '@/lib/dev-auth';
+import { useToast } from '@/components/Toast';
 import type { Message, ChatSession } from './types';
 
 // ====== 会话管理 ======
@@ -135,10 +137,13 @@ export function useSessionManager() {
 // ====== 消息操作 ======
 
 export function useMessageActions() {
+  const { showToast } = useToast();
   const createInspiration = useCreateInspiration();
+  const createSchedule = useCreateSchedule();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
 
@@ -242,7 +247,12 @@ export function useMessageActions() {
         body: JSON.stringify({ content: userMsg.content, session_id: sessionId || undefined }),
       });
       const data = await res.json();
-      return data.response || data.summary || data.title || '已收到';
+      const scheduleData = data.schedules || (data.schedule ? [data.schedule] : undefined);
+      return {
+        content: data.response || data.summary || data.title || '已收到',
+        schedule: data.schedule || undefined,
+        schedules: scheduleData,
+      };
     } catch { return null; } finally {
       setRegeneratingId(null);
     }
@@ -298,17 +308,45 @@ export function useMessageActions() {
     }
   }, [createInspiration]);
 
+  const addToSchedule = useCallback(async (msg: Message) => {
+    const list = msg.schedules || (msg.schedule ? [msg.schedule] : null);
+    if (!list) return;
+    setSchedulingId(msg.id);
+    try {
+      syncDevAuthCookie();
+      for (const s of list) {
+        await createSchedule.mutateAsync({
+          title: s.title,
+          description: s.description || undefined,
+          scheduled_at: s.scheduled_at,
+          location: s.location || undefined,
+          color: '#8B5CF6',
+          remind_before: 30,
+          suggestions: s.suggestions?.length ? s.suggestions : undefined,
+        });
+      }
+      showToast(`已成功添加 ${list.length} 条日程到首页和日程库`, 'success');
+      setTimeout(() => setSchedulingId(null), 2000);
+    } catch (e: any) {
+      const errMsg = e?.message || '未知错误';
+      console.error('添加日程失败:', errMsg);
+      showToast('添加日程失败: ' + errMsg, 'error');
+      setSchedulingId(null);
+    }
+  }, [createSchedule]);
+
   return {
-    copiedId, regeneratingId, savingId, speakingId,
-    setCopiedId, setRegeneratingId, setSavingId, setSpeakingId,
+    copiedId, regeneratingId, savingId, schedulingId, speakingId,
+    setCopiedId, setRegeneratingId, setSavingId, setSchedulingId, setSpeakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
-    speakMessage, regenerateMessage, saveToInspiration,
+    speakMessage, regenerateMessage, saveToInspiration, addToSchedule,
   };
 }
 
 // ====== 语音录制 ======
 
 export function useVoiceRecording() {
+  const { showToast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -374,7 +412,7 @@ export function useVoiceRecording() {
 
   const startRecording = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('您的浏览器不支持语音识别，请使用 Chrome 浏览器'); return; }
+    if (!SpeechRecognition) { showToast('您的浏览器不支持语音识别，请使用 Chrome 浏览器', 'warning'); return; }
 
     setIsRecording(true);
     setRecordingTime(0);
@@ -412,7 +450,7 @@ export function useVoiceRecording() {
     recognition.onerror = (event: any) => {
       console.error('语音识别错误:', event.error);
       if (event.error === 'not-allowed') {
-        alert('请允许使用麦克风权限');
+        showToast('请允许使用麦克风权限', 'warning');
         shouldRestartRef.current = false;
         setIsRecording(false);
         setRecordingTime(0);
@@ -498,6 +536,7 @@ export function useVoiceRecording() {
 // ====== 文件上传 ======
 
 export function useFileUpload() {
+  const { showToast } = useToast();
   const [uploadError, setUploadError] = useState<string | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
 
@@ -520,8 +559,8 @@ export function useFileUpload() {
       ? ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
       : ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
     const maxSize = type === 'video' ? 100 * 1024 * 1024 : 20 * 1024 * 1024;
-    if (!validTypes.includes(file.type)) { alert('格式不支持'); return false; }
-    if (file.size > maxSize) { alert(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB）`); return false; }
+    if (!validTypes.includes(file.type)) { showToast('格式不支持', 'warning'); return false; }
+    if (file.size > maxSize) { showToast(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB）`, 'warning'); return false; }
     return true;
   };
 

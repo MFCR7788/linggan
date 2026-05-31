@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { StarBackground } from "@/components/StarBackground";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
+import { ToastProvider } from "@/components/Toast";
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'default-cache';
@@ -36,7 +37,9 @@ export default function RootLayout({
         {/* 页面内容 */}
         <div style={{ position: "relative", zIndex: 10 }}>
           <ReactQueryProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </ReactQueryProvider>
         </div>
       </body>

@@ -178,6 +178,7 @@ export interface Schedule {
   color?: string;
   status: 'pending' | 'completed' | 'cancelled';
   remind_before?: number;
+  suggestions?: string[];
   source_content_id?: string;
   created_at: string;
   updated_at: string;

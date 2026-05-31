@@ -12,6 +12,20 @@ export interface Message {
   sourceUrl?: string;
   generatedImage?: { imageUrl: string; prompt: string };
   generatedVideo?: { videoUrl?: string; prompt: string; taskId?: string; status?: string };
+  schedule?: {
+    title: string;
+    scheduled_at: string;
+    description?: string | null;
+    location?: string | null;
+    suggestions?: string[];
+  };
+  schedules?: Array<{
+    title: string;
+    scheduled_at: string;
+    description?: string | null;
+    location?: string | null;
+    suggestions?: string[];
+  }>;
   timestamp: Date;
 }
 

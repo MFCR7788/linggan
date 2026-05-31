@@ -10,6 +10,7 @@ import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
 import { useRouter } from "next/navigation";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useSchedules } from "@/hooks/use-schedule";
+import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
 import { TYPE_EMOJIS, TYPE_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
 import type { ContentItem } from "@/types";
 
@@ -33,6 +34,7 @@ function HomeContent() {
   const router = useRouter();
   const { data: inspirationsData, isLoading } = useInspirations({ limit: 50 });
   const { data: schedulesData } = useSchedules({ limit: 50 });
+  useNotificationScheduler();
   const [searchQuery, setSearchQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -70,12 +72,15 @@ function HomeContent() {
 
   const recentInspirations = useMemo(() => inspirationsData || [], [inspirationsData]);
 
-  // 日程按 scheduled_at 降序排列（最近的排前面）
+  // 日程：只显示未来7天内待处理的，按时间升序，最多5条
   const sortedSchedules = useMemo(() => {
     if (!schedulesData || schedulesData.length === 0) return [];
-    return [...schedulesData].sort((a, b) =>
-      new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime()
-    );
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+    return [...schedulesData]
+      .filter(s => s.status === 'pending' && new Date(s.scheduled_at) >= now && new Date(s.scheduled_at) <= sevenDaysLater)
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .slice(0, 5);
   }, [schedulesData]);
 
   // 过滤灵感（使用 useMemo 避免每次渲染重复计算）
@@ -186,16 +191,10 @@ function HomeContent() {
             <div className="space-y-3">
               {sortedSchedules.map((schedule) => {
                 const scheduleDate = new Date(schedule.scheduled_at);
-                const isPast = scheduleDate < new Date();
                 const isToday = scheduleDate.toDateString() === new Date().toDateString();
-                const statusColor =
-                  schedule.status === "completed" ? "success" :
-                  schedule.status === "cancelled" ? "error" :
-                  "primary";
-                const statusLabel =
-                  schedule.status === "completed" ? "已完成" :
-                  schedule.status === "cancelled" ? "已取消" :
-                  "待处理";
+                const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduleDate.toDateString();
+                const statusColor = "primary";
+                const statusLabel = "待处理";
 
                 return (
                   <GlassCard
@@ -222,24 +221,24 @@ function HomeContent() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <p
-                            style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
-                            className="truncate"
-                          >
-                            {schedule.title}
-                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <p
+                              style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
+                              className="truncate"
+                            >
+                              {schedule.title}
+                            </p>
+                            {schedule.remind_before && schedule.remind_before > 0 && (
+                              <Bell size={12} color="#8B5CF6" className="flex-shrink-0" />
+                            )}
+                          </div>
                           <GlassBadge color={statusColor as "success" | "error" | "primary"}>
                             {statusLabel}
                           </GlassBadge>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            style={{
-                              color: isPast && schedule.status === "pending" ? "#EF4444" : "#9CA3AF",
-                              fontSize: 12,
-                            }}
-                          >
-                            {isToday ? "今天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
+                          <span style={{ color: "#9CA3AF", fontSize: 12 }}>
+                            {isToday ? "今天" : isTomorrow ? "明天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
                             {" "}
                             {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                           </span>
@@ -259,6 +258,26 @@ function HomeContent() {
               })}
             </div>
           </div>
+        )}
+
+        {/* 空状态：无日程 */}
+        {sortedSchedules.length === 0 && !searchQuery && (
+          <GlassCard className="!p-5 text-center">
+            <span style={{ fontSize: 32 }}>📅</span>
+            <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
+              暂无日程安排
+            </p>
+            <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
+              在灵感助手中输入"明天下午3点开会"，<br />AI 会帮你自动提取并添加日程
+            </p>
+            <button
+              onClick={() => handleNavigate("capture")}
+              className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
+            >
+              去灵感助手
+            </button>
+          </GlassCard>
         )}
 
         {/* Search */}

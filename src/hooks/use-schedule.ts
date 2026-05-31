@@ -11,6 +11,7 @@ interface CreateScheduleData {
   location?: string;
   color?: string;
   remind_before?: number;
+  suggestions?: string[];
   source_content_id?: string;
 }
 
@@ -22,6 +23,7 @@ interface UpdateScheduleData {
   color?: string;
   status?: "pending" | "completed" | "cancelled";
   remind_before?: number;
+  suggestions?: string[];
 }
 
 interface SchedulesQuery {

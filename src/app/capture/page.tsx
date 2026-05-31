@@ -14,9 +14,22 @@ import type { Message, AttachedFile } from "./types";
 import { REWRITE_STYLES } from "./types";
 import { useSessionManager, useMessageActions, useVoiceRecording, useFileUpload } from "./hooks";
 import { ActionBtn, UserActions, AiActions } from "./components";
+import { useToast } from "@/components/Toast";
+
+function formatScheduleTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  const now = new Date();
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const isToday = d.toDateString() === now.toDateString();
+  const isTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString() === d.toDateString();
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const dateLabel = isToday ? '今天' : isTomorrow ? '明天' : `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+  return `${dateLabel} ${time}`;
+}
 
 function CaptureContent() {
   const router = useRouter();
+  const { showToast } = useToast();
 
   // 会话管理
   const sessionMgr = useSessionManager();
@@ -29,9 +42,9 @@ function CaptureContent() {
   // 消息操作
   const msgActions = useMessageActions();
   const {
-    copiedId, regeneratingId, savingId, speakingId,
+    copiedId, regeneratingId, savingId, schedulingId, speakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
-    speakMessage, regenerateMessage, saveToInspiration,
+    speakMessage, regenerateMessage, saveToInspiration, addToSchedule,
   } = msgActions;
 
   // 语音
@@ -118,8 +131,8 @@ function CaptureContent() {
       if (!file) return;
 
       const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
-      if (!validTypes.includes(file.type)) { alert('格式不支持，请使用 MP4/MOV/AVI/WebM'); return; }
-      if (file.size > 100 * 1024 * 1024) { alert(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），最大 100MB`); return; }
+      if (!validTypes.includes(file.type)) { showToast('格式不支持，请使用 MP4/MOV/AVI/WebM', 'warning'); return; }
+      if (file.size > 100 * 1024 * 1024) { showToast(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），最大 100MB`, 'warning'); return; }
 
       setIsAnalyzingVideo(true);
       setIsAnalyzing(true);
@@ -320,7 +333,7 @@ function CaptureContent() {
         }]);
       }
     } catch {
-      alert('改写失败，请重试');
+      showToast('改写失败，请重试', 'error');
     } finally {
       setIsRewriting(false);
     }
@@ -394,6 +407,24 @@ function CaptureContent() {
       const data = await res.json();
       const aiContent = data.response || data.summary || data.title || '已收到';
 
+      // 处理日程数据：优先用 AI 里的 schedule/schedules，没有则后台提取
+      let scheduleData = data.schedules || (data.schedule ? [data.schedule] : undefined);
+
+      if (!scheduleData) {
+        // AI 可能没返回日程结构（如 life 意图），把 AI 分析也传给 extract-schedule 以提取详细信息
+        try {
+          const extractRes = await fetch('/api/ai/extract-schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, aiResponse: aiContent }),
+          });
+          const extractData = await extractRes.json();
+          if (extractData.success && extractData.schedules?.length > 0) {
+            scheduleData = extractData.schedules;
+          }
+        } catch { /* 提取失败不影响主流程 */ }
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -401,6 +432,8 @@ function CaptureContent() {
         contentType: 'text',
         generatedImage: data.generatedImage || undefined,
         generatedVideo: data.generatedVideo || undefined,
+        schedule: data.schedule || undefined,
+        schedules: scheduleData,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
@@ -467,7 +500,33 @@ function CaptureContent() {
   const handleRegenerate = async (msg: Message) => {
     const result = await regenerateMessage(msg, messages, currentSessionId);
     if (result) {
-      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: result, timestamp: new Date() } : m));
+      let schedules = result.schedules;
+
+      // 如果 AI 没返回日程结构，尝试从原用户文本提取
+      if (!schedules) {
+        const userMsg = messages.find(m => m.type === 'user' && m.id < msg.id && !messages.some(mm => mm.type === 'ai' && mm.id > m.id && mm.id < msg.id));
+        if (userMsg) {
+          try {
+            const extractRes = await fetch('/api/ai/extract-schedule', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: userMsg.content, aiResponse: result.content }),
+            });
+            const extractData = await extractRes.json();
+            if (extractData.success && extractData.schedules?.length > 0) {
+              schedules = extractData.schedules;
+            }
+          } catch { /* ignore */ }
+        }
+      }
+
+      setMessages(prev => prev.map(m => m.id === msg.id ? {
+        ...m,
+        content: result.content,
+        schedule: result.schedule,
+        schedules,
+        timestamp: new Date(),
+      } : m));
     }
   };
 
@@ -694,6 +753,130 @@ function CaptureContent() {
                 )}
               </div>
             )}
+            {/* 日程预览卡片（支持多条） */}
+            {msg.type === 'ai' && (msg.schedules && msg.schedules.length > 0) && (
+              <div className="mt-2 ml-[52px] max-w-[85%]">
+                {msg.schedules.length > 1 && (
+                  <p style={{ color: '#A78BFA', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>
+                    识别到 {msg.schedules.length} 条日程
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {msg.schedules.map((s, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-xl p-3"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(99,102,241,0.08))',
+                        border: '1px solid rgba(139,92,246,0.25)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span style={{ fontSize: 14 }}>📅</span>
+                        <span style={{ color: '#C4B5FD', fontSize: 12, fontWeight: 600 }}>
+                          {formatScheduleTime(s.scheduled_at)}
+                        </span>
+                        <span style={{
+                          color: (() => {
+                            try { return new Date(s.scheduled_at) < new Date() ? '#EF4444' : '#10B981'; }
+                            catch { return '#9CA3AF'; }
+                          })(),
+                          fontSize: 10,
+                        }}>
+                          {(() => {
+                            try {
+                              const d = new Date(s.scheduled_at);
+                              const now = new Date();
+                              if (d.toDateString() === now.toDateString()) return '(今天)';
+                              if (new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString() === d.toDateString()) return '(明天)';
+                              return '';
+                            } catch { return ''; }
+                          })()}
+                        </span>
+                      </div>
+                      <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+                        {s.title}
+                      </p>
+                      {s.description && (
+                        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 2, lineHeight: 1.4 }}>
+                          {s.description}
+                        </p>
+                      )}
+                      {s.location && (
+                        <p style={{ color: '#6EE7B7', fontSize: 11 }}>
+                          📍 {s.location}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => addToSchedule(msg)}
+                  className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80"
+                  style={{ background: 'rgba(139,92,246,0.4)' }}
+                >
+                  {schedulingId === msg.id ? (
+                    <>✅ 已全部添加</>
+                  ) : (
+                    <>📅 添加全部日程 ({msg.schedules.length}条)</>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* 兼容单条日程旧格式 */}
+            {msg.type === 'ai' && msg.schedule && !msg.schedules && (
+              <div className="mt-2 ml-[52px] max-w-[80%]">
+                <div
+                  className="rounded-xl p-3"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.1))',
+                    border: '1px solid rgba(139,92,246,0.3)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span style={{ fontSize: 16 }}>📅</span>
+                    <span style={{ color: '#C4B5FD', fontSize: 13, fontWeight: 600 }}>
+                      {formatScheduleTime(msg.schedule.scheduled_at)}
+                    </span>
+                  </div>
+                  <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                    {msg.schedule.title}
+                  </p>
+                  {msg.schedule.description && (
+                    <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, lineHeight: 1.4 }}>
+                      {msg.schedule.description}
+                    </p>
+                  )}
+                  {msg.schedule.location && (
+                    <p style={{ color: '#6EE7B7', fontSize: 12 }}>
+                      📍 {msg.schedule.location}
+                    </p>
+                  )}
+                  {msg.schedule.suggestions && msg.schedule.suggestions.length > 0 && (
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(139,92,246,0.2)' }}>
+                      {msg.schedule.suggestions.map((si, i) => (
+                        <p key={i} style={{ color: '#A78BFA', fontSize: 11, lineHeight: 1.5 }}>
+                          {i + 1}. {si}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => addToSchedule(msg)}
+                    className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80"
+                    style={{ background: 'rgba(139,92,246,0.4)' }}
+                  >
+                    {schedulingId === msg.id ? (
+                      <>✅ 已添加</>
+                    ) : (
+                      <>📅 添加到日程</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {hoveredMessageId === msg.id && (
               <div className={`flex mt-0.5 ${msg.type === 'user' ? 'justify-end mr-2' : 'justify-start ml-[52px]'}`}>
                 {msg.type === 'user' ? (
@@ -715,11 +898,13 @@ function CaptureContent() {
                     speakingId={speakingId}
                     regeneratingId={regeneratingId}
                     savingId={savingId}
+                    schedulingId={schedulingId}
                     onCopy={copyMessage}
                     onSpeak={speakMessage}
                     onShare={shareMessage}
                     onRegenerate={handleRegenerate}
                     onSave={(msg: any) => saveToInspiration(msg, messages)}
+                    onAddToSchedule={addToSchedule}
                     onDelete={handleDelete}
                   />
                 )}

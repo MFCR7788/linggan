@@ -1,6 +1,6 @@
 // ====== Capture 页面子组件 ======
 
-import { Clipboard, Check, Share2, Edit3, Trash2, Volume2, Square, RefreshCw, BookmarkPlus, Image as ImageIcon, Video } from 'lucide-react';
+import { Clipboard, Check, Share2, Edit3, Trash2, Volume2, Square, RefreshCw, BookmarkPlus, CalendarPlus, Image as ImageIcon, Video } from 'lucide-react';
 import type { Message } from './types';
 
 // ====== 小操作按钮 ======
@@ -60,17 +60,19 @@ export function UserActions({ msg, copiedId, generatingId, onCopy, onShare, onMo
 
 // ====== AI 消息操作按钮 ======
 
-export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId, onCopy, onSpeak, onShare, onRegenerate, onSave, onDelete }: {
+export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId, schedulingId, onCopy, onSpeak, onShare, onRegenerate, onSave, onAddToSchedule, onDelete }: {
   msg: Message;
   copiedId: string | null;
   speakingId: string | null;
   regeneratingId: string | null;
   savingId: string | null;
+  schedulingId: string | null;
   onCopy: (msg: Message) => void;
   onSpeak: (msg: Message) => void;
   onShare: (msg: Message) => void;
   onRegenerate: (msg: Message) => void;
   onSave: (msg: Message) => void;
+  onAddToSchedule: (msg: Message) => void;
   onDelete: (msg: Message) => void;
 }) {
   return (
@@ -93,6 +95,13 @@ export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId,
         tooltip="存灵感库"
         onClick={() => onSave(msg)}
       />
+      {(msg.schedule || (msg.schedules && msg.schedules.length > 0)) && (
+        <ActionBtn
+          icon={schedulingId === msg.id ? Check : CalendarPlus}
+          tooltip="添加到日程"
+          onClick={() => onAddToSchedule(msg)}
+        />
+      )}
       <ActionBtn icon={Trash2} tooltip="删除" onClick={() => onDelete(msg)} />
     </div>
   );

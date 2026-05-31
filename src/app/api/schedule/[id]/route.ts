@@ -21,14 +21,28 @@ export const GET = withAuth(async ({ request, user, params }) => {
     return createApiError('日程不存在', 404);
   }
 
-  return createApiResponse(data);
+  // 如果有关联的灵感来源，一并返回 AI 分析数据
+  let linkedInspiration = null;
+  if (data.source_content_id) {
+    const { data: inspiration } = await supabase
+      .from('content_items')
+      .select('id, title, original_text, ai_summary, ai_key_points, ai_creation_suggestions, type, created_at')
+      .eq('id', data.source_content_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (inspiration) {
+      linkedInspiration = inspiration;
+    }
+  }
+
+  return createApiResponse({ ...data, linkedInspiration });
 });
 
 // 更新日程
 export const PUT = withAuth(async ({ request, user, params }) => {
   const { id } = params;
   const body = await request.json();
-  const { title, description, scheduled_at, location, color, status, remind_before } = body;
+  const { title, description, scheduled_at, location, color, status, remind_before, suggestions } = body;
 
   const supabase = createAdminClient();
 
@@ -52,6 +66,7 @@ export const PUT = withAuth(async ({ request, user, params }) => {
   if (color !== undefined) updateData.color = color;
   if (status !== undefined) updateData.status = status;
   if (remind_before !== undefined) updateData.remind_before = remind_before;
+  if (suggestions !== undefined) updateData.suggestions = Array.isArray(suggestions) ? JSON.stringify(suggestions) : null;
 
   const { data, error } = await supabase
     .from('schedules')

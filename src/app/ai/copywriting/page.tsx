@@ -2,10 +2,11 @@
 
 
 import { useState, useEffect } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon } from "lucide-react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { useToast } from "@/components/Toast";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components";
@@ -66,18 +67,27 @@ interface InspirationItem {
 }
 
 function AICopywritingContent() {
+  const { showToast } = useToast();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedType, setSelectedType] = useState("xiaohongshu");
   const [selectedStyle, setSelectedStyle] = useState("小红书博主风");
   const [isGenerated, setIsGenerated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
   const [noAiMode, setNoAiMode] = useState(true);
   const [resultTab, setResultTab] = useState<"standard" | "noai">("standard");
-  const [standardContent, setStandardContent] = useState<string>(generateStandardContent());
-  const [noAiContent, setNoAiContent] = useState<string>(generateNoAiContent());
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [standardContents, setStandardContents] = useState<string[]>([generateStandardContent()]);
+  const [noAiContents, setNoAiContents] = useState<string[]>([generateNoAiContent()]);
   const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [copied, setCopied] = useState(false);
+
+  // 多平台改写
+  const [rewriteContents, setRewriteContents] = useState<Record<string, string>>({});
+  const [rewriteTab, setRewriteTab] = useState('xiaohongshu');
+  const [isRewriting, setIsRewriting] = useState(false);
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -120,6 +130,8 @@ function AICopywritingContent() {
     }
   }, [searchParams]);
 
+  const standardContent = standardContents[currentBatchIndex] || standardContents[0];
+  const noAiContent = noAiContents[currentBatchIndex] || noAiContents[0];
   const currentContent = resultTab === "standard" ? standardContent : noAiContent;
 
   // 切换灵感选择
@@ -161,40 +173,65 @@ function AICopywritingContent() {
         selectedData.push({ title: '通用内容创作', originalText: '用户未选择特定素材，请生成通用参考内容', aiSummary: '' });
       }
 
+      const batchN = batchMode ? 3 : 1;
       // 并行请求标准版和去AI味版
       const [standardRes, noAiRes] = await Promise.all([
         fetch('/api/ai/copywriting', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: false }),
+          body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: false, n: batchN }),
         }),
         noAiMode
           ? fetch('/api/ai/copywriting', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: true }),
+              body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: true, n: batchN }),
             })
           : null,
       ]);
 
       const standardData = await standardRes.json();
-      setStandardContent(standardData.success ? standardData.data.content : generateStandardContent());
+      const standardResult = standardData.success ? standardData.data.content : generateStandardContent();
+      setStandardContents(Array.isArray(standardResult) ? standardResult : [standardResult]);
+      setCurrentBatchIndex(0);
 
       if (noAiRes) {
         const noAiData = await noAiRes.json();
-        setNoAiContent(noAiData.success ? noAiData.data.content : standardData.data.content || generateNoAiContent());
+        const noAiResult = noAiData.success ? noAiData.data.content : (Array.isArray(standardResult) ? standardResult[0] : standardResult);
+        setNoAiContents(Array.isArray(noAiResult) ? noAiResult : [noAiResult]);
       } else {
-        setNoAiContent(standardData.data.content || generateNoAiContent());
+        setNoAiContents(Array.isArray(standardResult) ? standardResult : [standardResult]);
       }
+
+      // 重置改写
+      setRewriteContents({});
     } catch (error) {
       console.error('Generation failed:', error);
-      // 出错时降级到本地内容
-      setStandardContent(generateStandardContent());
-      setNoAiContent(generateNoAiContent());
+      setStandardContents([generateStandardContent()]);
+      setNoAiContents([generateNoAiContent()]);
+      setCurrentBatchIndex(0);
     } finally {
       setIsLoading(false);
       setIsGenerated(true);
     }
+  };
+
+  const handleRewriteMulti = async () => {
+    setIsRewriting(true);
+    try {
+      const res = await fetch('/api/ai/copywriting/rewrite-multi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: currentContent }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRewriteContents(data.data.versions || {});
+      }
+    } catch (e) {
+      console.error('Multi-platform rewrite failed:', e);
+    }
+    setIsRewriting(false);
   };
 
   const handleCopy = async () => {
@@ -220,7 +257,7 @@ function AICopywritingContent() {
         });
       } else {
         await handleCopy();
-        alert('链接已复制到剪贴板！');
+        showToast('链接已复制到剪贴板！', 'success');
       }
     } catch (error) {
       console.error('Share failed:', error);
@@ -371,7 +408,7 @@ function AICopywritingContent() {
 
         {/* Generate */}
         <GlassCard className="!p-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex flex-col gap-1">
               <span style={{ color: "#E5E7EB", fontSize: 14 }}>去 AI 味</span>
               <span style={{ color: "#9CA3AF", fontSize: 11 }}>让文案更像真人写的，减少AI痕迹</span>
@@ -390,8 +427,29 @@ function AICopywritingContent() {
               />
             </button>
           </div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5" style={{ color: "#E5E7EB", fontSize: 14 }}>
+                <Layers size={14} color="#F59E0B" /> 批量生成
+              </span>
+              <span style={{ color: "#9CA3AF", fontSize: 11 }}>同时生成 3 个不同角度的版本</span>
+            </div>
+            <button
+              onClick={() => setBatchMode(!batchMode)}
+              className="w-10 h-6 rounded-full transition-all"
+              style={{
+                background: batchMode ? "#F59E0B" : "rgba(255,255,255,0.2)",
+                position: "relative",
+              }}
+            >
+              <div
+                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                style={{ left: batchMode ? "calc(100% - 22px)" : 2 }}
+              />
+            </button>
+          </div>
           <PrimaryButton fullWidth size="lg" onClick={handleGenerate}>
-            <Zap size={18} /> {isLoading ? "生成中..." : "立即生成"}
+            <Zap size={18} /> {isLoading ? "生成中..." : batchMode ? "批量生成 (3篇)" : "立即生成"}
           </PrimaryButton>
         </GlassCard>
 
@@ -405,6 +463,25 @@ function AICopywritingContent() {
               </div>
             ) : (
               <>
+                {/* Batch version picker */}
+                {standardContents.length > 1 && (
+                  <div className="flex gap-1.5 mb-3 overflow-x-auto">
+                    {standardContents.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentBatchIndex(i)}
+                        className="px-3 py-1 rounded-lg text-xs flex-shrink-0"
+                        style={{
+                          background: currentBatchIndex === i ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                          border: currentBatchIndex === i ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                          color: currentBatchIndex === i ? '#93C5FD' : '#9CA3AF',
+                        }}
+                      >
+                        版本 {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex rounded-xl overflow-hidden mb-4" style={{ background: "rgba(255,255,255,0.05)" }}>
                   {(["standard", "noai"] as const).map((tab) => (
                     <button
@@ -450,6 +527,83 @@ function AICopywritingContent() {
                   ))}
                 </div>
               </>
+            )}
+          </GlassCard>
+        )}
+
+        {/* 多平台改写 */}
+        {isGenerated && !isLoading && (
+          <GlassCard>
+            <div className="flex items-center justify-between mb-3">
+              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+                <Globe size={14} color="#8B5CF6" style={{ display: 'inline', marginRight: 4 }} />
+                <span style={{ color: '#8B5CF6' }}>多平台</span> · 一键改写
+              </p>
+              <button
+                onClick={handleRewriteMulti}
+                disabled={isRewriting}
+                className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
+                style={{
+                  background: 'rgba(139,92,246,0.15)',
+                  border: '1px solid rgba(139,92,246,0.3)',
+                  color: '#C4B5FD',
+                }}
+              >
+                {isRewriting ? (
+                  <><div className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> 改写中...</>
+                ) : (
+                  <><RefreshCw size={12} /> 改写全部</>
+                )}
+              </button>
+            </div>
+
+            {Object.keys(rewriteContents).length > 0 ? (
+              <>
+                <div className="flex gap-1 mb-3 overflow-x-auto">
+                  {[
+                    { key: 'xiaohongshu', label: '小红书' },
+                    { key: 'douyin', label: '抖音' },
+                    { key: 'wechat_article', label: '公众号' },
+                    { key: 'weibo', label: '微博' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setRewriteTab(key)}
+                      className="px-3 py-1.5 rounded-lg text-xs flex-shrink-0"
+                      style={{
+                        background: rewriteTab === key ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: rewriteTab === key ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                        color: rewriteTab === key ? '#C4B5FD' : '#9CA3AF',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  className="p-4 rounded-xl mb-3"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    {rewriteContents[rewriteTab] || '暂无内容'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(rewriteContents[rewriteTab] || '');
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="w-full py-2 rounded-lg text-xs flex items-center justify-center gap-1.5"
+                  style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}
+                >
+                  <Copy size={12} /> 复制当前版本
+                </button>
+              </>
+            ) : (
+              <p style={{ color: '#6B7280', fontSize: 12, textAlign: 'center', padding: '12px 0' }}>
+                点击「改写全部」将当前文案改写为四个平台版本
+              </p>
             )}
           </GlassCard>
         )}

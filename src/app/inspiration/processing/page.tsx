@@ -18,6 +18,7 @@ import {
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { useToast } from "@/components/Toast";
 import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components";
 import { useCreateInspiration } from "@/hooks/use-inspiration";
@@ -60,6 +61,7 @@ const getInitialSteps = (type: ContentType): AnalysisStep[] => {
 };
 
 function InspirationProcessingContent() {
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const contentType = (searchParams.get("type") as ContentType) || "text";
@@ -243,7 +245,7 @@ function InspirationProcessingContent() {
       router.push("/inspiration");
     } catch (error) {
       console.error("保存失败:", error);
-      alert("保存失败，请重试");
+      showToast("保存失败，请重试", 'error');
     }
   };
   

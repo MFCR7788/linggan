@@ -56,7 +56,7 @@ export const GET = withAuth(async ({ request, user }) => {
 // 创建日程
 export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
-  const { title, description, scheduled_at, location, color, remind_before, source_content_id } = body;
+  const { title, description, scheduled_at, location, color, remind_before, suggestions, source_content_id } = body;
 
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     return createApiError('日程标题不能为空', 400);
@@ -76,6 +76,7 @@ export const POST = withAuth(async ({ request, user }) => {
       location: location || null,
       color: color || '#3B82F6',
       remind_before: remind_before != null ? remind_before : 30,
+      suggestions: Array.isArray(suggestions) ? JSON.stringify(suggestions) : null,
       source_content_id: source_content_id || null,
     })
     .select()

@@ -8,6 +8,7 @@ import { BottomNav, PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
 import { useRouter } from "next/navigation";
 import { useSchedules, useUpdateSchedule, useDeleteSchedule, useCreateSchedule } from "@/hooks/use-schedule";
+import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
 import { PAGE_ROUTES } from "@/lib/style-constants";
 import type { Schedule } from "@/types";
 
@@ -34,6 +35,7 @@ function ScheduleContent() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("");
   const { data: schedules, isLoading } = useSchedules({ status: activeFilter || undefined });
+  useNotificationScheduler();
   const updateSchedule = useUpdateSchedule();
   const deleteSchedule = useDeleteSchedule();
   const createSchedule = useCreateSchedule();
@@ -133,7 +135,8 @@ function ScheduleContent() {
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl p-4 transition-all"
+                  onClick={() => router.push(`/schedule/${item.id}`)}
+                  className="rounded-xl p-4 transition-all cursor-pointer hover:bg-white/5"
                   style={{
                     background: 'rgba(255,255,255,0.06)',
                     border: '1px solid rgba(255,255,255,0.1)',
@@ -201,7 +204,7 @@ function ScheduleContent() {
                       {/* 操作按钮 */}
                       <div className="flex gap-2 mt-3">
                         <button
-                          onClick={() => handleToggleStatus(item)}
+                          onClick={(e) => { e.stopPropagation(); handleToggleStatus(item); }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all hover:bg-white/10"
                           style={{
                             background: item.status === 'completed'
@@ -220,7 +223,7 @@ function ScheduleContent() {
                         </button>
                         {item.status !== 'cancelled' && item.status !== 'completed' && (
                           <button
-                            onClick={() => updateSchedule.mutateAsync({ id: item.id, data: { status: 'cancelled' } })}
+                            onClick={(e) => { e.stopPropagation(); updateSchedule.mutateAsync({ id: item.id, data: { status: 'cancelled' } }); }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all hover:bg-white/10"
                             style={{
                               background: 'rgba(239,68,68,0.1)',
@@ -233,7 +236,7 @@ function ScheduleContent() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleDelete(item.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all hover:bg-white/10 ml-auto"
                           style={{
                             background: 'rgba(255,255,255,0.06)',

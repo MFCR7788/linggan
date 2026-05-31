@@ -8,6 +8,7 @@ import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { useToast } from '@/components/Toast';
 import { ProtectedRoute, LoadingSpinner } from '@/components';
 
 interface RelatedHotspot {
@@ -47,6 +48,7 @@ interface HotspotDetail {
 }
 
 function HotspotDetailContent() {
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
@@ -418,7 +420,7 @@ function HotspotDetailContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'confirmed' }),
               });
-              alert('已标记为有用');
+              showToast('已标记为有用', 'success');
             } catch {}
           }}
           className="!px-3"
@@ -440,7 +442,7 @@ function HotspotDetailContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'dismissed' }),
               });
-              alert('已忽略该热点');
+              showToast('已忽略该热点', 'info');
             } catch {}
           }}
           className="!px-3"
