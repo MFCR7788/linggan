@@ -14,7 +14,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from '@/lib/style-constants';
-import { QUALITY_TIERS, type QualityTier } from '@/lib/ai-services';
+import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
 
 // ─── 类型 ────────────────────────────────────────────────
 

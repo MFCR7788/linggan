@@ -2,7 +2,8 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
-import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, QUALITY_TIERS, type StoryboardScene, type VideoProvider } from '@/lib/ai-services';
+import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
+import { QUALITY_TIERS, type VideoProvider } from '@/lib/video-models';
 
 export const dynamic = 'force-dynamic';
 
