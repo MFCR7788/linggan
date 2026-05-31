@@ -1,0 +1,24 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build and upload to Play Store"
+  lane :beta do
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      properties: {
+        "android.injected.signing.store.file" => ENV["ANDROID_KEYSTORE_FILE"],
+        "android.injected.signing.store.password" => ENV["ANDROID_KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["ANDROID_KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"],
+      }
+    )
+
+    upload_to_play_store(
+      package_name: "com.lingji.app",
+      track: "internal",
+      json_key_file: ENV["GOOGLE_PLAY_JSON_KEY_FILE"],
+      release_status: "completed"
+    )
+  end
+end
