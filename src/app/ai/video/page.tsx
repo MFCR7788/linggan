@@ -122,6 +122,8 @@ function AIVideoContent() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const segmentsRef = useRef<SegmentState[]>([]);
+  const [oneClickMode, setOneClickMode] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // ─── 加载灵感数据 ────────────────────────────────────
@@ -297,7 +299,148 @@ function AIVideoContent() {
       setMergeError(e.message || '提交失败');
       setMergePhase('error');
     }
-  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos]);
+  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier]);
+
+  const handleOneClickGenerate = async () => {
+    if (selectedInspirations.size === 0) {
+      setToast({ message: '请先选择素材', type: 'error' });
+      return;
+    }
+    setOneClickMode(true);
+    setCurrentStep(3);
+    setMergePhase('submitting');
+    setMergeError(null);
+    setFinalVideoUrl(null);
+
+    const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
+
+    try {
+      const res = await fetch('/api/ai/video/one-click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inspirations: selectedData,
+          topic: topic.trim() || undefined,
+          stylePreset,
+          qualityTier,
+          language,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || '一键成片失败');
+
+      // 设置分镜
+      if (data.data.storyboard) {
+        setStoryboard(data.data.storyboard);
+      }
+
+      const segs: SegmentState[] = data.data.segments.map((s: any) => ({
+        ...s,
+        status: s.taskId ? 'queued' : 'failed',
+      }));
+      setSegments(segs);
+      segmentsRef.current = segs;
+
+      const validSegs = segs.filter((s) => s.taskId);
+      if (validSegs.length === 0) {
+        setMergeError('所有片段提交失败');
+        setMergePhase('error');
+        return;
+      }
+
+      // 开始轮询
+      setMergePhase('generating');
+      const validTaskIds = validSegs.map((s) => s.taskId).join(',');
+      const validProviders = validSegs.map((s) => s.provider || 'dashscope').join(',');
+      let attempts = 0;
+      pollingRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > 120) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setMergeError('生成超时，请重试');
+          setMergePhase('error');
+          return;
+        }
+        try {
+          const pollRes = await fetch(`/api/ai/video/generate?taskIds=${validTaskIds}&providers=${validProviders}`);
+          const pollData = await pollRes.json();
+          if (pollData.success) {
+            const { results, progress } = pollData.data;
+            const updatedSegs = segmentsRef.current.map((seg) => {
+              const r = seg.taskId ? results?.[seg.taskId] : undefined;
+              if (r) {
+                return {
+                  ...seg,
+                  status: r.status === 'succeeded' ? 'succeeded' as const
+                    : r.status === 'failed' ? 'failed' as const
+                    : seg.status === 'queued' ? 'running' as const
+                    : seg.status,
+                  videoUrl: r.videoUrl || seg.videoUrl,
+                };
+              }
+              return seg;
+            });
+            segmentsRef.current = updatedSegs;
+            setSegments(updatedSegs);
+
+            if (progress?.allDone) {
+              if (pollingRef.current) clearInterval(pollingRef.current);
+              // 一键成片模式：自动合成
+              const succeededSegs = updatedSegs.filter((s) => s.status === 'succeeded' && s.videoUrl);
+              if (succeededSegs.length > 0) {
+                setMergePhase('segments_ready');
+                // 自动触发合成
+                setTimeout(() => {
+                  const urls = succeededSegs.map((s) => s.videoUrl as string);
+                  handleAutoMerge(urls);
+                }, 500);
+              } else {
+                setMergeError('所有片段生成失败');
+                setMergePhase('error');
+              }
+            }
+          }
+        } catch (pollErr) {
+          console.warn('[OneClick Poll] 轮询失败:', pollErr);
+        }
+      }, 5000);
+    } catch (e: any) {
+      console.error('[OneClick] 一键成片失败:', e);
+      setMergeError(e.message || '一键成片失败');
+      setMergePhase('error');
+    }
+  };
+
+  const handleAutoMerge = async (urls: string[]) => {
+    setMergePhase('merging');
+    setMergeError(null);
+    try {
+      const mergeRes = await fetch('/api/ai/video/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrls: urls,
+          bgmStyle,
+          subtitleStyle,
+          subtitlePosition: subtitlePos,
+          storyboard,
+          stylePreset,
+          language,
+          topic: topic.trim() || '',
+        }),
+      });
+      const mergeData = await mergeRes.json();
+      if (mergeData.success && mergeData.data?.videoUrl) {
+        setFinalVideoUrl(mergeData.data.videoUrl);
+        setMergePhase('done');
+      } else {
+        throw new Error(mergeData.error || '合并返回无视频地址');
+      }
+    } catch (e: any) {
+      setMergeError(e.message || '合并失败');
+      setMergePhase('error');
+    }
+  };
 
   const handleCancel = () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -478,53 +621,6 @@ function AIVideoContent() {
         </p>
       </GlassCard>
 
-      {/* 画质档位选择 */}
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#F59E0B' }}>画质</span> · 选择生成模型
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {Object.values(QUALITY_TIERS).map((tier: QualityTier) => {
-            const t2vName = getModelDisplayName(tier.t2v.model);
-            const i2vName = getModelDisplayName(tier.i2v.model);
-            return (
-              <button
-                key={tier.value}
-                onClick={() => setQualityTier(tier.value)}
-                className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
-                style={{
-                  background: qualityTier === tier.value ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: qualityTier === tier.value ? '1px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                <span style={{ fontSize: 20 }}>{tier.icon}</span>
-                <span style={{
-                  color: qualityTier === tier.value ? '#FCD34D' : '#E5E7EB',
-                  fontSize: 13, fontWeight: 700,
-                }}>
-                  {tier.label}
-                </span>
-                <span style={{ color: '#9CA3AF', fontSize: 9 }}>
-                  {tier.description}
-                </span>
-                <span style={{
-                  color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
-                  fontSize: 9, lineHeight: 1.4, textAlign: 'center',
-                }}>
-                  {t2vName}<br />{i2vName}
-                </span>
-                <span style={{
-                  color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
-                  fontSize: 9, fontWeight: 600,
-                }}>
-                  {tier.t2v.price}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </GlassCard>
-
       {/* 时长选择 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
@@ -546,30 +642,91 @@ function AIVideoContent() {
         </div>
       </GlassCard>
 
-      {/* 语言选择 */}
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#3B82F6' }}>语言</span> · 字幕语言
-        </p>
-        <div className="grid grid-cols-4 gap-2">
-          {LANGUAGE_OPTIONS.map((lang) => (
-            <button
-              key={lang.value}
-              onClick={() => setLanguage(lang.value)}
-              className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
-              style={{
-                background: language === lang.value ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                border: language === lang.value ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{lang.icon}</span>
-              <span style={{ color: language === lang.value ? '#93C5FD' : '#9CA3AF', fontSize: 11 }}>
-                {lang.nativeLabel}
-              </span>
-            </button>
-          ))}
+      {/* 高级设置折叠 */}
+      <div
+        className="p-3 rounded-xl cursor-pointer transition-all"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+        onClick={() => setAdvancedOpen(!advancedOpen)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Settings size={14} color="#9CA3AF" />
+            <span style={{ color: '#9CA3AF', fontSize: 13 }}>高级设置</span>
+            <span style={{ color: '#6B7280', fontSize: 10 }}>
+              {qualityTier === 'standard' ? '标准画质' : qualityTier === 'high' ? '高清画质' : '超高清'} · {LANGUAGE_OPTIONS.find(l => l.value === language)?.nativeLabel || '中文'}
+            </span>
+          </div>
+          {advancedOpen ? <ChevronUp size={14} color="#9CA3AF" /> : <ChevronDown size={14} color="#9CA3AF" />}
         </div>
-      </GlassCard>
+        {advancedOpen && (
+          <div className="mt-3 pt-3 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            {/* 画质档位 */}
+            <div>
+              <p style={{ color: '#F59E0B', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>画质档位</p>
+              <div className="grid grid-cols-3 gap-2">
+                {Object.values(QUALITY_TIERS).map((tier: QualityTier) => {
+                  const t2vName = getModelDisplayName(tier.t2v.model);
+                  const i2vName = getModelDisplayName(tier.i2v.model);
+                  return (
+                    <button
+                      key={tier.value}
+                      onClick={(e) => { e.stopPropagation(); setQualityTier(tier.value); }}
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
+                      style={{
+                        background: qualityTier === tier.value ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+                        border: qualityTier === tier.value ? '1px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      <span style={{ fontSize: 20 }}>{tier.icon}</span>
+                      <span style={{
+                        color: qualityTier === tier.value ? '#FCD34D' : '#E5E7EB',
+                        fontSize: 13, fontWeight: 700,
+                      }}>
+                        {tier.label}
+                      </span>
+                      <span style={{ color: '#9CA3AF', fontSize: 9 }}>{tier.description}</span>
+                      <span style={{
+                        color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
+                        fontSize: 9, lineHeight: 1.4, textAlign: 'center',
+                      }}>
+                        {t2vName}<br />{i2vName}
+                      </span>
+                      <span style={{
+                        color: qualityTier === tier.value ? '#FCD34D' : '#6B7280',
+                        fontSize: 9, fontWeight: 600,
+                      }}>
+                        {tier.t2v.price}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* 语言选择 */}
+            <div>
+              <p style={{ color: '#3B82F6', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>字幕语言</p>
+              <div className="grid grid-cols-4 gap-2">
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <button
+                    key={lang.value}
+                    onClick={(e) => { e.stopPropagation(); setLanguage(lang.value); }}
+                    className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
+                    style={{
+                      background: language === lang.value ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                      border: language === lang.value ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <span style={{ fontSize: 20 }}>{lang.icon}</span>
+                    <span style={{ color: language === lang.value ? '#93C5FD' : '#9CA3AF', fontSize: 11 }}>
+                      {lang.nativeLabel}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 主题 */}
       <GlassCard>
@@ -581,6 +738,32 @@ function AIVideoContent() {
           className="w-full px-3 py-2 rounded-xl bg-transparent text-sm outline-none"
           style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
         />
+      </GlassCard>
+
+      {/* 一键成片 */}
+      <GlassCard
+        hover
+        onClick={handleOneClickGenerate}
+        className="!p-4 relative overflow-hidden"
+        style={{
+          border: '1px solid rgba(239,68,68,0.4)',
+          background: 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.08))',
+        }}
+      >
+        <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl" style={{ background: 'rgba(239,68,68,0.15)' }} />
+        <div className="flex items-center gap-3 relative">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.3)' }}>
+            <Wand2 size={20} color="#FCA5A5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p style={{ color: '#FCA5A5', fontSize: 14, fontWeight: 700 }}>一键成片</p>
+            <p style={{ color: '#9CA3AF', fontSize: 11 }}>
+              自动分镜 + 生成 + 合成 · 选好素材直接出片
+            </p>
+          </div>
+          <ChevronRight size={18} color="#FCA5A5" />
+        </div>
       </GlassCard>
 
       {/* 生成按钮 */}
@@ -925,6 +1108,9 @@ function AIVideoContent() {
               style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
           </div>
           <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
+            {oneClickMode && (
+              <span style={{ color: '#FCA5A5', fontSize: 11, display: 'block', marginBottom: 4 }}>一键成片 · 自动分镜+生成+合成</span>
+            )}
             {mergePhase === 'submitting' ? '正在提交任务...' :
              mergePhase === 'generating' ? '正在生成视频片段...' :
              mergePhase === 'merging' ? '正在合并 + 字幕 + BGM...' : '处理中...'}

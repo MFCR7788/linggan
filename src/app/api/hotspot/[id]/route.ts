@@ -89,3 +89,22 @@ export const PATCH = withAuth(async ({ request, params, user }) => {
 
   return createApiResponse(null, '状态已更新');
 });
+
+// 删除单个热点（硬删除，关联通知的 hot_item_id 会自动置 NULL）
+export const DELETE = withAuth(async ({ params, user }) => {
+  const { id } = params;
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from('hot_items')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('删除热点失败:', error);
+    return createApiError('删除失败', 500);
+  }
+
+  return createApiResponse(null, '已删除');
+});

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { inspirations, type, style, noAiTaste } = await request.json();
+    const { inspirations, type, style, noAiTaste, n } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations)) {
       return createApiError('Inspirations array is required', 400);
@@ -25,13 +25,14 @@ export async function POST(request: NextRequest) {
       wechat: '公众号文章',
     };
     const typeLabel = typeLabels[type] || type || '小红书文案';
+    const count = Math.min(n || 1, 5);
 
-    const result = await generateCopywriting(inspirations, typeLabel, style || '小红书博主风', noAiTaste || false);
+    const result = await generateCopywriting(inspirations, typeLabel, style || '小红书博主风', noAiTaste || false, count);
 
     // 记录AI使用
-    await logAiUsage(user.id, 'copywriting', 1000);
+    await logAiUsage(user.id, 'copywriting', 1000 * count);
 
-    // 保存到"AI创作"作品集（不再每次创建新对话）
+    // 保存到"AI创作"作品集
     if (!noAiTaste) {
       const supabase = createAdminClient();
       const { data: session } = await supabase
@@ -47,11 +48,12 @@ export async function POST(request: NextRequest) {
         .single()
       ).data?.id;
       if (sessionId) {
+        const content = Array.isArray(result) ? result.join('\n\n---\n\n') : result;
         await supabase.from('chat_messages').insert({
           session_id: sessionId,
           user_id: user.id,
           type: 'ai',
-          content: result,
+          content,
           content_type: 'text',
           metadata: { source: 'ai_creation', copywritingType: type },
         });
@@ -61,7 +63,8 @@ export async function POST(request: NextRequest) {
     return createApiResponse({
       content: result,
       type,
-      style
+      style,
+      isBatch: count > 1,
     }, 'Copywriting generated');
   } catch (error) {
     console.error('AI copywriting error:', error);

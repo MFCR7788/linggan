@@ -3,7 +3,7 @@ import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask,
 import { createAdminClient } from '@/lib/supabase-server';
 
 // ====== 意图类型定义 ======
-type IntentType = 'writing' | 'knowledge' | 'life' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal';
+type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal';
 
 // 生成子类型（内部使用，保留兼容）
 type GenType = 'text2img' | 'img2img' | 'text2vid' | 'img2vid' | 'vid2vid';
@@ -50,6 +50,10 @@ function detectIntent(
   // Life: 出行/规划/推荐
   const matchLife = /攻略|计划|行程|安排|规划|策划|旅游|出行|推荐|游玩|怎么[去逛玩]|旅行|路线|去哪|怎么安排|好物|选.*哪个|买.*什么|值得.*买|种草|拔草|探店|打卡|周末|假期|出行计划|方案/.test(c);
 
+  // Schedule: 仅匹配明确的"添加/创建/设置日程/提醒"命令
+  // 注意：不要跟 life 重叠 — "明天上午X点开会"走 life 获取丰富分析，分析后系统会自动提取日程
+  const matchSchedule = /添加.*日程|创建.*日程|新建.*日程|记.*日程|设.*提醒|设置.*提醒|帮我.*提醒|记.*提醒|添加.*提醒|创建.*提醒|设.*日程/.test(c);
+
   // Video: 视频相关
   const matchVideo = /视频.*分析|视频.*脚本|视频.*复刻|生成.*视频|视频.*生成|做.*视频|制作.*视频|分析.*视频|视频.*结构|视频.*节奏|同款.*视频|复刻.*视频|视频.*创作|文生视频|图生视频|vid2vid|剪.*视频|合成.*视频|视频.*内容/.test(c);
   const wantsVidGen = /生成.*视频|视频.*生成|做.*视频|制作.*视频|文生视频|图生视频|复刻.*视频|视频.*复刻|剪.*视频|合成.*视频/.test(c);
@@ -88,6 +92,9 @@ function detectIntent(
   if (matchCreative) return make('creative', '创意设计&营销策划', '品牌创意与营销方案设计');
 
   if (matchLife) return make('life', '生活&规划', '出行攻略与方案策划');
+
+  // Schedule 在 life 之后：明确的"添加日程""提醒我"才走 schedule
+  if (matchSchedule) return make('schedule', '日程管理', '时间安排与日程提醒');
 
   if (matchVideo) {
     let gType: GenType | undefined;
@@ -337,6 +344,55 @@ ${GLOBAL_CAPABILITIES}
 请直接输出内容，使用自然语言回复，不需要JSON格式。`,
     requiresJSON: false,
   },
+
+  // ---- 日程管理 ----
+  schedule: {
+    systemPrompt: `你是一位专业的日程管理助手。你的任务是：
+1. 理解用户的日程请求，给出友好确认回复
+2. 从用户输入中提取结构化日程信息
+3. 重要：如果用户在同一条消息中提到了多个独立事件（不同时间、不同事项），请为每个事件创建一个独立的日程条目
+
+多事件识别规则：
+- 分隔符识别：句号、分号、换行、"还有"、"另外"、"顺便"、"以及"等通常分隔了不同事件
+- 时间识别：每个独立的时间点（如"9点""上午10点""下午2点"）通常对应一个独立日程
+- 不同的参与方/地点通常意味着不同的日程（如"联系A" vs "与B沟通"）
+- 如果一个事件包含多个子任务（如"安排吃饭并谈销户"），这仍属于一个日程，子任务放在 description 或 suggestions 中
+
+时间解析规则（重要）：
+- "明天上午" → 当前日期+1天的 09:00，"明天下午" → 14:00
+- "后天" → 当前日期+2天
+- "下周一/二/三..." → 计算下周对应日期
+- "下周" → 当前日期+7天
+- 如果用户指定了具体时间（如"下午3点""15:00""三点""9点"），请准确使用
+- 如果用户没有指定具体时间，默认使用 09:00
+- scheduled_at 必须使用 ISO 8601 格式（含时区），如：2026-06-02T09:00:00+08:00
+- 当前日期为 ${new Date().toISOString().split('T')[0]}（${new Date().toLocaleDateString('zh-CN', { weekday: 'long' })}），请据此计算相对日期
+
+任务提取规则：
+- title：提取核心任务名（10-20字），格式如"联系XXX"、"与XXX开会"、"完成XXX"，不要包含时间
+- description：整理目的、准备事项、背景说明等（可以为 null）
+- location：如果有线下地点或线上会议链接则提取，否则 null
+- suggestions：提取2-3条执行建议或话术要点
+
+${GLOBAL_CAPABILITIES}
+
+请严格按以下JSON格式返回，不要有任何额外文字：
+{
+  "response": "对用户的自然语言确认回复，列出识别到的每个日程",
+  "summary": "一句话概括（10-20字）",
+  "tags": ["标签1", "标签2"],
+  "schedules": [
+    {
+      "title": "简洁的日程标题（10-20字）",
+      "scheduled_at": "ISO 8601 日期时间",
+      "description": "详细描述、准备事项等（null表示没有）",
+      "location": "地点或链接（null表示没有）",
+      "suggestions": ["执行建议1", "执行建议2"]
+    }
+  ]
+}`,
+    requiresJSON: true,
+  },
 };
 
 const GEN_JSON_TEMPLATE = `{
@@ -353,7 +409,7 @@ const GEN_JSON_TEMPLATE = `{
 
 function buildPrompt(intent: DetectedIntent, content: string): { systemPrompt: string; userPrompt: string; requiresJSON: boolean } {
   const mod = PROMPT_MODULES[intent.type];
-  const requiresJSON = intent.wantsGeneration && (intent.type === 'image' || intent.type === 'video');
+  const requiresJSON = (intent.wantsGeneration && (intent.type === 'image' || intent.type === 'video')) || mod.requiresJSON;
 
   let systemPrompt = mod.systemPrompt;
 

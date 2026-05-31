@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, ChevronDown, ChevronUp, Download, Save, RefreshCw, Palette, Ratio, AlertCircle, ImageIcon, Check, Sparkles } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp, Download, Save, RefreshCw, Palette, Ratio, AlertCircle, ImageIcon, Check, Sparkles, Layers, Wand2, Scissors, ArrowRight } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
@@ -61,6 +61,18 @@ function AIImageContent() {
   const [error, setError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [mode, setMode] = useState<'generate' | 'enhance'>('generate');
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchImages, setBatchImages] = useState<string[]>([]);
+
+  // 增强模式
+  const [enhanceType, setEnhanceType] = useState<'upscale' | 'bg_replace' | 'style_transfer'>('upscale');
+  const [newBackground, setNewBackground] = useState('');
+  const [styleTransferPreset, setStyleTransferPreset] = useState('watercolor');
+  const [beforeImage, setBeforeImage] = useState<string | null>(null);
+  const [afterImage, setAfterImage] = useState<string | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhanceLabel, setEnhanceLabel] = useState('');
 
   // Step1: 灵感选材
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string>>(new Set());
@@ -195,17 +207,25 @@ function AIImageContent() {
     fullPrompt = `[${selectedStyle}] [比例${selectedRatio}] ${fullPrompt}`;
 
     try {
+      const n = batchMode ? 4 : 1;
       const res = await fetch('/api/ai/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: fullPrompt,
           ratio: selectedRatio,
+          n,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setImageUrl(data.data.imageUrl);
+        if (Array.isArray(data.data)) {
+          setBatchImages(data.data.map((r: any) => r.imageUrl));
+          setImageUrl(data.data[0]?.imageUrl || null);
+        } else {
+          setImageUrl(data.data.imageUrl || data.data.url);
+          setBatchImages([]);
+        }
         setIsGenerated(true);
       } else {
         setError(data.error || '生成失败');
@@ -223,11 +243,77 @@ function AIImageContent() {
     if (preset) setSelectedRatio(preset.ratio);
   };
 
+  const handleEnhance = async () => {
+    const imgUrl = imageUrl || (selectedInspData
+      ? (Array.isArray(selectedInspData) ? selectedInspData : [])
+          .filter((item: any) => selectedInspirations.has(item.id))
+          .flatMap((item: any) => item.media_urls || [])[0]
+      : undefined);
+    if (!imgUrl) {
+      setToast({ message: '请先生成图片或选择含图片的素材', type: 'error' });
+      return;
+    }
+    setBeforeImage(imgUrl);
+    setAfterImage(null);
+    setIsEnhancing(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/ai/image/enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: imgUrl,
+          mode: enhanceType,
+          options: {
+            ratio: selectedRatio,
+            newBackground: enhanceType === 'bg_replace' ? newBackground : undefined,
+            style: enhanceType === 'style_transfer' ? styleTransferPreset : undefined,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAfterImage(data.data.resultImageUrl);
+        setEnhanceLabel(data.data.enhanceLabel || '增强完成');
+        setImageUrl(data.data.resultImageUrl);
+      } else {
+        setError(data.error || '增强失败');
+      }
+    } catch {
+      setError('网络请求失败，请重试');
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
       <TopNav title="AI 图片生成" showBack onBack={handleBack} />
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
+        {/* Mode Toggle */}
+        <div className="flex rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+          {([
+            { key: 'generate', label: '图片生成', icon: <Sparkles size={14} /> },
+            { key: 'enhance', label: '图片增强', icon: <Wand2 size={14} /> },
+          ] as const).map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => { setMode(key); setError(null); setBeforeImage(null); setAfterImage(null); }}
+              className="flex-1 py-2.5 text-xs flex items-center justify-center gap-1.5 transition-all"
+              style={{
+                background: mode === key ? 'rgba(59,130,246,0.2)' : 'transparent',
+                color: mode === key ? '#93C5FD' : '#9CA3AF',
+                fontWeight: mode === key ? 600 : 400,
+              }}
+            >
+              <span style={{ color: mode === key ? '#3B82F6' : '#9CA3AF' }}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Quick Presets */}
         <GlassCard className="!p-3">
           <button
@@ -311,6 +397,7 @@ function AIImageContent() {
         </GlassCard>
 
         {/* Step 2: 图片描述 */}
+        {mode === 'generate' && (
         <GlassCard>
           <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: "#8B5CF6" }}>Step 2</span> · 描述您想要的图片
@@ -346,56 +433,58 @@ function AIImageContent() {
             </button>
           </div>
 
-          {/* Style */}
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Palette size={14} color="#9CA3AF" />
-              <span style={{ color: '#9CA3AF', fontSize: 12 }}>风格选择</span>
+          {/* Style + Ratio in one row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Palette size={14} color="#9CA3AF" />
+                <span style={{ color: '#9CA3AF', fontSize: 12 }}>风格</span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {styleOptions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSelectedStyle(s)}
+                    className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs transition-all"
+                    style={{
+                      background: selectedStyle === s ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.06)',
+                      border: selectedStyle === s ? '1px solid rgba(139,92,246,0.5)' : '1px solid rgba(255,255,255,0.12)',
+                      color: selectedStyle === s ? '#C4B5FD' : '#9CA3AF',
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-              {styleOptions.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSelectedStyle(s)}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all"
-                  style={{
-                    background: selectedStyle === s ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.06)',
-                    border: selectedStyle === s ? '1px solid rgba(139,92,246,0.5)' : '1px solid rgba(255,255,255,0.12)',
-                    color: selectedStyle === s ? '#C4B5FD' : '#9CA3AF',
-                  }}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Ratio */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Ratio size={14} color="#9CA3AF" />
-              <span style={{ color: '#9CA3AF', fontSize: 12 }}>比例选择</span>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {ratioOptions.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setSelectedRatio(r)}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all"
-                  style={{
-                    background: selectedRatio === r ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
-                    border: selectedRatio === r ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.12)',
-                    color: selectedRatio === r ? '#93C5FD' : '#9CA3AF',
-                  }}
-                >
-                  {r}
-                </button>
-              ))}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Ratio size={14} color="#9CA3AF" />
+                <span style={{ color: '#9CA3AF', fontSize: 12 }}>比例</span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {ratioOptions.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setSelectedRatio(r)}
+                    className="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs transition-all"
+                    style={{
+                      background: selectedRatio === r ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
+                      border: selectedRatio === r ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.12)',
+                      color: selectedRatio === r ? '#93C5FD' : '#9CA3AF',
+                    }}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </GlassCard>
+        )}
 
         {/* Step 3: 色调参考（可选） */}
+        {mode === 'generate' && (
         <GlassCard>
           <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: "#22C55E" }}>Step 3</span> · 色调参考
@@ -437,6 +526,159 @@ function AIImageContent() {
             ))}
           </div>
         </GlassCard>
+        )}
+
+        {/* Enhance Mode */}
+        {mode === 'enhance' && (
+          <>
+            <GlassCard>
+              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                <span style={{ color: '#8B5CF6' }}>Step 2</span> · 选择增强类型
+              </p>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {([
+                  { key: 'upscale' as const, label: '超分辨率', icon: '🔍', desc: '提升清晰度' },
+                  { key: 'bg_replace' as const, label: '背景替换', icon: '🖼️', desc: '更换背景' },
+                  { key: 'style_transfer' as const, label: '风格迁移', icon: '🎨', desc: '艺术风格' },
+                ]).map(({ key, label, icon, desc }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setEnhanceType(key); setError(null); }}
+                    className="flex flex-col items-center gap-1 py-3 rounded-xl transition-all"
+                    style={{
+                      background: enhanceType === key ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)',
+                      border: enhanceType === key ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <span style={{ fontSize: 24 }}>{icon}</span>
+                    <span style={{ color: enhanceType === key ? '#C4B5FD' : '#E5E7EB', fontSize: 12, fontWeight: 600 }}>{label}</span>
+                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>{desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {enhanceType === 'bg_replace' && (
+                <div>
+                  <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>新背景描述</p>
+                  <input
+                    value={newBackground}
+                    onChange={(e) => setNewBackground(e.target.value)}
+                    placeholder="例：海边日落、现代办公室、星空..."
+                    className="w-full px-3 py-2 rounded-xl bg-transparent text-sm outline-none"
+                    style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+              )}
+
+              {enhanceType === 'style_transfer' && (
+                <div>
+                  <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>目标风格</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'watercolor', label: '水彩手绘' },
+                      { key: 'illustration', label: '插画风格' },
+                      { key: 'cyberpunk', label: '赛博朋克' },
+                      { key: '3d_render', label: '3D渲染' },
+                      { key: 'sketch', label: '素描风格' },
+                      { key: 'vintage', label: '复古胶片' },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setStyleTransferPreset(key)}
+                        className="px-2 py-1.5 rounded-lg text-xs transition-all"
+                        style={{
+                          background: styleTransferPreset === key ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.06)',
+                          border: styleTransferPreset === key ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                          color: styleTransferPreset === key ? '#C4B5FD' : '#9CA3AF',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Before/After Comparison */}
+            {(beforeImage || afterImage) && (
+              <GlassCard>
+                <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  <span style={{ color: '#8B5CF6' }}>对比</span> · Before / After
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 4 }}>原图</p>
+                    <div className="w-full rounded-xl overflow-hidden" style={{ aspectRatio: '1/1', background: 'rgba(255,255,255,0.05)' }}>
+                      {beforeImage ? (
+                        <img src={beforeImage} alt="Before" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageIcon size={24} color="#6B7280" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 4 }}>
+                      {enhanceLabel || '增强后'}
+                    </p>
+                    <div className="w-full rounded-xl overflow-hidden" style={{ aspectRatio: '1/1', background: 'rgba(255,255,255,0.05)', border: afterImage ? '2px solid rgba(34,197,94,0.4)' : 'none' }}>
+                      {afterImage ? (
+                        <img src={afterImage} alt="After" className="w-full h-full object-cover" />
+                      ) : isEnhancing ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ArrowRight size={24} color="#6B7280" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {afterImage && (
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <button
+                      onClick={() => { if (afterImage) window.open(afterImage, '_blank'); }}
+                      className="py-2 rounded-lg text-xs flex items-center justify-center gap-1"
+                      style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}
+                    >
+                      <Download size={12} /> 下载
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!afterImage) return;
+                        fetch('/api/inspiration', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            type: 'image',
+                            title: `增强图片 · ${enhanceLabel}`,
+                            media_urls: [afterImage],
+                            tags: [enhanceLabel, 'AI增强'],
+                          }),
+                        }).then(res => res.json()).then(data => {
+                          if (data.success) setToast({ message: '已保存到灵感库', type: 'success' });
+                        }).catch(() => setToast({ message: '保存失败', type: 'error' }));
+                      }}
+                      className="py-2 rounded-lg text-xs flex items-center justify-center gap-1"
+                      style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}
+                    >
+                      <Save size={12} /> 保存
+                    </button>
+                  </div>
+                )}
+              </GlassCard>
+            )}
+
+            {/* Enhance Button */}
+            <PrimaryButton fullWidth size="lg" onClick={handleEnhance} disabled={isEnhancing}>
+              <Wand2 size={18} /> {isEnhancing ? '增强中...' : '开始增强'}
+            </PrimaryButton>
+          </>
+        )}
 
         {/* History */}
         <div>
@@ -478,9 +720,34 @@ function AIImageContent() {
         </div>
 
         {/* Generate Button */}
-        <PrimaryButton fullWidth size="lg" onClick={handleGenerate}>
-          <Zap size={18} /> {isLoading ? '生成中...' : '立即生成'}
-        </PrimaryButton>
+        {mode === 'generate' && (
+        <div className="space-y-3">
+          {/* Batch toggle */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Layers size={14} color="#F59E0B" />
+              <span style={{ color: '#E5E7EB', fontSize: 13 }}>4 张变体</span>
+              <span style={{ color: '#9CA3AF', fontSize: 11 }}>多角度生成</span>
+            </div>
+            <button
+              onClick={() => setBatchMode(!batchMode)}
+              className="w-10 h-6 rounded-full transition-all"
+              style={{
+                background: batchMode ? '#F59E0B' : 'rgba(255,255,255,0.2)',
+                position: 'relative',
+              }}
+            >
+              <div
+                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                style={{ left: batchMode ? 'calc(100% - 22px)' : 2 }}
+              />
+            </button>
+          </div>
+          <PrimaryButton fullWidth size="lg" onClick={handleGenerate}>
+            <Zap size={18} /> {isLoading ? '生成中...' : batchMode ? '生成 4 张变体' : '立即生成'}
+          </PrimaryButton>
+        </div>
+        )}
 
         {/* Result */}
         {(isLoading || isGenerated || error) && (
@@ -504,32 +771,58 @@ function AIImageContent() {
               </div>
             ) : (
               <>
-                <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 12 }}>生成结果</p>
-                {/* Real Image Preview */}
-                <div
-                  className="w-full rounded-2xl mb-4 overflow-hidden flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    aspectRatio: selectedRatio.replace(':', '/'),
-                    maxHeight: 320,
-                  }}
-                >
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={prompt}
-                      loading="lazy"
-                      className="w-full h-full object-cover"
-                      style={{ maxHeight: 320 }}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center gap-3">
-                      <ImageIcon size={48} color="#9CA3AF" />
-                      <p style={{ color: '#9CA3AF', fontSize: 13 }}>图片加载中...</p>
-                    </div>
-                  )}
-                </div>
+                <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 12 }}>
+                  生成结果{batchImages.length > 1 ? ` (${batchImages.length} 张变体)` : ''}
+                </p>
+                {/* Batch images 2x2 grid */}
+                {batchImages.length > 1 ? (
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {batchImages.map((url, i) => (
+                      <div
+                        key={i}
+                        className="w-full rounded-xl overflow-hidden"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))',
+                          border: '1px solid rgba(59,130,246,0.3)',
+                          aspectRatio: selectedRatio.replace(':', '/'),
+                        }}
+                      >
+                        <img
+                          src={url}
+                          alt={`变体 ${i + 1}`}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Single Image Preview */
+                  <div
+                    className="w-full rounded-2xl mb-4 overflow-hidden flex items-center justify-center"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))',
+                      border: '1px solid rgba(59,130,246,0.3)',
+                      aspectRatio: selectedRatio.replace(':', '/'),
+                      maxHeight: 320,
+                    }}
+                  >
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={prompt}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        style={{ maxHeight: 320 }}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <ImageIcon size={48} color="#9CA3AF" />
+                        <p style={{ color: '#9CA3AF', fontSize: 13 }}>图片加载中...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="grid grid-cols-4 gap-2">

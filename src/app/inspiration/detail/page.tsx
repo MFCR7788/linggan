@@ -378,67 +378,101 @@ function InspirationDetailContent() {
               {/* 日程 */}
               {(inspiration as any).type === 'schedule' && (
                 <div>
+                  {/* 日程概览卡片 */}
                   <div
-                    className="p-4 rounded-lg mb-3"
+                    className="p-4 rounded-lg mb-4"
                     style={{
                       background: "rgba(251,191,36,0.08)",
                       border: "1px solid rgba(251,191,36,0.2)",
                     }}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span style={{ fontSize: 24 }}>📅</span>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span style={{ fontSize: 28 }}>📅</span>
                       <div>
-                        <p style={{ color: "#FBBF24", fontSize: 14, fontWeight: 600 }}>
+                        <p style={{ color: "#FBBF24", fontSize: 16, fontWeight: 700 }}>
                           {inspiration.title || "日程安排"}
                         </p>
-                        <p style={{ color: "#9CA3AF", fontSize: 12 }}>
-                          创建于 {new Date(inspiration.created_at).toLocaleDateString("zh-CN")}
+                        <p style={{ color: "#9CA3AF", fontSize: 11 }}>
+                          AI 分析 · 创建于 {new Date(inspiration.created_at).toLocaleDateString("zh-CN")}
                         </p>
                       </div>
                     </div>
                   </div>
 
+                  {/* 核心任务 */}
                   {inspiration.ai_summary && (
-                    <div className="mb-3">
-                      <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>📋 详情</p>
-                      <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
+                    <div className="mb-4 p-4 rounded-lg"
+                      style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.25)" }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-md flex items-center justify-center"
+                          style={{ background: "#3B82F6", color: "#fff", fontSize: 10, fontWeight: 700 }}>AI</div>
+                        <span style={{ color: "#FBBF24", fontSize: 13, fontWeight: 600 }}>🎯 核心任务</span>
+                      </div>
+                      <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
                         {inspiration.ai_summary}
                       </p>
                     </div>
                   )}
 
+                  {/* 任务清单 */}
                   {inspiration.ai_key_points && inspiration.ai_key_points.length > 0 && (
-                    <div className="mb-3">
-                      <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>📌 关键事项</p>
-                      <ul className="space-y-1">
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-3 px-1">
+                        <span style={{ color: "#22C55E", fontSize: 14 }}>📋</span>
+                        <span style={{ color: "#22C55E", fontSize: 13, fontWeight: 600 }}>任务清单</span>
+                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>({inspiration.ai_key_points.length} 项)</span>
+                      </div>
+                      <div className="space-y-2">
                         {inspiration.ai_key_points.map((point: string, idx: number) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm" style={{ color: "#D1D5DB" }}>
-                            <span style={{ color: "#FBBF24" }}>•</span>
-                            {point}
-                          </li>
+                          <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-lg"
+                            style={{ background: "rgba(255,255,255,0.03)" }}
+                          >
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}
+                            >
+                              <span style={{ color: "#22C55E", fontSize: 10, fontWeight: 700 }}>{idx + 1}</span>
+                            </div>
+                            <span style={{ color: "#D1D5DB", fontSize: 13, lineHeight: 1.5 }}>{point}</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
 
+                  {/* 备选方案 */}
                   {inspiration.ai_creation_suggestions && inspiration.ai_creation_suggestions.length > 0 && (
-                    <div>
-                      <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>💡 建议</p>
-                      <ul className="space-y-1">
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-3 px-1">
+                        <span style={{ fontSize: 14 }}>💡</span>
+                        <span style={{ color: "#A78BFA", fontSize: 13, fontWeight: 600 }}>备选方案</span>
+                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>({inspiration.ai_creation_suggestions.length} 个)</span>
+                      </div>
+                      <div className="space-y-2">
                         {inspiration.ai_creation_suggestions.map((suggestion: string, idx: number) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm" style={{ color: "#D1D5DB" }}>
-                            <span style={{ color: "#3B82F6" }}>•</span>
-                            {suggestion}
-                          </li>
+                          <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-lg"
+                            style={{ background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.12)" }}
+                          >
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                              style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}
+                            >
+                              <span style={{ color: "#A78BFA", fontSize: 10, fontWeight: 700 }}>{idx + 1}</span>
+                            </div>
+                            <span style={{ color: "#D1D5DB", fontSize: 13, lineHeight: 1.5 }}>{suggestion}</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
 
-                  {inspiration.original_text && !inspiration.ai_summary && (
-                    <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                      {inspiration.original_text}
-                    </p>
+                  {/* 原始内容（无 AI 分析时显示） */}
+                  {inspiration.original_text && !inspiration.ai_summary && !inspiration.ai_key_points?.length && (
+                    <div className="mb-4">
+                      <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>📝 原始内容</p>
+                      <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
+                        {inspiration.original_text}
+                      </p>
+                    </div>
                   )}
                 </div>
               )}

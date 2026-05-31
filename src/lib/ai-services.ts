@@ -272,8 +272,8 @@ function getSizeForRatio(ratio: string): string {
 
 export async function generateImage(
   prompt: string,
-  options: { ratio?: string } = {}
-): Promise<ImageResult> {
+  options: { ratio?: string; n?: number } = {}
+): Promise<ImageResult | ImageResult[]> {
   // 先优化提示词
   const finalPrompt = await optimizePrompt(prompt, 'image');
   console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
@@ -286,6 +286,7 @@ export async function generateImage(
   if (!imageModelArkId) throw new Error('SEEDANCE_IMAGE_MODEL_ARK_ID is not configured');
 
   const size = getSizeForRatio(options.ratio || '1:1');
+  const n = options.n || 1;
 
   const response = await fetch(`${baseUrl}/images/generations`, {
     method: 'POST',
@@ -296,7 +297,7 @@ export async function generateImage(
     body: JSON.stringify({
       model: imageModelArkId,
       prompt: finalPrompt,
-      n: 1,
+      n,
       size,
     }),
   });
@@ -308,11 +309,13 @@ export async function generateImage(
   }
 
   const data = await response.json();
-  return {
-    imageUrl: data.data[0].url,
+  const results = (data.data || []).map((item: any) => ({
+    imageUrl: item.url,
     prompt: finalPrompt,
     size,
-  };
+  }));
+
+  return n === 1 ? results[0] : results;
 }
 
 // ====== 视频模型注册表（从客户端安全模块导入） ======
@@ -673,6 +676,87 @@ export async function getVideoTaskStatus(
   }
 }
 
+// ====== 数字人 Audio2Video（wan2.2-s2v） ======
+
+const DASHSCOPE_S2V_BASE = 'https://dashscope.aliyuncs.com/api/v1';
+
+export async function submitDigitalHumanTask(params: {
+  imageUrl: string;
+  audioUrl: string;
+  resolution?: '480P' | '720P';
+  mode?: string; // 前端仍可传，但 API 暂不支持，仅保留兼容
+}): Promise<VideoTaskResult> {
+  const { imageUrl, audioUrl, resolution = '720P' } = params;
+
+  try {
+    const response = await fetch(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify({
+        model: 'wan2.2-s2v',
+        input: {
+          image_url: imageUrl,
+          audio_url: audioUrl,
+        },
+        parameters: {
+          resolution,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[DigitalHuman] API 错误:', response.status, errText.substring(0, 500));
+      return { taskId: null, status: 'error', message: `数字人服务错误: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const taskId = data.output?.task_id;
+    if (!taskId) {
+      return { taskId: null, status: 'error', message: '未获取到任务ID' };
+    }
+    return { taskId, status: 'queued', message: '数字人任务已提交' };
+  } catch (error) {
+    console.error('[DigitalHuman] 提交错误:', error);
+    return { taskId: null, status: 'error', message: '网络错误' };
+  }
+}
+
+export async function getDigitalHumanTaskStatus(
+  taskId: string
+): Promise<{ status: string; videoUrl?: string; message?: string }> {
+  try {
+    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
+    });
+
+    if (!response.ok) {
+      return { status: 'error', message: '查询失败' };
+    }
+
+    const data = await response.json();
+    const taskStatus = data.output?.task_status;
+
+    if (taskStatus === 'SUCCEEDED') {
+      const videoUrl = data.output?.results?.video_url || data.output?.video_url || data.output?.videos?.[0]?.url;
+      return { status: 'succeeded', videoUrl, message: '生成完成' };
+    }
+
+    if (taskStatus === 'FAILED') {
+      return { status: 'failed', message: data.output?.message || data.message || '生成失败' };
+    }
+
+    return { status: 'running', message: '生成中...' };
+  } catch (error) {
+    console.error('[DigitalHuman] 查询错误:', error);
+    return { status: 'error', message: '网络错误' };
+  }
+}
+
 // ====== 通用 DashScope 视频提交（HappyHorse + Wan 2.6） ======
 
 async function submitDashScopeVideoTask(
@@ -916,8 +1000,9 @@ export async function generateCopywriting(
   inspirations: { title?: string; originalText?: string; aiSummary?: string }[],
   type: string,
   style: string,
-  noAiTaste: boolean = false
-): Promise<string> {
+  noAiTaste: boolean = false,
+  n: number = 1
+): Promise<string | string[]> {
   const inspirationText = inspirations.map((i) => {
     const parts: string[] = [];
     if (i.title) parts.push(`【标题】${i.title}`);
@@ -932,7 +1017,7 @@ export async function generateCopywriting(
       '要求：去掉AI味，使用更自然的口语化表达，增加个人化的语气，避免过于工整的排比和模板化表达。';
   }
 
-  const prompt = `请基于以下灵感内容创作一篇${type}，风格要求：${style}。
+  const basePrompt = (angle: string) => `请基于以下灵感内容创作一篇${type}，风格要求：${style}。${angle}
 
 灵感内容：
 ${inspirationText}
@@ -942,10 +1027,31 @@ ${styleInstruction}
 请直接输出最终文案内容。`;
 
   try {
-    return await callDeepSeek(prompt, { temperature: 0.8, maxTokens: 1500 });
+    if (n <= 1) {
+      return await callDeepSeek(basePrompt(''), { temperature: 0.8, maxTokens: 1500 });
+    }
+    // 批量生成：不同角度 + 不同 temperature
+    const angles = [
+      '请从热门爆款角度撰写',
+      '请从专业深度角度撰写',
+      '请从情感共鸣角度撰写',
+      '请从新奇有趣角度撰写',
+      '请从实用干货角度撰写',
+    ];
+    const results = await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        callDeepSeek(basePrompt(angles[i % angles.length]), {
+          temperature: 0.7 + (i * 0.1),
+          maxTokens: 1500,
+        })
+      )
+    );
+    return results;
   } catch (e) {
     console.error('Copywriting generation failed:', e);
-    return '✨ 这是一篇精彩的文案内容（模拟数据）...';
+    return n <= 1
+      ? '✨ 这是一篇精彩的文案内容（模拟数据）...'
+      : Array.from({ length: n }, (_, i) => `版本 ${i + 1}：这是一篇精彩的文案内容...`);
   }
 }
 
@@ -1004,6 +1110,76 @@ export async function logAiUsage(
     console.error('Failed to log AI usage:', e);
   }
 }
+
+// ====== 数字人口播脚本生成 ======
+
+const ORAL_SCRIPT_STYLES: Record<string, string> = {
+  oral: '自然口播风格，像在和朋友聊天，语气亲切自然，有停顿和语气词',
+  livestream: '直播带货风格，热情有感染力，多用感叹句和号召性语言，"快来"、"千万不要错过"',
+  news: '新闻播报风格，正式专业，语句工整，信息密度高',
+  emotional: '情感讲述风格，温柔舒缓，有故事感和代入感',
+};
+
+export async function generateOralScript(params: {
+  topic: string;
+  style?: string;
+  language?: string;
+  targetLength?: number;
+  variantCount?: number;
+  inspirations?: { title?: string; original_text?: string; ai_summary?: string }[];
+}): Promise<string[]> {
+  const { topic, style = 'oral', language = 'zh', targetLength = 500, variantCount = 1, inspirations = [] } = params;
+
+  const langLabels: Record<string, string> = { zh: '中文', en: 'English', ja: '日本語', ko: '한국어' };
+  const langLabel = langLabels[language] || '中文';
+
+  const styleDesc = ORAL_SCRIPT_STYLES[style] || ORAL_SCRIPT_STYLES.oral;
+
+  let materialContext = '';
+  if (inspirations.length > 0) {
+    materialContext = '\n参考素材：\n' + inspirations.map((insp, i) => {
+      const parts = [`素材${i + 1}：`];
+      if (insp.title) parts.push(`标题：${insp.title}`);
+      if (insp.original_text) parts.push(`原文：${insp.original_text}`);
+      if (insp.ai_summary) parts.push(`摘要：${insp.ai_summary}`);
+      return parts.join('\n');
+    }).join('\n\n');
+  }
+
+  const angles = variantCount > 1
+    ? ['请从开头引入的角度撰写', '请从核心观点展开的角度撰写', '请从案例故事的角度撰写', '请从问题解决的角度撰写', '请从总结升华的角度撰写']
+    : [''];
+
+  try {
+    const results = await Promise.all(angles.slice(0, Math.max(variantCount, 1)).map(angle =>
+      callDeepSeek(
+        `你是专业的短视频口播脚本写手。请根据以下要求写出一个数字人口播脚本。
+
+主题：${topic}
+风格要求：${styleDesc}
+目标字数：约${targetLength}字
+输出语言：${langLabel}
+${angle ? `角度要求：${angle}` : ''}${materialContext}
+
+重要要求：
+1. 纯口语化表达，适合朗读，不要书面语
+2. 不要使用markdown格式（不要标题、列表、符号、加粗等）
+3. 短句为主，每句不超过25个字
+4. 加入自然的语气停顿和转折词
+5. 开头要有吸引力，结尾有总结或互动
+6. 直接输出脚本文字，不要任何其他说明或前缀`,
+        { temperature: 0.8, maxTokens: 2000 }
+      )
+    ));
+
+    return results.map(r => r.replace(/^["']|["']$/g, '').trim());
+  } catch (e) {
+    console.error('Oral script generation failed:', e);
+    return [`大家好，今天我们来聊聊${topic}。这个话题非常有趣，让我来为大家详细介绍一下。\n\n首先，我们需要了解${topic}的基本概念。很多人可能对这个领域还不太熟悉，但其实它与我们的生活息息相关。\n\n那么，${topic}到底能给我们带来什么价值呢？让我们一探究竟。`];
+  }
+}
+
+// ====== 长文本拆分 ======
 
 // ====== Helpers ======
 

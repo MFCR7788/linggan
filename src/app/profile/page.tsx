@@ -44,7 +44,7 @@ const menuItems = [
   { icon: <Settings size={18} />, label: '账号设置', page: null, color: '#8B5CF6' },
   { icon: <CreditCard size={18} />, label: '订阅管理', page: null, color: '#F59E0B' },
   { icon: <BarChart2 size={18} />, label: '数据分析', page: null, color: '#22C55E' },
-  { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: null, color: '#9CA3AF' },
+  { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey | null, color: '#9CA3AF' },
 ];
 
 function ProfileContent() {
@@ -68,6 +68,7 @@ function ProfileContent() {
       case 'hotspot-detail': router.push('/hotspot/detail'); break;
       case 'hotspot-library': router.push('/hotspot/library'); break;
       case 'notification': router.push('/notification'); break;
+      case 'profile-help': router.push('/profile/help'); break;
       default: router.push('/home'); break;
     }
   };

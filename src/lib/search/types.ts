@@ -27,6 +27,16 @@ export interface SearchSourceResult {
   error?: string;
 }
 
+/** 标准化热榜条目，各平台热榜 API 统一转换为此格式 */
+export interface HotListItem {
+  title: string;
+  url: string;
+  content: string;
+  rank: number;
+  hotScore: number;
+  topicId?: string;
+}
+
 export interface AIAnalysis {
   isReal: boolean;
   relevance: number;

@@ -2,7 +2,7 @@
 
 
 import { useState, useEffect, useCallback } from "react";
-import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, RefreshCw, Share2, Loader2, X, Play, ExternalLink, Download, Save, Copy, Trash2, CheckSquare, Square } from "lucide-react";
+import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, RefreshCw, Share2, Loader2, X, Play, ExternalLink, Download, Save, Copy, Trash2, CheckSquare, Square } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -11,15 +11,17 @@ import { ProtectedRoute } from "@/components";
 import { syncDevAuthCookie } from "@/lib/dev-auth";
 
 const quickActions = [
-  { label: "一键生成小红书文案", sub: "使用最近灵感", page: "ai-copywriting" as PageKey, color: "#F43F5E", type: "xiaohongshu" },
-  { label: "一键生成短视频", sub: "使用最近热点", page: "ai-video" as PageKey, color: "#3B82F6", type: "" },
-  { label: "一键生成公众号文章", sub: "使用最近灵感", page: "ai-copywriting" as PageKey, color: "#8B5CF6", type: "wechat" },
+  { label: "小红书文案", sub: "一键爆款", page: "ai-copywriting" as PageKey, color: "#F43F5E", type: "xiaohongshu" },
+  { label: "公众号文章", sub: "深度长文", page: "ai-copywriting" as PageKey, color: "#8B5CF6", type: "wechat" },
+  { label: "一键成片", sub: "全自动出片", page: "ai-video" as PageKey, color: "#F59E0B", type: "" },
 ];
 
 const creationEntries = [
-  { icon: <FileText size={28} />, title: "AI 文案", desc: "小红书/公众号/短视频脚本", color: "#3B82F6", page: "ai-copywriting" as PageKey },
-  { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "封面图/配图/海报生成", color: "#8B5CF6", page: "ai-image" as PageKey },
-  { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "短视频自动合成创作", color: "#F43F5E", page: "ai-video" as PageKey },
+  { icon: <FileText size={32} />, title: "AI 文案", desc: "小红书/公众号/短视频脚本/多平台改写", color: "#3B82F6", page: "ai-copywriting" as PageKey },
+  { icon: <ImageIcon size={32} />, title: "AI 图片", desc: "封面图/配图/海报 · 增强/抠图", color: "#8B5CF6", page: "ai-image" as PageKey },
+  { icon: <Mic size={32} />, title: "AI 数字人", desc: "AI写稿 · 一键成片 · 批量口播 · 多语言", color: "#06B6D4", page: "ai-digital-human" as PageKey },
+  { icon: <Music size={32} />, title: "AI 配音", desc: "多音色文本转语音 · 男女声可选", color: "#22C55E", page: "ai-tts" as PageKey },
+  { icon: <VideoIcon size={32} />, title: "AI 视频", desc: "短视频自动合成 · 分镜/字幕/BGM", color: "#F43F5E", page: "ai-video" as PageKey },
 ];
 
 const workFilters = ["全部", "文案", "图片", "视频"];
@@ -198,6 +200,8 @@ function AICreationContent() {
       case "ai-copywriting": router.push(`/ai/copywriting${params || ""}`); break;
       case "ai-image": router.push("/ai/image"); break;
       case "ai-video": router.push("/ai/video"); break;
+      case "ai-tts": router.push("/ai/tts"); break;
+      case "ai-digital-human": router.push("/ai/digital-human"); break;
       case "hotspot": router.push("/hotspot"); break;
       case "profile": router.push("/profile"); break;
       default: router.push("/home");
@@ -234,16 +238,17 @@ function AICreationContent() {
         {/* Creation Entry */}
         <div>
           <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 10 }}>创作入口</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {creationEntries.map(({ icon, title, desc, color, page }) => (
               <GlassCard
                 key={title}
                 hover
                 onClick={() => handleNavigate(page)}
-                className="!p-4 flex flex-col items-center text-center gap-2"
+                className="!p-4 flex flex-col items-center text-center gap-2 relative overflow-hidden"
               >
-                <span style={{ color, filter: `drop-shadow(0 0 10px ${color}66)` }}>{icon}</span>
-                <p style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 600 }}>{title}</p>
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: color, opacity: 0.5 }} />
+                <span style={{ color, filter: `drop-shadow(0 0 12px ${color}66)`, fontSize: 32 }}>{icon}</span>
+                <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 700 }}>{title}</p>
                 <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }}>{desc}</p>
               </GlassCard>
             ))}

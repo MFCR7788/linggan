@@ -1,4 +1,5 @@
 import { callDeepSeek } from '../ai-services';
+import { SearchResult, HotListItem } from '../search/types';
 
 /**
  * 查询扩展缓存
@@ -68,6 +69,34 @@ export function preMatchKeyword(text: string, expandedKeywords: string[]): { mat
     }
   }
   return { matched: matchedTerms.length > 0, matchedTerms };
+}
+
+/**
+ * 将热榜条目与扩展关键词做本地匹配，返回匹配成功的 SearchResult[]
+ */
+export function matchHotListAgainstKeywords(
+  hotItems: HotListItem[],
+  expandedKeywords: string[],
+  source: 'weibo' | 'zhihu' | 'baidu' | 'douyin' | 'toutiao'
+): SearchResult[] {
+  const matched: SearchResult[] = [];
+  for (const item of hotItems) {
+    const combinedText = `${item.title} ${item.content}`;
+    const preMatch = preMatchKeyword(combinedText, expandedKeywords);
+    if (preMatch.matched) {
+      matched.push({
+        title: item.title,
+        content: item.content || item.title,
+        url: item.url,
+        source,
+        sourceId: item.topicId,
+        viewCount: item.hotScore || undefined,
+        score: item.hotScore || undefined,
+      });
+    }
+  }
+  // 按热度降序
+  return matched.sort((a, b) => (b.score || 0) - (a.score || 0));
 }
 
 /**

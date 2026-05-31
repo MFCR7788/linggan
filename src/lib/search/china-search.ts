@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import crypto from 'crypto';
-import { SearchResult } from './types';
+import { SearchResult, HotListItem } from './types';
 
 const chinaAxios = axios.create({ timeout: 15000 });
 
@@ -32,6 +32,339 @@ const baiduLimiter = new RateLimiter(5000);
 const douyinLimiter = new RateLimiter(5000);
 const zhihuLimiter = new RateLimiter(5000);
 const toutiaoLimiter = new RateLimiter(5000);
+const weiboHotLimiter = new RateLimiter(10000);
+const zhihuHotLimiter = new RateLimiter(10000);
+const baiduHotLimiter = new RateLimiter(10000);
+const douyinHotLimiter = new RateLimiter(5000);
+const toutiaoHotLimiter = new RateLimiter(5000);
+
+// ====== 热榜拉取（公开 API，无需登录，一次调用获取整个热榜） ======
+
+// 微博热搜 API 响应
+interface WeiboHotResponse {
+  data?: {
+    realtime?: Array<{
+      word: string;
+      word_scheme?: string;
+      raw_hot: number;
+      num: number;
+    }>;
+  };
+}
+
+export async function fetchWeiboHotList(): Promise<HotListItem[]> {
+  await weiboHotLimiter.wait();
+  try {
+    const res = await chinaAxios.get<WeiboHotResponse>(
+      'https://weibo.com/ajax/side/hotSearch',
+      {
+        headers: {
+          'User-Agent': getUA(),
+          'Accept': 'application/json',
+          'Referer': 'https://weibo.com/',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        timeout: 15000,
+      }
+    );
+    const realtime = res.data?.data?.realtime;
+    if (!Array.isArray(realtime)) return [];
+    return realtime.map((item) => ({
+      title: item.word || '',
+      url: `https://s.weibo.com/weibo?q=${encodeURIComponent(item.word || '')}`,
+      content: `热搜第${item.num || 0}位，热度${item.raw_hot || 0}`,
+      rank: item.num || 0,
+      hotScore: item.raw_hot || 0,
+      topicId: item.word || '',
+    }));
+  } catch (error) {
+    console.error('fetchWeiboHotList error:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+// 知乎热榜 API 响应
+interface ZhihuHotResponse {
+  data?: Array<{
+    target?: {
+      id: number;
+      title: string;
+      excerpt?: string;
+      url?: string;
+    };
+    detail_text?: string;
+  }>;
+}
+
+export async function fetchZhihuHotList(): Promise<HotListItem[]> {
+  await zhihuHotLimiter.wait();
+  try {
+    const res = await chinaAxios.get<ZhihuHotResponse>(
+      'https://www.zhihu.com/api/v3/feed/topstory/hot-lists-wormhole',
+      {
+        params: { limit: 50 },
+        headers: {
+          'User-Agent': getUA(),
+          'Accept': 'application/json',
+          'Referer': 'https://www.zhihu.com/hot',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        timeout: 15000,
+      }
+    );
+    const data = res.data?.data;
+    if (!Array.isArray(data)) return [];
+    return data.map((item, index) => {
+      const target = item.target;
+      const title = target?.title || '';
+      return {
+        title,
+        url: target?.url || (target?.id ? `https://www.zhihu.com/question/${target.id}` : `https://www.zhihu.com/search?q=${encodeURIComponent(title)}`),
+        content: target?.excerpt || '',
+        rank: index + 1,
+        hotScore: parseHotText(item.detail_text),
+        topicId: target?.id ? String(target.id) : undefined,
+      };
+    });
+  } catch (error) {
+    console.error('fetchZhihuHotList error:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+/** 解析热度文本 "1000 万热度" -> 10000000 */
+function parseHotText(text?: string): number {
+  if (!text) return 0;
+  const numMatch = text.match(/([\d.]+)\s*万?/);
+  if (!numMatch) return 0;
+  const num = parseFloat(numMatch[1]);
+  return text.includes('万') ? Math.round(num * 10000) : Math.round(num);
+}
+
+// 百度热搜 API/SSR 响应
+interface BaiduBoardItem {
+  word: string;
+  desc?: string;
+  url?: string;
+  hotScore?: string;
+}
+
+export async function fetchBaiduHotList(): Promise<HotListItem[]> {
+  await baiduHotLimiter.wait();
+  try {
+    // 优先尝试 API 接口
+    let items: BaiduBoardItem[] = [];
+    const headers = {
+      'User-Agent': getUA(),
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+    };
+
+    try {
+      const apiRes = await chinaAxios.get(
+        'https://top.baidu.com/api/board',
+        { params: { tab: 'realtime' }, headers: { ...headers, 'Accept': 'application/json' }, timeout: 15000 }
+      );
+      const cards = apiRes.data?.data?.cards ?? apiRes.data?.cards ?? [];
+      for (const card of cards) {
+        if (Array.isArray(card.content)) {
+          items.push(...card.content.map((c: any) => ({
+            word: c.word || c.query || '',
+            desc: c.desc || c.descSummary || '',
+            url: c.url || c.appUrl || '',
+            hotScore: String(c.hotScore || c.heatScore || '0'),
+          })));
+        }
+      }
+    } catch {
+      // API 失败，尝试从 HTML 提取 __NEXT_DATA__
+    }
+
+    if (items.length === 0) {
+      const htmlRes = await chinaAxios.get(
+        'https://top.baidu.com/board?tab=realtime',
+        { headers: { ...headers, 'Accept': 'text/html' }, timeout: 15000 }
+      );
+      const html = htmlRes.data;
+      // 尝试 __NEXT_DATA__ JSON
+      const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>\s*(\{[\s\S]*?\})\s*<\/script>/);
+      if (nextDataMatch) {
+        try {
+          const parsed = JSON.parse(nextDataMatch[1]);
+          const cards = parsed?.props?.pageProps?.cards ?? parsed?.props?.cards ?? [];
+          for (const card of cards) {
+            if (Array.isArray(card.content)) {
+              items.push(...card.content.map((c: any) => ({
+                word: c.word || c.query || '',
+                desc: c.desc || c.descSummary || '',
+                url: c.url || c.appUrl || '',
+                hotScore: String(c.hotScore || c.heatScore || '0'),
+              })));
+            }
+          }
+        } catch { /* ignore parse errors */ }
+      }
+      // 尝试 window.__INITIAL_STATE__
+      if (items.length === 0) {
+        const initStateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+        if (initStateMatch) {
+          try {
+            const parsed = JSON.parse(initStateMatch[1]);
+            const cards = parsed?.cards ?? parsed?.data?.cards ?? [];
+            for (const card of cards) {
+              if (Array.isArray(card.content)) {
+                items.push(...card.content.map((c: any) => ({
+                  word: c.word || c.query || '',
+                  desc: c.desc || '',
+                  url: c.url || '',
+                  hotScore: String(c.hotScore || c.heatScore || '0'),
+                })));
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
+    return items
+      .filter((item) => item.word)
+      .map((item, index) => ({
+        title: item.word,
+        url: item.url || `https://www.baidu.com/s?wd=${encodeURIComponent(item.word)}`,
+        content: item.desc || '',
+        rank: index + 1,
+        hotScore: parseInt(item.hotScore || '0', 10) || 0,
+        topicId: item.word,
+      }));
+  } catch (error) {
+    console.error('fetchBaiduHotList error:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+// ====== 抖音热榜 ======
+
+// 抖音热搜 API 响应
+interface DouyinHotResponse {
+  data?: {
+    word_list?: Array<{
+      word: string;
+      hot_value: number;
+      sentence_id?: string;
+      event_time?: number;
+      label?: string;
+      video_count?: number;
+    }>;
+    trending_list?: Array<{
+      word: string;
+      hot_value: number;
+      sentence_id?: string;
+      discuss_video_count?: number;
+    }>;
+  };
+}
+
+export async function fetchDouyinHotList(): Promise<HotListItem[]> {
+  await douyinHotLimiter.wait();
+  try {
+    const res = await chinaAxios.get<DouyinHotResponse>(
+      'https://www.douyin.com/aweme/v1/web/hot/search/list/',
+      {
+        headers: {
+          'User-Agent': getUA(),
+          'Accept': 'application/json',
+          'Referer': 'https://www.douyin.com/hot',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        timeout: 15000,
+      }
+    );
+    const wordList = res.data?.data?.word_list;
+    const trendingList = res.data?.data?.trending_list;
+    if (!Array.isArray(wordList)) return [];
+    // 合并 word_list 和 trending_list，去重
+    const seen = new Set<string>();
+    const items: HotListItem[] = [];
+    const push = (item: { word: string; hot_value: number; sentence_id?: string; label?: string; video_count?: number }, rank: number) => {
+      const word = item.word?.trim();
+      if (!word || seen.has(word)) return;
+      seen.add(word);
+      items.push({
+        title: word,
+        url: `https://www.douyin.com/search/${encodeURIComponent(word)}`,
+        content: [item.label, item.video_count ? `${item.video_count}个视频` : ''].filter(Boolean).join(' '),
+        rank,
+        hotScore: item.hot_value || 0,
+        topicId: item.sentence_id ? String(item.sentence_id) : undefined,
+      });
+    };
+    wordList.forEach((w, i) => push(w, i + 1));
+    if (Array.isArray(trendingList)) {
+      trendingList.forEach((t, i) => push(t, wordList.length + i + 1));
+    }
+    return items;
+  } catch (error) {
+    console.error('fetchDouyinHotList error:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+// ====== 今日头条热榜 ======
+
+interface ToutiaoHotItem {
+  ClusterId?: number;
+  Title: string;
+  Label?: string;
+  LabelUrl?: string;
+  HotValue?: number;
+  Url?: string;
+}
+
+export async function fetchToutiaoHotList(): Promise<HotListItem[]> {
+  await toutiaoHotLimiter.wait();
+  try {
+    const htmlRes = await chinaAxios.get(
+      'https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc',
+      {
+        headers: {
+          'User-Agent': getUA(),
+          'Accept': 'text/html,application/json',
+          'Referer': 'https://www.toutiao.com/',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        timeout: 15000,
+      }
+    );
+    // 响应格式是 JSON 开头后接 HTML，需要提取 JSON 部分
+    const raw = typeof htmlRes.data === 'string' ? htmlRes.data : JSON.stringify(htmlRes.data);
+    // 通过括号匹配找到 JSON 尾部
+    let depth = 0;
+    let jsonEnd = 0;
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === '{') depth++;
+      else if (raw[i] === '}') {
+        depth--;
+        if (depth === 0) { jsonEnd = i + 1; break; }
+      }
+    }
+    const jsonStr = jsonEnd > 0 ? raw.slice(0, jsonEnd) : raw;
+    const parsed = JSON.parse(jsonStr);
+    const data: ToutiaoHotItem[] = parsed?.data;
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((item) => item.Title)
+      .map((item, index) => ({
+        title: item.Title,
+        url: item.Url || `https://www.toutiao.com/trending/${item.ClusterId || ''}`,
+        content: item.Label || '',
+        rank: index + 1,
+        hotScore: item.HotValue || 0,
+        topicId: item.ClusterId ? String(item.ClusterId) : undefined,
+      }));
+  } catch (error) {
+    console.error('fetchToutiaoHotList error:', error instanceof Error ? error.message : error);
+    return [];
+  }
+}
 
 // ====== 搜狗搜索 ======
 export async function searchSogou(query: string): Promise<SearchResult[]> {

@@ -12,18 +12,19 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { prompt, ratio } = await request.json();
+    const { prompt, ratio, n } = await request.json();
 
     if (!prompt) {
       return createApiError('Prompt is required', 400);
     }
 
-    const result = await generateImage(prompt, { ratio });
+    const count = Math.min(n || 1, 4);
+    const result = await generateImage(prompt, { ratio, n: count });
 
     // 记录AI使用
-    await logAiUsage(user.id, 'image', 100);
+    await logAiUsage(user.id, 'image', 100 * count);
 
-    // 保存到"AI创作"作品集（不再每次创建新对话）
+    // 保存到"AI创作"作品集
     const supabase = createAdminClient();
     const { data: session } = await supabase
       .from('chat_sessions')
@@ -38,13 +39,18 @@ export async function POST(request: NextRequest) {
       .single()
     ).data?.id;
     if (sessionId) {
+      const firstResult = Array.isArray(result) ? result[0] : result;
       await supabase.from('chat_messages').insert({
         session_id: sessionId,
         user_id: user.id,
         type: 'ai',
         content: prompt,
         content_type: 'text',
-        metadata: { source: 'ai_creation', generatedImage: { imageUrl: result.imageUrl, prompt: result.prompt, size: result.size } },
+        metadata: {
+          source: 'ai_creation',
+          generatedImage: { imageUrl: firstResult.imageUrl, prompt: firstResult.prompt, size: firstResult.size },
+          batchImages: Array.isArray(result) ? result.map((r) => ({ imageUrl: r.imageUrl, size: r.size })) : undefined,
+        },
       });
     }
 
