@@ -152,7 +152,9 @@ export function useMessageActions() {
       await navigator.clipboard.writeText(msg.content);
       setCopiedId(msg.id);
       setTimeout(() => setCopiedId(null), 1500);
-    } catch { /* ignore */ }
+    } catch {
+      console.error('复制失败：剪贴板不可用');
+    }
   }, []);
 
   const shareMessage = useCallback(async (msg: Message) => {
@@ -303,6 +305,7 @@ export function useMessageActions() {
       setTimeout(() => setCopiedId(null), 1500);
     } catch (e) {
       console.error('保存灵感失败:', e);
+      throw e;
     } finally {
       setSavingId(null);
     }

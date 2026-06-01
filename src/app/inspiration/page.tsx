@@ -14,14 +14,13 @@ import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/styl
 
 // ====== 常量 ======
 
-const typeFilters = ["全部", "灵感", "图片", "视频", "日程"];
+const typeFilters = ["全部", "灵感", "图片", "视频"];
 
 const typeMap: Record<string, string | undefined> = {
   "全部": undefined,
   "灵感": "text",
   "图片": "image",
   "视频": "video",
-  "日程": "schedule",
 };
 
 const TIME_RANGES = [

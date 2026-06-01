@@ -26,7 +26,7 @@ const platformColors: Record<string, string> = {
   weibo: '#E0534A', 微博: '#E0534A',
   zhihu: '#3B82F6', 知乎: '#3B82F6',
   xiaohongshu: '#F43F5E', 小红书: '#F43F5E',
-  douyin: '#1C1C1C', 抖音: '#1C1C1C',
+  douyin: '#FFFFFF', 抖音: '#FFFFFF',
   bilibili: '#FB7299', B站: '#FB7299',
 };
 

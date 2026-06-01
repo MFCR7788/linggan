@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Zap, ChevronDown, ChevronUp, Play, Download, FolderOpen, RefreshCw, Share2,
-  ChevronLeft, ChevronRight, AlertCircle, Loader2, Clock, CheckCircle2, XCircle,
-  ImageIcon, FileText, Film, Music, Type, Settings, Plus, Wand2, Sparkles,
+  Zap, ChevronDown, ChevronUp, Download, FolderOpen, RefreshCw, Share2,
+  ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle2, XCircle,
+  Settings, Wand2, Sparkles,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -69,7 +69,7 @@ const bgmOptions = [
 const subtitleStyles = ['白色粗体', '黄色描边', '黑底白字', '渐变彩色'];
 const subtitlePositions = ['底部', '中部', '顶部'];
 
-const STEPS = ['确定方向', '分镜预览', '生成下载'];
+const STEPS = ['确定方向', '分镜预览', '生成'];
 
 const stylePresets = Object.entries(STYLE_PRESETS);
 
@@ -117,9 +117,8 @@ function AIVideoContent() {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [segments, setSegments] = useState<SegmentState[]>([]);
-  const [mergePhase, setMergePhase] = useState<'idle' | 'submitting' | 'generating' | 'downloading' | 'merging' | 'segments_ready' | 'done' | 'error'>('idle');
-  const [mergeError, setMergeError] = useState<string | null>(null);
-  const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [genPhase, setGenPhase] = useState<'idle' | 'submitting' | 'generating' | 'done' | 'error'>('idle');
+  const [genError, setGenError] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const segmentsRef = useRef<SegmentState[]>([]);
   const [oneClickMode, setOneClickMode] = useState(false);
@@ -215,9 +214,8 @@ function AIVideoContent() {
       return;
     }
 
-    setMergePhase('submitting');
-    setMergeError(null);
-    setFinalVideoUrl(null);
+    setGenPhase('submitting');
+    setGenError(null);
 
     const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
 
@@ -244,20 +242,20 @@ function AIVideoContent() {
       const validProviders = validSegs.map((s) => s.provider || 'dashscope').join(',');
       if (!validTaskIds) {
         const errMsg = segs[0]?.status === 'skipped' ? '所有片段提交 AI 生成失败，请检查 API Key 或稍后重试' : '未获取到生成任务';
-        setMergeError(errMsg);
-        setMergePhase('error');
+        setGenError(errMsg);
+        setGenPhase('error');
         return;
       }
 
       // 开始轮询
-      setMergePhase('generating');
+      setGenPhase('generating');
       let attempts = 0;
       pollingRef.current = setInterval(async () => {
         attempts++;
         if (attempts > 120) {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          setMergeError('生成超时，请重试');
-          setMergePhase('error');
+          setGenError('生成超时，请重试');
+          setGenPhase('error');
           return;
         }
         try {
@@ -286,7 +284,7 @@ function AIVideoContent() {
 
             if (progress?.allDone) {
               if (pollingRef.current) clearInterval(pollingRef.current);
-              setMergePhase('segments_ready');
+              setGenPhase('done');
             }
           } else {
             console.warn('[Poll] API 返回非成功:', pollData.error || pollData);
@@ -296,8 +294,8 @@ function AIVideoContent() {
         }
       }, 5000);
     } catch (e: any) {
-      setMergeError(e.message || '提交失败');
-      setMergePhase('error');
+      setGenError(e.message || '提交失败');
+      setGenPhase('error');
     }
   }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier]);
 
@@ -308,9 +306,8 @@ function AIVideoContent() {
     }
     setOneClickMode(true);
     setCurrentStep(3);
-    setMergePhase('submitting');
-    setMergeError(null);
-    setFinalVideoUrl(null);
+    setGenPhase('submitting');
+    setGenError(null);
 
     const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
 
@@ -343,13 +340,13 @@ function AIVideoContent() {
 
       const validSegs = segs.filter((s) => s.taskId);
       if (validSegs.length === 0) {
-        setMergeError('所有片段提交失败');
-        setMergePhase('error');
+        setGenError('所有片段提交失败');
+        setGenPhase('error');
         return;
       }
 
       // 开始轮询
-      setMergePhase('generating');
+      setGenPhase('generating');
       const validTaskIds = validSegs.map((s) => s.taskId).join(',');
       const validProviders = validSegs.map((s) => s.provider || 'dashscope').join(',');
       let attempts = 0;
@@ -357,8 +354,8 @@ function AIVideoContent() {
         attempts++;
         if (attempts > 120) {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          setMergeError('生成超时，请重试');
-          setMergePhase('error');
+          setGenError('生成超时，请重试');
+          setGenPhase('error');
           return;
         }
         try {
@@ -385,19 +382,7 @@ function AIVideoContent() {
 
             if (progress?.allDone) {
               if (pollingRef.current) clearInterval(pollingRef.current);
-              // 一键成片模式：自动合成
-              const succeededSegs = updatedSegs.filter((s) => s.status === 'succeeded' && s.videoUrl);
-              if (succeededSegs.length > 0) {
-                setMergePhase('segments_ready');
-                // 自动触发合成
-                setTimeout(() => {
-                  const urls = succeededSegs.map((s) => s.videoUrl as string);
-                  handleAutoMerge(urls);
-                }, 500);
-              } else {
-                setMergeError('所有片段生成失败');
-                setMergePhase('error');
-              }
+              setGenPhase('done');
             }
           }
         } catch (pollErr) {
@@ -406,87 +391,15 @@ function AIVideoContent() {
       }, 5000);
     } catch (e: any) {
       console.error('[OneClick] 一键成片失败:', e);
-      setMergeError(e.message || '一键成片失败');
-      setMergePhase('error');
-    }
-  };
-
-  const handleAutoMerge = async (urls: string[]) => {
-    setMergePhase('merging');
-    setMergeError(null);
-    try {
-      const mergeRes = await fetch('/api/ai/video/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrls: urls,
-          bgmStyle,
-          subtitleStyle,
-          subtitlePosition: subtitlePos,
-          storyboard,
-          stylePreset,
-          language,
-          topic: topic.trim() || '',
-        }),
-      });
-      const mergeData = await mergeRes.json();
-      if (mergeData.success && mergeData.data?.videoUrl) {
-        setFinalVideoUrl(mergeData.data.videoUrl);
-        setMergePhase('done');
-      } else {
-        throw new Error(mergeData.error || '合并返回无视频地址');
-      }
-    } catch (e: any) {
-      setMergeError(e.message || '合并失败');
-      setMergePhase('error');
+      setGenError(e.message || '一键成片失败');
+      setGenPhase('error');
     }
   };
 
   const handleCancel = () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
-    setMergePhase('idle');
+    setGenPhase('idle');
     setSegments([]);
-  };
-
-  // ─── 手动合成 ───────────────────────────────────────
-
-  const handleMerge = async () => {
-    const succeededSegs = segmentsRef.current.filter((s) => s.status === 'succeeded' && s.videoUrl);
-    const urls = succeededSegs.map((s) => s.videoUrl as string);
-    if (urls.length === 0) {
-      setMergeError('没有可用的视频片段');
-      setMergePhase('error');
-      return;
-    }
-    setMergePhase('merging');
-    setMergeError(null);
-    try {
-      const mergeRes = await fetch('/api/ai/video/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrls: urls,
-          bgmStyle,
-          subtitleStyle,
-          subtitlePosition: subtitlePos,
-          storyboard,
-          stylePreset,
-          language,
-          topic: topic.trim() || '',
-        }),
-      });
-      const mergeData = await mergeRes.json();
-      if (mergeData.success && mergeData.data?.videoUrl) {
-        setFinalVideoUrl(mergeData.data.videoUrl);
-        setMergePhase('done');
-      } else {
-        throw new Error(mergeData.error || '合并返回无视频地址');
-      }
-    } catch (e: any) {
-      console.error('[handleMerge] 合并失败:', e);
-      setMergeError(e.message || '合并失败');
-      setMergePhase('error');
-    }
   };
 
   // ─── 保存单个分段到作品 ─────────────────────────────
@@ -759,7 +672,7 @@ function AIVideoContent() {
           <div className="flex-1 min-w-0">
             <p style={{ color: '#FCA5A5', fontSize: 14, fontWeight: 700 }}>一键成片</p>
             <p style={{ color: '#9CA3AF', fontSize: 11 }}>
-              自动分镜 + 生成 + 合成 · 选好素材直接出片
+              自动分镜 + 生成 · 选好素材直接出片
             </p>
           </div>
           <ChevronRight size={18} color="#FCA5A5" />
@@ -844,62 +757,11 @@ function AIVideoContent() {
         </GlassCard>
       )}
 
-      {/* BGM + 字幕配置 */}
+      {/* 后期配置占位 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-          <span style={{ color: '#8B5CF6' }}>后期</span> · BGM & 字幕（可覆盖预设）
+        <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', padding: 8 }}>
+          BGM 与字幕功能即将支持，敬请期待
         </p>
-
-        <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>背景音乐</p>
-        <div className="space-y-2 mb-4">
-          {bgmOptions.map(({ id, label, wave }) => (
-            <button key={id} onClick={() => setBgmStyle(id)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl"
-              style={{
-                background: bgmStyle === id ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
-                border: bgmStyle === id ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
-              }}>
-              <div className="flex items-end gap-0.5 h-6">
-                {wave.map((h, i) => (
-                  <div key={i} className="w-1 rounded-full"
-                    style={{ height: h * 2.5, background: bgmStyle === id ? '#8B5CF6' : 'rgba(255,255,255,0.3)' }} />
-                ))}
-              </div>
-              <span style={{ color: bgmStyle === id ? '#C4B5FD' : '#E5E7EB', fontSize: 13 }}>{label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>字幕样式</p>
-            <div className="grid grid-cols-2 gap-1">
-              {subtitleStyles.map((s) => (
-                <button key={s} onClick={() => setSubtitleStyle(s)}
-                  className="px-2 py-1.5 rounded text-xs"
-                  style={{
-                    background: subtitleStyle === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
-                    border: subtitleStyle === s ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                    color: subtitleStyle === s ? '#93C5FD' : '#9CA3AF',
-                  }}>{s}</button>
-              ))}
-            </div>
-          </div>
-          <div className="flex-1">
-            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>字幕位置</p>
-            <div className="flex gap-1">
-              {subtitlePositions.map((p) => (
-                <button key={p} onClick={() => setSubtitlePos(p)}
-                  className="flex-1 py-2 rounded text-xs"
-                  style={{
-                    background: subtitlePos === p ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
-                    border: subtitlePos === p ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                    color: subtitlePos === p ? '#93C5FD' : '#9CA3AF',
-                  }}>{p}</button>
-              ))}
-            </div>
-          </div>
-        </div>
       </GlassCard>
 
       {/* 操作按钮 */}
@@ -916,10 +778,10 @@ function AIVideoContent() {
 
   const renderStep3 = () => (
     <GlassCard>
-      {mergePhase === 'idle' ? (
+      {genPhase === 'idle' ? (
         <>
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            <span style={{ color: '#3B82F6' }}>确认</span> · 合成参数
+            <span style={{ color: '#3B82F6' }}>确认</span> · 生成参数
           </p>
           <div className="space-y-2 mb-4">
             {[
@@ -938,11 +800,12 @@ function AIVideoContent() {
             ))}
           </div>
           <PrimaryButton fullWidth size="lg" onClick={submitGenerate}>
-            <Zap size={16} /> 开始合成
+            <Zap size={16} /> 开始生成
           </PrimaryButton>
         </>
-      ) : mergePhase === 'segments_ready' ? (
+      ) : genPhase === 'done' ? (
         <>
+          {/* 成功提示 */}
           <div className="flex items-center gap-2 mb-4 p-2 rounded-lg"
             style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
             <CheckCircle2 size={14} color="#22C55E" />
@@ -951,155 +814,104 @@ function AIVideoContent() {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {segments.map((seg) => {
+          {/* 分段视频列表 */}
+          <div className="space-y-4 mb-4">
+            {segments.filter(s => s.status === 'succeeded').map((seg) => {
               const sb = storyboard.find((s) => s.index === seg.index);
-              const isSuccess = seg.status === 'succeeded';
               return (
                 <div key={seg.index} className="p-3 rounded-xl"
-                  style={{
-                    background: isSuccess ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
-                    border: isSuccess ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(239,68,68,0.2)',
-                  }}>
-                  <div className="flex items-center gap-1.5 mb-2">
+                  style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                  {/* 分段信息 */}
+                  <div className="flex items-center gap-2 mb-2">
                     <span className="px-1.5 py-0.5 rounded text-xs font-bold"
                       style={{ background: 'rgba(59,130,246,0.2)', color: '#93C5FD' }}>
                       段{seg.index + 1}
                     </span>
-                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>{seg.duration}s</span>
-                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>
-                      {seg.materialType === 'image' ? '图生' : '文生'}
+                    <span style={{ color: '#9CA3AF', fontSize: 11 }}>{seg.duration}秒</span>
+                    <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                      {seg.materialType === 'image' ? '图生视频' : '文生视频'}
                     </span>
-                    {isSuccess ? (
-                      <CheckCircle2 size={12} color="#22C55E" style={{ marginLeft: 'auto' }} />
-                    ) : (
-                      <XCircle size={12} color="#EF4444" style={{ marginLeft: 'auto' }} />
+                    {seg.model && (
+                      <span style={{ color: '#6B7280', fontSize: 10 }}>
+                        {getModelDisplayName(seg.model)}
+                      </span>
                     )}
+                    <CheckCircle2 size={12} color="#22C55E" style={{ marginLeft: 'auto' }} />
                   </div>
 
-                  {seg.model && (
-                    <p style={{ color: '#6B7280', fontSize: 9, marginBottom: 4 }}>
-                      {getModelDisplayName(seg.model)}
+                  {/* 字幕 */}
+                  {sb?.subtitle && (
+                    <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                      {sb.subtitle}
                     </p>
                   )}
 
-                  {isSuccess ? (
-                    <>
-                      <p className="text-xs mb-2 leading-relaxed truncate"
-                        style={{ color: '#E5E7EB' }}>
-                        {sb?.subtitle || `片段 ${seg.index + 1}`}
-                      </p>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleDownloadSegment(seg)}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs"
-                          style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
-                          <Download size={10} /> 下载
-                        </button>
-                        <button onClick={() => handleSaveSegment(seg)}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs"
-                          style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}>
-                          <FolderOpen size={10} /> 保存
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs" style={{ color: '#FCA5A5' }}>
-                      {seg.status === 'failed' ? '生成失败' : '已跳过'}
-                    </p>
+                  {/* 视频播放器 */}
+                  {seg.videoUrl && (
+                    <video src={seg.videoUrl} controls playsInline
+                      className="w-full rounded-xl mb-3"
+                      style={{ background: '#000', maxHeight: 280 }} />
                   )}
+
+                  {/* 操作按钮 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => handleDownloadSegment(seg)}
+                      className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
+                      style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
+                      <Download size={12} /> 下载
+                    </button>
+                    <button onClick={() => handleSaveSegment(seg)}
+                      className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
+                      style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}>
+                      <FolderOpen size={12} /> 保存灵感
+                    </button>
+                    <button onClick={() => {
+                      if (seg.videoUrl) {
+                        navigator.clipboard.writeText(seg.videoUrl).then(() => {
+                          setToast({ message: '链接已复制', type: 'success' });
+                        }).catch(() => setToast({ message: '复制失败', type: 'error' }));
+                      }
+                    }}
+                      className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
+                      style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', color: '#86EFAC' }}>
+                      <Share2 size={12} /> 分享
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          {(() => {
-            const sCount = segments.filter((s) => s.status === 'succeeded').length;
-            return (
-              <>
-                <PrimaryButton fullWidth size="lg" onClick={handleMerge} disabled={sCount === 0}>
-                  <Film size={16} /> ffmpeg 合成视频（拼接 + BGM + 字幕）
-                </PrimaryButton>
-                {sCount === 0 && (
-                  <p style={{ color: '#FCA5A5', fontSize: 11, textAlign: 'center', marginTop: 8 }}>
-                    需至少 1 段生成成功才能合成
-                  </p>
-                )}
-              </>
-            );
-          })()}
+          {/* 失败分段 */}
+          {segments.filter(s => s.status === 'failed' || s.status === 'skipped').length > 0 && (
+            <div className="mb-4">
+              <p style={{ color: '#FCA5A5', fontSize: 12, marginBottom: 8 }}>以下分段生成失败：</p>
+              {segments.filter(s => s.status === 'failed' || s.status === 'skipped').map(seg => (
+                <div key={seg.index} className="flex items-center gap-2 py-1 px-2 rounded"
+                  style={{ background: 'rgba(239,68,68,0.06)' }}>
+                  <XCircle size={12} color="#EF4444" />
+                  <span style={{ color: '#FCA5A5', fontSize: 12 }}>段{seg.index + 1}</span>
+                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                    {seg.status === 'failed' ? '生成失败' : '已跳过'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 重新生成 */}
+          <PrimaryButton fullWidth size="lg" onClick={() => { setGenPhase('idle'); setSegments([]); }}>
+            <RefreshCw size={16} /> 重新生成
+          </PrimaryButton>
         </>
-      ) : mergePhase === 'error' ? (
+      ) : genPhase === 'error' ? (
         <div className="flex flex-col items-center py-10 gap-4">
           <XCircle size={40} color="#EF4444" />
-          <p style={{ color: '#FCA5A5', fontSize: 14 }}>{mergeError || '合成失败'}</p>
-          <PrimaryButton size="sm" onClick={() => { setMergePhase('idle'); setSegments([]); }}>
+          <p style={{ color: '#FCA5A5', fontSize: 14 }}>{genError || '生成失败'}</p>
+          <PrimaryButton size="sm" onClick={() => { setGenPhase('idle'); setSegments([]); }}>
             <RefreshCw size={14} /> 重试
           </PrimaryButton>
         </div>
-      ) : mergePhase === 'done' ? (
-        <>
-          {finalVideoUrl ? (
-            <>
-              <video src={finalVideoUrl} controls playsInline className="w-full rounded-xl mb-3"
-                style={{ background: '#000', maxHeight: 360 }} />
-              <div className="flex items-center gap-2 mb-4 p-2 rounded-lg"
-                style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
-                <CheckCircle2 size={14} color="#22C55E" />
-                <span style={{ color: '#86EFAC', fontSize: 11 }}>合成完成，已自动保存到作品</span>
-                <a href={finalVideoUrl} target="_blank" rel="noopener noreferrer"
-                  className="ml-auto px-2 py-0.5 rounded text-xs"
-                  style={{ color: '#93C5FD', background: 'rgba(59,130,246,0.15)' }}>
-                  新窗口打开 ↗
-                </a>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center py-8 gap-3">
-              <CheckCircle2 size={40} color="#22C55E" />
-              <p style={{ color: '#86EFAC', fontSize: 14 }}>视频已保存到作品</p>
-              <button onClick={() => router.push('/inspiration')}
-                className="px-4 py-2 rounded-lg text-sm"
-                style={{ color: '#93C5FD', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                去作品库查看 →
-              </button>
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              {
-                icon: <Download size={15} />, label: '下载',
-                action: async () => {
-                  if (finalVideoUrl) {
-                    try {
-                      const res = await fetch(finalVideoUrl);
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `linggan-video-${Date.now()}.mp4`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    } catch { /* ignore */ }
-                  }
-                },
-              },
-              {
-                icon: <FolderOpen size={15} />, label: '查看作品',
-                action: () => router.push('/inspiration'),
-              },
-              {
-                icon: <RefreshCw size={15} />, label: '重新合成',
-                action: () => { setMergePhase('idle'); setSegments([]); setFinalVideoUrl(null); },
-              },
-            ].map(({ icon, label, action }) => (
-              <button key={label} onClick={action}
-                className="flex flex-col items-center gap-1 py-2 rounded-xl text-xs"
-                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB' }}>
-                <span style={{ color: '#3B82F6' }}>{icon}</span> {label}
-              </button>
-            ))}
-          </div>
-        </>
       ) : (
         <div className="flex flex-col items-center py-8 gap-4">
           <div className="relative w-16 h-16">
@@ -1109,11 +921,10 @@ function AIVideoContent() {
           </div>
           <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
             {oneClickMode && (
-              <span style={{ color: '#FCA5A5', fontSize: 11, display: 'block', marginBottom: 4 }}>一键成片 · 自动分镜+生成+合成</span>
+              <span style={{ color: '#FCA5A5', fontSize: 11, display: 'block', marginBottom: 4 }}>一键成片 · 自动分镜+生成</span>
             )}
-            {mergePhase === 'submitting' ? '正在提交任务...' :
-             mergePhase === 'generating' ? '正在生成视频片段...' :
-             mergePhase === 'merging' ? '正在合并 + 字幕 + BGM...' : '处理中...'}
+            {genPhase === 'submitting' ? '正在提交任务...' :
+             genPhase === 'generating' ? '正在生成视频片段...' : '处理中...'}
           </p>
 
           {/* 分段进度 */}
@@ -1145,15 +956,6 @@ function AIVideoContent() {
             </div>
           )}
 
-          {mergePhase === 'merging' && (
-            <>
-              <div className="w-48 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                <div className="h-full w-2/3 rounded-full animate-pulse" style={{ background: '#8B5CF6' }} />
-              </div>
-              <span style={{ color: '#9CA3AF', fontSize: 11 }}>ffmpeg 合并 + 字幕 + BGM...</span>
-            </>
-          )}
-
           <button onClick={handleCancel}
             className="px-4 py-1.5 rounded-lg text-xs"
             style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>
@@ -1166,22 +968,22 @@ function AIVideoContent() {
 
   // ─── 主渲染 ──────────────────────────────────────────
 
-  const isMerging = mergePhase !== 'idle' && mergePhase !== 'error' && mergePhase !== 'done' && mergePhase !== 'segments_ready';
+  const isGenActive = genPhase !== 'idle' && genPhase !== 'error' && genPhase !== 'done';
 
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 视频生成" showBack onBack={() => router.push('/ai')} />
 
       <div className="flex-1 px-4 pt-4 space-y-4">
-        {/* Step 导航 — 合成期间隐藏 */}
-        {!isMerging && mergePhase !== 'done' && mergePhase !== 'segments_ready' && (
+        {/* Step 导航 — 生成期间隐藏 */}
+        {!isGenActive && genPhase !== 'done' && (
           <>
             <div className="overflow-x-auto">
               <div className="flex gap-0 min-w-max justify-center">
                 {STEPS.map((step, i) => {
                   const stepIndex = i + 1;
                   return (
-                    <button key={step} onClick={() => { if (stepIndex <= currentStep && !isMerging) setCurrentStep(stepIndex); }}
+                    <button key={step} onClick={() => { if (stepIndex <= currentStep && !isGenActive) setCurrentStep(stepIndex); }}
                       className="flex flex-col items-center gap-1 px-3">
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
                         style={{
@@ -1205,14 +1007,14 @@ function AIVideoContent() {
             {/* Step 内容 */}
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && mergePhase === 'idle' && renderStep3()}
+            {currentStep === 3 && genPhase === 'idle' && renderStep3()}
           </>
         )}
 
-        {/* 合成中 / 合成完成 — 全屏占据 */}
-        {(isMerging || mergePhase === 'done' || mergePhase === 'segments_ready') && (
+        {/* 生成中 / 生成完成 — 全屏占据 */}
+        {(isGenActive || genPhase === 'done') && (
           <>
-            {mergePhase === 'done' ? (
+            {genPhase === 'done' ? (
               <div className="pt-2">
                 {renderStep3()}
               </div>

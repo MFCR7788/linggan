@@ -828,7 +828,19 @@ function AIImageContent() {
                 <div className="grid grid-cols-4 gap-2">
                   {[
                     { icon: <RefreshCw size={15} />, label: '重新生成', action: handleGenerate },
-                    { icon: <Download size={15} />, label: '下载', action: () => { if (imageUrl) window.open(imageUrl, '_blank'); } },
+                    { icon: <Download size={15} />, label: '下载', action: async () => {
+                      if (!imageUrl) return;
+                      try {
+                        const res = await fetch(imageUrl);
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `linggan-image-${Date.now()}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch { setToast({ message: '下载失败', type: 'error' }); }
+                    } },
                     { icon: <Save size={15} />, label: '存灵感', action: () => {
       if (!imageUrl) return;
       fetch('/api/inspiration', {

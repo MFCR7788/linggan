@@ -9,6 +9,7 @@ import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import { syncDevAuthCookie } from "@/lib/dev-auth";
+import { Toast } from "@/components/Toast";
 
 const quickActions = [
   { label: "小红书文案", sub: "一键爆款", page: "ai-copywriting" as PageKey, color: "#F43F5E", type: "xiaohongshu" },
@@ -24,7 +25,7 @@ const creationEntries = [
   { icon: <VideoIcon size={32} />, title: "AI 视频", desc: "短视频自动合成 · 分镜/字幕/BGM", color: "#F43F5E", page: "ai-video" as PageKey },
 ];
 
-const workFilters = ["全部", "文案", "图片", "视频"];
+const workFilters = ["全部", "文案", "图片", "视频", "语音"];
 
 function formatRelativeTime(dateStr: string): string {
   if (!dateStr) return "";
@@ -69,6 +70,7 @@ function AICreationContent() {
   const [selectedWork, setSelectedWork] = useState<Work | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const router = useRouter();
 
   const loadWorks = useCallback(() => {
@@ -140,7 +142,7 @@ function AICreationContent() {
     try {
       await fetch(`/api/ai/works?id=${w.id}&source=${w._source || 'chat'}`, { method: 'DELETE' });
       loadWorks();
-    } catch { /* ignore */ }
+    } catch { setToast({ message: '删除失败，请重试', type: 'error' }); }
   };
 
   const handleBatchDelete = async () => {
@@ -159,7 +161,7 @@ function AICreationContent() {
       setIsSelecting(false);
       setSelectedKeys(new Set());
       loadWorks();
-    } catch { /* ignore */ }
+    } catch { setToast({ message: '批量删除失败', type: 'error' }); }
   };
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "");
@@ -174,7 +176,7 @@ function AICreationContent() {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(blobUrl);
-    } catch { /* ignore */ }
+    } catch { setToast({ message: '下载失败', type: 'error' }); }
   };
 
   const handleSaveToInspiration = async (work: Work) => {
@@ -190,7 +192,8 @@ function AICreationContent() {
           tags: ["AI生成"],
         }),
       });
-    } catch { /* ignore */ }
+      setToast({ message: '已保存到灵感库', type: 'success' });
+    } catch { setToast({ message: '保存失败，请重试', type: 'error' }); }
   };
 
   const handleNavigate = (page: PageKey, params?: string) => {
@@ -539,6 +542,7 @@ function AICreationContent() {
       )}
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

@@ -20,7 +20,12 @@ function LoginContent() {
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
+  const [isLocalhost, setIsLocalhost] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    setIsLocalhost(window.location.hostname === 'localhost');
+  }, []);
   const { data: user } = useUser();
 
   // 如果用户已登录，直接跳转到首页
@@ -178,7 +183,8 @@ function LoginContent() {
         </p>
         
         {/* 测试模式提示 */}
-        <div 
+        {isLocalhost && (
+        <div
           className="mt-4 px-4 py-3 rounded-lg"
           style={{
             background: "rgba(34,197,94,0.1)",
@@ -186,12 +192,13 @@ function LoginContent() {
           }}
         >
           <p style={{ color: "#22C55E", fontSize: 11, textAlign: "center" }}>
-            🧪 开发测试模式
+            🧪 本地测试模式
           </p>
           <p style={{ color: "#86EFAC", fontSize: 12, textAlign: "center", marginTop: 4 }}>
             发送验证码后，请使用 <strong>123456</strong> 进行登录/注册
           </p>
         </div>
+        )}
       </div>
 
       <GlassCard className="w-full max-w-sm p-6">

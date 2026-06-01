@@ -719,7 +719,7 @@ function HotspotRadarInner() {
 
   const handleMarkAllRead = async () => {
     syncDevAuthCookie();
-    try { await fetch('/api/hotspot/mark-read', { method: 'POST', headers: { ...authHeaders } }); fetchData(); } catch {}
+    try { await fetch('/api/hotspot/mark-read', { method: 'POST', headers: { ...authHeaders } }); fetchData(); } catch { console.error('全部标为已读失败'); }
   };
 
   const handleCheckNow = async () => {
@@ -756,12 +756,12 @@ function HotspotRadarInner() {
 
   const handleToggleKeyword = async (id: string, currentActive: boolean) => {
     syncDevAuthCookie();
-    try { await fetch(`/api/keywords/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ is_active: !currentActive }) }); fetchData(); } catch {}
+    try { await fetch(`/api/keywords/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ is_active: !currentActive }) }); fetchData(); } catch { setToast({ type: 'error', message: '操作失败' }); }
   };
 
   const handleDeleteKeyword = async (id: string) => {
     syncDevAuthCookie();
-    try { await fetch(`/api/keywords/${id}`, { method: 'DELETE', headers: { ...authHeaders } }); if (selectedKeywordId === id) setSelectedKeywordId(null); fetchData(); } catch {}
+    try { await fetch(`/api/keywords/${id}`, { method: 'DELETE', headers: { ...authHeaders } }); if (selectedKeywordId === id) setSelectedKeywordId(null); fetchData(); } catch { setToast({ type: 'error', message: '删除失败' }); }
   };
 
   const handleSearch = async () => {
@@ -772,7 +772,7 @@ function HotspotRadarInner() {
       const res = await fetch('/api/hotspot/search', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ query: searchQuery.trim(), region: searchRegion, resultsPerSource: searchResultsPerSource }) });
       const data = await res.json();
       if (data.success) setSearchResults(data.data.results || []);
-    } catch {}
+    } catch { setToast({ type: 'error', message: '搜索失败' }); }
     finally { setSearching(false); }
   };
 
@@ -781,7 +781,8 @@ function HotspotRadarInner() {
     try {
       const res = await fetch('/api/inspiration', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ type: 'link', title: item.title?.substring(0, 100) || '热点灵感', original_text: item.original_content || item.ai_summary || '', summary: item.ai_summary || '', source_url: item.original_url || '', source_platform: item.platform || '', tags: [item.platform, item.importance_level].filter(Boolean) }) });
       if (res.ok) { setCheckResult('已保存到灵感库'); setTimeout(() => setCheckResult(null), 2000); }
-    } catch {}
+      else { setToast({ type: 'error', message: '保存失败' }); }
+    } catch { setToast({ type: 'error', message: '保存失败，请重试' }); }
   };
 
   const handleViewDetail = (id: string) => { router.push(`/hotspot/detail?id=${id}`); };

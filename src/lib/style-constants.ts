@@ -72,6 +72,9 @@ export const PAGE_ROUTES: Record<string, string> = {
   capture: '/capture',
   schedule: '/schedule',
   login: '/login',
+  'ai-tts': '/ai/tts',
+  'ai-digital-human': '/ai/digital-human',
+  'profile-help': '/profile/help',
 };
 
 // 常用背景色

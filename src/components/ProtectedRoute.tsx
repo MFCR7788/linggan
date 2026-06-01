@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { LoadingSpinner } from "@/components";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AlertCircle } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -34,6 +35,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <ErrorBoundary>{children}</ErrorBoundary>;
   }
 
-  // 其他情况（未登录或错误），不渲染任何内容或可以显示错误状态
+  // 错误或无用户，显示错误状态
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+        <AlertCircle size={40} color="#EF4444" />
+        <p style={{ color: "#FCA5A5", fontSize: 14, textAlign: "center" }}>加载用户信息失败</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 rounded-lg text-sm"
+          style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#FCA5A5" }}
+        >
+          重新加载
+        </button>
+      </div>
+    );
+  }
+
+  // 未登录，不渲染
   return null;
 }

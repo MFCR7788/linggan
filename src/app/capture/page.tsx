@@ -903,7 +903,7 @@ function CaptureContent() {
                     onSpeak={speakMessage}
                     onShare={shareMessage}
                     onRegenerate={handleRegenerate}
-                    onSave={(msg: any) => saveToInspiration(msg, messages)}
+                    onSave={(msg: any) => saveToInspiration(msg, messages).catch(() => showToast('保存失败，请重试', 'error'))}
                     onAddToSchedule={(msg) => addToSchedule(msg, messages)}
                     onDelete={handleDelete}
                   />
