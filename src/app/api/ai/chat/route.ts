@@ -710,29 +710,23 @@ export async function POST(request: NextRequest) {
     // ====== 天气查询：提取城市并获取实时天气 ======
     let weatherData: import('@/lib/ai-services').WeatherData | null = null;
     if (intent.type === 'weather') {
-      const cityPatterns = [
-        /([\u4e00-\u9fff]{2,4})(?:的)?(?:天气|气温|温度|下雨|下雪|刮风|雾霾|空气质量)/,
-        /(?:查|看|搜|问)(?:一下|一下)?([\u4e00-\u9fff]{2,4})(?:的)?(?:天气|气温|温度)?/,
-        /(?:天气|气温|温度)(?:怎么样|如何|预报).*?([\u4e00-\u9fff]{2,4})/,
-      ];
-      let city = '';
-      for (const pattern of cityPatterns) {
-        const match = content.match(pattern);
-        if (match && match[1]) { city = match[1]; break; }
-      }
-      // 兜底：直接用用户输入的前几个中文字符作为城市名
-      if (!city) {
-        const chineseMatch = content.match(/[\u4e00-\u9fff]{2,4}/);
-        if (chineseMatch) city = chineseMatch[0];
-      }
+      // 去掉常见的天气/时间/疑问词，剩下的中文字符最可能是城市名
+      const noiseWords = /的|天气|气温|温度|下雨|下雪|刮风|雾霾|空气质量|预报|今天|明天|后天|昨天|最近|未来|这周|本周|下周|周末|怎么样|如何|冷不冷|热不热|会不会|会下|热|冷|带伞|穿什么|紫外线|多云|阴天|晴天|台风|暴雪|冰雹|寒潮|降温|升温|变天|查一下|帮我看|搜一下|一下|一查/g;
+      const cleaned = content.replace(noiseWords, ' ').trim();
+      // 提取第一个连续2-3个中文字符作为城市名
+      const cityMatch = cleaned.match(/[\u4e00-\u9fff]{2,3}/);
+      const city = cityMatch ? cityMatch[0] : '';
+
       if (city) {
-        console.log(`[天气] 检测到城市: ${city}`);
+        console.log(`[天气] 检测到城市: "${city}" (原始: "${content}")`);
         weatherData = await fetchWeather(city);
         if (weatherData) {
           console.log(`[天气] 获取成功: ${weatherData.current.desc} ${weatherData.current.temp}°C`);
         } else {
-          console.log(`[天气] 获取失败，降级为知识库回答`);
+          console.log(`[天气] fetchWeather 返回 null，城市="${city}"`);
         }
+      } else {
+        console.log(`[天气] 未检测到城市名，原始: "${content}"`);
       }
     }
 
