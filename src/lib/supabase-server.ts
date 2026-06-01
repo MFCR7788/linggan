@@ -181,8 +181,9 @@ async function ensureDevUserProfile(userId: string) {
     });
 
     if (createAuthError) {
-      console.warn('[ensureDevUserProfile] 创建 auth 用户失败:', createAuthError.message);
-      return;
+      // 已注册过（邮箱冲突）：不再 return，仍尝试补建 public.users
+      // 因为只缺 public.users 记录时 content_items 写入会 FK 失败
+      console.warn('[ensureDevUserProfile] 创建 auth 用户失败（可能已存在）:', createAuthError.message);
     }
 
     // 插入 public.users

@@ -1,4 +1,6 @@
-// 多媒体上传 API 端点（图片/视频/音频）
+// 灵感库多媒体上传端点（图片/视频/音频）
+// 与 /api/upload/document 对称：上传到 storage 后立即创建一条 ContentItem
+// 与 /api/upload（capture 等页面用的"只拿 URL"端点）保持隔离
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
@@ -14,13 +16,24 @@ import { getUsage, addStorageUsage } from '@/lib/upload/usage';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+const TYPE_MAP: Record<string, 'image' | 'video' | 'audio'> = {
+  'image/jpeg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+  'image/gif': 'image',
+  'video/mp4': 'video',
+  'video/quicktime': 'video',
+  'audio/mpeg': 'audio',
+  'audio/wav': 'audio',
+};
+
 export const POST = withAuth(async ({ request, user }) => {
   let formData: FormData;
   try {
     formData = await request.formData();
   } catch (e) {
-    console.error('解析上传表单失败:', e);
-    return createApiError('上传内容过大或格式错误，请尝试压缩图片后重试', 413);
+    console.error('[upload/inspiration] 解析表单失败:', e);
+    return createApiError('上传内容过大或格式错误', 413);
   }
 
   const file = formData.get('file') as File;
@@ -37,13 +50,13 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError(`FILE_TOO_LARGE（${sizeCheck.maxMB}MB）`, 413);
   }
 
-  // Magic number 校验：防止 MIME 伪造
+  // Magic number
   const magicOk = await verifyMagicNumber(file, file.type);
   if (!magicOk) {
     return createApiError('FILE_CONTENT_MISMATCH', 415);
   }
 
-  // 配额检查
+  // 配额
   const usage = await getUsage(user.id);
   const quota = checkQuota({
     plan: usage.plan,
@@ -73,7 +86,7 @@ export const POST = withAuth(async ({ request, user }) => {
       });
 
     if (uploadError) {
-      console.error('文件上传失败:', uploadError);
+      console.error('[upload/inspiration] storage 上传失败:', uploadError);
       return createApiError('STORAGE_UPLOAD_FAILED', 502);
     }
 
@@ -81,19 +94,46 @@ export const POST = withAuth(async ({ request, user }) => {
       .from('lingji-media')
       .getPublicUrl(filePath);
 
-    // 累加用量（失败不阻塞主流程）
+    const contentType = TYPE_MAP[file.type] || 'image';
+
+    // 直接创建 ContentItem
+    const { data: item, error: insertError } = await supabase
+      .from('content_items')
+      .insert({
+        user_id: user.id,
+        type: contentType,
+        title: safeName,
+        media_urls: [publicUrl],
+        source_platform: 'upload',
+        analysis_status: 'pending', // 触发未来可能的 AI 处理
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (insertError || !item) {
+      console.error('[upload/inspiration] 入库失败:', insertError);
+      await supabase.storage.from('lingji-media').remove([filePath]).catch(() => {});
+      return createApiError('创建灵感记录失败', 500);
+    }
+
     addStorageUsage(user.id, file.size).catch((e) =>
-      console.error('[upload] 累加用量失败:', e)
+      console.error('[upload/inspiration] 累加用量失败:', e)
     );
 
-    return createApiResponse({
-      url: publicUrl,
-      fileName: safeName,
-      size: file.size,
-      type: file.type,
-    }, '文件上传成功');
-  } catch (dbError) {
-    console.error('上传过程出错:', dbError);
+    return createApiResponse(
+      {
+        id: item.id,
+        url: publicUrl,
+        fileName: safeName,
+        size: file.size,
+        type: file.type,
+        contentType,
+      },
+      '上传成功'
+    );
+  } catch (e) {
+    console.error('[upload/inspiration] 上传过程出错:', e);
     return createApiError('上传失败', 500);
   }
 });
