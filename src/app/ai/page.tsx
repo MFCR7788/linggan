@@ -116,8 +116,8 @@ function AICreationContent() {
           </div>
 
           {loadingWorks ? (
-            <div className="grid grid-cols-3 gap-2">
-              {[0, 1, 2].map((i) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
                   className="aspect-[3/4] rounded-xl animate-pulse"
@@ -141,7 +141,7 @@ function AICreationContent() {
               </div>
             </GlassCard>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
               {aiWorks.map((item: any) => {
                 const isVideo = item.type === 'video';
                 const isImage = item.type === 'image';
