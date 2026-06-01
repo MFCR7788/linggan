@@ -56,7 +56,8 @@ export default function PrivacyPage() {
         {/* 2. 信息使用 */}
         <Section title="二、我们如何使用信息">
           <ListItem>提供、维护和优化本应用的核心功能。</ListItem>
-          <ListItem>调用 AI 服务（DeepSeek、豆包 TTS 等）处理您提交的内容，生成文案、图片、数字人视频、语音合成等结果。</ListItem>
+          <ListItem>调用 AI 服务（DeepSeek、豆包大模型、豆包 TTS、Seedance 视频、Seedream 图片、阿里云通义千问、OpenRouter）处理您提交的内容，生成文案、图片、数字人视频、语音合成等结果。</ListItem>
+          <ListItem>通过阿里云短信服务向您发送登录验证码。</ListItem>
           <ListItem>向您发送热点更新、AI 任务完成等与服务相关的通知。</ListItem>
           <ListItem>响应用户反馈，提供技术支持和客户服务。</ListItem>
           <ListItem>分析应用使用数据，改进产品体验和功能设计。</ListItem>
@@ -80,6 +81,7 @@ export default function PrivacyPage() {
                   <th style={{ textAlign: 'left', padding: '8px 0', color: '#9CA3AF', fontWeight: 500 }}>第三方</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', color: '#9CA3AF', fontWeight: 500 }}>用途</th>
                   <th style={{ textAlign: 'left', padding: '8px 0', color: '#9CA3AF', fontWeight: 500 }}>采集数据类型</th>
+                  <th style={{ textAlign: 'left', padding: '8px 0', color: '#9CA3AF', fontWeight: 500 }}>存储区域</th>
                 </tr>
               </thead>
               <tbody>
@@ -87,26 +89,55 @@ export default function PrivacyPage() {
                   <td style={{ padding: '10px 0', color: '#FFFFFF' }}>Supabase</td>
                   <td style={{ padding: '10px 0' }}>用户认证、数据存储</td>
                   <td style={{ padding: '10px 0' }}>账户信息、内容数据</td>
+                  <td style={{ padding: '10px 0' }}>境外</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>字节跳动 · 豆包大模型</td>
+                  <td style={{ padding: '10px 0' }}>AI 文案、多模态理解</td>
+                  <td style={{ padding: '10px 0' }}>用户提示词、文本</td>
+                  <td style={{ padding: '10px 0' }}>境内</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>字节跳动 · 语音合成 TTS</td>
+                  <td style={{ padding: '10px 0' }}>AI 配音功能</td>
+                  <td style={{ padding: '10px 0' }}>待合成文本</td>
+                  <td style={{ padding: '10px 0' }}>境内</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>字节跳动 · Seedance/Seedream</td>
+                  <td style={{ padding: '10px 0' }}>AI 视频/图片生成</td>
+                  <td style={{ padding: '10px 0' }}>提示词、参考素材</td>
+                  <td style={{ padding: '10px 0' }}>境内</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '10px 0', color: '#FFFFFF' }}>DeepSeek</td>
                   <td style={{ padding: '10px 0' }}>AI 文案生成、AI 分析</td>
-                  <td style={{ padding: '10px 0' }}>用户提交的提示词</td>
+                  <td style={{ padding: '10px 0' }}>用户提示词</td>
+                  <td style={{ padding: '10px 0' }}>境外</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>阿里云 DashScope（通义千问）</td>
+                  <td style={{ padding: '10px 0' }}>AI 文本生成（备用）</td>
+                  <td style={{ padding: '10px 0' }}>用户提示词</td>
+                  <td style={{ padding: '10px 0' }}>境内</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>OpenRouter</td>
+                  <td style={{ padding: '10px 0' }}>热点抓取、多模型接入</td>
+                  <td style={{ padding: '10px 0' }}>公开热点内容</td>
+                  <td style={{ padding: '10px 0' }}>境外</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '10px 0', color: '#FFFFFF' }}>阿里云</td>
                   <td style={{ padding: '10px 0' }}>短信验证码服务</td>
                   <td style={{ padding: '10px 0' }}>手机号码</td>
-                </tr>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '10px 0', color: '#FFFFFF' }}>字节跳动（豆包）</td>
-                  <td style={{ padding: '10px 0' }}>TTS 语音合成、图片/视频生成</td>
-                  <td style={{ padding: '10px 0' }}>文本内容、图片素材</td>
+                  <td style={{ padding: '10px 0' }}>境内</td>
                 </tr>
                 <tr>
                   <td style={{ padding: '10px 0', color: '#FFFFFF' }}>Vercel</td>
                   <td style={{ padding: '10px 0' }}>应用托管与 CDN</td>
                   <td style={{ padding: '10px 0' }}>日志信息、IP 地址</td>
+                  <td style={{ padding: '10px 0' }}>境外</td>
                 </tr>
               </tbody>
             </table>
@@ -115,7 +146,8 @@ export default function PrivacyPage() {
 
         {/* 4. 数据存储与安全 */}
         <Section title="四、数据存储与安全">
-          <ListItem>您的数据存储在 Supabase 提供的云数据库中，服务器位于合规的数据中心。</ListItem>
+          <ListItem>您的账户数据、内容数据存储在 Supabase 提供的云数据库中（境外节点），加密静态保存。</ListItem>
+          <ListItem>我们在境内为您提供 AI 服务时，会通过字节跳动火山引擎与阿里云完成数据处理，数据按其所在区域法律法规进行存储与保护。</ListItem>
           <ListItem>我们采用行业标准的加密传输协议（HTTPS/TLS）保护数据传输过程。</ListItem>
           <ListItem>我们采取访问控制、数据隔离等技术措施，防止未经授权的访问、使用或泄露。</ListItem>
           <ListItem>AI 生成过程中提交给第三方 API 的提示词和数据仅用于当次请求处理，不会被第三方用于模型训练。</ListItem>
@@ -156,8 +188,9 @@ export default function PrivacyPage() {
             padding: '16px 20px',
             fontSize: 14,
           }}>
-            <p style={{ marginBottom: 6 }}>邮箱：support@lingji.app</p>
+            <p style={{ marginBottom: 6 }}>邮箱：229888777@qq.com</p>
             <p style={{ marginBottom: 6 }}>在线客服：工作日 9:00 - 18:00</p>
+            <p style={{ marginBottom: 6 }}>应用网址：https://linggan-two.vercel.app</p>
             <p>应用内：个人中心 → 帮助与反馈 → 意见反馈</p>
           </div>
           <p style={{ marginTop: 24, color: '#6B7280', fontSize: 13 }}>
