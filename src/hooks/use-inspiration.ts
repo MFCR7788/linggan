@@ -49,10 +49,11 @@ interface InspirationsQuery {
   sortBy?: string;
   sortOrder?: string;
   tagIds?: string;
+  sourcePlatform?: string;
 }
 
 export function useInspirations(params?: InspirationsQuery) {
-  const { page = 1, limit = 20, type, categoryId, startDate, endDate, sortBy, sortOrder, tagIds } = params || {};
+  const { page = 1, limit = 20, type, categoryId, startDate, endDate, sortBy, sortOrder, tagIds, sourcePlatform } = params || {};
 
   const queryString = new URLSearchParams({
     page: page.toString(),
@@ -64,10 +65,11 @@ export function useInspirations(params?: InspirationsQuery) {
     ...(sortBy && { sortBy }),
     ...(sortOrder && { sortOrder }),
     ...(tagIds && { tagIds }),
+    ...(sourcePlatform && { sourcePlatform }),
   });
 
   return useQuery({
-    queryKey: ["inspirations", { page, limit, type, categoryId, startDate, endDate, sortBy, sortOrder, tagIds }],
+    queryKey: ["inspirations", { page, limit, type, categoryId, startDate, endDate, sortBy, sortOrder, tagIds, sourcePlatform }],
     queryFn: async () => {
       const response = await apiClient.get<ContentItem[]>(`/inspiration?${queryString}`);
       if (!response.success) {

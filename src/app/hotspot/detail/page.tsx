@@ -10,6 +10,7 @@ import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useToast } from '@/components/Toast';
 import { ProtectedRoute, LoadingSpinner } from '@/components';
+import FormattedText from '@/components/FormattedText';
 
 interface RelatedHotspot {
   id: string;
@@ -287,9 +288,9 @@ function HotspotDetailContent() {
 
           {/* 原文内容 */}
           {detail.original_content && (
-            <p style={{ color: '#E5E7EB', fontSize: 14, lineHeight: 1.8, marginBottom: 12 }}>
-              {detail.original_content}
-            </p>
+            <div style={{ marginBottom: 12 }}>
+              <FormattedText text={detail.original_content} color="#E5E7EB" fontSize={14} lineHeight={1.8} />
+            </div>
           )}
 
           {detail.author && (
@@ -318,9 +319,9 @@ function HotspotDetailContent() {
             {detail.ai_summary && (
               <>
                 <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>摘要</p>
-                <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-                  {detail.ai_summary}
-                </p>
+                <div style={{ marginBottom: 14 }}>
+                  <FormattedText text={detail.ai_summary} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
+                </div>
               </>
             )}
 
@@ -329,8 +330,8 @@ function HotspotDetailContent() {
                 <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>关键观点</p>
                 {detail.key_points.map((pt: string, i: number) => (
                   <div key={i} className="flex gap-2 mb-1.5">
-                    <span style={{ color: '#3B82F6', flexShrink: 0 }}>•</span>
-                    <span style={{ color: '#E5E7EB', fontSize: 13 }}>{pt}</span>
+                    <span style={{ color: '#3B82F6', flexShrink: 0, marginTop: 2 }}>•</span>
+                    <FormattedText text={pt} color="#E5E7EB" fontSize={13} lineHeight={1.6} compact />
                   </div>
                 ))}
               </>
@@ -339,9 +340,9 @@ function HotspotDetailContent() {
             {detail.relevance_reason && (
               <>
                 <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginTop: 12, marginBottom: 8 }}>相关性分析</p>
-                <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-                  {detail.relevance_reason}
-                </p>
+                <div style={{ marginBottom: 14 }}>
+                  <FormattedText text={detail.relevance_reason} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
+                </div>
               </>
             )}
 
@@ -350,8 +351,8 @@ function HotspotDetailContent() {
                 <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>创作建议</p>
                 {detail.creation_suggestions.map((s: string, i: number) => (
                   <div key={i} className="flex gap-2 mb-1.5">
-                    <span style={{ color: '#22C55E', flexShrink: 0 }}>→</span>
-                    <span style={{ color: '#E5E7EB', fontSize: 13 }}>{s}</span>
+                    <span style={{ color: '#22C55E', flexShrink: 0, marginTop: 2 }}>→</span>
+                    <FormattedText text={s} color="#E5E7EB" fontSize={13} lineHeight={1.6} compact />
                   </div>
                 ))}
               </>

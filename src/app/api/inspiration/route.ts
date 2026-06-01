@@ -17,6 +17,7 @@ export const GET = withAuth(async ({ request, user }) => {
   const sortBy = searchParams.get('sortBy') || 'created_at';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
   const tagIds = searchParams.get('tagIds'); // 逗号分隔的 tag id 列表
+  const sourcePlatform = searchParams.get('sourcePlatform'); // 按来源平台筛选（如 'ai'）
 
   const supabase = createAdminClient();
 
@@ -43,6 +44,7 @@ export const GET = withAuth(async ({ request, user }) => {
         .in('id', contentIds);
 
       if (type) query = query.eq('type', type);
+      if (sourcePlatform) query = query.eq('source_platform', sourcePlatform);
       if (categoryId) query = query.eq('category_id', categoryId);
       if (startDate) query = query.gte('created_at', startDate);
       if (endDate) query = query.lte('created_at', endDate);
@@ -71,6 +73,7 @@ export const GET = withAuth(async ({ request, user }) => {
     .eq('status', status);
 
   if (type) query = query.eq('type', type);
+  if (sourcePlatform) query = query.eq('source_platform', sourcePlatform);
   if (categoryId) query = query.eq('category_id', categoryId);
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);

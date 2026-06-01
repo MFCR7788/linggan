@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>灵集需要使用相机来拍照或扫描图片</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>灵集需要访问相册以选择和保存图片</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>灵集需要保存图片到相册</string>
 </dict>
 </plist>

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus } from '@/lib/ai-services';
+import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 
 // ====== 意图类型定义 ======
-type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal';
+type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal' | 'weather';
 
 // 生成子类型（内部使用，保留兼容）
 type GenType = 'text2img' | 'img2img' | 'text2vid' | 'img2vid' | 'vid2vid';
@@ -47,6 +47,9 @@ function detectIntent(
   // Legal: 法律文书&合规草拟 — 放在 writing 之前，"起草合同"优先走 legal
   const matchLegal = /合同|协议|法律|法规|条款|合规|诉讼|仲裁|律师|法院|判决|裁定|通知书|律师函|法律.*(?:意见|风险|咨询)|起草.*(?:合同|协议|文书|文件)|审查.*(?:合同|协议|条款)|解释.*(?:条款|法律|法规|条文)|劳动.*(?:合同|仲裁|纠纷)|知识产权|版权.*(?:侵权|保护)|隐私.*(?:政策|条款)|保密.*(?:协议|条款)|租赁.*(?:合同|协议)|买卖.*(?:合同)|章程|股东.*(?:协议)|竞业.*(?:限制|协议)|NDA|保密.*(?:合同|函)|法务|格式.*(?:合同|协议|文书)|模版.*(?:合同|协议)|范本.*(?:合同|协议)/.test(c);
 
+  // Weather: 天气查询
+  const matchWeather = /天气|下雨|下雪|刮风|雾霾|气温|温度|会不会下雨|带伞|穿什么|空气质量|紫外线|多云|阴天|晴天|台风|暴雪|冰雹|寒潮|降温|升温|变天/.test(c);
+
   // Life: 出行/规划/推荐
   const matchLife = /攻略|计划|行程|安排|规划|策划|旅游|出行|推荐|游玩|怎么[去逛玩]|旅行|路线|去哪|怎么安排|好物|选.*哪个|买.*什么|值得.*买|种草|拔草|探店|打卡|周末|假期|出行计划|方案/.test(c);
 
@@ -74,6 +77,9 @@ function detectIntent(
   }
 
   // ====== Priority 1: 关键词匹配（从具体到宽泛） ======
+
+  // 天气最优先：避免"怎么样"等被 knowledge 误捕获
+  if (matchWeather) return make('weather', '天气查询', '实时天气查询与出行建议');
 
   if (matchKnowledge) return make('knowledge', '知识解答&学习辅助', '知识点讲解与答疑解惑');
 
@@ -393,6 +399,26 @@ ${GLOBAL_CAPABILITIES}
 }`,
     requiresJSON: true,
   },
+
+  // ---- 天气查询 ----
+  weather: {
+    systemPrompt: `你是一位贴心的天气播报员，擅长根据实时天气数据为用户提供实用的出行和生活建议。
+
+你的工作方式：
+- 系统会将实时天气数据注入到对话中，你需要以自然、友好的方式呈现
+- 根据天气情况给出穿衣建议、是否需要带伞、出行注意事项等
+
+回复要求：
+1. 先简洁播报当前天气状况（温度、天气、风力等）
+2. 再给出未来几天天气预报概况
+3. 结合天气给出实用的生活建议（穿衣、带伞、出行等）
+4. 语言温馨自然，像朋友在提醒你天气
+
+${GLOBAL_CAPABILITIES}
+
+请直接输出内容，使用自然语言回复，不需要JSON格式。`,
+    requiresJSON: false,
+  },
 };
 
 const GEN_JSON_TEMPLATE = `{
@@ -681,6 +707,35 @@ export async function POST(request: NextRequest) {
 
     console.log(`[意图] ${intent.label}${intent.genType ? ' → ' + intent.genType : ''} | content: "${content.substring(0, 50)}..."`);
 
+    // ====== 天气查询：提取城市并获取实时天气 ======
+    let weatherData: import('@/lib/ai-services').WeatherData | null = null;
+    if (intent.type === 'weather') {
+      const cityPatterns = [
+        /([\u4e00-\u9fff]{2,4})(?:的)?(?:天气|气温|温度|下雨|下雪|刮风|雾霾|空气质量)/,
+        /(?:查|看|搜|问)(?:一下|一下)?([\u4e00-\u9fff]{2,4})(?:的)?(?:天气|气温|温度)?/,
+        /(?:天气|气温|温度)(?:怎么样|如何|预报).*?([\u4e00-\u9fff]{2,4})/,
+      ];
+      let city = '';
+      for (const pattern of cityPatterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) { city = match[1]; break; }
+      }
+      // 兜底：直接用用户输入的前几个中文字符作为城市名
+      if (!city) {
+        const chineseMatch = content.match(/[\u4e00-\u9fff]{2,4}/);
+        if (chineseMatch) city = chineseMatch[0];
+      }
+      if (city) {
+        console.log(`[天气] 检测到城市: ${city}`);
+        weatherData = await fetchWeather(city);
+        if (weatherData) {
+          console.log(`[天气] 获取成功: ${weatherData.current.desc} ${weatherData.current.temp}°C`);
+        } else {
+          console.log(`[天气] 获取失败，降级为知识库回答`);
+        }
+      }
+    }
+
     // ====== 构造 Prompt ======
     const { systemPrompt, userPrompt: baseUserPrompt, requiresJSON } = buildPrompt(intent, content);
 
@@ -783,6 +838,42 @@ ${searchContext}
 3. **核心要求**：无论搜索结果质量如何，都要给用户一个完整、专业、有价值的回答
 
 注意：直接输出分析结果，不需要 JSON 包装。`;
+    } else if (intent.type === 'weather' && weatherData) {
+      // 天气模式：注入实时天气数据
+      const forecastText = weatherData.forecast.map(f =>
+        `${f.date}: ${f.desc || '晴'} ${f.minTemp}°C ~ ${f.maxTemp}°C，日出 ${f.sunrise} 日落 ${f.sunset}`
+      ).join('\n');
+      userPrompt = `${systemPrompt}
+
+用户提问：${content}
+
+以下是 ${weatherData.city} 的实时天气数据（数据来源：wttr.in）：
+
+当前天气：
+- 天气状况：${weatherData.current.desc}
+- 当前温度：${weatherData.current.temp}°C
+- 体感温度：${weatherData.current.feelsLike}°C
+- 湿度：${weatherData.current.humidity}%
+- 风速：${weatherData.current.windSpeed} km/h
+- 云量：${weatherData.current.cloudCover}%
+
+未来三天预报：
+${forecastText}
+
+请根据以上实时天气数据，用自然温馨的语气回答用户的问题。`;
+    } else if (intent.type === 'weather') {
+      // 天气 API 获取失败，降级为知识库 + 引导用户自行查询
+      userPrompt = `${systemPrompt}
+
+用户提问：${content}
+
+注意：实时天气数据暂时获取失败。请基于你对气候和季节的常识性知识来回答用户：
+1. 如果问题涉及具体城市的实时天气，坦诚说明暂时无法获取实时数据
+2. 可以介绍该城市当前季节的一般气候特点
+3. 给出通用的穿衣/出行建议
+4. 建议用户查看天气预报应用获取准确的实时天气
+
+请直接以自然语言输出，不需要JSON格式。`;
     } else {
       // 纯文本模式
       userPrompt = `${systemPrompt}\n\n${baseUserPrompt}`;

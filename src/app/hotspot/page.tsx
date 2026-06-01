@@ -167,7 +167,8 @@ function HotspotCard({
 
 function RadarTab({
   stats, hotspots, refreshing, selectionMode, selectedIds,
-  source, setSource, importance, setImportance, timeRange, setTimeRange,
+  source, setSource, monitorKeywordId, setMonitorKeywordId, keywords,
+  importance, setImportance, timeRange, setTimeRange,
   sortBy, setSortBy, sortOrder, setSortOrder,
   onViewDetail, onToInspiration, onCheckNow, checking, onMarkAllRead,
   onToggleSelect, onDeleteSingle, onSelectAll, onExitSelection,
@@ -214,6 +215,15 @@ function RadarTab({
 
       {/* 筛选排序 + 管理 - 紧凑一行 */}
       <div className="flex items-center gap-1 mb-2 flex-wrap">
+        {/* 监控词下拉 */}
+        <select value={monitorKeywordId} onChange={(e) => setMonitorKeywordId(e.target.value)}
+          className="flex-shrink-0 px-2 py-1 rounded text-[11px] appearance-none"
+          style={{ background: monitorKeywordId ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: monitorKeywordId ? '#C4B5FD' : '#9CA3AF' }}>
+          <option value="">监控词</option>
+          {keywords?.map((kw: any) => (
+            <option key={kw.id} value={kw.id}>{kw.keyword}</option>
+          ))}
+        </select>
         {/* 来源下拉 */}
         <select value={source} onChange={(e) => setSource(e.target.value)}
           className="flex-shrink-0 px-2 py-1 rounded text-[11px] appearance-none"
@@ -384,8 +394,10 @@ function KeywordsTab({
       {/* 预设关键词联想 */}
       {showAddKeyword && (() => {
         const input = newKeyword.trim().toLowerCase();
-        const matchedPresets: { keyword: string; desc?: string; category: string; categoryName: string }[] = [];
+
+        // 有输入：搜索匹配
         if (input) {
+          const matchedPresets: { keyword: string; desc?: string; category: string; categoryName: string }[] = [];
           for (const cat of PRESET_CATEGORIES) {
             for (const pk of cat.keywords) {
               if (pk.keyword.toLowerCase().includes(input) || (pk.desc && pk.desc.includes(input))) {
@@ -393,24 +405,52 @@ function KeywordsTab({
               }
             }
           }
-        }
-        const displayPresets = input ? matchedPresets.slice(0, 6) : PRESET_CATEGORIES.slice(0, 4).flatMap(c => c.keywords.slice(0, 1).map(pk => ({ keyword: pk.keyword, desc: pk.desc, category: c.id, categoryName: c.name })));
-        if (displayPresets.length === 0) return null;
-        return (
-          <div className="mb-2 rounded-lg py-1 px-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ color: '#6B7280', fontSize: 9, marginBottom: 2 }}>{input ? '匹配关键词' : '热门推荐'}</p>
-            <div className="flex flex-wrap gap-1">
-              {displayPresets.map((pk) => {
-                const alreadyAdded = keywords.some((kw: any) => kw.keyword === pk.keyword);
-                return (
-                  <button key={pk.keyword} onClick={() => !alreadyAdded && handleAddKeyword(pk.keyword)} disabled={alreadyAdded || addingKeyword}
-                    className="px-1.5 py-0.5 rounded text-[11px]"
-                    style={{ background: alreadyAdded ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: alreadyAdded ? '#6EE7B7' : '#9CA3AF', border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
-                    {pk.keyword} {alreadyAdded ? '✓' : '+'}
-                  </button>
-                );
-              })}
+          if (matchedPresets.length === 0) return null;
+          return (
+            <div className="mb-2 rounded-lg py-1 px-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ color: '#6B7280', fontSize: 9, marginBottom: 2 }}>匹配关键词 ({matchedPresets.length})</p>
+              <div className="flex flex-wrap gap-1">
+                {matchedPresets.slice(0, 12).map((pk) => {
+                  const alreadyAdded = keywords.some((kw: any) => kw.keyword === pk.keyword);
+                  return (
+                    <button key={pk.keyword} onClick={() => !alreadyAdded && handleAddKeyword(pk.keyword)} disabled={alreadyAdded || addingKeyword}
+                      className="px-1.5 py-0.5 rounded text-[11px]"
+                      style={{ background: alreadyAdded ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: alreadyAdded ? '#6EE7B7' : '#9CA3AF', border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+                      {pk.keyword} {alreadyAdded ? '✓' : '+'}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          );
+        }
+
+        // 无输入：按分类展示全部预设
+        return (
+          <div className="mb-2 rounded-lg p-2 space-y-2 max-h-64 overflow-y-auto"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <p style={{ color: '#6B7280', fontSize: 9 }}>预设监控词 · 点击快速添加</p>
+            {PRESET_CATEGORIES.map((cat) => {
+              const availableKeywords = cat.keywords.filter(pk => !keywords.some((kw: any) => kw.keyword === pk.keyword));
+              if (availableKeywords.length === 0) return null;
+              return (
+                <div key={cat.id}>
+                  <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 4 }}>{cat.name}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {cat.keywords.map((pk) => {
+                      const alreadyAdded = keywords.some((kw: any) => kw.keyword === pk.keyword);
+                      return (
+                        <button key={pk.keyword} onClick={() => !alreadyAdded && handleAddKeyword(pk.keyword)} disabled={alreadyAdded || addingKeyword}
+                          className="px-1.5 py-0.5 rounded text-[11px]"
+                          style={{ background: alreadyAdded ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: alreadyAdded ? '#6EE7B7' : '#9CA3AF', border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+                          {pk.keyword} {alreadyAdded ? '✓' : '+'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       })()}
@@ -423,11 +463,11 @@ function KeywordsTab({
             <span style={{ color: '#9CA3AF', fontSize: 11 }}>监控词 ({keywords.length})</span>
           </div>
           {keywords.length > 0 ? (
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <div className="grid grid-cols-3 gap-1.5">
               {keywords.map((kw: any) => (
                 <div key={kw.id}
                   onClick={() => setSelectedKeywordId(selectedKeywordId === kw.id ? null : kw.id)}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all"
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-all min-w-0"
                   style={{
                     background: selectedKeywordId === kw.id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
                     border: `1px solid ${selectedKeywordId === kw.id ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.06)'}`,
@@ -438,7 +478,7 @@ function KeywordsTab({
                     <div className="w-3 h-3 rounded-full absolute top-0.5 transition-all"
                       style={{ background: kw.is_active ? '#22C55E' : '#6B7280', left: kw.is_active ? 13 : 1 }} />
                   </button>
-                  <span style={{ color: kw.is_active ? '#E5E7EB' : '#6B7280', fontSize: 11, whiteSpace: 'nowrap' }}>{kw.keyword}</span>
+                  <span style={{ color: kw.is_active ? '#E5E7EB' : '#6B7280', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kw.keyword}</span>
                   <button onClick={(e) => { e.stopPropagation(); handleDeleteKeyword(kw.id); }} className="flex-shrink-0 ml-1">
                     <Trash2 size={12} color="#4B5563" />
                   </button>
@@ -582,6 +622,7 @@ function HotspotRadarInner() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [source, setSource] = useState('');
+  const [monitorKeywordId, setMonitorKeywordId] = useState('');
   const [importance, setImportance] = useState('');
   const [timeRange, setTimeRange] = useState('');
   const [sortBy, setSortBy] = useState('captured_at');
@@ -616,7 +657,7 @@ function HotspotRadarInner() {
     try {
       const [statsRes, hotspotRes, kwRes] = await Promise.all([
         fetch('/api/hotspot/stats', { headers: { ...authHeaders } }),
-        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&importance=${importance}&timeRange=${timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}`, { headers: { ...authHeaders } }),
+        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&monitorKeywordId=${monitorKeywordId}&importance=${importance}&timeRange=${timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}`, { headers: { ...authHeaders } }),
         fetch('/api/keywords?limit=50', { headers: { ...authHeaders } }),
       ]);
       const statsData = await statsRes.json();
@@ -637,7 +678,7 @@ function HotspotRadarInner() {
       setInitialLoading(false);
       setRefreshing(false);
     }
-  }, [page, source, importance, timeRange, sortBy, sortOrder]);
+  }, [page, source, monitorKeywordId, importance, timeRange, sortBy, sortOrder]);
 
   // ─── 选择/删除操作 ─────────────────────────────
 
@@ -748,7 +789,22 @@ function HotspotRadarInner() {
       }
       const res = await fetch('/api/keywords', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ keyword: kw, platforms }) });
       const data = await res.json();
-      if (data.success) { setNewKeyword(''); setShowAddKeyword(false); fetchData(); }
+      if (data.success) {
+        // 乐观更新：立刻插入关键词列表，不等 fetchData 异步返回
+        const inheritedCount = data.data?.inheritedHotspots || 0;
+        const newKw: any = {
+          id: data.data.id, keyword: kw, is_active: true,
+          category: data.data.category || null,
+          last_check_at: null, hotspotCount: inheritedCount,
+        };
+        setKeywords((prev: any) => [newKw, ...prev]);
+        setNewKeyword(''); setShowAddKeyword(false);
+        // 后台同步完整数据
+        fetchData();
+        const msg = data.message || '关键词添加成功';
+        setCheckResult(msg);
+        setTimeout(() => setCheckResult(null), 3000);
+      }
       else if (res.status !== 409) console.error('添加关键词失败:', data.error);
     } catch (err) { console.error('添加关键词网络错误:', err); }
     finally { setAddingKeyword(false); }
@@ -859,7 +915,8 @@ function HotspotRadarInner() {
             <RadarTab
               stats={stats} hotspots={hotspots} refreshing={refreshing}
               selectionMode={selectionMode} selectedIds={selectedIds}
-              source={source} setSource={setSource} importance={importance} setImportance={setImportance}
+              source={source} setSource={setSource} monitorKeywordId={monitorKeywordId} setMonitorKeywordId={setMonitorKeywordId} keywords={keywords}
+              importance={importance} setImportance={setImportance}
               timeRange={timeRange} setTimeRange={setTimeRange}
               sortBy={sortBy} setSortBy={setSortBy} sortOrder={sortOrder} setSortOrder={setSortOrder}
               onViewDetail={handleViewDetail} onToInspiration={handleToInspiration}

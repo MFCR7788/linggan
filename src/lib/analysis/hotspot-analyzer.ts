@@ -1,3 +1,5 @@
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 import { callDeepSeek } from '../ai-services';
 import { SearchResult, HotListItem } from '../search/types';
 
@@ -188,4 +190,133 @@ export async function batchAnalyze(
   }
 
   return results;
+}
+
+// ─── 页面内容抓取 ────────────────────────────────────────
+
+const fetchAxios = axios.create({ timeout: 15000 });
+
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+/**
+ * 从热点 URL 抓取页面正文文本
+ * 不同平台用不同提取策略
+ */
+export async function fetchPageContent(url: string, source: string): Promise<string> {
+  try {
+    const res = await fetchAxios.get(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+      },
+      maxRedirects: 5,
+    });
+
+    const html = res.data;
+    if (typeof html !== 'string' || html.length < 100) return '';
+
+    const $ = cheerio.load(html);
+
+    // 移除无用元素
+    $('script, style, nav, footer, header, aside, .sidebar, .comment, .comments, .ad, .advertisement, .recommend, .related, noscript, iframe, svg').remove();
+
+    let text = '';
+
+    // 平台特定提取
+    switch (source) {
+      case 'weibo': {
+        // 微博正文
+        const body = $('.WB_text, .weibo-text, .detail_wbtext_4CRf, .txt');
+        text = body.text().trim();
+        break;
+      }
+      case 'zhihu': {
+        // 知乎回答/文章
+        const article = $('.Post-RichText, .RichContent-inner, .Article-content, .Post-content');
+        text = article.text().trim();
+        if (!text) {
+          // 问题页：取标题+描述
+          text = $('.QuestionHeader-title').text().trim() + '\n' + $('.QuestionRichText').text().trim();
+        }
+        break;
+      }
+      case 'bilibili': {
+        // B站视频简介
+        text = $('.video-desc, .video-info-desc, .desc-info-text').text().trim();
+        if (!text) {
+          text = $('meta[name="description"]').attr('content') || '';
+        }
+        break;
+      }
+      case 'baidu':
+      case 'sogou': {
+        // 百度/搜狗 — 搜索结果页，无法抓原文，用摘要
+        text = $('.article, .content, .post-content, .entry-content, article, main, .c-abstract, .content-right_8Zs40').text().trim();
+        break;
+      }
+      case 'douyin':
+      case 'toutiao': {
+        // 抖音/头条
+        text = $('article, .article-content, .content, .detail-content, main').text().trim();
+        break;
+      }
+      default: {
+        // 通用提取
+        const selectors = ['article', 'main', '.post-content', '.article-content', '.entry-content', '.content', '#content', '.post-body', '.story-body'];
+        for (const sel of selectors) {
+          const el = $(sel);
+          if (el.length > 0 && el.text().trim().length > 100) {
+            text = el.text().trim();
+            break;
+          }
+        }
+        if (!text) {
+          // 最终回退：取 body 文本
+          text = $('body').text().trim();
+        }
+      }
+    }
+
+    // 清理：合并空白、限制长度
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.slice(0, 3000);
+  } catch (error) {
+    console.error(`fetchPageContent error [${source}] ${url}:`, error instanceof Error ? error.message : error);
+    return '';
+  }
+}
+
+/**
+ * AI 对完整页面内容做摘要总结
+ * 返回 Markdown 格式的摘要
+ */
+export async function summarizeHotspot(
+  fullContent: string,
+  title: string,
+  keyword: string
+): Promise<string> {
+  if (!fullContent || fullContent.length < 30) return '';
+
+  try {
+    const prompt = `你是热点内容分析专家。请对以下关于【${keyword}】的热点内容进行总结归纳。
+
+要求：
+1. 用 2-4 句话概括核心内容
+2. 提炼关键数据和观点
+3. 说明此内容与【${keyword}】的关联
+4. 语言简洁有力，适合快速阅读
+
+标题：${title}
+
+原文内容：
+${fullContent.slice(0, 2500)}`;
+
+    const result = await callDeepSeek(prompt, { temperature: 0.3, maxTokens: 400 });
+    return result.trim().slice(0, 300);
+  } catch (error) {
+    console.error('summarizeHotspot error:', error instanceof Error ? error.message : error);
+    // 回退：取原文前 100 字
+    return fullContent.replace(/\s+/g, ' ').slice(0, 100) + '...';
+  }
 }

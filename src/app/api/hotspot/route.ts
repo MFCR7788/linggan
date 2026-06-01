@@ -30,6 +30,8 @@ export const GET = withAuth(async ({ request, user }) => {
   if (keyword) query = query.ilike('title', `%${keyword}%`);
   if (importance) query = query.eq('importance_level', importance);
   if (credibility) query = query.eq('credibility_level', credibility);
+  const monitorKeywordId = searchParams.get('monitorKeywordId');
+  if (monitorKeywordId) query = query.eq('monitor_keyword_id', monitorKeywordId);
 
   // 时间范围筛选
   if (timeRange) {

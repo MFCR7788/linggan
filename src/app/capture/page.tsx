@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { TopNav } from "@/components/TopNav";
 import { ProtectedRoute } from "@/components";
+import FormattedText from "@/components/FormattedText";
 import type { Message, AttachedFile } from "./types";
 import { REWRITE_STYLES } from "./types";
 import { useSessionManager, useMessageActions, useVoiceRecording, useFileUpload } from "./hooks";
@@ -702,7 +703,7 @@ function CaptureContent() {
                     ) : msg.contentType === 'voice' ? (
                       <div className="flex items-center gap-2"><Mic size={14} className="text-orange-400" /><span>{msg.content}</span></div>
                     ) : (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <FormattedText text={msg.content} color={msg.type === 'user' ? '#FFFFFF' : '#D1D5DB'} fontSize={14} compact />
                     )}
                   </div>
                   <p className="text-[10px] text-gray-500 mt-1.5">

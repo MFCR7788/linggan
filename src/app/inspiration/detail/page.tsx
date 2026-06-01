@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner } from "@/components";
+import FormattedText from "@/components/FormattedText";
 import { syncDevAuthCookie, getDevUserIdHeader } from "@/lib/dev-auth";
 import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration } from "@/hooks/use-inspiration";
 import { useCategories } from "@/hooks/use-categories";
@@ -307,9 +308,7 @@ function InspirationDetailContent() {
                     />
                   ) : null}
                   {inspiration.original_text && (
-                    <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                      {inspiration.original_text}
-                    </p>
+                    <FormattedText text={inspiration.original_text} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
                   )}
                 </div>
               )}
@@ -331,12 +330,10 @@ function InspirationDetailContent() {
                     </video>
                   )}
                   {inspiration.ai_summary && (
-                    <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8 }}>{inspiration.ai_summary}</p>
+                    <FormattedText text={inspiration.ai_summary} color="#9CA3AF" fontSize={12} compact />
                   )}
                   {inspiration.original_text && (
-                    <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                      {inspiration.original_text}
-                    </p>
+                    <FormattedText text={inspiration.original_text} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
                   )}
                 </div>
               )}
@@ -368,9 +365,7 @@ function InspirationDetailContent() {
                     </a>
                   )}
                   {inspiration.original_text && (
-                    <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                      {inspiration.original_text}
-                    </p>
+                    <FormattedText text={inspiration.original_text} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
                   )}
                 </div>
               )}
@@ -409,9 +404,7 @@ function InspirationDetailContent() {
                           style={{ background: "#3B82F6", color: "#fff", fontSize: 10, fontWeight: 700 }}>AI</div>
                         <span style={{ color: "#FBBF24", fontSize: 13, fontWeight: 600 }}>🎯 核心任务</span>
                       </div>
-                      <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                        {inspiration.ai_summary}
-                      </p>
+                      <FormattedText text={inspiration.ai_summary || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
                     </div>
                   )}
 
@@ -469,9 +462,7 @@ function InspirationDetailContent() {
                   {inspiration.original_text && !inspiration.ai_summary && !inspiration.ai_key_points?.length && (
                     <div className="mb-4">
                       <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>📝 原始内容</p>
-                      <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                        {inspiration.original_text}
-                      </p>
+                      <FormattedText text={inspiration.original_text || ""} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
                     </div>
                   )}
                 </div>
@@ -479,9 +470,7 @@ function InspirationDetailContent() {
 
               {/* 文本 / 语音（默认文本展示） */}
               {(inspiration.type === 'text' || inspiration.type === 'voice' || !inspiration.type) && (
-                <p style={{ color: "#E5E7EB", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
-                  {inspiration.original_text || "暂无原始内容"}
-                </p>
+                <FormattedText text={inspiration.original_text || "暂无原始内容"} color="#E5E7EB" fontSize={14} lineHeight={1.7} />
               )}
             </GlassCard>
 
@@ -494,9 +483,9 @@ function InspirationDetailContent() {
                   >AI</div>
                   <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>AI 分析摘要</span>
                 </div>
-                <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>
-                  {inspiration.ai_summary}
-                </p>
+                <div style={{ marginBottom: 12 }}>
+                  <FormattedText text={inspiration.ai_summary || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
+                </div>
               </GlassCard>
             )}
 

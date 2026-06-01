@@ -352,7 +352,7 @@ function HomeContent() {
             />
           ) : filteredInspirations.length > 0 ? (
             <div className="space-y-3">
-              {filteredInspirations.map((item: ContentItem) => (
+              {filteredInspirations.slice(0, 5).map((item: ContentItem) => (
                 <GlassCard
                   key={item.id}
                   hover
@@ -415,7 +415,7 @@ function HomeContent() {
           </div>
           {filteredHotTopics.length > 0 ? (
             <div className="space-y-3">
-              {filteredHotTopics.map((item) => (
+              {filteredHotTopics.slice(0, 5).map((item) => (
                 <GlassCard
                   key={item.id}
                   hover

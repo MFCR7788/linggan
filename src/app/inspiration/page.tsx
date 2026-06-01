@@ -1,26 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
-import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration } from "@/hooks/use-inspiration";
+import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration, useUpdateInspiration } from "@/hooks/use-inspiration";
 import { useTags } from "@/hooks/use-categories";
 import { useSchedules } from "@/hooks/use-schedule";
 import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
 
 // ====== 常量 ======
 
-const typeFilters = ["全部", "灵感", "图片", "视频"];
+const typeFilters = ["全部", "灵感", "图片", "视频", "AI作品"];
 
 const typeMap: Record<string, string | undefined> = {
   "全部": undefined,
   "灵感": "text",
   "图片": "image",
   "视频": "video",
+  "AI作品": "ai",
 };
 
 const TIME_RANGES = [
@@ -158,6 +159,14 @@ function InspirationLibraryContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [showDeleteTip, setShowDeleteTip] = useState<string | null>(null);
 
+  // 编辑状态
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editSummary, setEditSummary] = useState("");
+  const [editText, setEditText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [showEditToast, setShowEditToast] = useState<string | null>(null);
+
   // 筛选状态
   const [timeRange, setTimeRange] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
@@ -174,9 +183,11 @@ function InspirationLibraryContent() {
   // 计算时间范围参数
   const dateParams = getDateRange(timeRange);
 
+  const isAiFilter = activeFilter === "AI作品";
   const { data: inspirations, isLoading } = useInspirations({
-    type: typeMap[activeFilter] as any,
+    type: isAiFilter ? undefined : (typeMap[activeFilter] as any),
     limit: 50,
+    sourcePlatform: isAiFilter ? "ai" : undefined,
     ...dateParams,
     sortBy: SORT_OPTIONS[sortKey].sortBy,
     sortOrder: SORT_OPTIONS[sortKey].sortOrder,
@@ -186,6 +197,7 @@ function InspirationLibraryContent() {
   const createInspiration = useCreateInspiration();
   const deleteInspiration = useDeleteInspiration();
   const batchDelete = useBatchDeleteInspiration();
+  const updateInspiration = useUpdateInspiration();
 
   const { data: schedules = [] } = useSchedules({ limit: 10 });
 
@@ -285,6 +297,40 @@ function InspirationLibraryContent() {
     }
   };
 
+  // 打开编辑弹窗
+  const handleOpenEdit = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    setEditingItem(item);
+    setEditTitle(item.title || "");
+    setEditSummary(item.ai_summary || "");
+    setEditText(item.original_text || "");
+  };
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
+    setIsSaving(true);
+    try {
+      await updateInspiration.mutateAsync({
+        id: editingItem.id,
+        data: {
+          title: editTitle.trim() || undefined,
+          ai_summary: editSummary.trim() || undefined,
+          original_text: editText.trim() || undefined,
+        },
+      });
+      setShowEditToast("修改保存成功");
+      setTimeout(() => setShowEditToast(null), 3000);
+      setEditingItem(null);
+    } catch (e) {
+      console.error("保存编辑失败:", e);
+      setShowEditToast("保存失败，请重试");
+      setTimeout(() => setShowEditToast(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (searchParams.get('saved') === 'true') {
       setShowSavedTip(true);
@@ -332,9 +378,14 @@ function InspirationLibraryContent() {
           </button>
         )}
         {!isSelecting && (
-          <button onClick={(e) => handleSingleDelete(e, item.id)} className="absolute top-2 right-2 z-10 p-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all" style={{ background: "rgba(0,0,0,0.5)" }} title="删除">
-            <Trash2 size={16} color="#EF4444" />
-          </button>
+          <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all">
+            <button onClick={(e) => handleOpenEdit(e, item)} className="p-1 rounded" style={{ background: "rgba(0,0,0,0.5)" }} title="编辑">
+              <Pencil size={14} color="#E5E7EB" />
+            </button>
+            <button onClick={(e) => handleSingleDelete(e, item.id)} className="p-1 rounded" style={{ background: "rgba(0,0,0,0.5)" }} title="删除">
+              <Trash2 size={14} color="#EF4444" />
+            </button>
+          </div>
         )}
 
         {/* 上半部分：媒体/内容预览 */}
@@ -534,6 +585,16 @@ function InspirationLibraryContent() {
           <Trash2 size={18} color="#EF4444" /> {showDeleteTip}
         </div>
       )}
+      {showEditToast && (
+        <div className="mx-4 mt-3 p-3 rounded-lg flex items-center gap-2 text-sm"
+          style={{
+            background: showEditToast.includes("失败") ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+            border: showEditToast.includes("失败") ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(34,197,94,0.3)",
+            color: showEditToast.includes("失败") ? "#FCA5A5" : "#86EFAC",
+          }}>
+          <CheckCircle size={18} color={showEditToast.includes("失败") ? "#EF4444" : "#22C55E"} /> {showEditToast}
+        </div>
+      )}
 
       <div className="flex-1 px-4 pt-4">
         {/* 分类 Tab */}
@@ -658,6 +719,96 @@ function InspirationLibraryContent() {
       </div>
 
       <BottomNav activePage="inspiration" onNavigate={(page) => handleNavigate(page)} />
+
+      {/* 编辑弹窗 */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setEditingItem(null)}>
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
+          <div className="relative w-full sm:max-w-md mx-4 mb-4 sm:mb-0 p-5 rounded-2xl"
+            style={{ background: "rgba(31,41,55,0.98)", border: "1px solid rgba(255,255,255,0.12)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>编辑灵感</h3>
+              <button onClick={() => setEditingItem(null)} className="p-1 rounded" style={{ background: "rgba(255,255,255,0.08)" }}>
+                <X size={16} color="#9CA3AF" />
+              </button>
+            </div>
+
+            {/* 标题 */}
+            <div className="mb-3">
+              <label className="block mb-1.5" style={{ color: "#9CA3AF", fontSize: 12 }}>标题</label>
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="输入标题"
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#FFFFFF",
+                }}
+              />
+            </div>
+
+            {/* 描述/summary */}
+            <div className="mb-3">
+              <label className="block mb-1.5" style={{ color: "#9CA3AF", fontSize: 12 }}>描述</label>
+              <textarea
+                value={editSummary}
+                onChange={(e) => setEditSummary(e.target.value)}
+                placeholder="输入描述"
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                style={{
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#FFFFFF",
+                }}
+              />
+            </div>
+
+            {/* 原始文本 */}
+            <div className="mb-4">
+              <label className="block mb-1.5" style={{ color: "#9CA3AF", fontSize: 12 }}>原文</label>
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                placeholder="输入原文内容"
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                style={{
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#FFFFFF",
+                }}
+              />
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingItem(null)}
+                className="flex-1 py-2 rounded-lg text-sm"
+                style={{ background: "rgba(255,255,255,0.08)", color: "#9CA3AF" }}>
+                取消
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="flex-1 py-2 rounded-lg text-sm font-medium"
+                style={{
+                  background: "rgba(59,130,246,0.3)",
+                  border: "1px solid rgba(59,130,246,0.4)",
+                  color: "#93C5FD",
+                  opacity: isSaving ? 0.6 : 1,
+                }}>
+                {isSaving ? "保存中..." : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

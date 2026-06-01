@@ -4,7 +4,7 @@ import {
   searchSogou, searchBilibili, searchWeibo, searchBaiduHot, searchDouyinHot, searchZhihuHot, searchToutiaoHot,
   fetchWeiboHotList, fetchZhihuHotList, fetchBaiduHotList, fetchDouyinHotList, fetchToutiaoHotList,
 } from '../search/china-search';
-import { expandKeyword, analyzeContent, preMatchKeyword, matchHotListAgainstKeywords } from '../analysis/hotspot-analyzer';
+import { expandKeyword, analyzeContent, preMatchKeyword, matchHotListAgainstKeywords, fetchPageContent, summarizeHotspot } from '../analysis/hotspot-analyzer';
 import { deduplicateResults, filterByFreshness, prioritizeResults, normalizeUrlForDedup } from '../search';
 import { SearchResult, HotListItem } from '../search/types';
 
@@ -144,7 +144,7 @@ function buildHotItemPayload(item: SearchResult, analysis: any, userId: string, 
     platform: item.source,
     original_url: item.url,
     title: item.title,
-    original_content: item.content,
+    original_content: (analysis.fullContent || item.content),
     author: item.author?.name || null,
     ai_summary: analysis.summary || null,
     relevance_reason: analysis.relevanceReason || null,
@@ -242,13 +242,14 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
                 relevanceReason: '已收录热点',
                 importance: 'medium',
                 summary: item.content.slice(0, 100),
+                fullContent: item.content,
               };
               console.log(`  Reusing existing: ${item.title.slice(0, 30)}...`);
             } else {
-              // ---- AI 分析（新热点才做） ----
-              const fullText = item.title + '\n' + item.content;
-              const preMatch = preMatchKeyword(fullText, expandedKeywords);
-              const aiResult = await analyzeContent(fullText, keyword, preMatch);
+              // ---- 第一步：AI 相关性判定（用简短片段，速度快） ----
+              const shortText = item.title + '\n' + item.content;
+              const preMatch = preMatchKeyword(shortText, expandedKeywords);
+              const aiResult = await analyzeContent(shortText, keyword, preMatch);
               if (!aiResult.isReal) {
                 console.log(`  Filtered fake/spam: ${item.title.slice(0, 30)}...`);
                 continue;
@@ -257,7 +258,26 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
                 console.log(`  Low relevance (${aiResult.relevance}): ${item.title.slice(0, 30)}...`);
                 continue;
               }
-              analysis = aiResult;
+
+              // ---- 第二步：抓取原文 + AI 总结摘要 ----
+              let fullContent = '';
+              let aiSummary = aiResult.summary; // 默认用相关性简述
+
+              try {
+                fullContent = await fetchPageContent(item.url, item.source);
+                if (fullContent && fullContent.length > 50) {
+                  aiSummary = await summarizeHotspot(fullContent, item.title, keyword);
+                  console.log(`  Summarized: ${aiSummary.slice(0, 40)}...`);
+                }
+              } catch (fetchErr) {
+                console.warn(`  Fetch content failed for ${item.url}:`, fetchErr);
+              }
+
+              analysis = {
+                ...aiResult,
+                summary: aiSummary || aiResult.summary,
+                fullContent: fullContent || item.content,
+              };
             }
 
             // ---- 按用户分发：每个监控此关键词的用户都获得一份热点 ----

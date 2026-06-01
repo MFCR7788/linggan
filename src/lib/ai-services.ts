@@ -1181,6 +1181,94 @@ ${angle ? `角度要求：${angle}` : ''}${materialContext}
 
 // ====== 长文本拆分 ======
 
+// ====== 天气查询 ======
+
+export interface WeatherData {
+  city: string;
+  current: {
+    temp: number;
+    feelsLike: number;
+    desc: string;
+    humidity: number;
+    windSpeed: number;
+    cloudCover: number;
+  };
+  forecast: {
+    date: string;
+    maxTemp: number;
+    minTemp: number;
+    desc: string;
+    sunrise: string;
+    sunset: string;
+  }[];
+}
+
+const WEATHER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+
+export async function fetchWeather(city: string): Promise<WeatherData | null> {
+  try {
+    const encodedCity = encodeURIComponent(city.trim());
+    const url = `http://wttr.in/${encodedCity}?format=j1`;
+
+    const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+      || process.env.http_proxy || process.env.https_proxy
+      || 'http://127.0.0.1:6767'; // 兜底代理
+
+    // 用原生 http 模块 + 代理
+    const http = require('http');
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const agent = new HttpsProxyAgent(proxyUrl);
+    console.log('[Weather] 使用代理:', proxyUrl);
+
+    // http.get 封装成 Promise
+    const fetchWithAgent = (requestUrl: string): Promise<{ ok: boolean; json: () => Promise<any> }> =>
+      new Promise((resolve, reject) => {
+        http.get(requestUrl, { agent, headers: { 'User-Agent': WEATHER_USER_AGENT, 'Accept': 'application/json' } }, (res: any) => {
+          let body = '';
+          res.on('data', (chunk: string) => { body += chunk; });
+          res.on('end', () => {
+            resolve({
+              ok: res.statusCode >= 200 && res.statusCode < 400,
+              json: () => Promise.resolve(JSON.parse(body)),
+            });
+          });
+        }).on('error', reject);
+      });
+
+    const res = await fetchWithAgent(url);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const current = data.current_condition?.[0];
+    const weather = data.weather;
+
+    if (!current) return null;
+
+    return {
+      city: city.trim(),
+      current: {
+        temp: Number(current.temp_C),
+        feelsLike: Number(current.FeelsLikeC),
+        desc: current.weatherDesc?.[0]?.value || '未知',
+        humidity: Number(current.humidity),
+        windSpeed: Number(current.windspeedKmph),
+        cloudCover: Number(current.cloudcover),
+      },
+      forecast: (weather || []).slice(0, 3).map((day: any) => ({
+        date: day.date,
+        maxTemp: Number(day.maxtempC),
+        minTemp: Number(day.mintempC),
+        desc: day.hourly?.[4]?.weatherDesc?.[0]?.value || '',
+        sunrise: day.astronomy?.[0]?.sunrise || '',
+        sunset: day.astronomy?.[0]?.sunset || '',
+      })),
+    };
+  } catch (e) {
+    console.error('[Weather] 获取天气失败:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 // ====== Helpers ======
 
 function extractTags(text: string): string[] {

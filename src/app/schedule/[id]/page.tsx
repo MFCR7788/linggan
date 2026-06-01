@@ -9,6 +9,7 @@ import {
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { LoadingSpinner, EmptyState, ProtectedRoute } from '@/components';
+import FormattedText from '@/components/FormattedText';
 import { useSchedule, useUpdateSchedule, useDeleteSchedule } from '@/hooks/use-schedule';
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; border: string }> = {
@@ -178,9 +179,7 @@ function ScheduleDetailContent() {
         {schedule.description && (
           <GlassCard className="!p-4">
             <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>描述</p>
-            <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {schedule.description}
-            </p>
+            <FormattedText text={schedule.description} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
           </GlassCard>
         )}
 
@@ -205,9 +204,7 @@ function ScheduleDetailContent() {
                     <span style={{ color: '#FBBF24', fontSize: 13, fontWeight: 600 }}>核心任务</span>
                   </div>
                 </div>
-                <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                  {linkedInspiration.ai_summary}
-                </p>
+                <FormattedText text={linkedInspiration.ai_summary || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
               </GlassCard>
             )}
 
@@ -256,9 +253,7 @@ function ScheduleDetailContent() {
             {linkedInspiration.original_text && (
               <GlassCard className="!p-4">
                 <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>原始内容</p>
-                <p style={{ color: '#D1D5DB', fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                  {linkedInspiration.original_text}
-                </p>
+                <FormattedText text={linkedInspiration.original_text || ""} color="#D1D5DB" fontSize={12} lineHeight={1.6} />
               </GlassCard>
             )}
 

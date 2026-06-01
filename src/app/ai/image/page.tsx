@@ -227,6 +227,25 @@ function AIImageContent() {
           setBatchImages([]);
         }
         setIsGenerated(true);
+
+        // 自动保存到灵感库
+        const urls: string[] = Array.isArray(data.data)
+          ? data.data.map((r: any) => r.imageUrl).filter(Boolean)
+          : [data.data.imageUrl || data.data.url].filter(Boolean);
+        if (urls.length > 0) {
+          fetch('/api/inspiration', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'image',
+              title: prompt.substring(0, 50),
+              original_text: prompt,
+              source_platform: 'ai',
+              media_urls: urls,
+              tags: ['AI作品', 'AI图片'],
+            }),
+          }).catch(() => {});
+        }
       } else {
         setError(data.error || '生成失败');
       }
@@ -357,7 +376,7 @@ function AIImageContent() {
           {!inspirations || (Array.isArray(inspirations) && inspirations.length === 0) ? (
             <p style={{ color: '#6B7280', fontSize: 12 }}>暂无灵感，先去灵感库添加内容吧</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto custom-scrollbar" style={{ maxHeight: 232 }}>
               {(Array.isArray(inspirations) ? inspirations : []).slice(0, 15).map((item: any) => {
                 const isSelected = selectedInspirations.has(item.id);
                 return (

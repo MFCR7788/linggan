@@ -10,6 +10,7 @@ import { useToast } from "@/components/Toast";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components";
+import FormattedText from "@/components/FormattedText";
 
 const contentTypes = [
   { id: "xiaohongshu", label: "小红书文案", emoji: "📱" },
@@ -205,6 +206,22 @@ function AICopywritingContent() {
 
       // 重置改写
       setRewriteContents({});
+
+      // 自动保存到灵感库
+      const content = Array.isArray(standardResult) ? standardResult[0] : standardResult;
+      if (content) {
+        fetch('/api/inspiration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'text',
+            title: content.substring(0, 50),
+            original_text: content,
+            source_platform: 'ai',
+            tags: ['AI作品', selectedType === 'xiaohongshu' ? '小红书' : selectedType === 'wechat' ? '公众号' : '文案'],
+          }),
+        }).catch(() => {});
+      }
     } catch (error) {
       console.error('Generation failed:', error);
       setStandardContents([generateStandardContent()]);
@@ -317,7 +334,10 @@ function AICopywritingContent() {
           <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: "#3B82F6" }}>Step 1</span> · 从灵感库选材
           </p>
-          <div className="space-y-2">
+          <div
+            className="space-y-2 overflow-y-auto custom-scrollbar"
+            style={{ maxHeight: 232 }}
+          >
             {inspirations.length > 0 ? (
               inspirations.map((item) => (
                 <div
@@ -502,7 +522,7 @@ function AICopywritingContent() {
                   className="p-4 rounded-xl mb-4"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
                 >
-                  <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{currentContent}</p>
+                  <FormattedText text={currentContent} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
@@ -584,9 +604,7 @@ function AICopywritingContent() {
                   className="p-4 rounded-xl mb-3"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
                 >
-                  <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                    {rewriteContents[rewriteTab] || '暂无内容'}
-                  </p>
+                  <FormattedText text={rewriteContents[rewriteTab] || '暂无内容'} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
                 </div>
                 <button
                   onClick={() => {
