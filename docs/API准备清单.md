@@ -24,7 +24,6 @@
 
 | API 名称 | 用途 | 优先级 | 状态 | 获取来源 | 备注 |
 |---------|------|--------|------|---------|------|
-| 阿里云 STT API | 高精度语音转文字 | P0 | ⏳ 待准备 | [阿里云智能语音交互](https://www.aliyun.com/product/nls) | Pro/Creator 用户使用 |
 | ElevenLabs API | 语音合成（TTS） | P2 | ✅ 已准备 | [ElevenLabs](https://elevenlabs.io/) | 高质量语音生成 |
 | 浏览器原生 Web Speech API | 免费语音识别 | P1 | ✅ 无需准备 | 浏览器内置 | 免费用户使用 |
 
@@ -69,7 +68,6 @@
 - Supabase: https://supabase.com/
 - 阿里云 OSS: https://www.aliyun.com/product/oss
 - 阿里云 SMS: https://www.aliyun.com/product/sms
-- 阿里云 STT: https://www.aliyun.com/product/nls
 - 阿里云 CDN: https://www.aliyun.com/product/cdn
 
 ### 支付服务
@@ -89,8 +87,7 @@
 
 ### 第二阶段（建议准备）
 
-1. **阿里云 STT** - 语音转文字
-2. **video-use API** - 视频合并
+1. **video-use API** - 视频合并
 3. **热点数据源API**（微信公众号 + 小红书）
 4. **阿里云 SMS** - 短信验证码
 5. **微信支付** - 支付功能
@@ -130,10 +127,6 @@ ALIYUN_OSS_ACCESS_KEY_SECRET=
 ALIYUN_OSS_BUCKET=
 ALIYUN_OSS_REGION=
 
-# 语音服务
-ALIYUN_STT_ACCESS_KEY_ID=
-ALIYUN_STT_ACCESS_KEY_SECRET=
-
 # 短信服务
 ALIYUN_SMS_ACCESS_KEY_ID=
 ALIYUN_SMS_ACCESS_KEY_SECRET=
@@ -158,7 +151,6 @@ ALIPAY_PUBLIC_KEY=
 - [x] Seedance API Key 申请完成 ✅
 - [x] Supabase 项目创建完成 ✅（Auth + DB + Storage）
 - [x] Supabase Storage 配置完成 ✅（替代阿里云 OSS）
-- [ ] 阿里云 STT 服务开通（可选，第一阶段可用原生方案）
 - [x] 阿里云 SMS 服务开通完成 ✅
 - [x] OpenRouter API Key 申请完成 ✅
 - [x] ElevenLabs API Key 申请完成 ✅
@@ -178,7 +170,6 @@ ALIPAY_PUBLIC_KEY=
 | Seedance 生图 | 1,000 张 | ¥40 | 按 ¥0.04/张 |
 | Seedance 生视频 | 500 段 | ¥250 | 按 ¥0.5/段 |
 | Supabase Storage | 50GB | ¥0 | 免费额度内 |
-| 阿里云 STT | 1000 分钟 | ¥58 | 按 ¥0.058/分钟 |
 | 阿里云 SMS | 1000 条 | ¥40 | 按 ¥0.04/条 |
 | Supabase Pro | 1 个 | ¥180 | 按 $25/月估算 |
 | **总计** | | **¥748** | |
