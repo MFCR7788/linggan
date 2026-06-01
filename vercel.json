@@ -16,10 +16,5 @@
       "memory": 1024
     }
   },
-  "crons": [
-    {
-      "path": "/api/cron/check-hotspots",
-      "schedule": "0 9 * * *"
-    }
-  ]
+  "crons": []
 }

@@ -1,0 +1,30 @@
+name: Check Hotspots
+
+on:
+  schedule:
+    # 每 3 小时触发一次（UTC 0/3/6/9/12/15/18/21 → 北京时间 8/11/14/17/20/23/2/5）
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # 允许在 Actions 页面手动触发
+
+jobs:
+  check-hotspots:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hotspot check
+        env:
+          API_URL: ${{ secrets.LINGJI_API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::缺少必要的 secrets: LINGJI_API_URL / CRON_SECRET"
+            exit 1
+          fi
+          # -w 输出 HTTP 状态码；-f 在 HTTP 错误时让 curl 失败
+          http_code=$(curl -sS -o /tmp/hotspot-resp.json -w "%{http_code}" \
+            "${API_URL}/api/cron/check-hotspots?secret=${CRON_SECRET}")
+          echo "HTTP ${http_code}"
+          cat /tmp/hotspot-resp.json
+          if [ "$http_code" != "200" ]; then
+            echo "::error::热点检查失败 (HTTP ${http_code})"
+            exit 1
+          fi
