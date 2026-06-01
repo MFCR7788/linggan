@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
 import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration, useUpdateInspiration } from "@/hooks/use-inspiration";
+import { useUploadQueue } from "@/hooks/use-upload-queue";
 import { useTags } from "@/hooks/use-categories";
 import { useSchedules } from "@/hooks/use-schedule";
 import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ====== 常量 ======
 
@@ -156,8 +158,10 @@ function InspirationLibraryContent() {
   const [showSavedTip, setShowSavedTip] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isUploading, setIsUploading] = useState(false);
   const [showDeleteTip, setShowDeleteTip] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadToast, setUploadToast] = useState<string | null>(null);
+  const [uploadHasSucceeded, setUploadHasSucceeded] = useState(false);
 
   // 编辑状态
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -176,6 +180,36 @@ function InspirationLibraryContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+
+  // 上传队列
+  const { items: uploadItems, addFiles, retry: retryUpload, removeItem, clearDone } = useUploadQueue({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inspirations"] });
+    },
+    onAllDone: (summary) => {
+      if (summary.total > 0) {
+        let msg: string;
+        if (summary.failed > 0) {
+          msg = `上传完成：${summary.succeeded} 成功，${summary.failed} 失败`;
+          if (summary.firstError) msg += `（${summary.firstError}）`;
+        } else if (summary.inFlight > 0) {
+          msg = `${summary.inFlight} 个文件仍在处理中`;
+        } else {
+          msg = `成功上传 ${summary.succeeded} 个文件`;
+        }
+        setUploadToast(msg);
+        setUploadHasSucceeded(summary.succeeded > 0);
+        setTimeout(() => setUploadToast(null), 6000);
+      }
+      if (summary.succeeded > 0) {
+        queryClient.invalidateQueries({ queryKey: ["inspirations"] });
+      }
+    },
+  });
+  const isUploading = uploadItems.some(
+    (it) => it.status === 'uploading' || it.status === 'compressing' || it.status === 'creating' || it.status === 'extracting' || it.status === 'queued'
+  );
 
   // 获取标签列表
   const { data: tags = [] } = useTags();
@@ -268,33 +302,25 @@ function InspirationLibraryContent() {
   const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    setIsUploading(true);
-    try {
-      for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('type', file.type.startsWith('image') ? 'image' : 'video');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok || !uploadData.success) continue;
-        const url = uploadData.data.url;
-        const isImage = file.type.startsWith('image');
-        const isVideo = file.type.startsWith('video');
-        await createInspiration.mutateAsync({
-          type: isImage ? 'image' : isVideo ? 'video' : 'text',
-          title: file.name.length > 50 ? file.name.substring(0, 50) : file.name,
-          original_text: file.name,
-          summary: `上传的${isImage ? '图片' : '视频'}: ${file.name}`,
-          tags: ['灵感'],
-          media_urls: [url],
-        });
-      }
-    } catch (e) {
-      console.error('批量上传失败:', e);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    addFiles(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    addFiles(files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget === e.target) setIsDragging(false);
   };
 
   // 打开编辑弹窗
@@ -360,6 +386,13 @@ function InspirationLibraryContent() {
     setSelectedTagIds(next);
   };
 
+  // AI 总结中判定：extraction_status 是 pending/extracting 或 analysis_status 是 pending/processing
+  const isExtractingOrPending = (item: any): boolean => {
+    if (item.extraction_status === 'pending' || item.extraction_status === 'extracting') return true;
+    if (!item.ai_summary && (item.analysis_status === 'pending' || item.analysis_status === 'processing')) return true;
+    return false;
+  };
+
   // ====== 抖音风格卡片（所有类型） ======
   const renderCard = (item: any) => {
     const checked = selectedIds.has(item.id);
@@ -420,11 +453,37 @@ function InspirationLibraryContent() {
               </p>
             </div>
           )}
-          {/* 类型角标 */}
-          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-medium"
-            style={{ background: "rgba(0,0,0,0.6)", color: "#FFFFFF" }}>
-            {typeLabel}
-          </span>
+          {/* 类型角标 / AI 总结中徽标 */}
+          <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+            <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+              style={{ background: "rgba(0,0,0,0.6)", color: "#FFFFFF" }}>
+              {item.original_file_url
+                ? (item.original_filename?.split('.').pop()?.toUpperCase() || 'FILE')
+                : typeLabel}
+            </span>
+            {isExtractingOrPending(item) && (
+              <span className="px-1.5 py-0.5 rounded text-xs font-medium flex items-center gap-1"
+                style={{
+                  background: "rgba(249,115,22,0.95)",
+                  color: "#FFFFFF",
+                  boxShadow: "0 0 0 0 rgba(249,115,22,0.7)",
+                  animation: "pulse-orange 1.5s infinite",
+                }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: '#FFFFFF', display: 'inline-block',
+                  animation: 'pulse 1s infinite',
+                }} />
+                AI 总结中
+              </span>
+            )}
+            {item.extraction_status === 'failed' && (
+              <span className="px-1.5 py-0.5 rounded text-xs font-medium"
+                style={{ background: "rgba(239,68,68,0.9)", color: "#FFFFFF" }}>
+                抽取失败
+              </span>
+            )}
+          </div>
         </div>
 
         {/* 底部信息 */}
@@ -564,7 +623,7 @@ function InspirationLibraryContent() {
         }
       />
 
-      <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx,.txt" className="hidden" onChange={handleBatchUpload} />
+      <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.docx,.txt,.md" className="hidden" onChange={handleBatchUpload} />
 
       {/* 提示条 */}
       {showSavedTip && (
@@ -574,9 +633,64 @@ function InspirationLibraryContent() {
         </div>
       )}
       {isUploading && (
-        <div className="mx-4 mt-3 p-3 rounded-lg flex items-center gap-2 text-sm"
+        <div className="mx-4 mt-3 p-3 rounded-lg text-sm"
           style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#93C5FD" }}>
-          <Upload size={18} className="animate-pulse" /> 正在上传处理...
+          <div className="flex items-center gap-2 mb-2">
+            <Upload size={18} className="animate-pulse" />
+            <span className="font-medium">正在上传 {uploadItems.filter((it) => it.status === 'done' || it.status === 'extracting' || it.status === 'error').length}/{uploadItems.length}</span>
+          </div>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {uploadItems.map((it) => {
+              const label =
+                it.status === 'compressing' ? '压缩中' :
+                it.status === 'uploading' ? `上传中 ${it.progress}%` :
+                it.status === 'extracting' ? 'AI 总结中' :
+                it.status === 'done' ? '完成' :
+                it.status === 'error' ? `失败：${it.error}` :
+                it.status === 'queued' ? '等待中' : it.status;
+              return (
+                <div key={it.id} className="flex items-center gap-2 text-xs" style={{ color: it.status === 'error' ? "#FCA5A5" : "#93C5FD" }}>
+                  {it.status === 'error' ? (
+                    <AlertCircle size={12} color="#EF4444" />
+                  ) : it.status === 'done' ? (
+                    <CheckCircle size={12} color="#22C55E" />
+                  ) : (
+                    <Upload size={12} />
+                  )}
+                  <span className="truncate flex-1">{it.file.name}</span>
+                  <span style={{ flexShrink: 0 }}>{label}</span>
+                  {it.status === 'error' && (
+                    <button onClick={() => retryUpload(it.id)} className="px-1.5 py-0.5 rounded text-xs"
+                      style={{ background: "rgba(255,255,255,0.15)" }}>重试</button>
+                  )}
+                  {(it.status === 'done' || it.status === 'error') && (
+                    <button onClick={() => removeItem(it.id)} className="px-1 text-xs" style={{ color: "#9CA3AF" }}>×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {uploadToast && (
+        <div className="mx-4 mt-3 p-3 rounded-lg flex items-center gap-2 text-sm"
+          style={{
+            background: uploadToast.includes('失败') ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+            border: uploadToast.includes('失败') ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(34,197,94,0.3)",
+            color: uploadToast.includes('失败') ? "#FCA5A5" : "#86EFAC",
+          }}>
+          <CheckCircle size={18} color={uploadToast.includes('失败') ? "#EF4444" : "#22C55E"} />
+          <span className="flex-1">{uploadToast}</span>
+          {uploadHasSucceeded && activeFilter !== "全部" && (
+            <button
+              onClick={() => { setActiveFilter("全部"); setUploadToast(null); }}
+              className="px-2 py-0.5 rounded text-xs flex-shrink-0"
+              style={{ background: "rgba(34,197,94,0.3)", color: "#86EFAC" }}
+            >
+              查看全部
+            </button>
+          )}
         </div>
       )}
       {showDeleteTip && (
@@ -596,7 +710,23 @@ function InspirationLibraryContent() {
         </div>
       )}
 
-      <div className="flex-1 px-4 pt-4">
+      <div
+        className="flex-1 px-4 pt-4 relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none"
+            style={{ background: "rgba(59,130,246,0.08)" }}>
+            <div className="px-8 py-6 rounded-2xl text-center"
+              style={{ background: "rgba(59,130,246,0.9)", color: "#FFFFFF", boxShadow: "0 8px 32px rgba(59,130,246,0.4)" }}>
+              <Upload size={32} className="mx-auto mb-2" />
+              <div style={{ fontSize: 16, fontWeight: 600 }}>松开上传文件</div>
+              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>支持 图片 / 视频 / 音频 / PDF / DOCX / TXT / MD</div>
+            </div>
+          </div>
+        )}
         {/* 分类 Tab */}
         <div className="flex gap-2 overflow-x-auto pb-1 mb-4 -mx-4 px-4">
           {typeFilters.map((f) => (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Zap, TrendingUp } from "lucide-react";
+import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner } from "@/components";
 import FormattedText from "@/components/FormattedText";
 import { syncDevAuthCookie, getDevUserIdHeader } from "@/lib/dev-auth";
-import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration } from "@/hooks/use-inspiration";
+import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration, useTriggerExtract } from "@/hooks/use-inspiration";
 import { useCategories } from "@/hooks/use-categories";
 
 const typeEmojis: Record<string, string> = {
@@ -40,6 +40,13 @@ const statusLabels: Record<string, string> = {
   active: "正常",
 };
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
 function InspirationDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,6 +54,7 @@ function InspirationDetailContent() {
   const { data: inspiration, isLoading, isError } = useInspiration(id);
   const { updateStatus } = useInspirationActions();
   const updateInspiration = useUpdateInspiration();
+  const triggerExtract = useTriggerExtract();
   const { data: categories } = useCategories();
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
@@ -281,6 +289,86 @@ function InspirationDetailContent() {
                 {statusMsg}
               </div>
             )}
+
+            {/* 文档附件区（仅当 original_file_url 存在时） */}
+            {inspiration.original_file_url && (
+              <GlassCard className="mb-3">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)" }}
+                  >
+                    <FileText size={18} color="#93C5FD" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ color: "#FFFFFF", fontSize: 13, fontWeight: 600 }} className="truncate">
+                      {inspiration.original_filename || '原始文件'}
+                    </p>
+                    <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 2 }}>
+                      {formatFileSize(inspiration.original_file_size)}
+                      {inspiration.extracted_chars ? ` · 已抽取 ${inspiration.extracted_chars} 字` : ''}
+                    </p>
+                    {inspiration.original_mime_type === 'application/pdf' && (
+                      <div className="mt-2">
+                        <iframe
+                          src={inspiration.original_file_url}
+                          title={inspiration.original_filename || 'PDF preview'}
+                          className="w-full rounded-lg"
+                          style={{ height: 400, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <a
+                        href={inspiration.original_file_url}
+                        download={inspiration.original_filename || true}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
+                        style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD", border: "1px solid rgba(59,130,246,0.3)" }}
+                      >
+                        <Download size={12} /> 下载
+                      </a>
+                      {(inspiration.extraction_status === 'failed' || inspiration.analysis_status === 'failed') && (
+                        <button
+                          onClick={() => triggerExtract.mutate(id!)}
+                          disabled={triggerExtract.isPending}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
+                          style={{ background: "rgba(249,115,22,0.2)", color: "#FDBA74", border: "1px solid rgba(249,115,22,0.3)" }}
+                        >
+                          <RefreshCw size={12} className={triggerExtract.isPending ? 'animate-spin' : ''} />
+                          {triggerExtract.isPending ? '重试中...' : '重试 AI 总结'}
+                        </button>
+                      )}
+                    </div>
+                    {inspiration.extraction_error && (
+                      <div className="flex items-start gap-1.5 mt-2 text-xs" style={{ color: "#FCA5A5" }}>
+                        <AlertCircle size={12} color="#EF4444" className="mt-0.5 flex-shrink-0" />
+                        <span>{inspiration.extraction_error}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </GlassCard>
+            )}
+
+            {/* AI 总结中骨架（extracting/pending 状态） */}
+            {inspiration.original_file_url && !inspiration.ai_summary &&
+              (inspiration.extraction_status === 'pending' || inspiration.extraction_status === 'extracting' ||
+                inspiration.analysis_status === 'pending' || inspiration.analysis_status === 'processing') && (
+                <GlassCard className="mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
+                      style={{ borderColor: "rgba(249,115,22,0.4)", borderTopColor: "transparent" }} />
+                    <span style={{ color: "#FDBA74", fontSize: 13, fontWeight: 600 }}>AI 总结中...</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '90%' }} />
+                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '75%' }} />
+                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '60%' }} />
+                  </div>
+                </GlassCard>
+              )}
 
             {/* 原素材卡片 — 根据类型展示 */}
             <GlassCard style={{ overflow: 'hidden' }}>
