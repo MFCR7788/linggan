@@ -35,15 +35,15 @@
   "crons": [
     {
       "path": "/api/jobs/claim",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/platforms/metrics-fetch",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/platforms/scheduled-publish",
-      "schedule": "* * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
