@@ -16,8 +16,9 @@ const VALID_RANGES: Record<string, number> = {
 
 export const GET = withAuth(async ({ request, user }) => {
   const url = new URL(request.url);
-  const rangeKey = url.searchParams.get('range') || '30d';
-  const days = VALID_RANGES[rangeKey] || 30;
+  const rawRange = url.searchParams.get('range') || '30d';
+  const rangeKey = VALID_RANGES[rawRange] ? rawRange : '30d';
+  const days = VALID_RANGES[rangeKey];
   const since = new Date(Date.now() - days * 86400 * 1000).toISOString();
 
   const supabase = createAdminClient();

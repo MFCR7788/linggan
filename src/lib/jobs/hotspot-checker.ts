@@ -283,8 +283,9 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
               console.log(`  Low relevance (${aiResult.relevance}): ${item.title.slice(0, 30)}...`);
               continue;
             }
+            const settled = fullContents[i];
             const fullContent =
-              (fullContents[i].status === 'fulfilled' ? fullContents[i].value : '') || item.content;
+              (settled.status === 'fulfilled' ? settled.value : '') || item.content;
             analysis = { ...aiResult, fullContent };
             console.log(`  New hotspot [${item.source}]: ${item.title.slice(0, 40)}... (${aiResult.importance}) → shared to ${userCount} user(s)`);
           }

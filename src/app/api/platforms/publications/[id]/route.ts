@@ -21,7 +21,7 @@ export const GET = withAuth(async ({ params, user }) => {
     .eq('id', id)
     .eq('user_id', user.id)
     .single();
-  if (error) return createApiError(error.message, 404);
+  if (error) return createApiError('发布不存在或已删除', 404);
   return createApiResponse({ publication: data });
 });
 
