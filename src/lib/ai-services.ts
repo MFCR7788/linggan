@@ -272,7 +272,7 @@ function getSizeForRatio(ratio: string): string {
 
 export async function generateImage(
   prompt: string,
-  options: { ratio?: string; n?: number } = {}
+  options: { ratio?: string; n?: number; seed?: number } = {}
 ): Promise<ImageResult | ImageResult[]> {
   // 先优化提示词
   const finalPrompt = await optimizePrompt(prompt, 'image');
@@ -287,6 +287,18 @@ export async function generateImage(
 
   const size = getSizeForRatio(options.ratio || '1:1');
   const n = options.n || 1;
+  const seed = options.seed;
+
+  const requestBody: Record<string, unknown> = {
+    model: imageModelArkId,
+    prompt: finalPrompt,
+    n,
+    size,
+  };
+  if (typeof seed === 'number' && Number.isFinite(seed) && seed >= 0) {
+    requestBody.seed = seed;
+    console.log(`[Image] 使用固定种子: ${seed}`);
+  }
 
   const response = await fetch(`${baseUrl}/images/generations`, {
     method: 'POST',
@@ -294,12 +306,7 @@ export async function generateImage(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: imageModelArkId,
-      prompt: finalPrompt,
-      n,
-      size,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -545,15 +552,16 @@ interface InspireInput {
   media_urls?: string[];
 }
 
-/** 一步生成分镜：素材 + 风格 + 时长 + 主题 + 语言 → storyboard[]（含 visualPrompt + subtitle） */
+/** 一步生成分镜：素材 + 风格 + 时长 + 主题 + 语言 + 首帧 → storyboard[]（含 visualPrompt + subtitle） */
 export async function generateStoryboardV2(params: {
   inspirations: InspireInput[];
   stylePreset: string;
   duration: number;
   topic?: string;
   language?: string;
+  firstFrameUrl?: string;
 }): Promise<StoryboardScene[]> {
-  const { inspirations, stylePreset, duration, topic, language = 'zh' } = params;
+  const { inspirations, stylePreset, duration, topic, language = 'zh', firstFrameUrl } = params;
   const preset = STYLE_PRESETS[stylePreset] || STYLE_PRESETS.random;
   const durations = calcSegmentDurations(duration);
   const numSegments = durations.length;
@@ -581,7 +589,7 @@ export async function generateStoryboardV2(params: {
 总时长：${duration}秒
 分段数：${numSegments}
 每段时长（秒）：${durations.join(', ')}
-${topic ? `主题方向：${topic}` : ''}${materialContext}
+${topic ? `主题方向：${topic}` : ''}${materialContext}${firstFrameUrl ? `\n首帧参考图：${firstFrameUrl}（视频的起始画面应该基于这张图，确保与首帧风格/构图/色彩一致）` : ''}
 要求：
 1. visualPrompt 用${subtitleLang}，详细描述画面内容、光线、色彩、风格、运镜（<150词），融入"${preset.visualStyle}"的风格特征
 2. subtitle 用${subtitleLang}，简短有力（每段1-2句），${langOpt.promptInstruction}
@@ -1001,7 +1009,9 @@ export async function generateCopywriting(
   type: string,
   style: string,
   noAiTaste: boolean = false,
-  n: number = 1
+  n: number = 1,
+  industryInstruction?: string,
+  userInstruction?: string
 ): Promise<string | string[]> {
   const inspirationText = inspirations.map((i) => {
     const parts: string[] = [];
@@ -1017,8 +1027,11 @@ export async function generateCopywriting(
       '要求：去掉AI味，使用更自然的口语化表达，增加个人化的语气，避免过于工整的排比和模板化表达。';
   }
 
-  const basePrompt = (angle: string) => `请基于以下灵感内容创作一篇${type}，风格要求：${style}。${angle}
+  const industryBlock = industryInstruction ? `\n${industryInstruction}\n` : '';
+  const userBlock = userInstruction ? `\n【用户特别要求】\n${userInstruction}\n` : '';
 
+  const basePrompt = (angle: string) => `请基于以下灵感内容创作一篇${type}，风格要求：${style}。${angle}
+${industryBlock}${userBlock}
 灵感内容：
 ${inspirationText}
 
@@ -1057,7 +1070,7 @@ ${styleInstruction}
 
 // ====== Usage Recording ======
 
-type AiTaskType = 'ai_summary' | 'copywriting' | 'image' | 'video';
+type AiTaskType = 'ai_summary' | 'copywriting' | 'image' | 'image_batch' | 'video' | 'digital_human' | 'digital_human_batch' | 'video_merge';
 
 export async function logAiUsage(
   userId: string,
@@ -1080,7 +1093,11 @@ export async function logAiUsage(
       ai_summary: 'ai_summary_count',
       copywriting: 'ai_writing_count',
       image: 'image_count',
+      image_batch: 'image_count',
       video: 'video_count',
+      digital_human: 'digital_human_count',
+      digital_human_batch: 'digital_human_count',
+      video_merge: 'video_count',
     };
 
     if (existing) {

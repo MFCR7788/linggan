@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Zap, ChevronDown, ChevronUp, Download, FolderOpen, RefreshCw, Share2,
   ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle2, XCircle,
-  Settings, Wand2, Sparkles,
+  Settings, Wand2, Sparkles, ImageIcon, Upload, X, Link2, Music,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -15,6 +15,7 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from '@/lib/style-constants';
 import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
+import { useContentHandoff } from '@/hooks/use-content-handoff';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ function getModelDisplayName(model: string): string {
 
 function AIVideoContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { receive } = useContentHandoff();
 
   // ─── Step 1: 确定方向 ──────────────────────────────────
 
@@ -94,6 +97,12 @@ function AIVideoContent() {
   const [duration, setDuration] = useState(10);
   const [qualityTier, setQualityTier] = useState('standard');
   const [language, setLanguage] = useState('zh');
+
+  // ─── 首帧图片（关键：图生视频入口） ──────────────────────
+  const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null);
+  const [firstFrameInput, setFirstFrameInput] = useState('');
+  const [firstFrameTab, setFirstFrameTab] = useState<'inspiration' | 'url' | 'upload'>('inspiration');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Step 2: 分镜预览 & 微调 ─────────────────────────
 
@@ -132,6 +141,23 @@ function AIVideoContent() {
       .then((r) => r.json())
       .then((d) => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {});
+  }, []);
+
+  // ─── URL 参数接收（从 AI 生图 / AI 文案 带入） ────────
+  useEffect(() => {
+    const params = receive(['firstFrame', 'prompt', 'text', 'topic', 'style', 'imageUrl']);
+    if (params.firstFrame) {
+      setFirstFrameUrl(params.firstFrame);
+      setFirstFrameTab('url');
+    } else if (params.imageUrl) {
+      setFirstFrameUrl(params.imageUrl);
+      setFirstFrameTab('url');
+    }
+    if (params.prompt || params.text) {
+      setTopic((params.prompt || params.text || '').slice(0, 300));
+    } else if (params.topic) {
+      setTopic(params.topic);
+    }
   }, []);
 
   useEffect(() => {
@@ -181,6 +207,7 @@ function AIVideoContent() {
           duration,
           topic: topic.trim() || undefined,
           language,
+          firstFrameUrl: firstFrameUrl || undefined,
         }),
       });
       const data = await res.json();
@@ -223,7 +250,15 @@ function AIVideoContent() {
       const res = await fetch('/api/ai/video/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyboard, inspirations: selectedData, qualityTier }),
+        body: JSON.stringify({
+          storyboard,
+          inspirations: selectedData,
+          qualityTier,
+          firstFrameUrl: firstFrameUrl || undefined,
+          bgmStyle,
+          subtitleStyle,
+          subtitlePosition: subtitlePos,
+        }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || '提交失败');
@@ -461,6 +496,146 @@ function AIVideoContent() {
 
   const renderStep1 = () => (
     <>
+      {/* 首帧图片（关键：图生视频入口） */}
+      <GlassCard>
+        <div className="flex items-center justify-between mb-2">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+            <span style={{ color: '#F59E0B' }}>首帧</span> · 视频起始画面
+            <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>（可作为图生视频的素材）</span>
+          </p>
+          {firstFrameUrl && (
+            <button
+              onClick={() => setFirstFrameUrl(null)}
+              className="text-xs flex items-center gap-1 px-2 py-0.5 rounded"
+              style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}
+            >
+              <X size={11} /> 清除
+            </button>
+          )}
+        </div>
+
+        {/* 已选首帧预览 */}
+        {firstFrameUrl && (
+          <div
+            className="mb-3 rounded-xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(139,92,246,0.15))',
+              border: '1px solid rgba(245,158,11,0.3)',
+              aspectRatio: '16/9',
+              maxHeight: 200,
+            }}
+          >
+            <img src={firstFrameUrl} alt="首帧" className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        {/* 三个 tab */}
+        <div className="flex rounded-lg overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          {([
+            { key: 'inspiration' as const, label: '灵感库', icon: '📚' },
+            { key: 'url' as const, label: 'URL', icon: '🔗' },
+            { key: 'upload' as const, label: '上传', icon: '📤' },
+          ]).map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => setFirstFrameTab(key)}
+              className="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition-all"
+              style={{
+                background: firstFrameTab === key ? 'rgba(245,158,11,0.2)' : 'transparent',
+                color: firstFrameTab === key ? '#FCD34D' : '#9CA3AF',
+                fontWeight: firstFrameTab === key ? 600 : 400,
+              }}
+            >
+              <span>{icon}</span> {label}
+            </button>
+          ))}
+        </div>
+
+        {firstFrameTab === 'inspiration' && (
+          <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+            {inspirations.length === 0 ? (
+              <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 8 }}>加载中...</p>
+            ) : (
+              inspirations
+                .filter((i) => i.type === 'image' && i.media_urls && i.media_urls.length > 0)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => setFirstFrameUrl(item.media_urls![0])}
+                    className="flex items-center gap-2 p-1.5 rounded-lg cursor-pointer"
+                    style={{
+                      background: firstFrameUrl === item.media_urls![0] ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: firstFrameUrl === item.media_urls![0] ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <img src={item.media_urls![0]} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                    <span style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate flex-1">
+                      {item.title || '未命名'}
+                    </span>
+                    {firstFrameUrl === item.media_urls![0] && <CheckCircle2 size={12} color="#FCD34D" />}
+                  </div>
+                ))
+            )}
+          </div>
+        )}
+
+        {firstFrameTab === 'url' && (
+          <div>
+            <div className="flex gap-1.5">
+              <input
+                value={firstFrameInput}
+                onChange={(e) => setFirstFrameInput(e.target.value)}
+                placeholder="https://... 图片 URL"
+                className="flex-1 px-2.5 py-2 rounded-lg text-xs bg-transparent outline-none"
+                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              <button
+                onClick={() => { if (firstFrameInput.trim()) setFirstFrameUrl(firstFrameInput.trim()); }}
+                className="px-3 py-1.5 rounded-lg text-xs"
+                style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)' }}
+              >
+                <Link2 size={11} className="inline mr-0.5" /> 应用
+              </button>
+            </div>
+            {firstFrameUrl && firstFrameTab === 'url' && (
+              <p style={{ color: '#FCD34D', fontSize: 10, marginTop: 4 }} className="truncate">
+                ✓ 已设置：{firstFrameUrl.slice(0, 60)}...
+              </p>
+            )}
+          </div>
+        )}
+
+        {firstFrameTab === 'upload' && (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                // 简单方案：用 FileReader 读为 data URL
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const dataUrl = ev.target?.result as string;
+                  setFirstFrameUrl(dataUrl);
+                  setToast({ message: '已加载本地图片', type: 'success' });
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-3 rounded-lg text-xs flex items-center justify-center gap-1.5"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', color: '#9CA3AF' }}
+            >
+              <Upload size={14} /> 点击选择本地图片
+            </button>
+          </div>
+        )}
+      </GlassCard>
+
       {/* 素材选择 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
@@ -757,11 +932,96 @@ function AIVideoContent() {
         </GlassCard>
       )}
 
-      {/* 后期配置占位 */}
+      {/* 后期配置：BGM + 字幕（实做） */}
       <GlassCard>
-        <p style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', padding: 8 }}>
-          BGM 与字幕功能即将支持，敬请期待
+        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <span style={{ color: '#EC4899' }}>后期</span> · BGM 与字幕
+          <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>（已配置真实音频）</span>
         </p>
+
+        {/* BGM 选择 */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Music size={13} color="#EC4899" />
+            <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600 }}>背景音乐</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {bgmOptions.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => setBgmStyle(b.id)}
+                className="flex flex-col items-center gap-1.5 py-2.5 rounded-lg transition-all"
+                style={{
+                  background: bgmStyle === b.id ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.05)',
+                  border: bgmStyle === b.id ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                <div className="flex items-end gap-0.5 h-4">
+                  {b.wave.map((v, i) => (
+                    <div key={i} className="w-0.5 rounded-full" style={{
+                      height: v * 1.5,
+                      background: bgmStyle === b.id ? '#F472B6' : '#6B7280',
+                    }} />
+                  ))}
+                </div>
+                <span style={{ color: bgmStyle === b.id ? '#FBCFE8' : '#E5E7EB', fontSize: 11, fontWeight: 600 }}>{b.label}</span>
+              </button>
+            ))}
+          </div>
+          {/* 试听按钮 */}
+          {bgmStyle && (
+            <audio
+              key={bgmStyle}
+              controls
+              preload="none"
+              src={`/bgm/${bgmStyle}.mp3`}
+              className="w-full mt-2"
+              style={{ height: 32 }}
+            />
+          )}
+        </div>
+
+        {/* 字幕样式 */}
+        <div className="mb-3">
+          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>字幕样式</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {subtitleStyles.map((s) => (
+              <button
+                key={s}
+                onClick={() => setSubtitleStyle(s)}
+                className="py-1.5 rounded text-[11px] transition-all"
+                style={{
+                  background: subtitleStyle === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                  border: subtitleStyle === s ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                  color: subtitleStyle === s ? '#93C5FD' : '#9CA3AF',
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 字幕位置 */}
+        <div>
+          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>字幕位置</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {subtitlePositions.map((p) => (
+              <button
+                key={p}
+                onClick={() => setSubtitlePos(p)}
+                className="py-1.5 rounded text-[11px] transition-all"
+                style={{
+                  background: subtitlePos === p ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                  border: subtitlePos === p ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                  color: subtitlePos === p ? '#93C5FD' : '#9CA3AF',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
       </GlassCard>
 
       {/* 操作按钮 */}

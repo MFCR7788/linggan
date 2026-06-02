@@ -1,27 +1,23 @@
 "use client";
 
 
-import { useState, useEffect } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useToast } from "@/components/Toast";
 import { BottomNav, PageKey } from "@/components/BottomNav";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import FormattedText from "@/components/FormattedText";
-
-const contentTypes = [
-  { id: "xiaohongshu", label: "小红书文案", emoji: "📱" },
-  { id: "script", label: "短视频脚本", emoji: "🎬" },
-  { id: "wechat", label: "公众号文章", emoji: "📰" },
-];
-
-const styles = [
-  "小红书博主风", "专业权威感", "幽默轻松", "情感共鸣",
-  "干货知识", "故事叙述", "极简简洁",
-];
+import {
+  COPYWRITING_TYPES,
+  COPYWRITING_STYLES,
+  COPYWRITING_INDUSTRIES,
+  findIndustry,
+} from "@/lib/preset-templates";
+import { useContentHandoff } from "@/hooks/use-content-handoff";
 
 const typeEmojis: Record<string, string> = {
   text: "📝",
@@ -67,90 +63,163 @@ interface InspirationItem {
   ai_summary?: string;
 }
 
+const STYLE_CATEGORY_LABELS: Record<string, string> = {
+  '情感': '🌸 情感',
+  '专业': '📚 专业',
+  '营销': '💰 营销',
+  '搞笑': '😂 搞笑',
+};
+
 function AICopywritingContent() {
   const { showToast } = useToast();
+  const router = useRouter();
+  const { handoff, receive } = useContentHandoff();
+
+  // ─── 用户偏好持久化 ─────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedType, setSelectedType] = useState("xiaohongshu");
-  const [selectedStyle, setSelectedStyle] = useState("小红书博主风");
-  const [isGenerated, setIsGenerated] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+
+  // ─── Step 1: 选材 + 输入 + 智能助手 ─────────────────────
+  const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
+  const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
+  const [userInput, setUserInput] = useState('');
+  const [refinedMessage, setRefinedMessage] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
+
+  // ─── Step 2: 平台类型 ─────────────────────────────────
+  const [selectedType, setSelectedType] = useState('xiaohongshu');
+
+  // ─── Step 3: 文风 ─────────────────────────────────────
+  const [selectedStyle, setSelectedStyle] = useState('planting');
+
+  // ─── Step 4: 行业 ─────────────────────────────────────
+  const [selectedIndustry, setSelectedIndustry] = useState('general');
+
+  // ─── 开关 ─────────────────────────────────────────────
   const [batchMode, setBatchMode] = useState(false);
   const [noAiMode, setNoAiMode] = useState(true);
+
+  // ─── 生成结果 ─────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
   const [resultTab, setResultTab] = useState<"standard" | "noai">("standard");
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [standardContents, setStandardContents] = useState<string[]>([generateStandardContent()]);
   const [noAiContents, setNoAiContents] = useState<string[]>([generateNoAiContent()]);
-  const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
-  const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [copied, setCopied] = useState(false);
 
-  // 多平台改写
+  // ─── 多平台改写 ───────────────────────────────────────
   const [rewriteContents, setRewriteContents] = useState<Record<string, string>>({});
   const [rewriteTab, setRewriteTab] = useState('xiaohongshu');
   const [isRewriting, setIsRewriting] = useState(false);
 
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // 从 API 加载灵感数据
+  // 智能助手：textarea 自动撑高
+  const userInputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
-    const loadData = async () => {
+    if (userInputRef.current) {
+      userInputRef.current.style.height = 'auto';
+      userInputRef.current.style.height = Math.min(userInputRef.current.scrollHeight, 200) + 'px';
+    }
+  }, [userInput]);
+
+  // ─── 初始化：加载灵感 + URL 参数 ──────────────────────
+  useEffect(() => {
+    (async () => {
       try {
         const inspRes = await fetch('/api/inspiration?limit=20');
         if (inspRes.ok) {
-          const inspData = await inspRes.json();
-          const items = inspData.data || [];
-          setInspirations(items);
-          const inspIdParam = searchParams.get('inspirationId');
-          if (inspIdParam) {
-            const inspIds = inspIdParam.split(',').filter(Boolean);
-            const autoSelected = new Set<string | number>();
-            items.forEach((item: InspirationItem) => {
-              if (inspIds.includes(String(item.id))) {
-                autoSelected.add(item.id);
-              }
-            });
-            if (autoSelected.size > 0) {
-              setSelectedInspirations(autoSelected);
-            }
-          }
+          const data = await inspRes.json();
+          setInspirations(data.data || []);
         }
-      } catch (error) {
-        console.error('Failed to load data:', error);
+      } catch (e) {
+        console.error('Failed to load inspirations', e);
       }
-    };
-
-    loadData();
+    })();
   }, []);
 
-  // 从 URL 参数读取 type，自动切换内容类型
+  // 从 URL 接收上游页面带入的参数
   useEffect(() => {
-    const typeParam = searchParams.get('type');
-    if (typeParam && contentTypes.some(t => t.id === typeParam)) {
-      setSelectedType(typeParam);
+    const params = receive(['text', 'topic', 'inspirationId', 'industry', 'style']);
+    if (params.text) setUserInput(params.text);
+    if (params.topic) {
+      // topic 可能是文案类型 id
+      if (COPYWRITING_TYPES.some(t => t.id === params.topic)) {
+        setSelectedType(params.topic);
+      }
     }
-  }, [searchParams]);
+    if (params.inspirationId) {
+      const ids = params.inspirationId.split(',').filter(Boolean);
+      setSelectedInspirations(new Set(ids));
+    }
+    if (params.industry && findIndustry(params.industry)) {
+      setSelectedIndustry(params.industry);
+    }
+    if (params.style && COPYWRITING_STYLES.some(s => s.id === params.style)) {
+      setSelectedStyle(params.style);
+    }
+  }, []);
+
+  // 应用上次设置
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('copywriting_last_settings');
+      if (saved) {
+        const last = JSON.parse(saved);
+        if (last.selectedType) setSelectedType(last.selectedType);
+        if (last.selectedStyle) setSelectedStyle(last.selectedStyle);
+        if (last.selectedIndustry) setSelectedIndustry(last.selectedIndustry);
+        if (typeof last.noAiMode === 'boolean') setNoAiMode(last.noAiMode);
+      }
+    } catch {}
+  }, []);
+
+  const toggleInspiration = (id: string | number) => {
+    const next = new Set(selectedInspirations);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedInspirations(next);
+  };
 
   const standardContent = standardContents[currentBatchIndex] || standardContents[0];
   const noAiContent = noAiContents[currentBatchIndex] || noAiContents[0];
   const currentContent = resultTab === "standard" ? standardContent : noAiContent;
 
-  // 切换灵感选择
-  const toggleInspiration = (id: string | number) => {
-    const newSelected = new Set(selectedInspirations);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
+  // 智能助手：把"素材 + 输入"提炼成核心信息
+  const handleRefine = async () => {
+    if (!userInput.trim() && selectedInspirations.size === 0) {
+      showToast('请先输入主题或选择素材', 'error');
+      return;
     }
-    setSelectedInspirations(newSelected);
+    setIsRefining(true);
+    try {
+      const inspData = inspirations
+        .filter(i => selectedInspirations.has(i.id))
+        .map(i => ({ title: i.title, originalText: i.original_text, aiSummary: i.ai_summary }));
+
+      const res = await fetch('/api/ai/copywriting/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspirations: inspData, userInput }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRefinedMessage(data.data.refined);
+        showToast('已提炼核心信息', 'success');
+      } else {
+        showToast('提炼失败：' + (data.error || '未知错误'), 'error');
+      }
+    } catch (e) {
+      showToast('提炼失败，请稍后重试', 'error');
+    } finally {
+      setIsRefining(false);
+    }
   };
 
+  // 保存最近设置
   const saveLastSettings = () => {
     try {
       localStorage.setItem('copywriting_last_settings', JSON.stringify({
         selectedType,
         selectedStyle,
+        selectedIndustry,
         noAiMode,
       }));
     } catch {}
@@ -160,33 +229,48 @@ function AICopywritingContent() {
     setIsLoading(true);
     saveLastSettings();
     try {
-      // 收集选中的灵感内容
       const selectedData = inspirations
-          .filter(item => selectedInspirations.has(item.id))
-          .map(item => ({
-            title: item.title,
-            originalText: item.original_text || '',
-            aiSummary: item.ai_summary || '',
-          }));
+        .filter(item => selectedInspirations.has(item.id))
+        .map(item => ({
+          title: item.title,
+          originalText: item.original_text || '',
+          aiSummary: item.ai_summary || '',
+        }));
 
-      if (selectedData.length === 0) {
-        // 没有选择素材时，传一个占位
-        selectedData.push({ title: '通用内容创作', originalText: '用户未选择特定素材，请生成通用参考内容', aiSummary: '' });
+      if (selectedData.length === 0 && !userInput.trim() && !refinedMessage) {
+        selectedData.push({ title: '通用内容创作', originalText: '用户未提供具体素材', aiSummary: '' });
       }
 
+      const finalInstruction = refinedMessage || userInput.trim() || undefined;
       const batchN = batchMode ? 3 : 1;
-      // 并行请求标准版和去AI味版
+
       const [standardRes, noAiRes] = await Promise.all([
         fetch('/api/ai/copywriting', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: false, n: batchN }),
+          body: JSON.stringify({
+            inspirations: selectedData,
+            type: selectedType,
+            style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle,
+            noAiTaste: false,
+            n: batchN,
+            industry: selectedIndustry,
+            userInstruction: finalInstruction,
+          }),
         }),
         noAiMode
           ? fetch('/api/ai/copywriting', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ inspirations: selectedData, type: selectedType, style: selectedStyle, noAiTaste: true, n: batchN }),
+              body: JSON.stringify({
+                inspirations: selectedData,
+                type: selectedType,
+                style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle,
+                noAiTaste: true,
+                n: batchN,
+                industry: selectedIndustry,
+                userInstruction: finalInstruction,
+              }),
             })
           : null,
       ]);
@@ -204,7 +288,6 @@ function AICopywritingContent() {
         setNoAiContents(Array.isArray(standardResult) ? standardResult : [standardResult]);
       }
 
-      // 重置改写
       setRewriteContents({});
 
       // 自动保存到灵感库
@@ -218,7 +301,7 @@ function AICopywritingContent() {
             title: content.substring(0, 50),
             original_text: content,
             source_platform: 'ai',
-            tags: ['AI作品', selectedType === 'xiaohongshu' ? '小红书' : selectedType === 'wechat' ? '公众号' : '文案'],
+            tags: ['AI作品', selectedType === 'xiaohongshu' ? '小红书' : selectedType === 'wechat_article' ? '公众号' : '文案'],
           }),
         }).catch(() => {});
       }
@@ -261,17 +344,12 @@ function AICopywritingContent() {
     }
   };
 
-  const handleRegenerate = () => {
-    handleGenerate();
-  };
+  const handleRegenerate = () => handleGenerate();
 
   const handleShare = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'AI 生成的文案',
-          text: currentContent,
-        });
+        await navigator.share({ title: 'AI 生成的文案', text: currentContent });
       } else {
         await handleCopy();
         showToast('链接已复制到剪贴板！', 'success');
@@ -279,6 +357,25 @@ function AICopywritingContent() {
     } catch (error) {
       console.error('Share failed:', error);
     }
+  };
+
+  // 跳到 AI 生图，带上 prompt + 行业
+  const handleImportToImage = () => {
+    handoff('/ai/image', {
+      prompt: currentContent.slice(0, 300),
+      topic: selectedType,
+      industry: selectedIndustry,
+      style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label,
+    });
+  };
+
+  // 跳到 AI 视频
+  const handleImportToVideo = () => {
+    handoff('/ai/video', {
+      text: currentContent.slice(0, 300),
+      topic: selectedType,
+      style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label,
+    });
   };
 
   const handleNavigate = (page: PageKey) => {
@@ -293,13 +390,21 @@ function AICopywritingContent() {
   };
 
   const currentSelectedCount = selectedInspirations.size;
+  const currentIndustry = findIndustry(selectedIndustry);
+
+  // 按 category 分组文风
+  const stylesByCategory = COPYWRITING_STYLES.reduce<Record<string, typeof COPYWRITING_STYLES>>((acc, s) => {
+    if (!acc[s.category]) acc[s.category] = [];
+    acc[s.category].push(s);
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 文案创作" showBack onBack={() => router.back()} />
 
       <div className="flex-1 px-4 pt-4 space-y-4">
-        {/* Quick Settings */}
+        {/* 快捷设置 */}
         <GlassCard className="!p-3">
           <button
             className="flex items-center justify-between w-full"
@@ -309,142 +414,230 @@ function AICopywritingContent() {
             {settingsOpen ? <ChevronUp size={16} color="#9CA3AF" /> : <ChevronDown size={16} color="#9CA3AF" />}
           </button>
           {settingsOpen && (
-            <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              <button
-                onClick={() => {
-                  try {
-                    const saved = localStorage.getItem('copywriting_last_settings');
-                    if (saved) {
-                      const { selectedType: lastType, selectedStyle: lastStyle, noAiMode: lastNoAi } = JSON.parse(saved);
-                      if (lastType) setSelectedType(lastType);
-                      if (lastStyle) setSelectedStyle(lastStyle);
-                      if (typeof lastNoAi === 'boolean') setNoAiMode(lastNoAi);
-                    }
-                  } catch {}
-                }}
-                className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD", border: "1px solid rgba(59,130,246,0.3)" }}>
-                应用上次设置
-              </button>
+            <div className="mt-3 pt-3 flex flex-wrap gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <span style={{ color: "#6B7280", fontSize: 11, lineHeight: '28px' }}>
+                上次：{findIndustry(JSON.parse(localStorage.getItem('copywriting_last_settings') || '{}')?.selectedIndustry || 'general')?.name}
+                {' · '}
+                {COPYWRITING_TYPES.find(t => t.id === (JSON.parse(localStorage.getItem('copywriting_last_settings') || '{}')?.selectedType || 'xiaohongshu'))?.label}
+              </span>
             </div>
           )}
         </GlassCard>
 
-        {/* Step 1: 从灵感库选材 */}
+        {/* Step 1: 选材 + 输入 + 智能助手 */}
         <GlassCard>
           <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            <span style={{ color: "#3B82F6" }}>Step 1</span> · 从灵感库选材
+            <span style={{ color: "#3B82F6" }}>Step 1</span> · 选材与意图
           </p>
-          <div
-            className="space-y-2 overflow-y-auto custom-scrollbar"
-            style={{ maxHeight: 232 }}
-          >
-            {inspirations.length > 0 ? (
-              inspirations.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
-                  onClick={() => toggleInspiration(item.id)}
-                  style={{
-                    background: selectedInspirations.has(item.id) ? "rgba(59,130,246,0.1)" : "rgba(255,255,255,0.05)",
-                    border: selectedInspirations.has(item.id) ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.1)",
-                  }}
-                >
+
+          {/* 1a. 灵感库多选 */}
+          <div className="mb-3">
+            <p style={{ color: "#9CA3AF", fontSize: 11, marginBottom: 6 }}>
+              📚 灵感库多选（{currentSelectedCount} / {inspirations.length}）
+            </p>
+            <div
+              className="space-y-2 overflow-y-auto custom-scrollbar"
+              style={{ maxHeight: 180 }}
+            >
+              {inspirations.length > 0 ? (
+                inspirations.map((item) => (
                   <div
-                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                    key={item.id}
+                    className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer"
+                    onClick={() => toggleInspiration(item.id)}
                     style={{
-                      background: selectedInspirations.has(item.id) ? "#3B82F6" : "transparent",
-                      border: selectedInspirations.has(item.id) ? "none" : "1px solid rgba(255,255,255,0.3)",
-                      fontSize: 10, color: "#fff"
+                      background: selectedInspirations.has(item.id) ? "rgba(59,130,246,0.1)" : "rgba(255,255,255,0.05)",
+                      border: selectedInspirations.has(item.id) ? "1px solid rgba(59,130,246,0.4)" : "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
-                    {selectedInspirations.has(item.id) ? "✓" : ""}
+                    <div
+                      className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 text-white"
+                      style={{
+                        background: selectedInspirations.has(item.id) ? "#3B82F6" : "transparent",
+                        border: selectedInspirations.has(item.id) ? "none" : "1px solid rgba(255,255,255,0.3)",
+                        fontSize: 9,
+                      }}
+                    >
+                      {selectedInspirations.has(item.id) ? "✓" : ""}
+                    </div>
+                    <span style={{ fontSize: 16 }}>{typeEmojis[item.type || "text"]}</span>
+                    <span style={{ color: "#E5E7EB", fontSize: 12 }} className="truncate flex-1">
+                      {item.title || item.ai_summary || item.original_text?.substring(0, 30) || "未命名灵感"}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 20 }}>{typeEmojis[item.type || "text"]}</span>
-                  <span style={{ color: "#E5E7EB", fontSize: 13 }} className="truncate">
-                    {item.title || item.ai_summary || item.original_text?.substring(0, 30) || "未命名灵感"}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="p-4 text-center" style={{ color: "#9CA3AF" }}>
-                <p>暂无灵感数据</p>
-                <p style={{ fontSize: 12, marginTop: 4 }}>去灵感库添加一些灵感吧</p>
-              </div>
-            )}
+                ))
+              ) : (
+                <p style={{ color: "#6B7280", fontSize: 11, textAlign: 'center', padding: 8 }}>暂无灵感数据</p>
+              )}
+            </div>
           </div>
-          <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 8 }}>
-            已选 {currentSelectedCount} 个 · 为您推荐最近 {inspirations.length} 个灵感
-          </p>
+
+          {/* 1b. 用户输入框 */}
+          <div className="mb-3">
+            <p style={{ color: "#9CA3AF", fontSize: 11, marginBottom: 6 }}>
+              ✏️ 自由输入（主题/补充信息）
+            </p>
+            <textarea
+              ref={userInputRef}
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              placeholder="例：写一篇面向 25-30 岁职场女性的抗老精华推荐..."
+              className="w-full p-3 rounded-lg text-sm resize-none custom-scrollbar"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#E5E7EB",
+                minHeight: 60,
+                maxHeight: 200,
+              }}
+            />
+          </div>
+
+          {/* 1c. 智能助手按钮 */}
+          <button
+            onClick={handleRefine}
+            disabled={isRefining}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium"
+            style={{
+              background: 'linear-gradient(135deg, rgba(139,92,246,0.25), rgba(59,130,246,0.2))',
+              border: '1px solid rgba(139,92,246,0.4)',
+              color: '#C4B5FD',
+            }}
+          >
+            {isRefining ? (
+              <><div className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> 提炼中...</>
+            ) : (
+              <><Wand2 size={14} /> 智能助手：把素材+输入提炼成核心信息</>
+            )}
+          </button>
+
+          {refinedMessage && (
+            <div
+              className="mt-3 p-3 rounded-lg"
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <p style={{ color: "#A78BFA", fontSize: 11, fontWeight: 600 }}>✨ 已提炼的核心信息</p>
+                <button onClick={() => setRefinedMessage('')} className="text-gray-500">
+                  <X size={12} />
+                </button>
+              </div>
+              <p style={{ color: "#E5E7EB", fontSize: 12, lineHeight: 1.6 }}>{refinedMessage}</p>
+            </div>
+          )}
         </GlassCard>
 
-        {/* Step 2: Content Type */}
+        {/* Step 2: 内容类型 */}
         <GlassCard>
           <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            <span style={{ color: "#3B82F6" }}>Step 2</span> · 选择内容类型
+            <span style={{ color: "#3B82F6" }}>Step 2</span> · 平台与内容类型
           </p>
-          <div className="grid grid-cols-3 gap-2">
-            {contentTypes.map(({ id, label, emoji }) => (
+          <div className="grid grid-cols-4 gap-2">
+            {COPYWRITING_TYPES.map(({ id, label, emoji, scenario }) => (
               <button
                 key={id}
                 onClick={() => setSelectedType(id)}
-                className="flex flex-col items-center gap-2 py-3 rounded-xl transition-all"
+                className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg transition-all"
                 style={{
                   background: selectedType === id ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
                   border: selectedType === id ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.1)",
                 }}
+                title={scenario}
               >
-                <span style={{ fontSize: 22 }}>{emoji}</span>
-                <span style={{ color: selectedType === id ? "#93C5FD" : "#9CA3AF", fontSize: 11, fontWeight: selectedType === id ? 600 : 400 }}>{label}</span>
+                <span style={{ fontSize: 18 }}>{emoji}</span>
+                <span style={{ color: selectedType === id ? "#93C5FD" : "#9CA3AF", fontSize: 10, fontWeight: selectedType === id ? 600 : 400, textAlign: 'center', lineHeight: 1.2 }}>
+                  {label}
+                </span>
               </button>
             ))}
           </div>
         </GlassCard>
 
-        {/* Step 3: Writing Style */}
+        {/* Step 3: 文风 */}
         <GlassCard>
-          <div className="flex items-center justify-between mb-3">
-            <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}>
-              <span style={{ color: "#3B82F6" }}>Step 3</span> · 选择文风
-            </p>
-            <span style={{ color: "#9CA3AF", fontSize: 11 }}>您最常用：{selectedStyle}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {styles.map((s) => (
+          <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
+            <span style={{ color: "#3B82F6" }}>Step 3</span> · 文风
+          </p>
+          {Object.entries(stylesByCategory).map(([cat, styles]) => (
+            <div key={cat} className="mb-3 last:mb-0">
+              <p style={{ color: "#6B7280", fontSize: 11, marginBottom: 6 }}>{STYLE_CATEGORY_LABELS[cat] || cat}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {styles.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedStyle(s.id)}
+                    className="px-2.5 py-1 rounded-md text-xs transition-all"
+                    style={{
+                      background: selectedStyle === s.id ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
+                      border: selectedStyle === s.id ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                      color: selectedStyle === s.id ? "#93C5FD" : "#9CA3AF",
+                    }}
+                    title={s.hint}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </GlassCard>
+
+        {/* Step 4: 行业 */}
+        <GlassCard>
+          <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
+            <span style={{ color: "#3B82F6" }}>Step 4</span> · 行业
+          </p>
+          <div className="grid grid-cols-5 gap-2">
+            {COPYWRITING_INDUSTRIES.map((ind) => (
               <button
-                key={s}
-                onClick={() => setSelectedStyle(s)}
-                className="px-3 py-1.5 rounded-lg text-xs transition-all"
+                key={ind.id}
+                onClick={() => setSelectedIndustry(ind.id)}
+                className="flex flex-col items-center gap-1 py-2.5 rounded-lg transition-all"
                 style={{
-                  background: selectedStyle === s ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.07)",
-                  border: selectedStyle === s ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.12)",
-                  color: selectedStyle === s ? "#93C5FD" : "#9CA3AF",
+                  background: selectedIndustry === ind.id ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
+                  border: selectedIndustry === ind.id ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.1)",
                 }}
+                title={ind.audience}
               >
-                {s}
+                <span style={{ fontSize: 18 }}>{ind.emoji}</span>
+                <span style={{ color: selectedIndustry === ind.id ? "#93C5FD" : "#9CA3AF", fontSize: 11, fontWeight: selectedIndustry === ind.id ? 600 : 400 }}>{ind.name}</span>
               </button>
             ))}
           </div>
+
+          {/* 行业模板预览（折叠） */}
+          {currentIndustry && currentIndustry.id !== 'general' && (
+            <details className="mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+              <summary style={{ color: '#9CA3AF', fontSize: 11, cursor: 'pointer', listStyle: 'none' }}>
+                🔍 查看该行业的 AI 写作模板
+              </summary>
+              <div className="mt-2 p-2.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <p style={{ color: '#93C5FD', fontSize: 11, lineHeight: 1.7 }}>
+                  <strong>受众：</strong>{currentIndustry.audience}<br />
+                  <strong>必含：</strong>{currentIndustry.mustInclude}<br />
+                  <strong>避坑：</strong>{currentIndustry.avoidList}<br />
+                  <strong>开头：</strong>{currentIndustry.opener}<br />
+                  <strong>CTA：</strong>{currentIndustry.cta}<br />
+                  <strong>长度：</strong>{currentIndustry.recLength}
+                </p>
+              </div>
+            </details>
+          )}
         </GlassCard>
 
-        {/* Generate */}
+        {/* 开关 + 生成按钮 */}
         <GlassCard className="!p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex flex-col gap-1">
               <span style={{ color: "#E5E7EB", fontSize: 14 }}>去 AI 味</span>
-              <span style={{ color: "#9CA3AF", fontSize: 11 }}>让文案更像真人写的，减少AI痕迹</span>
+              <span style={{ color: "#9CA3AF", fontSize: 11 }}>让文案更像真人写的</span>
             </div>
             <button
               onClick={() => setNoAiMode(!noAiMode)}
-              className="w-10 h-6 rounded-full transition-all"
-              style={{
-                background: noAiMode ? "#3B82F6" : "rgba(255,255,255,0.2)",
-                position: "relative",
-              }}
+              className="w-10 h-6 rounded-full transition-all relative"
+              style={{ background: noAiMode ? "#3B82F6" : "rgba(255,255,255,0.2)" }}
             >
-              <div
-                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
-                style={{ left: noAiMode ? "calc(100% - 22px)" : 2 }}
-              />
+              <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: noAiMode ? "calc(100% - 22px)" : 2 }} />
             </button>
           </div>
           <div className="flex items-center justify-between mb-4">
@@ -452,20 +645,14 @@ function AICopywritingContent() {
               <span className="flex items-center gap-1.5" style={{ color: "#E5E7EB", fontSize: 14 }}>
                 <Layers size={14} color="#F59E0B" /> 批量生成
               </span>
-              <span style={{ color: "#9CA3AF", fontSize: 11 }}>同时生成 3 个不同角度的版本</span>
+              <span style={{ color: "#9CA3AF", fontSize: 11 }}>同时生成 3 个不同角度版本</span>
             </div>
             <button
               onClick={() => setBatchMode(!batchMode)}
-              className="w-10 h-6 rounded-full transition-all"
-              style={{
-                background: batchMode ? "#F59E0B" : "rgba(255,255,255,0.2)",
-                position: "relative",
-              }}
+              className="w-10 h-6 rounded-full transition-all relative"
+              style={{ background: batchMode ? "#F59E0B" : "rgba(255,255,255,0.2)" }}
             >
-              <div
-                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
-                style={{ left: batchMode ? "calc(100% - 22px)" : 2 }}
-              />
+              <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: batchMode ? "calc(100% - 22px)" : 2 }} />
             </button>
           </div>
           <PrimaryButton fullWidth size="lg" onClick={handleGenerate}>
@@ -473,7 +660,7 @@ function AICopywritingContent() {
           </PrimaryButton>
         </GlassCard>
 
-        {/* Results */}
+        {/* 生成结果 */}
         {(isLoading || isGenerated) && (
           <GlassCard>
             {isLoading ? (
@@ -483,7 +670,6 @@ function AICopywritingContent() {
               </div>
             ) : (
               <>
-                {/* Batch version picker */}
                 {standardContents.length > 1 && (
                   <div className="flex gap-1.5 mb-3 overflow-x-auto">
                     {standardContents.map((_, i) => (
@@ -524,27 +710,53 @@ function AICopywritingContent() {
                 >
                   <FormattedText text={currentContent} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { icon: copied ? <Check size={15} /> : <Copy size={15} />, label: copied ? "已复制" : "复制", action: handleCopy, highlight: false },
-                    { icon: <RefreshCw size={15} />, label: "重新生成", action: handleRegenerate, highlight: false },
-                    { icon: <Share2 size={15} />, label: "分享", action: handleShare, highlight: false },
-                    { icon: selectedType === "script" ? <VideoIcon size={15} /> : <ImageIcon size={15} />, label: selectedType === "script" ? "AI生视频" : "AI生图", action: () => router.push(selectedType === "script" ? '/ai/video' : '/ai/image'), highlight: true },
-                  ].map(({ icon, label, action, highlight }, index) => (
-                    <button
-                      key={index}
-                      onClick={action}
-                      className="flex flex-col items-center gap-1 py-2 rounded-xl text-xs transition-all active:scale-95"
-                      style={{
-                        background: highlight ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(59,130,246,0.2))" : "rgba(255,255,255,0.07)",
-                        border: highlight ? "1px solid rgba(139,92,246,0.5)" : "1px solid rgba(255,255,255,0.12)",
-                        color: highlight ? "#C4B5FD" : "#E5E7EB"
-                      }}
-                    >
-                      <span style={{ color: highlight ? "#A78BFA" : "#3B82F6" }}>{icon}</span>
-                      {label}
-                    </button>
-                  ))}
+
+                {/* 6 个操作按钮 */}
+                <div className="grid grid-cols-3 gap-2">
+                  <ActionButton
+                    icon={copied ? <Check size={15} /> : <Copy size={15} />}
+                    label={copied ? "已复制" : "复制"}
+                    onClick={handleCopy}
+                  />
+                  <ActionButton
+                    icon={<RefreshCw size={15} />}
+                    label="重新生成"
+                    onClick={handleRegenerate}
+                  />
+                  <ActionButton
+                    icon={<Share2 size={15} />}
+                    label="分享"
+                    onClick={handleShare}
+                  />
+                  <ActionButton
+                    icon={<ImageIcon size={15} />}
+                    label="导入 AI 生图"
+                    onClick={handleImportToImage}
+                    highlight
+                  />
+                  <ActionButton
+                    icon={<VideoIcon size={15} />}
+                    label="导入 AI 视频"
+                    onClick={handleImportToVideo}
+                    highlight
+                  />
+                  <ActionButton
+                    icon={<FileText size={15} />}
+                    label="存为灵感"
+                    onClick={() => {
+                      fetch('/api/inspiration', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          type: 'text',
+                          title: currentContent.substring(0, 50),
+                          original_text: currentContent,
+                          source_platform: 'ai',
+                          tags: ['AI作品'],
+                        }),
+                      }).then(() => showToast('已存为灵感', 'success')).catch(() => showToast('保存失败', 'error'));
+                    }}
+                  />
                 </div>
               </>
             )}
@@ -629,6 +841,24 @@ function AICopywritingContent() {
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
     </div>
+  );
+}
+
+// 操作按钮小组件
+function ActionButton({ icon, label, onClick, highlight }: { icon: React.ReactNode; label: string; onClick: () => void; highlight?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs transition-all active:scale-95"
+      style={{
+        background: highlight ? "linear-gradient(135deg, rgba(139,92,246,0.3), rgba(59,130,246,0.2))" : "rgba(255,255,255,0.07)",
+        border: highlight ? "1px solid rgba(139,92,246,0.5)" : "1px solid rgba(255,255,255,0.12)",
+        color: highlight ? "#C4B5FD" : "#E5E7EB",
+      }}
+    >
+      <span style={{ color: highlight ? "#A78BFA" : "#3B82F6" }}>{icon}</span>
+      {label}
+    </button>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Home, BookOpen, Sparkles, TrendingUp, User, Plus } from "lucide-react";
 
-export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "schedule" | "profile-help" | "schedule-detail";
+export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "ai-ads" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "schedule" | "profile-help" | "schedule-detail";
 
 interface BottomNavProps {
   activePage: PageKey;

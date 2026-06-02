@@ -7,6 +7,7 @@ import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
+import { ThumbnailPreview } from "@/components/ThumbnailPreview";
 import { useRouter } from "next/navigation";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useSchedules } from "@/hooks/use-schedule";
@@ -363,7 +364,13 @@ function HomeContent() {
                   className="!p-4"
                 >
                   <div className="flex items-start gap-3">
-                    <span style={{ fontSize: 28 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
+                    <ThumbnailPreview
+                      type={item.type}
+                      thumbnailUrl={item.thumbnail_url}
+                      mediaUrls={item.media_urls}
+                      voiceUrl={item.voice_url}
+                      size="md"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <GlassBadge color="primary">{TYPE_LABELS[item.type] || "灵感"}</GlassBadge>

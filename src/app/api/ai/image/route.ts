@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { generateImage, logAiUsage } from '@/lib/ai-services';
+import { findImagePreset, findImagePalette } from '@/lib/preset-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,14 +13,50 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { prompt, ratio, n } = await request.json();
+    const {
+      prompt,
+      ratio,
+      n,
+      presetId,
+      style,
+      paletteId,
+      seed,
+    } = await request.json();
 
     if (!prompt) {
       return createApiError('Prompt is required', 400);
     }
 
+    // 解析 preset/style/palette
+    const preset = presetId ? findImagePreset(presetId) : null;
+    const palette = paletteId ? findImagePalette(paletteId) : null;
+
+    const finalRatio = ratio || preset?.ratio || '1:1';
+    const finalStyle = style || preset?.style;
+    const finalPaletteName = palette?.name;
+
+    // 把 preset 的 promptHint 拼到 prompt 前面（让 AI 模型感知预设）
+    let finalPrompt = prompt;
+    if (preset) {
+      finalPrompt = `[${preset.label} | ${preset.ratio} | ${preset.style} | 模板: ${preset.promptHint}] ${finalPrompt}`;
+    }
+    if (finalStyle && finalStyle !== preset?.style) {
+      finalPrompt = `[风格: ${finalStyle}] ${finalPrompt}`;
+    }
+    if (finalPaletteName) {
+      finalPrompt += ` | 主色调: ${finalPaletteName}`;
+    }
+
     const count = Math.min(n || 1, 4);
-    const result = await generateImage(prompt, { ratio, n: count });
+    // 解析 seed：支持正整数，未传或无效则不传（保持随机）
+    let finalSeed: number | undefined;
+    if (seed !== undefined && seed !== null && seed !== '') {
+      const parsed = Number(seed);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        finalSeed = Math.floor(parsed);
+      }
+    }
+    const result = await generateImage(finalPrompt, { ratio: finalRatio, n: count, seed: finalSeed });
 
     // 记录AI使用
     await logAiUsage(user.id, 'image', 100 * count);
@@ -50,6 +87,10 @@ export async function POST(request: NextRequest) {
           source: 'ai_creation',
           generatedImage: { imageUrl: firstResult.imageUrl, prompt: firstResult.prompt, size: firstResult.size },
           batchImages: Array.isArray(result) ? result.map((r) => ({ imageUrl: r.imageUrl, size: r.size })) : undefined,
+          presetId: presetId || null,
+          style: finalStyle || null,
+          paletteId: paletteId || null,
+          seed: finalSeed ?? null,
         },
       });
     }

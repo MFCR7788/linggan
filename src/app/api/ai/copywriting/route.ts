@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { generateCopywriting, logAiUsage } from '@/lib/ai-services';
+import { findIndustry, renderIndustryInstruction, COPYWRITING_TYPES } from '@/lib/preset-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,22 +13,30 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { inspirations, type, style, noAiTaste, n } = await request.json();
+    const { inspirations, type, style, noAiTaste, n, industry, userInstruction } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations)) {
       return createApiError('Inspirations array is required', 400);
     }
 
     // 将类型ID转换为中文描述
-    const typeLabels: Record<string, string> = {
-      xiaohongshu: '小红书文案',
-      script: '短视频脚本',
-      wechat: '公众号文章',
-    };
-    const typeLabel = typeLabels[type] || type || '小红书文案';
+    const typeDef = COPYWRITING_TYPES.find(t => t.id === type);
+    const typeLabel = typeDef?.label || type || '小红书笔记';
     const count = Math.min(n || 1, 5);
 
-    const result = await generateCopywriting(inspirations, typeLabel, style || '小红书博主风', noAiTaste || false, count);
+    // 行业模板注入
+    const industryDef = industry ? findIndustry(industry) : undefined;
+    const industryInstruction = industryDef ? renderIndustryInstruction(industryDef) : undefined;
+
+    const result = await generateCopywriting(
+      inspirations,
+      typeLabel,
+      style || '种草安利',
+      noAiTaste || false,
+      count,
+      industryInstruction,
+      userInstruction
+    );
 
     // 记录AI使用
     await logAiUsage(user.id, 'copywriting', 1000 * count);
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest) {
           type: 'ai',
           content,
           content_type: 'text',
-          metadata: { source: 'ai_creation', copywritingType: type },
+          metadata: { source: 'ai_creation', copywritingType: type, industry: industry || null },
         });
       }
     }
@@ -64,6 +73,7 @@ export async function POST(request: NextRequest) {
       content: result,
       type,
       style,
+      industry: industry || null,
       isBatch: count > 1,
     }, 'Copywriting generated');
   } catch (error) {

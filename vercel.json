@@ -22,7 +22,28 @@
     "src/app/api/cron/cleanup-hotspots/route.ts": {
       "maxDuration": 60,
       "memory": 512
+    },
+    "src/app/api/platforms/metrics-fetch/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/platforms/scheduled-publish/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   },
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/jobs/claim",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/platforms/metrics-fetch",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/platforms/scheduled-publish",
+      "schedule": "* * * * *"
+    }
+  ]
 }

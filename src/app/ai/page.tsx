@@ -2,7 +2,7 @@
 
 
 import { useState } from "react";
-import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio } from "lucide-react";
+import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -24,6 +24,9 @@ const creationEntries = [
   { icon: <Mic size={32} />, title: "AI 数字人", desc: "AI写稿 · 一键成片 · 批量口播 · 多语言", color: "#06B6D4", page: "ai-digital-human" as PageKey },
   { icon: <Music size={32} />, title: "AI 配音", desc: "多音色文本转语音 · 男女声可选", color: "#22C55E", page: "ai-tts" as PageKey },
   { icon: <VideoIcon size={32} />, title: "AI 视频", desc: "短视频自动合成 · 分镜/字幕/BGM", color: "#F43F5E", page: "ai-video" as PageKey },
+  { icon: <Grid3x3 size={32} />, title: "朋友圈 9 宫格", desc: "产品+3-5卖点 → 9 张 1:1 封面 + 标题 ZIP", color: "#F59E0B", page: "ai-ads" as PageKey, badge: "新" },
+  { icon: <Send size={32} />, title: "多平台分发", desc: "公众号/微博自动发 + 4 平台复制引导", color: "#F43F5E", page: "ai" as PageKey, path: "/publish", badge: "新" },
+  { icon: <BarChart3 size={32} />, title: "效果数据", desc: "公众号/微博自动抓 + 其他平台手动录入", color: "#06B6D4", page: "ai" as PageKey, path: "/insights" },
 ];
 
 function AICreationContent() {
@@ -47,6 +50,7 @@ function AICreationContent() {
       case "ai-video": router.push("/ai/video"); break;
       case "ai-tts": router.push("/ai/tts"); break;
       case "ai-digital-human": router.push("/ai/digital-human"); break;
+      case "ai-ads": router.push("/ai/ads"); break;
       case "hotspot": router.push("/hotspot"); break;
       case "profile": router.push("/profile"); break;
       default: router.push("/home");
@@ -84,13 +88,24 @@ function AICreationContent() {
         <div>
           <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 10 }}>创作入口</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {creationEntries.map(({ icon, title, desc, color, page }) => (
+            {creationEntries.map(({ icon, title, desc, color, page, badge, path }) => (
               <GlassCard
                 key={title}
                 hover
-                onClick={() => handleNavigate(page)}
+                onClick={() => path ? router.push(path) : handleNavigate(page)}
                 className="!p-4 flex flex-col items-center text-center gap-2 relative overflow-hidden"
               >
+                {badge && (
+                  <span
+                    className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                    style={{
+                      background: 'linear-gradient(135deg, #F59E0B, #EF4444)',
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {badge}
+                  </span>
+                )}
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: color, opacity: 0.5 }} />
                 <span style={{ color, filter: `drop-shadow(0 0 12px ${color}66)`, fontSize: 32 }}>{icon}</span>
                 <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 700 }}>{title}</p>

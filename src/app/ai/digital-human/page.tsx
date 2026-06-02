@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Zap, ChevronLeft, ChevronRight, Play, Download, Save, RefreshCw,
   AlertCircle, Loader2, CheckCircle2, XCircle, Wand2,
@@ -16,6 +16,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { splitLongText } from '@/lib/text-utils';
+import { useContentHandoff } from '@/hooks/use-content-handoff';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ const BATCH_STATUS_LABELS: Record<BatchItem['status'], { text: string; color: st
 
 function DigitalHumanContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { receive } = useContentHandoff();
 
   // ─── 模式 ─────────────────────────────────────────────
   const [dhMode, setDhMode] = useState<DigitalHumanMode>('manual');
@@ -114,6 +117,23 @@ function DigitalHumanContent() {
   const [pitch, setPitch] = useState(1.0);
   const [isGeneratingTTS, setIsGeneratingTTS] = useState(false);
   const [ttsAudioBase64, setTtsAudioBase64] = useState<string | null>(null);
+
+  // ─── 接收 handoff URL 参数（从 AI 生图 / AI 配音 带入） ──
+  useEffect(() => {
+    const params = receive(['imageUrl', 'audioUrl', 'text', 'script']);
+    if (params.imageUrl) {
+      setImageUrl(params.imageUrl);
+      setImagePreview(params.imageUrl);
+      setImageTab('url');
+    }
+    if (params.audioUrl) {
+      setAudioUrl(params.audioUrl);
+      setAudioTab('upload');
+    }
+    if (params.text || params.script) {
+      setTtsText((params.text || params.script || '').slice(0, 1000));
+    }
+  }, []);
 
   // ─── AI 写稿 ──────────────────────────────────────────
   const [aiTopic, setAiTopic] = useState('');

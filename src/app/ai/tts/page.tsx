@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Music, Play, Download, FolderOpen, RefreshCw, Volume2, Clock, Mic, ChevronDown } from 'lucide-react';
+import { Music, Play, Download, FolderOpen, RefreshCw, Volume2, Clock, Mic, ChevronDown, User } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
+import { useContentHandoff } from '@/hooks/use-content-handoff';
 
 interface VoiceOption {
   key: string;
@@ -30,6 +31,8 @@ const typeEmojis: Record<string, string> = {
 
 function TTSPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { receive, handoff } = useContentHandoff();
 
   // 文本输入
   const [textMode, setTextMode] = useState<'manual' | 'inspiration'>('manual');
@@ -48,6 +51,25 @@ function TTSPageContent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // 接收 handoff URL 参数（从 AI 文案带入）
+  useEffect(() => {
+    const params = receive(['text', 'script']);
+    if (params.text || params.script) {
+      setText((params.text || params.script || '').slice(0, 1000));
+    }
+  }, []);
+
+  // 完成后跳到数字人
+  const handleImportToDigitalHuman = () => {
+    if (!audioBase64) {
+      setToast({ message: '请先生成音频', type: 'error' });
+      return;
+    }
+    // 数字人接收 audioUrl，但我们这里是 base64。
+    // 实际上传 base64 音频到 Supabase 略复杂，这里直接提示用户去数字人页用 base64 内容
+    handoff('/ai/digital-human', { audioUrl: 'tts-recent' });
+  };
 
   // 加载灵感
   useEffect(() => {
@@ -336,21 +358,46 @@ function TTSPageContent() {
                 src={`data:audio/mpeg;base64,${audioBase64}`}
               />
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <button onClick={handleDownload}
                   className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
                   style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#86EFAC' }}>
-                  <Download size={16} /> 下载 MP3
+                  <Download size={16} /> 下载
                 </button>
                 <button onClick={handleSave}
                   className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
                   style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}>
-                  <FolderOpen size={16} /> 保存作品
+                  <FolderOpen size={16} /> 保存
                 </button>
                 <button onClick={handleGenerate}
                   className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
                   style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
                   <RefreshCw size={16} /> 重新生成
+                </button>
+                <button
+                  onClick={async () => {
+                    // 把音频 base64 上传到 storage，然后跳到数字人
+                    try {
+                      setToast({ message: '正在准备音频...', type: 'success' });
+                      const bytes = Uint8Array.from(atob(audioBase64!), c => c.charCodeAt(0));
+                      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+                      const fd = new FormData();
+                      fd.append('file', blob, `tts-${Date.now()}.mp3`);
+                      const upRes = await fetch('/api/upload/inspiration', { method: 'POST', body: fd });
+                      const upData = await upRes.json();
+                      if (upData.success && upData.data?.url) {
+                        handoff('/ai/digital-human', { audioUrl: upData.data.url });
+                      } else {
+                        handoff('/ai/digital-human', {});
+                        setToast({ message: '已跳转，请在数字人页用"上传"选这个音频', type: 'success' });
+                      }
+                    } catch {
+                      handoff('/ai/digital-human', {});
+                    }
+                  }}
+                  className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
+                  style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.25), rgba(236,72,153,0.2))', border: '1px solid rgba(236,72,153,0.4)', color: '#FBCFE8' }}>
+                  <User size={16} /> 驱动数字人
                 </button>
               </div>
             </>

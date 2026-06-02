@@ -166,7 +166,7 @@ export interface AiTask {
   user_id: string;
   content_id?: string;
   task_type: string;
-  status: AnalysisStatus;
+  status: AiTaskStatus;
   input_tokens?: number;
   output_tokens?: number;
   input?: unknown;
@@ -174,6 +174,46 @@ export interface AiTask {
   error_message?: string;
   created_at: string;
   completed_at?: string;
+  // V2.0.1 新增字段
+  batch_id?: string;
+  parent_task_id?: string;
+  progress?: number;             // 0-100
+  scheduled_for?: string;
+  started_at?: string;
+  retry_count?: number;
+  max_retries?: number;
+  worker_id?: string;
+  priority?: number;             // 1-10
+  error_code?: string;
+  estimated_seconds?: number;
+}
+
+// 任务类型枚举
+export type AiTaskType =
+  | 'ai_summary'
+  | 'copywriting'
+  | 'image'
+  | 'image_batch'   // V2.0.1 批量生图
+  | 'video'
+  | 'digital_human'
+  | 'digital_human_batch'  // V2.0.2 批量数字人
+  | 'video_merge';
+
+// 任务状态（扩展 cancelled）
+export type AiTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+// 批次进度（前端聚合用）
+export interface BatchProgress {
+  batchId: string;
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  percent: number;              // 0-100
+  estimatedRemainingSeconds?: number;
+  tasks: AiTask[];
 }
 
 // 日程类型

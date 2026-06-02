@@ -1,0 +1,149 @@
+// 朋友圈广告 9 宫格 API (V2.0.1)
+// POST /api/ai/ads/grid
+// Body: { product: string, sellingPoints: string[], referenceImage?: string }
+// Response: { success, data: { cells: [{ imageUrl, title, prompt, sellingPointIndex }] } }
+
+import { withAuth } from '@/lib/api-handler';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { generateImage, callDeepSeek, logAiUsage } from '@/lib/ai-services';
+
+export const dynamic = 'force-dynamic';
+
+const GRID_SIZE = 9;
+const MAX_SELLING_POINTS = 5;
+const MIN_SELLING_POINTS = 3;
+const MAX_TITLE_LENGTH = 20;
+
+interface CellResult {
+  imageUrl: string;
+  title: string;
+  prompt: string;
+  sellingPointIndex: number;
+  visualAngle: string;
+}
+
+export const POST = withAuth(async ({ request, user }) => {
+  const body = await request.json();
+  const { product, sellingPoints, referenceImage } = body as {
+    product?: string;
+    sellingPoints?: string[];
+    referenceImage?: string;
+  };
+
+  // 校验
+  if (!product || typeof product !== 'string' || product.length > 100) {
+    return createApiError('product 必填, 不超过 100 字', 400);
+  }
+  if (!Array.isArray(sellingPoints) || sellingPoints.length < MIN_SELLING_POINTS || sellingPoints.length > MAX_SELLING_POINTS) {
+    return createApiError(`sellingPoints 必须是 ${MIN_SELLING_POINTS}-${MAX_SELLING_POINTS} 个`, 400);
+  }
+  for (const sp of sellingPoints) {
+    if (typeof sp !== 'string' || !sp.trim()) {
+      return createApiError('sellingPoints 每项不能为空', 400);
+    }
+  }
+
+  try {
+    // 1) DeepSeek 生成 9 个视觉角度 + 9 句标题
+    const anglesPrompt = `你是顶级电商广告创意总监。为产品「${product}」设计朋友圈广告 9 宫格素材。
+卖点列表: ${sellingPoints.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+要求:
+1. 生成 9 个不同的视觉角度（如: 痛点共鸣、场景代入、产品特写、对比、用户证言、节日情感、品牌调性、生活方式、限时紧迫）
+2. 每个角度配一句 20 字内的朋友圈广告标题（带 emoji）
+3. 每个角度配一段 30-80 字的"生图 prompt 描述"（中文,直接给 AI 生图模型用）
+4. 9 个角度尽量分散,避免重复
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "痛点共鸣", "title": "标题含 emoji", "prompt": "生图描述" }
+  ]
+}
+
+JSON:`;
+
+    const llmResult = await callDeepSeek(anglesPrompt, { temperature: 0.9 });
+    if (!llmResult) {
+      return createApiError('生成角度失败', 500);
+    }
+
+    // 解析 LLM 返回的 JSON
+    const jsonMatch = llmResult.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[ads/grid] LLM 返回无法解析:', llmResult.substring(0, 200));
+      return createApiError('AI 返回格式错误', 500);
+    }
+    let parsed: { cells?: Array<{ visualAngle: string; title: string; prompt: string }> };
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      return createApiError('AI 返回 JSON 解析失败', 500);
+    }
+    const cells = parsed.cells || [];
+    if (cells.length !== GRID_SIZE) {
+      return createApiError(`AI 返回 ${cells.length} 个角度, 需要 ${GRID_SIZE} 个`, 500);
+    }
+
+    // 2) 校验每条 title 长度
+    for (const c of cells) {
+      if (!c.title || c.title.length > MAX_TITLE_LENGTH) {
+        c.title = (c.title || '朋友圈广告').substring(0, MAX_TITLE_LENGTH);
+      }
+      if (!c.prompt) c.prompt = `${product}, ${c.visualAngle || ''}`;
+    }
+
+    // 3) 并发调 generateImage 9 次
+    const imageResults = await Promise.allSettled(
+      cells.map((c) =>
+        generateImage(c.prompt, {
+          ratio: '1:1',
+          n: 1,
+        }).then((r: any) => (Array.isArray(r) ? r[0] : r))
+      )
+    );
+
+    // 4) 拼装返回
+    const finalCells: CellResult[] = cells.map((c, i) => {
+      const r = imageResults[i];
+      if (r.status === 'fulfilled' && r.value?.imageUrl) {
+        return {
+          imageUrl: r.value.imageUrl,
+          title: c.title,
+          prompt: c.prompt,
+          sellingPointIndex: i % sellingPoints.length,
+          visualAngle: c.visualAngle,
+        };
+      }
+      return {
+        imageUrl: '',
+        title: c.title,
+        prompt: c.prompt,
+        sellingPointIndex: i % sellingPoints.length,
+        visualAngle: c.visualAngle,
+      };
+    });
+
+    // 5) 记录 AI 用量（按 9 张计）
+    const successCount = finalCells.filter((c) => c.imageUrl).length;
+    try {
+      await logAiUsage(user.id, 'image', 100 * successCount);
+    } catch (e: any) {
+      console.warn('[ads/grid] logAiUsage 失败:', e.message);
+    }
+
+    return createApiResponse(
+      {
+        product,
+        sellingPoints,
+        cells: finalCells,
+        successCount,
+        failedCount: GRID_SIZE - successCount,
+      },
+      `已生成 ${successCount}/${GRID_SIZE} 张封面`
+    );
+  } catch (e: any) {
+    console.error('[ads/grid] 失败:', e);
+    return createApiError(e.message || '生成失败', 500);
+  }
+});

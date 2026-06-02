@@ -80,6 +80,16 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  public async patch<T>(
+    endpoint: string,
+    data?: unknown
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: "PATCH",
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

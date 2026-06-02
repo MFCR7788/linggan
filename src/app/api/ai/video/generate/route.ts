@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { storyboard, inspirations, qualityTier } = await request.json();
+    const { storyboard, inspirations, qualityTier, firstFrameUrl, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
     const tier = qualityTier || 'standard';
 
     if (!storyboard || !Array.isArray(storyboard) || storyboard.length === 0) {
@@ -39,9 +39,15 @@ export async function POST(request: NextRequest) {
     const segments = await Promise.all(
       (storyboard as StoryboardScene[]).map(async (scene, i) => {
         const insp = inspirations?.[i];
-        const imageUrl = (insp?.type === 'image' && insp?.media_urls?.[0])
-          ? insp.media_urls[0]
-          : undefined;
+        // 优先：i==0 用 firstFrameUrl（首帧一致），i>0 用对应素材图，否则用 firstFrameUrl 作为延续
+        let imageUrl: string | undefined;
+        if (i === 0 && firstFrameUrl) {
+          imageUrl = firstFrameUrl;
+        } else if (insp?.type === 'image' && insp?.media_urls?.[0]) {
+          imageUrl = insp.media_urls[0];
+        } else if (firstFrameUrl) {
+          imageUrl = firstFrameUrl;
+        }
 
         const duration = Math.min(Math.max(scene.duration, 3), 10);
         const modelConfig = imageUrl ? qt.i2v : qt.t2v;

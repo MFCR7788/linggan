@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { inspirations, stylePreset, duration, topic, language } = await request.json();
+    const { inspirations, stylePreset, duration, topic, language, firstFrameUrl } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations) || inspirations.length === 0) {
       return createApiError('请选择至少一个素材', 400);
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       duration: totalDuration,
       topic: topic?.trim() || undefined,
       language: language || 'zh',
+      firstFrameUrl: firstFrameUrl || undefined,
     });
 
     const preset = STYLE_PRESETS[stylePreset];
