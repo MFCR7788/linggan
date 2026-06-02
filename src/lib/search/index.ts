@@ -78,7 +78,7 @@ export function deduplicateResults(allResults: SearchResult[]): SearchResult[] {
 }
 
 // 新鲜度过滤
-const MAX_AGE_HOURS = 3 * 24;
+const MAX_AGE_HOURS = 7 * 24;
 export function filterByFreshness(results: SearchResult[]): SearchResult[] {
   const cutoff = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000);
   return results.filter(item => {

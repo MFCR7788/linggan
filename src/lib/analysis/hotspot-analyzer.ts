@@ -302,7 +302,7 @@ export async function summarizeHotspot(
     const prompt = `你是热点内容分析专家。请对以下关于【${keyword}】的热点内容进行总结归纳。
 
 要求：
-1. 用 2-4 句话概括核心内容
+1. **字数控制在 100 字左右**（90-110 字之间）
 2. 提炼关键数据和观点
 3. 说明此内容与【${keyword}】的关联
 4. 语言简洁有力，适合快速阅读
@@ -312,8 +312,8 @@ export async function summarizeHotspot(
 原文内容：
 ${fullContent.slice(0, 2500)}`;
 
-    const result = await callDeepSeek(prompt, { temperature: 0.3, maxTokens: 400 });
-    return result.trim().slice(0, 300);
+    const result = await callDeepSeek(prompt, { temperature: 0.3, maxTokens: 200 });
+    return result.trim().slice(0, 100);
   } catch (error) {
     console.error('summarizeHotspot error:', error instanceof Error ? error.message : error);
     // 回退：取原文前 100 字
