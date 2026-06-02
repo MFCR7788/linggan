@@ -4,7 +4,7 @@ import {
   searchSogou, searchBilibili, searchWeibo, searchBaiduHot, searchDouyinHot, searchZhihuHot, searchToutiaoHot,
   fetchWeiboHotList, fetchZhihuHotList, fetchBaiduHotList, fetchDouyinHotList, fetchToutiaoHotList,
 } from '../search/china-search';
-import { expandKeyword, analyzeContent, preMatchKeyword, matchHotListAgainstKeywords, fetchPageContent, summarizeHotspot } from '../analysis/hotspot-analyzer';
+import { expandKeyword, matchHotListAgainstKeywords, fetchPageContent, batchAnalyze } from '../analysis/hotspot-analyzer';
 import { deduplicateResults, filterByFreshness, prioritizeResults, normalizeUrlForDedup } from '../search';
 import { SearchResult, HotListItem } from '../search/types';
 
@@ -224,105 +224,102 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
         const sortedResults = prioritizeResults(freshResults);
         console.log(`  Total: ${allResults.length} raw → ${uniqueResults.length} unique → ${freshResults.length} fresh`);
 
-        let processedCount = 0;
+        // ====== 四阶段流水线（节省 token：批量 fetch + 一次 AI 出全部字段） ======
+        type Candidate = { item: any; existsGlobally: boolean };
 
+        // 阶段 1：扫描 + 全局去重（已有项目不计 OTHER_QUOTA）
+        const candidates: Candidate[] = [];
+        let processedCount = 0;
         for (const item of sortedResults) {
           if (processedCount >= OTHER_QUOTA) break;
-
           try {
-            // ---- 检查是否已被任何用户收录（全局去重） ----
             const existsGlobally = await findExistingHotspot(item);
+            candidates.push({ item, existsGlobally });
+            if (!existsGlobally) processedCount++;
+          } catch (e) {
+            console.error('  Pre-check error:', e);
+          }
+        }
 
-            let analysis: any;
-            if (existsGlobally) {
-              // 热点已存在过，不需要重新 AI 分析，直接复用基本信息
-              analysis = {
-                isReal: true,
-                relevance: 75,
-                relevanceReason: '已收录热点',
-                importance: 'medium',
-                summary: item.content.slice(0, 100),
-                fullContent: item.content,
-              };
-              console.log(`  Reusing existing: ${item.title.slice(0, 30)}...`);
-            } else {
-              // ---- 第一步：AI 相关性判定（用简短片段，速度快） ----
-              const shortText = item.title + '\n' + item.content;
-              const preMatch = preMatchKeyword(shortText, expandedKeywords);
-              const aiResult = await analyzeContent(shortText, keyword, preMatch);
-              if (!aiResult.isReal) {
-                console.log(`  Filtered fake/spam: ${item.title.slice(0, 30)}...`);
-                continue;
-              }
-              if (aiResult.relevance < 50) {
-                console.log(`  Low relevance (${aiResult.relevance}): ${item.title.slice(0, 30)}...`);
-                continue;
-              }
+        // 阶段 2：批量抓取全文（已存在的跳过抓取）
+        const fullContents = await Promise.allSettled(
+          candidates.map((c) =>
+            c.existsGlobally ? Promise.resolve('') : fetchPageContent(c.item.url, c.item.source)
+          )
+        );
 
-              // ---- 第二步：抓取原文 + AI 总结摘要 ----
-              let fullContent = '';
-              let aiSummary = aiResult.summary; // 默认用相关性简述
+        // 阶段 3：批量 AI 分析（一次输出 6 字段 + 100 字 summary）
+        const aiInputs = candidates.map((c, i) => ({
+          shortText: c.item.title + '\n' + c.item.content,
+          fullContent: c.existsGlobally
+            ? null
+            : fullContents[i].status === 'fulfilled'
+              ? fullContents[i].value
+              : '',
+        }));
+        const aiResults = await batchAnalyze(aiInputs, keyword, expandedKeywords);
 
-              try {
-                fullContent = await fetchPageContent(item.url, item.source);
-                if (fullContent && fullContent.length > 50) {
-                  aiSummary = await summarizeHotspot(fullContent, item.title, keyword);
-                  console.log(`  Summarized: ${aiSummary.slice(0, 40)}...`);
-                }
-              } catch (fetchErr) {
-                console.warn(`  Fetch content failed for ${item.url}:`, fetchErr);
-              }
+        // 阶段 4：过滤 + 分发插入
+        for (let i = 0; i < candidates.length; i++) {
+          const { item, existsGlobally } = candidates[i];
+          let analysis: any;
+          if (existsGlobally) {
+            analysis = {
+              isReal: true,
+              relevance: 75,
+              relevanceReason: '已收录热点',
+              importance: 'medium',
+              summary: item.content.slice(0, 100),
+              fullContent: item.content,
+            };
+            console.log(`  Reusing existing: ${item.title.slice(0, 30)}...`);
+          } else {
+            const aiResult = aiResults[i];
+            if (!aiResult.isReal) {
+              console.log(`  Filtered fake/spam: ${item.title.slice(0, 30)}...`);
+              continue;
+            }
+            if (aiResult.relevance < 50) {
+              console.log(`  Low relevance (${aiResult.relevance}): ${item.title.slice(0, 30)}...`);
+              continue;
+            }
+            const fullContent =
+              (fullContents[i].status === 'fulfilled' ? fullContents[i].value : '') || item.content;
+            analysis = { ...aiResult, fullContent };
+            console.log(`  New hotspot [${item.source}]: ${item.title.slice(0, 40)}... (${aiResult.importance}) → shared to ${userCount} user(s)`);
+          }
 
-              analysis = {
-                ...aiResult,
-                summary: aiSummary || aiResult.summary,
-                fullContent: fullContent || item.content,
-              };
+          // 按用户分发：每个监控此关键词的用户都获得一份热点
+          for (const kwRow of keywordRows) {
+            const userHasIt = await findExistingHotspot(item, kwRow.user_id);
+            if (userHasIt) {
+              console.log(`  Already owned by user ${kwRow.user_id.slice(0, 8)}...`);
+              continue;
             }
 
-            // ---- 按用户分发：每个监控此关键词的用户都获得一份热点 ----
-            for (const kwRow of keywordRows) {
-              // 检查此用户是否已有该热点（按用户去重）
-              const userHasIt = await findExistingHotspot(item, kwRow.user_id);
-              if (userHasIt) {
-                console.log(`  Already owned by user ${kwRow.user_id.slice(0, 8)}...`);
-                continue;
-              }
+            const { error: insertError } = await supabase
+              .from('hot_items')
+              .insert(buildHotItemPayload(item, analysis, kwRow.user_id, kwRow.id));
 
-              const { error: insertError } = await supabase
-                .from('hot_items')
-                .insert(buildHotItemPayload(item, analysis, kwRow.user_id, kwRow.id));
-
-              if (insertError) {
-                console.error(`  Insert error for user ${kwRow.user_id.slice(0, 8)}:`, insertError);
-                continue;
-              }
-
-              // 创建通知
-              const { error: notifError } = await supabase
-                .from('notifications')
-                .insert({
-                  user_id: kwRow.user_id,
-                  type: 'hotspot',
-                  title: `发现新热点: ${item.title.slice(0, 50)}`,
-                  content: analysis.summary || item.content.slice(0, 100),
-                });
-
-              if (notifError) {
-                console.error('  Notification insert error:', notifError);
-              }
-
-              newCount++;
-            }
-            processedCount++;
-
-            if (!existsGlobally) {
-              console.log(`  New hotspot [${item.source}]: ${item.title.slice(0, 40)}... (${analysis.importance}) → shared to ${userCount} user(s)`);
+            if (insertError) {
+              console.error(`  Insert error for user ${kwRow.user_id.slice(0, 8)}:`, insertError);
+              continue;
             }
 
-          } catch (itemError) {
-            console.error(`  Error processing item:`, itemError);
-            errors.push(`Error processing item "${item.title.slice(0, 30)}": ${itemError instanceof Error ? itemError.message : String(itemError)}`);
+            const { error: notifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: kwRow.user_id,
+                type: 'hotspot',
+                title: `发现新热点: ${item.title.slice(0, 50)}`,
+                content: analysis.summary || item.content.slice(0, 100),
+              });
+
+            if (notifError) {
+              console.error('  Notification insert error:', notifError);
+            }
+
+            newCount++;
           }
         }
 

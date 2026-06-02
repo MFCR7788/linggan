@@ -107,7 +107,8 @@ export function matchHotListAgainstKeywords(
 export async function analyzeContent(
   content: string,
   keyword: string,
-  preMatchResult?: { matched: boolean; matchedTerms: string[] }
+  preMatchResult?: { matched: boolean; matchedTerms: string[] },
+  fullContent?: string | null
 ): Promise<{ isReal: boolean; relevance: number; relevanceReason: string; keywordMentioned: boolean; importance: string; summary: string }> {
   const matchResult = preMatchResult ?? { matched: false, matchedTerms: [] };
 
@@ -115,17 +116,26 @@ export async function analyzeContent(
     ? `\n注意：文本预匹配发现内容中包含以下关键词变体：${matchResult.matchedTerms.join('、')}`
     : `\n注意：文本预匹配发现内容中未直接提及关键词"${keyword}"的任何变体，请特别严格审核相关性。`;
 
+  // 优先用抓到的全文做摘要；抓不到再回退到短摘要
+  const summarySource = (fullContent && fullContent.length > 50) ? fullContent : content;
+  const summarySourceLabel = (fullContent && fullContent.length > 50) ? '原文内容' : '可获取到的内容';
+
   try {
-    const prompt = `你是一个热点内容精准匹配专家。判断以下内容是否与监控关键词【${keyword}】直接相关。
+    const prompt = `你是一个热点内容分析专家。判断以下内容是否与监控关键词【${keyword}】直接相关，并给出 100 字左右的摘要。
 
 ${matchHint}
 
-分析要点：
+任务 1 - 相关性判定：
 1. 判断是否为真实有价值的信息（排除标题党、假新闻、营销软文）
 2. 判断内容是否【直接】涉及关键词"${keyword}"
-3. 判断内容中是否直接提及了"${keyword}"或其等价表述（keywordMentioned）
+3. 判断内容中是否直接提及了"${keyword}"或其等价表述
 4. 评估热点的重要程度
-5. 用一句话说明此内容与"${keyword}"的关系
+
+任务 2 - 摘要（基于【${summarySourceLabel}】，${summarySource.slice(0, 2500).length} 字）：
+1. **字数控制在 100 字左右**（90-110 字之间）
+2. 提炼关键数据和观点
+3. 说明此内容与【${keyword}】的关联
+4. 语言简洁有力，适合快速阅读
 
 请以 JSON 格式输出：
 {
@@ -134,13 +144,14 @@ ${matchHint}
   "relevanceReason": "相关性打分理由",
   "keywordMentioned": true/false,
   "importance": "low/medium/high/urgent",
-  "summary": "此内容与【${keyword}】的关联"
+  "summary": "100 字左右的摘要"
 }
 
-内容：${content.slice(0, 2000)}
+${summarySourceLabel}：
+${summarySource.slice(0, 2500)}
 只输出 JSON，不要有其他内容。`;
 
-    const result = await callDeepSeek(prompt, { temperature: 0.2, maxTokens: 500 });
+    const result = await callDeepSeek(prompt, { temperature: 0.3, maxTokens: 350 });
     const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -150,7 +161,7 @@ ${matchHint}
         relevanceReason: String(parsed.relevanceReason || '').slice(0, 200),
         keywordMentioned: Boolean(parsed.keywordMentioned),
         importance: ['low', 'medium', 'high', 'urgent'].includes(parsed.importance) ? parsed.importance : 'low',
-        summary: String(parsed.summary || '').slice(0, 150),
+        summary: String(parsed.summary || '').slice(0, 100),
       };
     }
     throw new Error('Failed to parse AI response');
@@ -168,22 +179,23 @@ ${matchHint}
 }
 
 /**
- * 批量分析
+ * 批量分析（每批 3 个并发）
+ * 一次 AI 调用同时输出 6 字段 + 100 字 summary
  */
 export async function batchAnalyze(
-  contents: string[],
+  items: Array<{ shortText: string; fullContent?: string | null }>,
   keyword: string,
   expandedKeywords?: string[]
 ): Promise<any[]> {
   const batchSize = 3;
   const results: any[] = [];
 
-  for (let i = 0; i < contents.length; i += batchSize) {
-    const batch = contents.slice(i, i + batchSize);
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
     const batchResults = await Promise.all(
-      batch.map(content => {
-        const preMatch = expandedKeywords ? preMatchKeyword(content, expandedKeywords) : undefined;
-        return analyzeContent(content, keyword, preMatch);
+      batch.map(({ shortText, fullContent }) => {
+        const preMatch = expandedKeywords ? preMatchKeyword(shortText, expandedKeywords) : undefined;
+        return analyzeContent(shortText, keyword, preMatch, fullContent);
       })
     );
     results.push(...batchResults);
