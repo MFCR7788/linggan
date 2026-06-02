@@ -3,7 +3,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { ExternalLink, TrendingUp, CheckCircle, XCircle, ArrowLeft, Clock, Eye, MessageSquare, ThumbsUp, Share2 } from 'lucide-react';
+import { ExternalLink, TrendingUp, CheckCircle, XCircle, ArrowLeft, Clock, Eye, MessageSquare, ThumbsUp, Share2, Copy, Check } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
@@ -58,6 +58,7 @@ function HotspotDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -306,6 +307,23 @@ function HotspotDetailContent() {
           >
             <ExternalLink size={14} /> 跳转原文
           </a>
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(detail.original_url);
+                setCopied(true);
+                showToast('链接已复制', 'success');
+                setTimeout(() => setCopied(false), 2000);
+              } catch {
+                showToast('复制失败，请手动复制', 'error');
+              }
+            }}
+            className="mt-4 ml-4 inline-flex items-center gap-2 text-sm"
+            style={{ color: '#3B82F6' }}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? '已复制' : '复制链接'}
+          </button>
         </GlassCard>
 
         {/* AI Analysis */}
