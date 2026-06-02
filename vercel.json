@@ -18,6 +18,10 @@
     "src/app/api/cron/check-hotspots/route.ts": {
       "maxDuration": 300,
       "memory": 1024
+    },
+    "src/app/api/cron/cleanup-hotspots/route.ts": {
+      "maxDuration": 60,
+      "memory": 512
     }
   },
   "crons": []

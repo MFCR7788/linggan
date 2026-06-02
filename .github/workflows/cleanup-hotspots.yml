@@ -1,0 +1,29 @@
+name: Cleanup Old Hotspots
+
+on:
+  # 每月 1 号 UTC 16:00（北京时间 0:00）跑一次
+  schedule:
+    - cron: '0 16 1 * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hotspot cleanup
+        env:
+          API_URL: ${{ secrets.LINGJI_API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::缺少必要的 secrets: LINGJI_API_URL / CRON_SECRET"
+            exit 1
+          fi
+          http_code=$(curl -sS -m 50 -o /tmp/cleanup-resp.json -w "%{http_code}" \
+            "${API_URL}/api/cron/cleanup-hotspots?secret=${CRON_SECRET}")
+          echo "HTTP ${http_code}"
+          cat /tmp/cleanup-resp.json
+          if [ "$http_code" != "200" ]; then
+            echo "::error::清理失败 (HTTP ${http_code})"
+            exit 1
+          fi
