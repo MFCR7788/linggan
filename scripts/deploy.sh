@@ -128,15 +128,20 @@ if ! bash -c "$RUN_AS npm run build" 2>&1 | tail -15 | tee -a "$LOG_FILE"; then
   exit 1
 fi
 
-# 11.5 BUILD_ID 自检(防止 build 部分完成导致 systemd 重启后 502)
+# 11.5 构建产物自检(防止 build 部分完成导致 systemd 重启后 502)
+# Next.js 14 不一定生成 .next/BUILD_ID 文件,改用更可靠的 app-build-manifest.json
 log "🔍 检查构建产物"
-if [ ! -s "$DEPLOY_DIR/.next/BUILD_ID" ]; then
-  log "❌ .next/BUILD_ID 缺失或为空, 构建可能未完成, 拒绝重启(避免上线后 502)"
+if [ ! -s "$DEPLOY_DIR/.next/app-build-manifest.json" ] || [ ! -d "$DEPLOY_DIR/.next/server" ] || [ ! -d "$DEPLOY_DIR/.next/static" ]; then
+  log "❌ 构建产物不完整 (缺 app-build-manifest.json / server / static), 拒绝重启(避免上线后 502)"
   ls -la "$DEPLOY_DIR/.next/" 2>&1 | tee -a "$LOG_FILE"
   exit 1
 fi
-BUILD_ID=$(cat "$DEPLOY_DIR/.next/BUILD_ID")
-log "✅ BUILD_ID: $BUILD_ID"
+if [ -s "$DEPLOY_DIR/.next/BUILD_ID" ]; then
+  BUILD_ID=$(cat "$DEPLOY_DIR/.next/BUILD_ID")
+  log "✅ BUILD_ID: $BUILD_ID"
+else
+  log "⚠️  .next/BUILD_ID 不存在(Next.js 14 某些版本不生成),但核心产物存在,继续部署"
+fi
 
 # 12. 重启 (需要 root)
 if [ "$CURRENT_USER" = "root" ]; then
