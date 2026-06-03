@@ -88,31 +88,37 @@ export function createSupabaseServerClient() {
 
 // 获取当前用户
 export async function getCurrentUser() {
-  // 开发模式：先尝试从请求头中获取用户 ID（最可靠）
-  try {
-    const headersList = headers();
-    const headerUserId = headersList.get('x-dev-user-id');
-    if (headerUserId) {
-      await ensureDevUserProfile(headerUserId);
-      return createDevUser(headerUserId);
+  // 生产环境: 跳过 dev 短路, 只信任真实 Supabase 会话
+  // 开发环境: dev header/cookie 用于无密码本地调试
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  if (isDev) {
+    // 开发模式: 先尝试从请求头中获取用户 ID (最可靠)
+    try {
+      const headersList = headers();
+      const headerUserId = headersList.get('x-dev-user-id');
+      if (headerUserId) {
+        await ensureDevUserProfile(headerUserId);
+        return createDevUser(headerUserId);
+      }
+    } catch (e) {
+      // headers() 可能在某些上下文不可用
     }
-  } catch (e) {
-    // headers() 可能在某些上下文不可用
+
+    // 开发模式: 再尝试从 cookies 中获取用户 ID
+    try {
+      const cookieStore = cookies();
+      const devUserId = cookieStore.get('dev_user_id');
+      if (devUserId?.value) {
+        await ensureDevUserProfile(devUserId.value);
+        return createDevUser(devUserId.value);
+      }
+    } catch (e) {
+      // cookies() 可能在某些上下文不可用
+    }
   }
 
-  // 开发模式：再尝试从 cookies 中获取用户 ID
-  try {
-    const cookieStore = cookies();
-    const devUserId = cookieStore.get('dev_user_id');
-    if (devUserId?.value) {
-      await ensureDevUserProfile(devUserId.value);
-      return createDevUser(devUserId.value);
-    }
-  } catch (e) {
-    // cookies() 可能在某些上下文不可用
-  }
-
-  // 最后尝试真实的 Supabase 会话（需要 middleware 刷新 session）
+  // 真实 Supabase 会话 (生产 + 开发通用, 优先信任)
   try {
     const supabase = createSupabaseServerClient();
     const { data: { user }, error } = await supabase.auth.getUser();

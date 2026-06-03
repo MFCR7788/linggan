@@ -5,17 +5,18 @@ import { createAdminClient } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
-// 与 check-hotspots 一致的简单共享密钥
-const CRON_SECRET = process.env.CRON_SECRET || 'linggan-cron-secret';
-
 export async function GET(request: Request) {
+  const expectedSecret = process.env.CRON_SECRET;
+  if (!expectedSecret) {
+    return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
+  }
   const { searchParams } = new URL(request.url);
   const secret =
     searchParams.get('secret') ||
     request.headers.get('x-cron-secret') ||
     request.headers.get('authorization')?.replace('Bearer ', '');
 
-  if (secret !== CRON_SECRET) {
+  if (secret !== expectedSecret) {
     return createApiError('Unauthorized', 401);
   }
 

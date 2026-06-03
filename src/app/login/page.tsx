@@ -22,7 +22,7 @@ function LoginContent() {
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
   const [isLocalhost, setIsLocalhost] = useState(false);
-  const [sliderOpen, setSliderOpen] = useState(false);
+  const [captchaOpen, setCaptchaOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -51,10 +51,10 @@ function LoginContent() {
       return;
     }
     // 弹出点字验证码
-    setSliderOpen(true);
+    setCaptchaOpen(true);
   };
 
-  const handleSliderSuccess = async (captchaToken: string) => {
+  const handleCaptchaSuccess = async (captchaToken: string) => {
     setIsSendingCode(true);
     setError("");
 
@@ -336,9 +336,9 @@ function LoginContent() {
       </p>
 
       <ClickTextCaptcha
-        open={sliderOpen}
-        onClose={() => setSliderOpen(false)}
-        onSuccess={handleSliderSuccess}
+        open={captchaOpen}
+        onClose={() => setCaptchaOpen(false)}
+        onSuccess={handleCaptchaSuccess}
       />
     </div>
   );

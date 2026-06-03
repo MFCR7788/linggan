@@ -332,7 +332,10 @@ export { type VideoProvider, type VideoModelConfig, type QualityTier, QUALITY_TI
 
 // ====== HappyHorse 视频生成（百炼 DashScope） ======
 
-const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY || 'sk-c270f05ccab6430aa50ed96ac3d7790b';
+const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY;
+if (!HAPPYHORSE_API_KEY && process.env.NODE_ENV === 'production') {
+  console.warn('[HappyHorse] HAPPYHORSE_API_KEY 未配置, 视频生成相关接口将不可用');
+}
 const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
 
 const DOUBAO_BASE_URL = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';

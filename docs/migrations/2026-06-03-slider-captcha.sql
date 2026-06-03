@@ -18,3 +18,6 @@ ALTER TABLE slider_captchas ENABLE ROW LEVEL SECURITY;
 
 -- 不创建任何 policy = 完全禁止 anon/authenticated 访问
 -- 服务端 createAdminClient() 用 service_role key 绕过 RLS
+
+-- 2026-06-03: 滑块已替换为点击文字验证码, slider_captchas 表清理
+DROP TABLE IF EXISTS slider_captchas;

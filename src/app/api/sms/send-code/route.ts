@@ -5,7 +5,6 @@ import { Config } from '@alicloud/openapi-client';
 
 export const dynamic = 'force-dynamic';
 
-const DEV_CODE = '123456';
 const CODE_EXPIRY_MINUTES = 30;
 const SMS_TEMPLATE_CODE = process.env.ALIYUN_SMS_TEMPLATE_CODE || 'SMS_506745050';
 const SMS_SIGN_NAME = process.env.ALIYUN_SMS_SIGN_NAME || '魔法超人';
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '请输入正确的手机号' }, { status: 400 });
     }
     if (!captchaToken) {
-      return NextResponse.json({ error: '请先完成滑块验证' }, { status: 400 });
+      return NextResponse.json({ error: '请先完成人机验证' }, { status: 400 });
     }
 
     const supabase = createAdminClient();
