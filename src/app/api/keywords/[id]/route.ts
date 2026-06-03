@@ -49,10 +49,9 @@ export const DELETE = withAuth(async ({ user, params }) => {
 
   const { count: hotCount } = await supabase
     .from('hot_items')
-    .delete()
+    .delete({ count: 'exact' })
     .eq('monitor_keyword_id', id)
-    .eq('user_id', user.id)
-    .select('*', { count: 'exact', head: true });
+    .eq('user_id', user.id);
 
   const { error } = await supabase
     .from('monitor_keywords')
