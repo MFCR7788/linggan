@@ -18,16 +18,17 @@ export const GET = withAuth(async ({ request, user }) => {
   const sortOrder = searchParams.get('sortOrder') || 'desc';
   const tagIds = searchParams.get('tagIds'); // 逗号分隔的 tag id 列表
   const sourcePlatform = searchParams.get('sourcePlatform'); // 按来源平台筛选（如 'ai'）
-  // ─── AI 创作 Step 1 专用过滤(向后兼容,默认排除 AI 作品 + 空内容) ───
-  // excludeSourcePlatforms: 逗号分隔,默认 'ai'(AI 作品不默认进 Step 1)
+  // ─── AI 创作 Step 1 专用过滤(向后兼容,默认不过滤) ───
+  // excludeSourcePlatforms: 逗号分隔,显式排除(如 'ai' 用于 Step 1)
   // includeSourcePlatforms: 逗号分隔,显式包含(覆盖 exclude)
-  // minOriginalLength: 原文最小字符数,默认 1(过滤空)
+  // minOriginalLength: 原文最小字符数,默认 0
   // minAiSummaryLength: ai_summary 最小字符数,默认 0
-  const excludeSourcePlatforms = (searchParams.get('excludeSourcePlatforms') || 'ai')
+  // 注意: 默认不传 excludeSourcePlatforms 时,所有 source_platform 都显示(不影响 /inspiration 主页)
+  const excludeSourcePlatforms = (searchParams.get('excludeSourcePlatforms') || '')
     .split(',').map(s => s.trim()).filter(Boolean);
   const includeSourcePlatforms = (searchParams.get('includeSourcePlatforms') || '')
     .split(',').map(s => s.trim()).filter(Boolean);
-  const minOriginalLength = parseInt(searchParams.get('minOriginalLength') || '1', 10);
+  const minOriginalLength = parseInt(searchParams.get('minOriginalLength') || '0', 10);
   const minAiSummaryLength = parseInt(searchParams.get('minAiSummaryLength') || '0', 10);
 
   const supabase = createAdminClient();

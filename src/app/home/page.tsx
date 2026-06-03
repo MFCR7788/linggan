@@ -426,7 +426,7 @@ function HomeContent() {
                 <GlassCard
                   key={item.id}
                   hover
-                  onClick={() => handleNavigate("hotspot-detail")}
+                  onClick={() => router.push(`/hotspot/detail?id=${item.id}`)}
                   className="!p-4"
                 >
                   <div className="flex items-start gap-3">
