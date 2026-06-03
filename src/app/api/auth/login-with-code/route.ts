@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         console.error('[login] 重置密码失败:', resetError);
         return NextResponse.json({ success: false, error: '登录失败,请稍后重试' }, { status: 500 });
       }
-      signInResult = await ssr.auth.signInWithPassword({ phone: e164, password: deterministicPassword });
+      signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
       if (signInResult.error) {
         console.error('[login] 重置后仍登录失败:', signInResult.error);
         return NextResponse.json({ success: false, error: '登录失败,请稍后重试' }, { status: 500 });
