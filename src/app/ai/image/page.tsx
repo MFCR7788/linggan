@@ -72,7 +72,7 @@ function AIImageContent() {
   const [selectedPaletteId, setSelectedPaletteId] = useState<string | null>('coral');
 
   // ─── 3. 高级（折叠） ────────────────────────────────
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(true);
   const [batchMode, setBatchMode] = useState(false);
   const [seed, setSeed] = useState<number | ''>('');
   const [seedHelpOpen, setSeedHelpOpen] = useState(false);
@@ -229,6 +229,7 @@ function AIImageContent() {
           style: selectedStyle,
           paletteId: selectedPaletteId,
           seed: seed === '' ? undefined : seed,
+          negativePrompt: negativePrompt.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -606,9 +607,12 @@ function AIImageContent() {
             className="flex items-center justify-between w-full"
             onClick={() => setAdvancedOpen(!advancedOpen)}
           >
-            <span style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
-              <span style={{ color: '#F59E0B' }}>Step 4</span> · 高级设置
-            </span>
+            <div className="flex flex-col items-start gap-0.5">
+              <span style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+                <span style={{ color: '#F59E0B' }}>Step 4</span> · 高级设置
+              </span>
+              <span style={{ color: '#9CA3AF', fontSize: 11 }}>4 张变体 / 种子 / 负面提示</span>
+            </div>
             {advancedOpen ? <ChevronUp size={16} color="#9CA3AF" /> : <ChevronDown size={16} color="#9CA3AF" />}
           </button>
           {advancedOpen && (
@@ -952,11 +956,6 @@ function AIImageContent() {
                           onClick={handleCopyPrompt}
                         />
                       )}
-                      <ActionBtn
-                        icon={<FileText size={14} />}
-                        label="复制 prompt"
-                        onClick={handleCopyPrompt}
-                      />
                     </div>
                   );
                 })()}

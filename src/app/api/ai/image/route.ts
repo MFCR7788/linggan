@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       style,
       paletteId,
       seed,
+      negativePrompt,
     } = await request.json();
 
     if (!prompt) {
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
     }
     if (finalPaletteName) {
       finalPrompt += ` | 主色调: ${finalPaletteName}`;
+    }
+    // 负面提示: 拼到 prompt 末尾(逗号分隔),让"不想要的内容"真的生效
+    // 火山方舟 Seedance 模型没有 native negative_prompt 字段, 用 prompt 后缀是稳妥做法
+    if (negativePrompt && typeof negativePrompt === 'string' && negativePrompt.trim()) {
+      finalPrompt += `, 避免: ${negativePrompt.trim()}`;
     }
 
     const count = Math.min(n || 1, 4);
