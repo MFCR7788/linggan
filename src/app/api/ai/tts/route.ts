@@ -113,14 +113,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.ok || result.status !== 200) {
-      console.error('[TTS] Volcengine error:', result.status, JSON.stringify(result.body).slice(0, 200));
-      return NextResponse.json({ success: false, error: '语音合成失败' }, { status: 502 });
+      console.error('[TTS] Volcengine HTTP error:', result.status, JSON.stringify(result.body).slice(0, 200));
+      const detail = typeof result.body === 'object' ? (result.body.message || JSON.stringify(result.body).slice(0, 100)) : String(result.body).slice(0, 100);
+      return NextResponse.json({ success: false, error: `语音合成失败(HTTP ${result.status}): ${detail}` }, { status: 502 });
     }
 
     const body = result.body;
     if (body.code !== 3000) {
-      console.error('[TTS] Volcengine error:', body.code, body.message);
-      return NextResponse.json({ success: false, error: '语音合成失败' }, { status: 502 });
+      console.error('[TTS] Volcengine business error:', body.code, body.message);
+      return NextResponse.json({ success: false, error: `语音合成失败(code ${body.code}): ${body.message || '未知原因'}` }, { status: 502 });
     }
 
     return NextResponse.json({
