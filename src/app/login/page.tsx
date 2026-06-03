@@ -6,7 +6,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassInput } from "@/components/GlassInput";
 import { LoadingSpinner } from "@/components";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { SliderCaptcha } from "@/components/SliderCaptcha";
+import { ClickTextCaptcha } from "@/components/ClickTextCaptcha";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { syncDevAuthCookie } from "@/lib/dev-auth";
@@ -50,7 +50,7 @@ function LoginContent() {
       setError("请输入正确的手机号");
       return;
     }
-    // 弹出滑块验证码
+    // 弹出点字验证码
     setSliderOpen(true);
   };
 
@@ -335,7 +335,7 @@ function LoginContent() {
         <span style={{ color: "#3B82F6" }}>隐私政策</span>
       </p>
 
-      <SliderCaptcha
+      <ClickTextCaptcha
         open={sliderOpen}
         onClose={() => setSliderOpen(false)}
         onSuccess={handleSliderSuccess}

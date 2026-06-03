@@ -24,23 +24,28 @@ export async function POST(request: Request) {
     const supabase = createAdminClient();
     const now = new Date();
 
-    // 1. 验证 captcha_token
-    const { data: captcha, error: captchaError } = await supabase
-      .from('slider_captchas')
+    // 1. 验证 captchaToken (通用通行证, 由 /api/captcha/click 签发, 一次性)
+    const { data: pass, error: passError } = await supabase
+      .from('captcha_tokens')
       .select('*')
       .eq('token', captchaToken)
       .single();
 
-    if (captchaError || !captcha) {
-      return NextResponse.json({ error: '滑块验证无效, 请刷新' }, { status: 400 });
+    if (passError || !pass) {
+      return NextResponse.json({ error: '人机验证无效, 请重试' }, { status: 400 });
     }
-    if (!captcha.used) {
-      // 异常: verify 后应已标记 used=true
-      return NextResponse.json({ error: '滑块未通过验证' }, { status: 400 });
+    if (pass.used) {
+      return NextResponse.json({ error: '人机验证已使用, 请重新验证' }, { status: 400 });
     }
-    if (new Date(captcha.expires_at) < now) {
-      return NextResponse.json({ error: '滑块验证已过期' }, { status: 400 });
+    if (new Date(pass.expires_at) < now) {
+      return NextResponse.json({ error: '人机验证已过期, 请重新验证' }, { status: 400 });
     }
+
+    // 立刻标记 used (防止并发重用)
+    await supabase
+      .from('captcha_tokens')
+      .update({ used: true })
+      .eq('token', captchaToken);
 
     // 2. 清理全局过期验证码
     await supabase
