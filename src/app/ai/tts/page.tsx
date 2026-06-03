@@ -639,7 +639,7 @@ function TTSPageContent() {
                       </button>
                     </div>
                     <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.5 }}>
-                      💡 在上方"我的克隆"卡片选择,或直接去做数字人(数字人页会优先推荐使用克隆音色)
+                      💡 在上方「我的克隆」卡片选择,或直接去做数字人(数字人页会优先推荐使用克隆音色)
                     </p>
                   </div>
                 )}
