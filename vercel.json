@@ -27,6 +27,10 @@
       "maxDuration": 60,
       "memory": 512
     },
+    "src/app/api/cron/subscription-grant/route.ts": {
+      "maxDuration": 120,
+      "memory": 512
+    },
     "src/app/api/platforms/metrics-fetch/route.ts": {
       "maxDuration": 60,
       "memory": 1024
@@ -56,6 +60,10 @@
     {
       "path": "/api/cron/credits-reset",
       "schedule": "0 16 1 * *"
+    },
+    {
+      "path": "/api/cron/subscription-grant",
+      "schedule": "0 0 * * *"
     }
   ]
 }
