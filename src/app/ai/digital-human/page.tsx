@@ -783,13 +783,19 @@ function DigitalHumanContent() {
   // 共用：TTS 面板
   // ══════════════════════════════════════════════════════════
 
-  const renderTTSPanel = (text: string, onTextChange: (v: string) => void) => (
+  const renderTTSPanel = (text: string, onTextChange: (v: string) => void) => {
+    // 火山引擎限制 ≤1000 字节 (utf-8), 中文字符 3 字节 ≈ 300 字上限
+    const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(text).length : text.length;
+    const overLimit = bytes > 1000;
+    return (
     <>
       <textarea value={text} onChange={e => onTextChange(e.target.value)}
-        placeholder="输入要播报的文本内容..." rows={3} maxLength={2000}
+        placeholder="输入要播报的文本内容(建议 300 字以内)..." rows={3} maxLength={1000}
         className="w-full bg-transparent p-3 rounded-xl resize-none outline-none text-sm mb-2"
         style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-      <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 8 }}>{text.length}/2000</p>
+      <p style={{ color: overLimit ? '#EF4444' : '#6B7280', fontSize: 10, marginBottom: 8 }}>
+        {text.length} 字 / {bytes} 字节{overLimit ? ' (超过 1000 字节限制)' : ' (建议 300 字以内)'}
+      </p>
 
       <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>音色</p>
       <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -839,7 +845,8 @@ function DigitalHumanContent() {
         </div>
       )}
     </>
-  );
+    );
+  };
 
   // ══════════════════════════════════════════════════════════
   // 共用：音频上传面板
