@@ -81,15 +81,14 @@ export const PUT = withAuth(async ({ request, user }) => {
   }
 
   let encrypted: string;
+  let unsafe_mode = false;
   try {
     encrypted = encryptToken(value);
   } catch (e: any) {
-    // PLATFORM_ENCRYPTION_KEY 未配置时无法加密 — 但当前 key 正是要存的
-    // 用 unsafe 兜底
-    return createApiError(
-      `加密失败: ${e.message}。请先在 Vercel 配置 PLATFORM_ENCRYPTION_KEY,或在站内「平台集成」点击「自动生成」来初始化。`,
-      500
-    );
+    // Bootstrap 死锁:PLATFORM_ENCRYPTION_KEY 还没同步到 Vercel,encryptToken 抛错。
+    // 明文兜底存,前端强提示用户尽快同步到 Vercel
+    encrypted = value;
+    unsafe_mode = true;
   }
 
   const supabase = createAdminClient();
@@ -105,7 +104,12 @@ export const PUT = withAuth(async ({ request, user }) => {
 
   if (error) return createApiError(error.message, 500);
 
-  return createApiResponse({ ok: true, keyName }, '已保存(同步到 Vercel 后才生效)');
+  return createApiResponse(
+    { ok: true, keyName, unsafe: unsafe_mode },
+    unsafe_mode
+      ? '已保存(明文兜底,因 Vercel 还没 PLATFORM_ENCRYPTION_KEY)请把同值同步到 Vercel → 重新部署 → 回来再次更新此 key 即可启用加密'
+      : '已保存(同步到 Vercel 后才生效)'
+  );
 });
 
 /**
@@ -156,24 +160,17 @@ export const POST = withAuth(async ({ request, user }) => {
   const value = randomBytes(32).toString('hex');
 
   // 加密 + 写库
-  // 特殊场景:若是 PLATFORM_ENCRYPTION_KEY 自己首次配置(bootstrap),Vercel env 还没设,
-  // encryptToken 会抛错。这种情况下用明文直接存(unsafe),前端强提示「立即复制到 Vercel,
-  // 等 env 设上后再次更新此 key 即可加密」,避免 bootstrap 死锁。
+  // Bootstrap 死锁处理:PLATFORM_ENCRYPTION_KEY 还没同步到 Vercel 时,encryptToken 会抛错。
+  // 这种情况下用明文直接存(unsafe),前端强提示「立即复制到 Vercel → 重新部署 →
+  // 回来再次更新此 key 即可启用加密」,让所有 bootstrap 期的写入都不被卡住。
   const supabase = createAdminClient();
   let value_encrypted: string;
   let unsafe_mode = false;
   try {
     value_encrypted = encryptToken(value);
   } catch (e: any) {
-    if (keyName === 'PLATFORM_ENCRYPTION_KEY') {
-      value_encrypted = value;  // 明文兜底
-      unsafe_mode = true;
-    } else {
-      return createApiError(
-        `加密失败: ${e.message}。请先在 Vercel 配置 PLATFORM_ENCRYPTION_KEY,或在站内「平台集成」点击「自动生成」来初始化。`,
-        500
-      );
-    }
+    value_encrypted = value;  // 明文兜底
+    unsafe_mode = true;
   }
 
   const { error } = await supabase
