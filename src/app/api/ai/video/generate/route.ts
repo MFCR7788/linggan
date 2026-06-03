@@ -223,28 +223,37 @@ export async function GET(request: NextRequest) {
       .map((r) => r.videoUrl as string);
 
     // ─── 失败段自动退点(异步) ───────────────────────
-    // 检测到 failed/error 段时,按段 creditCost 退(从 chat_messages.metadata 查)
+    // 检测到 failed/error 段时,按段 creditCost 退(从 chat_messages.metadata.segments[] 查)
     // 用 hasRefunded 防重复退
     const supabase = createAdminClient();
+    // 一次性查出当前用户最近的视频批次记录(含 segments 数组),避免每段都查一次 DB
+    const { data: recentBatches } = await supabase
+      .from('chat_messages')
+      .select('metadata')
+      .eq('user_id', user.id)
+      .eq('type', 'ai')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    // 构建 { taskId → creditCost } 索引
+    const taskCostMap: Record<string, number> = {};
+    if (recentBatches) {
+      for (const row of recentBatches) {
+        const meta = row.metadata as any;
+        if (meta?.segments && Array.isArray(meta.segments)) {
+          for (const seg of meta.segments) {
+            if (seg.taskId && typeof seg.creditCost === 'number') {
+              taskCostMap[seg.taskId] = seg.creditCost;
+            }
+          }
+        }
+      }
+    }
     for (const r of resultsArray) {
       if (r.status === 'failed' || r.status === 'error') {
         if (!r.taskId) continue;  // 提交时就失败的,无需退点(已在外层 try/catch 退过)
         const already = await hasRefunded(user.id, r.taskId);
         if (already) continue;
-        // 查原始扣点金额
-        const { data: msg } = await supabase
-          .from('chat_messages')
-          .select('metadata')
-          .eq('user_id', user.id)
-          .eq('metadata->>taskId', r.taskId)
-          .maybeSingle();
-        const meta = msg?.metadata as any;
-        // 视频段存的是 segments[].taskId,查 segments 数组
-        let segCost = 0;
-        if (meta?.segments && Array.isArray(meta.segments)) {
-          const seg = meta.segments.find((s: any) => s.taskId === r.taskId);
-          segCost = seg?.creditCost || 0;
-        }
+        const segCost = taskCostMap[r.taskId] || 0;
         if (segCost > 0) {
           await refund(user.id, segCost, 'ai_video', '视频段失败退点', {
             taskId: r.taskId, status: r.status, message: r.message,
