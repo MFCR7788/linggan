@@ -76,6 +76,12 @@ function CaptureContent() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
+  // 按住说话:recording 录音中,willCancel 上滑到取消区松手即取消
+  const [holdState, setHoldState] = useState<'idle' | 'recording' | 'willCancel'>('idle');
+  const voiceBtnRef = useRef<HTMLButtonElement>(null);
+  const pressStartYRef = useRef(0);
+  const holdHandledRef = useRef(false);
+
   const MODEL_OPTIONS = [
     { id: "auto", label: "自动选择", desc: "根据内容自动切换最优模型" },
     { id: "deepseek", label: "DeepSeek", desc: "文本处理，成本低" },
@@ -556,6 +562,47 @@ function CaptureContent() {
     setInputText(prev => prev + transcript);
   };
 
+  // 按住说话手势处理
+  const handlePressStart = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // 鼠标右键/中键忽略
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    holdHandledRef.current = false;
+    pressStartYRef.current = e.clientY;
+    setHoldState('recording');
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch { /* 部分浏览器不支持,忽略 */ }
+    startRecording();
+  };
+
+  const handlePressMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdState === 'idle') return;
+    const dy = pressStartYRef.current - e.clientY; // 上滑 dy>0
+    if (dy > 60) {
+      if (holdState !== 'willCancel') setHoldState('willCancel');
+    } else {
+      if (holdState !== 'recording') setHoldState('recording');
+    }
+  };
+
+  const handlePressEnd = async (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (holdState === 'idle' || holdHandledRef.current) return;
+    holdHandledRef.current = true;
+    const wasCancel = holdState === 'willCancel';
+    setHoldState('idle');
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (wasCancel) {
+      cancelRecording();
+      return;
+    }
+    const transcript = await stopRecording();
+    if (transcript) {
+      setInputText(prev => (prev ? prev + transcript : transcript));
+      showToast('语音已识别', 'success');
+    }
+  };
+
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   // ====== Render ======
@@ -1009,26 +1056,58 @@ function CaptureContent() {
       <div className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-3" style={{ maxWidth: 480, margin: '0 auto' }}>
         {isRecording ? (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 bg-red-500 rounded-full flex items-center justify-center animate-pulse"><Mic size={18} color="white" /></div>
-                <span className="text-red-400 font-mono">{formatTime(recordingTime)}</span>
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${holdState !== 'willCancel' ? 'animate-mic-pulse' : ''}`}
+                style={{
+                  background: holdState === 'willCancel' ? 'rgba(107,114,128,0.6)' : '#EF4444',
+                }}
+              >
+                <Mic size={18} color="white" />
               </div>
-              <div className="flex gap-2">
-                <button onClick={cancelRecording} className="px-4 py-1.5 rounded-full bg-gray-700 text-gray-300 text-sm">取消</button>
-                <button onClick={handleVoiceStop} className="px-4 py-1.5 rounded-full bg-blue-600 text-white text-sm">完成</button>
+              <div className="flex-1 flex items-center gap-2">
+                <span
+                  className="font-mono text-sm tabular-nums"
+                  style={{ color: holdState === 'willCancel' ? '#9CA3AF' : '#FCA5A5' }}
+                >
+                  {formatTime(recordingTime)}
+                </span>
+                <div
+                  className="flex-1 px-3 py-1.5 rounded-xl text-sm min-h-[32px] flex items-center"
+                  style={{
+                    background: 'rgba(31,41,55,0.8)',
+                    color: '#E5E7EB',
+                    border: holdState === 'willCancel' ? '1px solid rgba(239,68,68,0.5)' : '1px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  {liveTranscript ? (
+                    <>
+                      <span className="truncate">{liveTranscript}</span>
+                      <span className="inline-block w-1 h-4 bg-blue-400 ml-1 animate-pulse flex-shrink-0" />
+                    </>
+                  ) : (
+                    <span style={{ color: '#6B7280' }}>正在聆听...</span>
+                  )}
+                </div>
+                <button
+                  onPointerDown={(e) => { e.stopPropagation(); cancelRecording(); setHoldState('idle'); }}
+                  className="px-3 py-1.5 rounded-full text-xs flex-shrink-0"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    color: '#9CA3AF',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  取消
+                </button>
               </div>
             </div>
-            {liveTranscript ? (
-              <div className="px-3 py-2 bg-gray-800 rounded-xl text-gray-200 text-sm min-h-[36px]">
-                {liveTranscript}
-                <span className="inline-block w-1 h-4 bg-blue-400 ml-0.5 animate-pulse align-middle" />
-              </div>
-            ) : (
-              <div className="px-3 py-2 bg-gray-800 rounded-xl text-gray-500 text-sm min-h-[36px]">
-                正在聆听...
-              </div>
-            )}
+            <p
+              className="text-center text-[11px] mt-0.5"
+              style={{ color: holdState === 'willCancel' ? '#EF4444' : '#6B7280' }}
+            >
+              {holdState === 'willCancel' ? '松开手指,取消发送' : '松开发送,上滑可取消'}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -1140,8 +1219,29 @@ function CaptureContent() {
                     <Send size={16} color="white" />
                   </button>
                 ) : (
-                  <button onClick={startRecording} className="w-9 h-9 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <button
+                    ref={voiceBtnRef}
+                    onPointerDown={handlePressStart}
+                    onPointerMove={handlePressMove}
+                    onPointerUp={handlePressEnd}
+                    onPointerCancel={handlePressEnd}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="relative w-12 h-9 rounded-full flex items-center justify-center flex-shrink-0 select-none touch-none active:scale-95 transition-transform"
+                    style={{
+                      background: holdState === 'willCancel'
+                        ? 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)'
+                        : 'linear-gradient(135deg, #F97316 0%, #EF4444 100%)',
+                      boxShadow: holdState === 'recording' ? '0 0 0 4px rgba(239,68,68,0.25)' : 'none',
+                    }}
+                    title="按住说话"
+                  >
                     <Mic size={18} color="white" />
+                    {holdState === 'recording' && (
+                      <span
+                        className="absolute inset-0 rounded-full pointer-events-none animate-mic-ping"
+                        style={{ border: '2px solid rgba(239,68,68,0.6)' }}
+                      />
+                    )}
                   </button>
                 )}
               </div>
