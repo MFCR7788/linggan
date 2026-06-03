@@ -1,0 +1,15 @@
+/var/log/lingji.log
+/var/log/lingji-deploy.log
+/var/log/lingji-hotspots.log
+{
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    dateformat -%Y%m%d
+    create 0640 root root
+    sharedscripts
+}
