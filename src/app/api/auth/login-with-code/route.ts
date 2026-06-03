@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     } else {
       // 4. 已存在
       // 4a. 老用户(Phase C 前的)只有 phone 字段,迁移到 email 登录
-      if (existing.email !== authEmail) {
+      if (existing && existing.email !== authEmail) {
         const { error: migrateErr } = await supabase.auth.admin.updateUserById(authUserId, {
           email: authEmail,
           email_confirm: true,
