@@ -10,7 +10,7 @@ interface ScheduleNotificationParams {
 
 function isCapacitorAvailable(): boolean {
   try {
-    return !!(window as any).Capacitor?.isNativePlatform?.();
+    return !!(window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
   } catch {
     return false;
   }

@@ -77,9 +77,9 @@ export async function runWorker(opts: { workerId: string; limit?: number }): Pro
       await markCompleted(task.id, output);
       result.succeeded++;
       result.details.push({ taskId: task.id, taskType: task.task_type, status: 'completed' });
-    } catch (e: any) {
-      const errorCode = e?.code || 'WORKER_ERROR';
-      const errorMessage = e?.message || String(e);
+    } catch (e: unknown) {
+      const errorCode = (e as { code?: string })?.code || 'WORKER_ERROR';
+      const errorMessage = e instanceof Error ? e.message : String(e);
       console.error(`[runWorker] task ${task.id} 失败:`, errorCode, errorMessage);
       await markFailed({
         taskId: task.id,

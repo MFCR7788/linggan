@@ -34,7 +34,7 @@ const platformColors: Record<string, string> = {
 function HomeContent() {
   const router = useRouter();
   const { data: inspirationsData, isLoading } = useInspirations({ limit: 50 });
-  const { data: schedulesData } = useSchedules({ limit: 50 });
+  const { data: schedulesData, isLoading: schedulesLoading, isError: schedulesError } = useSchedules({ limit: 50 });
   useNotificationScheduler();
   const [searchQuery, setSearchQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
@@ -73,14 +73,23 @@ function HomeContent() {
 
   const recentInspirations = useMemo(() => inspirationsData || [], [inspirationsData]);
 
-  // 日程：只显示未来7天内待处理的，按时间升序，最多5条
+  // 日程：显示最近5条待处理的，优先未来，其次最近过去
   const sortedSchedules = useMemo(() => {
     if (!schedulesData || schedulesData.length === 0) return [];
+    const pending = schedulesData.filter(s => s.status === 'pending');
+    if (pending.length === 0) return [];
     const now = new Date();
-    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-    return [...schedulesData]
-      .filter(s => s.status === 'pending' && new Date(s.scheduled_at) >= now && new Date(s.scheduled_at) <= sevenDaysLater)
-      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+    return pending
+      .sort((a, b) => {
+        const aTime = new Date(a.scheduled_at).getTime();
+        const bTime = new Date(b.scheduled_at).getTime();
+        const aIsFuture = aTime >= now.getTime();
+        const bIsFuture = bTime >= now.getTime();
+        // 未来的排在前（升序），过去的排在后（降序，最近过去优先）
+        if (aIsFuture && bIsFuture) return aTime - bTime;
+        if (!aIsFuture && !bIsFuture) return bTime - aTime;
+        return aIsFuture ? -1 : 1;
+      })
       .slice(0, 5);
   }, [schedulesData]);
 
@@ -175,7 +184,7 @@ function HomeContent() {
         </div>
 
         {/* 日程安排 */}
-        {sortedSchedules.length > 0 && !searchQuery && (
+        {!searchQuery && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
@@ -189,96 +198,111 @@ function HomeContent() {
                 查看全部 <ChevronRight size={14} />
               </button>
             </div>
-            <div className="space-y-3">
-              {sortedSchedules.map((schedule) => {
-                const scheduleDate = new Date(schedule.scheduled_at);
-                const isToday = scheduleDate.toDateString() === new Date().toDateString();
-                const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduleDate.toDateString();
-                const statusColor = "primary";
-                const statusLabel = "待处理";
 
-                return (
-                  <GlassCard
-                    key={schedule.id}
-                    hover
-                    onClick={() => router.push("/schedule")}
-                    className="!p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* 日期徽章 */}
-                      <div
-                        className="flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center"
-                        style={{
-                          background: `${schedule.color || "#3B82F6"}22`,
-                          border: `1px solid ${schedule.color || "#3B82F6"}44`,
-                        }}
-                      >
-                        <span style={{ fontSize: 16, fontWeight: 700, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
-                          {scheduleDate.getDate()}
-                        </span>
-                        <span style={{ fontSize: 10, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
-                          {scheduleDate.toLocaleDateString("zh-CN", { month: "short" })}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            <p
-                              style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
-                              className="truncate"
-                            >
-                              {schedule.title}
-                            </p>
-                            {schedule.remind_before && schedule.remind_before > 0 && (
-                              <Bell size={12} color="#8B5CF6" className="flex-shrink-0" />
+            {schedulesLoading ? (
+              <GlassCard className="!p-5 text-center">
+                <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin mx-auto" />
+                <p style={{ color: "#9CA3AF", fontSize: 13, marginTop: 8 }}>加载日程...</p>
+              </GlassCard>
+            ) : schedulesError ? (
+              <GlassCard className="!p-5 text-center">
+                <span style={{ fontSize: 32 }}>⚠️</span>
+                <p style={{ color: "#F87171", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
+                  日程加载失败
+                </p>
+                <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5 }}>
+                  请检查数据库连接或稍后重试
+                </p>
+              </GlassCard>
+            ) : sortedSchedules.length > 0 ? (
+              <div className="space-y-3">
+                {sortedSchedules.map((schedule) => {
+                  const scheduleDate = new Date(schedule.scheduled_at);
+                  const isToday = scheduleDate.toDateString() === new Date().toDateString();
+                  const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduleDate.toDateString();
+                  const statusColor = "primary";
+                  const statusLabel = "待处理";
+
+                  return (
+                    <GlassCard
+                      key={schedule.id}
+                      hover
+                      onClick={() => router.push("/schedule")}
+                      className="!p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* 日期徽章 */}
+                        <div
+                          className="flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center"
+                          style={{
+                            background: `${schedule.color || "#3B82F6"}22`,
+                            border: `1px solid ${schedule.color || "#3B82F6"}44`,
+                          }}
+                        >
+                          <span style={{ fontSize: 16, fontWeight: 700, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+                            {scheduleDate.getDate()}
+                          </span>
+                          <span style={{ fontSize: 10, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+                            {scheduleDate.toLocaleDateString("zh-CN", { month: "short" })}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <p
+                                style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
+                                className="truncate"
+                              >
+                                {schedule.title}
+                              </p>
+                              {schedule.remind_before && schedule.remind_before > 0 && (
+                                <Bell size={12} color="#8B5CF6" className="flex-shrink-0" />
+                              )}
+                            </div>
+                            <GlassBadge color={statusColor as "success" | "error" | "primary"}>
+                              {statusLabel}
+                            </GlassBadge>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span style={{ color: "#9CA3AF", fontSize: 12 }}>
+                              {isToday ? "今天" : isTomorrow ? "明天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
+                              {" "}
+                              {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            {schedule.location && (
+                              <>
+                                <span style={{ color: "#4B5563" }}>·</span>
+                                <span style={{ color: "#9CA3AF", fontSize: 12 }} className="truncate">
+                                  {schedule.location}
+                                </span>
+                              </>
                             )}
                           </div>
-                          <GlassBadge color={statusColor as "success" | "error" | "primary"}>
-                            {statusLabel}
-                          </GlassBadge>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span style={{ color: "#9CA3AF", fontSize: 12 }}>
-                            {isToday ? "今天" : isTomorrow ? "明天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
-                            {" "}
-                            {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          {schedule.location && (
-                            <>
-                              <span style={{ color: "#4B5563" }}>·</span>
-                              <span style={{ color: "#9CA3AF", fontSize: 12 }} className="truncate">
-                                {schedule.location}
-                              </span>
-                            </>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  </GlassCard>
-                );
-              })}
-            </div>
+                    </GlassCard>
+                  );
+                })}
+              </div>
+            ) : (
+              <GlassCard className="!p-5 text-center">
+                <span style={{ fontSize: 32 }}>📅</span>
+                <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
+                  暂无日程安排
+                </p>
+                <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
+                  在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
+                </p>
+                <button
+                  onClick={() => handleNavigate("capture")}
+                  className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-80"
+                  style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
+                >
+                  去灵感助手
+                </button>
+              </GlassCard>
+            )}
           </div>
-        )}
-
-        {/* 空状态：无日程 */}
-        {sortedSchedules.length === 0 && !searchQuery && (
-          <GlassCard className="!p-5 text-center">
-            <span style={{ fontSize: 32 }}>📅</span>
-            <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
-              暂无日程安排
-            </p>
-            <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
-              在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
-            </p>
-            <button
-              onClick={() => handleNavigate("capture")}
-              className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-80"
-              style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
-            >
-              去灵感助手
-            </button>
-          </GlassCard>
         )}
 
         {/* Search */}

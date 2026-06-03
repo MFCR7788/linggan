@@ -161,7 +161,7 @@ export class WeChatMPAdapter implements PlatformAdapter {
   }
 }
 
-function articles(arr: any[]): string {
+function articles(arr: Record<string, unknown>[]): string {
   return JSON.stringify({ articles: arr });
 }
 function formatDate(ts: number): string {

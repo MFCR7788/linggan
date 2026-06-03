@@ -105,8 +105,8 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
         { timeout: 90000 }
       );
       downloaded = true;
-    } catch (e: any) {
-      console.warn("yt-dlp 下载失败，尝试备选方案:", e.message?.substring(0, 100));
+    } catch (e: unknown) {
+      console.warn("yt-dlp 下载失败，尝试备选方案:", e instanceof Error ? e.message?.substring(0, 100) : String(e).substring(0, 100));
     }
 
     // 2b. yt-dlp 失败时，尝试直接解析页面提取视频 URL（针对 douyin/iesdouyin）
@@ -160,11 +160,11 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
     }
 
     return { success: true, transcript };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("视频转录失败:", error);
     return {
       success: false,
-      error: error?.message || "视频转录失败，请稍后重试",
+      error: error instanceof Error ? error.message : "视频转录失败，请稍后重试",
     };
   } finally {
     // 清理临时目录
@@ -223,7 +223,7 @@ async function callDashScopeASR(audioUrl: string): Promise<string> {
   // 拼接所有句子的文本
   const transcripts = transcriptData.transcripts || [];
   const fullText = transcripts
-    .map((item: any) => item.text || "")
+    .map((item: { text?: string }) => item.text || "")
     .join("")
     .trim();
 

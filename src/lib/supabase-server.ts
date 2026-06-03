@@ -141,7 +141,7 @@ function createDevUser(userId: string) {
       phone: userId.replace('user_', ''),
       username: '开发用户'
     }
-  } as any;
+  } as { id: string; email: string; user_metadata: Record<string, unknown> };
 }
 
 // 确保开发模式用户在数据库中存在（否则 FK 约束会导致写入失败）

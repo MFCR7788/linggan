@@ -60,7 +60,7 @@ function sign(method: string, urlPath: string, body: string): string {
 }
 
 // ─── 通用 V3 请求 ───
-async function v3Request<T = any>(
+async function v3Request<T = unknown>(
   method: 'GET' | 'POST',
   urlPath: string,
   body?: Record<string, unknown>
@@ -84,13 +84,14 @@ async function v3Request<T = any>(
       validateStatus: () => true,
     });
     if (res.status >= 400) {
-      const err = res.data as any;
+      const err = res.data as { code?: string; message?: string };
       throw new Error(`WeChat Pay ${method} ${urlPath} 失败 [${res.status}]: ${err?.code || ''} ${err?.message || JSON.stringify(err)}`);
     }
     return res.data;
-  } catch (e: any) {
-    if (e?.response) {
-      throw new Error(`WeChat Pay ${method} ${urlPath} 网络失败: ${e.response.status} ${JSON.stringify(e.response.data)}`);
+  } catch (e: unknown) {
+    if (e instanceof Error && 'response' in e) {
+      const errWithResp = e as Error & { response?: { status: number; data: unknown } };
+      throw new Error(`WeChat Pay ${method} ${urlPath} 网络失败: ${errWithResp.response?.status} ${JSON.stringify(errWithResp.response?.data)}`);
     }
     throw e;
   }

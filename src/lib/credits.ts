@@ -128,7 +128,7 @@ export async function consume(
   }
   if (updateError) throw updateError;
 
-  const balanceAfter = (updated as any)?.balance_after ?? before.balance - amount;
+  const balanceAfter = (updated as { balance_after?: number } | null)?.balance_after ?? before.balance - amount;
 
   // 3. 写流水
   await supabase.from('credit_transactions').insert({
@@ -376,9 +376,9 @@ export async function getTiers(): Promise<SubscriptionTier[]> {
     .order('sort_order', { ascending: true });
 
   if (error) throw error;
-  return (data || []).map((t: any) => ({
-    ...t,
-    features: Array.isArray(t.features) ? t.features : [],
+  return (data || []).map((t) => ({
+    ...t as Record<string, unknown>,
+    features: Array.isArray((t as Record<string, unknown>).features) ? (t as Record<string, unknown>).features as string[] : [],
   })) as SubscriptionTier[];
 }
 

@@ -137,7 +137,7 @@ async function findExistingHotspot(item: SearchResult, userId?: string): Promise
 /**
  * 构建 hot_items 插入数据
  */
-function buildHotItemPayload(item: SearchResult, analysis: any, userId: string, keywordId: string) {
+function buildHotItemPayload(item: SearchResult, analysis: { isReal?: boolean; relevance?: number; relevanceReason?: string; keywordMentioned?: boolean; importance?: string; summary?: string; fullContent?: string | null }, userId: string, keywordId: string) {
   return {
     user_id: userId,
     monitor_keyword_id: keywordId,
@@ -225,7 +225,7 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
         console.log(`  Total: ${allResults.length} raw → ${uniqueResults.length} unique → ${freshResults.length} fresh`);
 
         // ====== 四阶段流水线（节省 token：批量 fetch + 一次 AI 出全部字段） ======
-        type Candidate = { item: any; existsGlobally: boolean };
+        type Candidate = { item: SearchResult; existsGlobally: boolean };
 
         // 阶段 1：扫描 + 全局去重（已有项目不计 OTHER_QUOTA）
         const candidates: Candidate[] = [];
@@ -262,7 +262,7 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
         // 阶段 4：过滤 + 分发插入
         for (let i = 0; i < candidates.length; i++) {
           const { item, existsGlobally } = candidates[i];
-          let analysis: any;
+          let analysis: { isReal?: boolean; relevance?: number; relevanceReason?: string; keywordMentioned?: boolean; importance?: string; summary?: string; fullContent?: string | null };
           if (existsGlobally) {
             analysis = {
               isReal: true,

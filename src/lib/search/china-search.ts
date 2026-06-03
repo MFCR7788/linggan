@@ -172,7 +172,7 @@ export async function fetchBaiduHotList(): Promise<HotListItem[]> {
       const cards = apiRes.data?.data?.cards ?? apiRes.data?.cards ?? [];
       for (const card of cards) {
         if (Array.isArray(card.content)) {
-          items.push(...card.content.map((c: any) => ({
+          items.push(...card.content.map((c: { word?: string; query?: string; desc?: string; descSummary?: string; url?: string; appUrl?: string; hotScore?: number; heatScore?: number }) => ({
             word: c.word || c.query || '',
             desc: c.desc || c.descSummary || '',
             url: c.url || c.appUrl || '',
@@ -198,7 +198,7 @@ export async function fetchBaiduHotList(): Promise<HotListItem[]> {
           const cards = parsed?.props?.pageProps?.cards ?? parsed?.props?.cards ?? [];
           for (const card of cards) {
             if (Array.isArray(card.content)) {
-              items.push(...card.content.map((c: any) => ({
+              items.push(...card.content.map((c: { word?: string; query?: string; desc?: string; descSummary?: string; url?: string; appUrl?: string; hotScore?: number; heatScore?: number }) => ({
                 word: c.word || c.query || '',
                 desc: c.desc || c.descSummary || '',
                 url: c.url || c.appUrl || '',
@@ -217,7 +217,7 @@ export async function fetchBaiduHotList(): Promise<HotListItem[]> {
             const cards = parsed?.cards ?? parsed?.data?.cards ?? [];
             for (const card of cards) {
               if (Array.isArray(card.content)) {
-                items.push(...card.content.map((c: any) => ({
+                items.push(...card.content.map((c: { word?: string; query?: string; desc?: string; url?: string; hotScore?: number; heatScore?: number }) => ({
                   word: c.word || c.query || '',
                   desc: c.desc || '',
                   url: c.url || '',
@@ -507,7 +507,7 @@ export async function searchDouyinHot(query: string): Promise<SearchResult[]> {
         const data = JSON.parse(itemMatch[1]);
         const items = data?.wordList || data?.hotWords || [];
         if (Array.isArray(items)) {
-          items.slice(0, 20).forEach((item: any) => {
+          items.slice(0, 20).forEach((item: { word?: string; hot_word?: string; hot_value?: number; label?: string }) => {
             const title = item.word || item.hot_word || '';
             if (title) {
               results.push({

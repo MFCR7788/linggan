@@ -182,13 +182,15 @@ ${summarySource.slice(0, 2500)}
  * 批量分析（每批 3 个并发）
  * 一次 AI 调用同时输出 6 字段 + 100 字 summary
  */
+type AnalyzeResult = Awaited<ReturnType<typeof analyzeContent>>;
+
 export async function batchAnalyze(
   items: Array<{ shortText: string; fullContent?: string | null }>,
   keyword: string,
   expandedKeywords?: string[]
-): Promise<any[]> {
+): Promise<AnalyzeResult[]> {
   const batchSize = 3;
-  const results: any[] = [];
+  const results: AnalyzeResult[] = [];
 
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);

@@ -10,10 +10,11 @@ const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 function ffmpegExec(cmd: string): void {
   try {
     execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
-  } catch (e: any) {
-    const stderr = e.stderr?.toString() || '';
-    const stdout = e.stdout?.toString() || '';
-    const detail = (stderr + stdout).trim() || e.message;
+  } catch (e: unknown) {
+    const execError = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
+    const stderr = execError.stderr?.toString() || '';
+    const stdout = execError.stdout?.toString() || '';
+    const detail = (stderr + stdout).trim() || (e instanceof Error ? e.message : String(e));
     console.error('[ffmpeg] 命令失败:', cmd.substring(0, 120));
     console.error('[ffmpeg] 错误:', detail);
     throw new Error(`ffmpeg 执行失败: ${detail.substring(0, 300)}`);

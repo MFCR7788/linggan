@@ -15,8 +15,8 @@ interface DigitalHumanParams {
   inspirationId?: string;
 }
 
-export async function processDigitalHumanTask(task: AiTask): Promise<any> {
-  const params: DigitalHumanParams = task.input as any;
+export async function processDigitalHumanTask(task: AiTask): Promise<unknown> {
+  const params = task.input as DigitalHumanParams;
   if (!params?.imageUrl) {
     throw new Error('imageUrl 必填');
   }
@@ -30,7 +30,7 @@ export async function processDigitalHumanTask(task: AiTask): Promise<any> {
     audioUrl: params.audioUrl,
   });
 
-  const externalTaskId = (submitResult as any).taskId || (submitResult as any).task_id;
+  const externalTaskId = submitResult.taskId || (submitResult as Record<string, unknown>).task_id as string;
   if (!externalTaskId) {
     throw new Error('数字人提交失败:未返回 task_id');
   }
@@ -62,10 +62,10 @@ export async function processDigitalHumanTask(task: AiTask): Promise<any> {
 /**
  * 完成回调:写 content_items + 记 AI 用量
  */
-export async function onDigitalHumanCompleted(task: AiTask, output: any): Promise<void> {
+export async function onDigitalHumanCompleted(task: AiTask, output: Record<string, unknown> | null): Promise<void> {
   if (!output?.videoUrl) return;
   const supabase = createAdminClient();
-  const params: DigitalHumanParams = task.input as any;
+  const params = task.input as DigitalHumanParams;
 
   // 写 content_items
   await supabase
@@ -85,7 +85,7 @@ export async function onDigitalHumanCompleted(task: AiTask, output: any): Promis
   // 计费(单条)
   try {
     await logAiUsage(task.user_id, 'digital_human', 1);
-  } catch (e: any) {
-    console.warn('[digital-human worker] logAiUsage 失败:', e.message);
+  } catch (e: unknown) {
+    console.warn('[digital-human worker] logAiUsage 失败:', e instanceof Error ? e.message : String(e));
   }
 }

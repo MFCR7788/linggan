@@ -202,7 +202,7 @@ export async function updateProgress(taskId: string, progress: number, workerId?
 
 // ─── 标记完成 ──────────────────────────────────────────────
 
-export async function markCompleted(taskId: string, output: any): Promise<void> {
+export async function markCompleted(taskId: string, output: unknown): Promise<void> {
   const supabase = createAdminClient();
   const { error } = await supabase
     .from('ai_tasks')

@@ -69,7 +69,8 @@ function LoginContent() {
         throw new Error(data.error);
       }
 
-      setError(data.message || "验证码已发送");
+      const msg = data.message || '验证码已发送';
+      setError(data.code ? `${msg}（开发码: ${data.code}）` : msg);
       setTimeout(() => setError(""), 3000);
       setCountdown(60);
     } catch (err) {
@@ -192,7 +193,7 @@ function LoginContent() {
             🧪 本地测试模式
           </p>
           <p style={{ color: "#86EFAC", fontSize: 12, textAlign: "center", marginTop: 4 }}>
-            发送验证码后，请使用 <strong>123456</strong> 进行登录/注册
+            短信发送失败时会显示开发验证码
           </p>
         </div>
         )}

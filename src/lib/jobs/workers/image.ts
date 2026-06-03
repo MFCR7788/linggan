@@ -52,10 +52,10 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
   await updateProgress(task.id, 80, workerId);
 
   const isBatch = Array.isArray(result);
-  const firstResult = isBatch ? (result as any[])[0] : (result as any);
+  const firstResult = isBatch ? result[0] : result;
   const imageUrls: string[] = isBatch
-    ? (result as any[]).map((r) => r.imageUrl).filter(Boolean)
-    : [(result as any).imageUrl].filter(Boolean);
+    ? result.map((r) => r.imageUrl).filter(Boolean)
+    : [result.imageUrl].filter(Boolean);
 
   if (imageUrls.length === 0) {
     throw Object.assign(new Error('生成结果为空'), { code: 'EMPTY_RESULT' });
@@ -80,17 +80,17 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
         is_shared: false,
         category_id: null,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       // 写灵感库失败不阻塞任务完成（图片本身已生成）
-      console.warn(`[image worker] 写灵感库失败: ${e.message}`);
+      console.warn(`[image worker] 写灵感库失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   // 5) 记录 AI 用量
   try {
     await logAiUsage(task.user_id, 'image', 100 * imageUrls.length);
-  } catch (e: any) {
-    console.warn(`[image worker] logAiUsage 失败: ${e.message}`);
+  } catch (e: unknown) {
+    console.warn(`[image worker] logAiUsage 失败: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 6) 上报进度 100%

@@ -21,7 +21,7 @@ export async function getUserPlan(userId: string): Promise<UserPlan> {
     .select('plan')
     .eq('id', userId)
     .maybeSingle();
-  const plan = (data as any)?.plan;
+  const plan = (data as { plan?: string } | null)?.plan;
   if (plan === 'pro' || plan === 'creator') return plan;
   return 'free';
 }
@@ -38,8 +38,8 @@ export async function getUsage(userId: string): Promise<UsageSnapshot> {
       .maybeSingle(),
   ]);
 
-  const plan = (planRes.data as any)?.plan;
-  const storageUsedMB = Number((usageRes.data as any)?.storage_used_mb || 0);
+  const plan = (planRes.data as { plan?: string } | null)?.plan;
+  const storageUsedMB = Number((usageRes.data as { storage_used_mb?: number } | null)?.storage_used_mb || 0);
 
   return {
     plan: plan === 'pro' || plan === 'creator' ? plan : 'free',
@@ -69,7 +69,7 @@ export async function addStorageUsage(userId: string, bytes: number): Promise<vo
     .eq('month', month)
     .maybeSingle();
 
-  const currentMB = Number((data as any)?.storage_used_mb || 0);
+  const currentMB = Number((data as { storage_used_mb?: number } | null)?.storage_used_mb || 0);
   const newMB = Math.max(0, currentMB + additionalMB);
 
   await supabase
@@ -92,7 +92,7 @@ export async function subtractStorageUsage(userId: string, bytes: number): Promi
     .maybeSingle();
 
   if (!data) return;
-  const currentMB = Number((data as any).storage_used_mb || 0);
+  const currentMB = Number((data as { storage_used_mb?: number }).storage_used_mb || 0);
   const newMB = Math.max(0, currentMB - subMB);
 
   await supabase
