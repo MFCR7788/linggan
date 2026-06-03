@@ -8,6 +8,7 @@ import {
   ImageIcon, Upload, Link, Mic, Music, Volume2,
   FileText, Globe, BookOpen, Layers, ChevronDown, ChevronUp,
   Settings, Trash2, Plus, Square, Share2, Video as VideoIcon, ArrowRight,
+  Sparkles, FolderOpen,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -35,7 +36,7 @@ interface InspirationItem {
   ai_summary?: string;
 }
 
-type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang';
+type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang' | 'animate';
 
 interface BatchItem {
   id: string;
@@ -60,6 +61,7 @@ const MODES: { key: DigitalHumanMode; label: string; icon: string; desc: string 
   { key: 'ai-write', label: 'AI 写稿', icon: '✍️', desc: '主题→AI脚本' },
   { key: 'batch', label: '批量生成', icon: '📦', desc: '20s 短视频合集' },
   { key: 'multi-lang', label: '多语言', icon: '🌐', desc: '20s 多语种短讲解' },
+  { key: 'animate', label: '用我的形象', icon: '🎭', desc: '角色动作迁移' },
   { key: 'manual', label: '手动配置', icon: '⚙️', desc: '逐步设置' },
 ];
 
@@ -117,6 +119,18 @@ function DigitalHumanContent() {
   const [isGeneratingTTS, setIsGeneratingTTS] = useState(false);
   const [ttsAudioBase64, setTtsAudioBase64] = useState<string | null>(null);
   const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null); // 声音克隆 ID
+
+  // ─── Animate 模式（角色动作迁移，wan2.2-animate）──
+  const [animateRefImageUrl, setAnimateRefImageUrl] = useState('');
+  const [animateMotionVideoUrl, setAnimateMotionVideoUrl] = useState('');
+  const [animateMode, setAnimateMode] = useState<'animate' | 'replace'>('animate');
+  const [animateResolution, setAnimateResolution] = useState<'480P' | '720P'>('720P');
+  const [animateTaskId, setAnimateTaskId] = useState<string | null>(null);
+  const [animatePhase, setAnimatePhase] = useState<'idle' | 'submitting' | 'running' | 'done' | 'failed'>('idle');
+  const [animateResultUrl, setAnimateResultUrl] = useState<string | null>(null);
+  const [animateError, setAnimateError] = useState<string | null>(null);
+  const animatePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isUploadingMotionVideo, setIsUploadingMotionVideo] = useState(false);
 
   // 加载已保存的克隆音色
   useEffect(() => {
@@ -458,6 +472,122 @@ function DigitalHumanContent() {
     setGeneratePhase('idle');
     setTaskId(null);
   };
+
+  // ─── Animate 模式:上传参考视频/头像 → 提交 → 轮询 ──
+  const handleUploadMotionVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) {
+      setToast({ message: '参考视频需 ≤ 100MB', type: 'error' });
+      return;
+    }
+    setIsUploadingMotionVideo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file, `motion-${Date.now()}.${file.name.split('.').pop()}`);
+      const res = await fetch('/api/upload/inspiration', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.success && data.data?.url) {
+        setAnimateMotionVideoUrl(data.data.url);
+        setToast({ message: '参考视频已上传', type: 'success' });
+      } else {
+        setToast({ message: data.error || '上传失败', type: 'error' });
+      }
+    } catch {
+      setToast({ message: '上传失败,请重试', type: 'error' });
+    }
+    setIsUploadingMotionVideo(false);
+  };
+
+  const handleAnimateSubmit = async () => {
+    if (!animateRefImageUrl || !animateMotionVideoUrl) {
+      setToast({ message: '请提供角色头像 + 参考视频', type: 'error' });
+      return;
+    }
+    setAnimatePhase('submitting');
+    setAnimateError(null);
+    setAnimateResultUrl(null);
+    try {
+      const res = await fetch('/api/ai/digital-human/animate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: animateRefImageUrl,
+          videoUrl: animateMotionVideoUrl,
+          mode: animateMode,
+          resolution: animateResolution,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAnimatePhase('failed');
+        setAnimateError(data.error || '提交失败');
+        setToast({ message: data.error || '提交失败', type: 'error' });
+        return;
+      }
+      setAnimateTaskId(data.data.taskId);
+      setAnimatePhase('running');
+      setToast({ message: 'Animate 任务已提交,通常 1-3 分钟', type: 'success' });
+      // 开始轮询
+      if (animatePollRef.current) clearInterval(animatePollRef.current);
+      animatePollRef.current = setInterval(pollAnimateStatus, 6000);
+      setTimeout(pollAnimateStatus, 2000);
+    } catch (e: any) {
+      setAnimatePhase('failed');
+      setAnimateError(e?.message || '网络错误');
+    }
+  };
+
+  const pollAnimateStatus = async () => {
+    if (!animateTaskId) return;
+    try {
+      const res = await fetch(`/api/ai/digital-human/animate?taskId=${encodeURIComponent(animateTaskId)}`);
+      const data = await res.json();
+      if (data.success) {
+        const s = data.data;
+        if (s.status === 'succeeded') {
+          setAnimateResultUrl(s.videoUrl);
+          setAnimatePhase('done');
+          if (animatePollRef.current) clearInterval(animatePollRef.current);
+          setToast({ message: '🎉 Animate 角色动作生成完成', type: 'success' });
+        } else if (s.status === 'failed') {
+          setAnimateError(s.message || '生成失败');
+          setAnimatePhase('failed');
+          if (animatePollRef.current) clearInterval(animatePollRef.current);
+        }
+      }
+    } catch {}
+  };
+
+  const handleAnimateSave = async () => {
+    if (!animateResultUrl) return;
+    try {
+      const res = await fetch('/api/inspiration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'video',
+          title: `Animate 角色动作 · ${animateMode === 'animate' ? '动作迁移' : '角色替换'}`,
+          media_urls: [animateResultUrl],
+          tags: ['Animate', '角色动作', 'wan2.2-animate'],
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToast({ message: '已存入灵感库', type: 'success' });
+      } else {
+        setToast({ message: data.error || '保存失败', type: 'error' });
+      }
+    } catch {
+      setToast({ message: '保存失败', type: 'error' });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (animatePollRef.current) clearInterval(animatePollRef.current);
+    };
+  }, []);
 
   const handleDownload = async (url?: string) => {
     const u = url || finalVideoUrl;
@@ -1596,6 +1726,159 @@ function DigitalHumanContent() {
   );
 
   // ══════════════════════════════════════════════════════════
+  // 模式：用我的形象（wan2.2-animate 角色动作迁移）
+  // ══════════════════════════════════════════════════════════
+
+  const renderAnimateMode = () => (
+    <>
+      <GlassCard>
+        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          <span style={{ color: '#EC4899' }}>🎭 角色动作迁移</span> · 静态头像 + 参考视频
+        </p>
+        <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6, marginBottom: 12 }}>
+          上传一张角色头像(创始人/虚拟形象) + 一段参考视频(任意人物动作/口播),AI 会让头像复刻视频里的动作、表情、口型。
+          <br />适合: 创始人 IP 持续产出、虚拟主播预制动作库、产品发布会动画。
+        </p>
+
+        {/* 角色头像:复用 imagePreview / imageUrl 状态 */}
+        <div className="mb-3">
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>① 角色头像(必填)</p>
+          {imagePreview || imageUrl ? (
+            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)' }}>
+              <img src={imagePreview || imageUrl} alt="角色" className="w-12 h-12 rounded-lg object-cover" />
+              <div className="flex-1 min-w-0">
+                <p style={{ color: '#86EFAC', fontSize: 11, fontWeight: 600 }}>已选择</p>
+                <p style={{ color: '#6B7280', fontSize: 10 }} className="truncate">{imagePreview || imageUrl}</p>
+              </div>
+              <button onClick={() => { setImagePreview(null); setImageUrl(''); setAnimateRefImageUrl(''); }}
+                style={{ color: '#FCA5A5', fontSize: 11 }}>清除</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setImageTab('upload')}
+              className="w-full py-2.5 rounded-lg text-xs"
+              style={{ background: 'rgba(236,72,153,0.1)', border: '1px dashed rgba(236,72,153,0.4)', color: '#F9A8D4' }}
+            >
+              👆 请先在上方「选择图片」上传/选一张头像
+            </button>
+          )}
+          {(imagePreview || imageUrl) && (
+            <input
+              value={animateRefImageUrl || imagePreview || imageUrl}
+              onChange={(e) => setAnimateRefImageUrl(e.target.value)}
+              placeholder="或直接粘贴图片 URL"
+              className="w-full mt-2 px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none"
+              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+          )}
+        </div>
+
+        {/* 参考视频 */}
+        <div className="mb-3">
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>② 参考视频(必填, ≤100MB)</p>
+          {animateMotionVideoUrl ? (
+            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)' }}>
+              <video src={animateMotionVideoUrl} className="w-12 h-12 rounded-lg object-cover" muted />
+              <div className="flex-1 min-w-0">
+                <p style={{ color: '#86EFAC', fontSize: 11, fontWeight: 600 }}>已上传参考视频</p>
+                <p style={{ color: '#6B7280', fontSize: 10 }} className="truncate">{animateMotionVideoUrl}</p>
+              </div>
+              <button onClick={() => setAnimateMotionVideoUrl('')}
+                style={{ color: '#FCA5A5', fontSize: 11 }}>清除</button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center gap-1.5 py-3 rounded-lg cursor-pointer"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.2)' }}>
+              <Upload size={18} color="#9CA3AF" />
+              <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                {isUploadingMotionVideo ? '上传中...' : '点击上传参考视频(mp4/mov)'}
+              </span>
+              <input type="file" accept="video/mp4,video/quicktime,video/*"
+                onChange={handleUploadMotionVideo} style={{ display: 'none' }} />
+            </label>
+          )}
+        </div>
+
+        {/* 模式 + 分辨率 */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>迁移模式</p>
+            <div className="flex gap-1">
+              {(['animate', 'replace'] as const).map((m) => (
+                <button key={m} onClick={() => setAnimateMode(m)}
+                  className="flex-1 py-1.5 rounded-lg text-xs"
+                  style={{
+                    background: animateMode === m ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.05)',
+                    border: animateMode === m ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    color: animateMode === m ? '#F9A8D4' : '#9CA3AF',
+                  }}>
+                  {m === 'animate' ? '动作迁移' : '角色替换'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>分辨率</p>
+            <div className="flex gap-1">
+              {(['480P', '720P'] as const).map((r) => (
+                <button key={r} onClick={() => setAnimateResolution(r)}
+                  className="flex-1 py-1.5 rounded-lg text-xs"
+                  style={{
+                    background: animateResolution === r ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.05)',
+                    border: animateResolution === r ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    color: animateResolution === r ? '#F9A8D4' : '#9CA3AF',
+                  }}>{r}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 提交 */}
+        {animatePhase === 'idle' || animatePhase === 'failed' ? (
+          <PrimaryButton fullWidth size="lg" onClick={handleAnimateSubmit}
+            disabled={!animateRefImageUrl || !animateMotionVideoUrl}>
+            <Sparkles size={16} /> {animatePhase === 'failed' ? '重试' : '开始 Animate'}
+          </PrimaryButton>
+        ) : animatePhase === 'submitting' || animatePhase === 'running' ? (
+          <div className="flex flex-col items-center py-3 gap-2">
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 rounded-full border-2 border-pink-400 border-t-transparent animate-spin" />
+            </div>
+            <p style={{ color: '#F9A8D4', fontSize: 12 }}>
+              {animatePhase === 'submitting' ? '提交中...' : '生成中(1-3 分钟)...'}
+            </p>
+          </div>
+        ) : null}
+        {animateError && (
+          <p style={{ color: '#FCA5A5', fontSize: 11, marginTop: 8 }}>❌ {animateError}</p>
+        )}
+      </GlassCard>
+
+      {/* 结果区 */}
+      {animateResultUrl && (
+        <GlassCard>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+            <span style={{ color: '#22C55E' }}>✨ 生成结果</span> · 角色动作视频
+          </p>
+          <video src={animateResultUrl} controls className="w-full rounded-xl mb-3" />
+          <div className="grid grid-cols-2 gap-2">
+            <a href={animateResultUrl} target="_blank" rel="noreferrer"
+              className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
+              style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#86EFAC' }}>
+              <Download size={16} /> 下载
+            </a>
+            <button onClick={handleAnimateSave}
+              className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs"
+              style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}>
+              <FolderOpen size={16} /> 存灵感库
+            </button>
+          </div>
+        </GlassCard>
+      )}
+    </>
+  );
+
+  // ══════════════════════════════════════════════════════════
   // 主渲染
   // ══════════════════════════════════════════════════════════
 
@@ -1638,6 +1921,7 @@ function DigitalHumanContent() {
         {dhMode === 'one-click' && renderOneClickMode()}
         {dhMode === 'batch' && renderBatchMode()}
         {dhMode === 'multi-lang' && renderMultiLangMode()}
+        {dhMode === 'animate' && renderAnimateMode()}
       </div>
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />

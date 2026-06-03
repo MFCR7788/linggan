@@ -18,6 +18,8 @@ export interface QualityTier {
   description: string;
   t2v: VideoModelConfig;
   i2v: VideoModelConfig;
+  /** 多关键帧模式（首帧 + 尾帧 + 可选中间关键帧） */
+  multiImageI2v?: VideoModelConfig;
 }
 
 export const QUALITY_TIERS: Record<string, QualityTier> = {
@@ -37,6 +39,12 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
       model: process.env.SEEDANCE_LITE_I2V_MODEL_ID || 'doubao-seedance-1-0-lite-i2v-250428',
       resolution: '720p',
       price: '约¥0.3/秒',
+    },
+    multiImageI2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_LITE_I2V_MODEL_ID || 'doubao-seedance-1-0-lite-i2v-250428',
+      resolution: '720p',
+      price: '约¥0.4/秒(多帧)',
     },
   },
   standard: {
@@ -60,6 +68,12 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
       extraParams: { prompt_extend: true, shot_type: 'multi' },
       price: '约¥0.5/秒',
     },
+    multiImageI2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
+      resolution: '720p',
+      price: '约¥0.6/秒(多帧)',
+    },
   },
   premium: {
     value: 'premium',
@@ -77,6 +91,12 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
       model: 'happyhorse-1.0-i2v',
       resolution: '720P',
       price: '约¥0.9/秒',
+    },
+    multiImageI2v: {
+      provider: 'ark',
+      model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
+      resolution: '1080p',
+      price: '约¥0.8/秒(多帧高清)',
     },
   },
 };
