@@ -2,6 +2,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
+import { Pool } from 'pg';
 
 // 创建代理 fetch — 每个 Supabase 客户端注入独立 dispatcher，不污染全局
 function createProxyFetch(): typeof globalThis.fetch {
@@ -54,6 +55,19 @@ export function createAdminClient() {
 }
 
 // 服务端客户端 - 用于 API routes（带 cookie 处理）
+// 直连 Postgres 的连接池(走 DATABASE_URL,可读 auth schema 等 PostgREST 禁的表)
+// 用完即关,适合一次性 SQL(如清 refresh_tokens / 列 sessions)
+export function createPgPool(): Pool {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL 未配置,无法直连 Postgres');
+  }
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 1,
+  });
+}
+
 export function createSupabaseServerClient() {
   let cookieStore: ReturnType<typeof cookies>;
   try {

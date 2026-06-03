@@ -256,6 +256,19 @@ const features: FeatureEntry[] = [
     ],
     path: '/notification',
   },
+  {
+    icon: <Settings size={20} />,
+    title: '账号设置',
+    desc: '管理资料、安全、通知、平台集成 4 大模块。',
+    color: '#8B5CF6',
+    highlights: [
+      '资料：修改头像、昵称，查看手机号（换号需联系客服）',
+      '安全：改密码、退出所有设备',
+      '集成：6 个 V2.0.2 env 一站式配置（自动生成 + 申请指引）',
+      '通知：跳到「通知中心」',
+    ],
+    path: '/profile/settings',
+  },
 ];
 
 // ─── 常见问题 ──────────────────────────────────────────────
@@ -329,6 +342,18 @@ const faqs: FAQEntry[] = [
   {
     q: '如何联系技术支持？',
     a: '通过本页面的"意见反馈"标签提交问题，我们会在 24 小时内回复。也可以通过反馈表单提交功能建议。',
+  },
+  {
+    q: '平台集成里的 6 个 env 为什么要分别填到 Vercel？',
+    a: '灵集代码读的是 Vercel 的 process.env，站内「平台集成」是「配置中心」（状态、申请指引、AES 加密备份），不是 env 的真源。\n\n配置流程：(1) 在站内填入或自动生成 → 站内加密存库 → 顶部出现「已配置」徽章；(2) 同步把同一个值贴到 Vercel → Settings → Environment Variables；(3) 重新部署后 Vercel env 生效 → 定时任务、多平台 OAuth 发布才真正能用。\n\n6 个 env：PLATFORM_ENCRYPTION_KEY（AES-256-GCM 加密 token 的密钥）、CRON_SECRET（Vercel cron 调 worker 的鉴权密钥）、WECHAT_MP_APP_ID/SECRET、WEIBO_APP_KEY/SECRET。',
+  },
+  {
+    q: '微信公众号需要什么资质？个人能开吗？',
+    a: '需要「已认证的服务号」+ 微信开放平台第三方平台账号，均需企业资质。\n\n流程：(1) 注册「微信公众平台」账号 → 完成企业主体认证（需营业执照，¥300/年审核费）；(2) 账号类型选「服务号」（订阅号无发文 API 权限）；(3) 在「微信开放平台」(open.weixin.qq.com) 注册开发者账号 → 认证 → 创建「第三方平台」→ 拿到 AppID + AppSecret；(4) 把这两个值填到灵集「平台集成」+ Vercel env。\n\n个人开发者无法走通这套流程（缺企业资质）。微博开放平台个人可以申请，但需要审核（约 1-3 个工作日）。',
+  },
+  {
+    q: '改密码后会退出所有设备吗？',
+    a: '会。出于安全考虑，Supabase 在密码修改后会让该用户的所有 refresh_token 立即失效，相当于强制所有设备重新登录。\n\n如果只是想在某些设备上退出、不想改密码，可以用「退出所有设备」按钮（仅当前可用，调用 listSessions + 逐个 signOut）。\n\n退出后本设备也需用新密码（或保持原密码）重新登录。',
   },
 ];
 
@@ -406,6 +431,19 @@ const guides: GuideSection[] = [
       { step: 4, content: '在首页可看到最新热点列表' },
       { step: 5, content: '点击热点查看 AI 摘要、分析和创作建议' },
       { step: 6, content: '热点库中可搜索和管理已抓取的所有热点' },
+    ],
+  },
+  {
+    title: '完善账号设置',
+    icon: <Settings size={18} />,
+    color: '#8B5CF6',
+    steps: [
+      { step: 1, content: '个人中心 → 右上角齿轮 → 跳到「账号设置」' },
+      { step: 2, content: '「资料」section：上传头像、修改昵称（1-30 字符）' },
+      { step: 3, content: '「安全」section：点「修改密码」→ 输入当前密码 + 8 位以上新密码 → 确认（其他设备会立即退出）' },
+      { step: 4, content: '「集成」section：点「自动生成 PLATFORM_ENCRYPTION_KEY」→ 复制 64 字符 hex → 粘贴到 Vercel env；CRON_SECRET 同理' },
+      { step: 5, content: '「集成」section：填入 WECHAT_MP_APP_ID / APP_SECRET、WEIBO_APP_KEY / APP_SECRET（需在微信公众平台、微博开放平台先申请）' },
+      { step: 6, content: '所有 env 都贴到 Vercel → 重新部署 → 集成状态变「已配置」+ 多平台 OAuth 发布 + 定时任务即可用' },
     ],
   },
 ];

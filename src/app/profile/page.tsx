@@ -41,7 +41,7 @@ const subscriptionTiers = [
 
 const menuItems = [
   { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey | null, color: '#3B82F6' },
-  { icon: <Settings size={18} />, label: '账号设置', page: null, color: '#8B5CF6' },
+  { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey | null, color: '#8B5CF6' },
   { icon: <CreditCard size={18} />, label: '订阅管理', page: null, color: '#F59E0B' },
   { icon: <BarChart2 size={18} />, label: '数据分析', page: null, color: '#22C55E' },
   { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey | null, color: '#9CA3AF' },
@@ -69,6 +69,8 @@ function ProfileContent() {
       case 'hotspot-library': router.push('/hotspot/library'); break;
       case 'notification': router.push('/notification'); break;
       case 'profile-help': router.push('/profile/help'); break;
+      case 'profile-settings': router.push('/profile/settings'); break;
+      case 'profile-integrations': router.push('/profile/integrations'); break;
       default: router.push('/home'); break;
     }
   };
@@ -95,7 +97,7 @@ function ProfileContent() {
       <TopNav
         title="个人中心"
         right={
-          <button className="p-1">
+          <button className="p-1" onClick={() => router.push('/profile/settings')}>
             <Settings size={20} color="#E5E7EB" />
           </button>
         }
