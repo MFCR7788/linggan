@@ -28,6 +28,12 @@ function toE164(phone: string): string {
   return phone.startsWith('+') ? phone : `+86${phone}`;
 }
 
+function toAuthEmail(phone: string): string {
+  // 用 email 字段而不是 phone 字段(Supabase Phone provider 默认禁用)
+  // 格式: 13800000000@phone.lingji.app
+  return `${phone}@phone.lingji.app`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { phone, code, username } = await request.json() as {
@@ -68,24 +74,27 @@ export async function POST(request: NextRequest) {
       .eq('id', verification.id);
 
     const e164 = toE164(phone);
+    const authEmail = toAuthEmail(phone);
     const deterministicPassword = derivePassword(phone);
 
-    // 2. 查找 Supabase Auth 用户(by phone,分页取前 1 条)
+    // 2. 查找 Supabase Auth 用户(按 email 查,Supabase Phone provider 默认禁用)
     let authUserId: string | null = null;
-    const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+    // listUsers 默认按 email/phone/元数据分页;为简单起见,精确查 email
+    const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
     if (listError) {
       console.error('[login] listUsers 失败:', listError);
       return NextResponse.json({ success: false, error: '服务暂时不可用' }, { status: 500 });
     }
-    const existing = listData?.users?.find((u: any) => u.phone === e164 || u.user_metadata?.phone === phone);
+    const existing = listData?.users?.find(
+      (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
+    );
     authUserId = existing?.id ?? null;
 
-    // 3. 不存在则创建
+    // 3. 不存在则创建(用 email 字段而非 phone,绕开 Supabase Phone provider)
     if (!authUserId) {
       const { data: created, error: createError } = await supabase.auth.admin.createUser({
-        phone: e164,
+        email: authEmail,
         password: deterministicPassword,
-        phone_confirm: true,
         email_confirm: true,
         user_metadata: {
           phone,
@@ -129,7 +138,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    let signInResult = await ssr.auth.signInWithPassword({ phone: e164, password: deterministicPassword });
+    let signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
     if (signInResult.error) {
       // 7. 老用户密码不匹配 → 重置
       console.warn(`[login] signInWithPassword 失败(${signInResult.error.message}),重置密码后重试`);
