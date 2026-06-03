@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   User as UserIcon, Shield, Bell, Plug, ChevronRight, Lock, LogOut,
   Smartphone, Edit3, Save, X, Check, AlertTriangle, Loader2, Eye, EyeOff,
-  Sparkles,
+  Sparkles, UserCircle2, Trash2, Video as VideoIcon,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -484,6 +484,265 @@ function NotificationSection() {
   );
 }
 
+// ====== 数字分身 Section ======
+
+type AvatarInfo = {
+  avatarId: string;
+  name: string;
+  status: 'training' | 'ready' | 'failed';
+  coverUrl?: string;
+  previewVideoUrl?: string;
+  trainedAt: number;
+};
+
+const AVATAR_STORAGE_KEY = 'lingji_avatar_info';
+
+function AvatarSection() {
+  const { showToast } = useToast();
+  const router = useRouter();
+  const [info, setInfo] = useState<AvatarInfo | null>(null);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [name, setName] = useState('');
+  const [lookalike, setLookalike] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AVATAR_STORAGE_KEY);
+      if (raw) setInfo(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!info || info.status !== 'training' || !info.avatarId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    setPolling(true);
+    const tick = async () => {
+      try {
+        const r = await apiClient.get<{ status: string; coverUrl?: string; previewVideoUrl?: string; error?: string }>(
+          `/api/ai/digital-human/avatar?avatarId=${encodeURIComponent(info.avatarId)}`
+        );
+        if (cancelled) return;
+        const next: AvatarInfo = {
+          ...info,
+          status: r.data?.status === 'ready' ? 'ready' : r.data?.status === 'failed' ? 'failed' : 'training',
+          coverUrl: r.data?.coverUrl ?? info.coverUrl,
+          previewVideoUrl: r.data?.previewVideoUrl ?? info.previewVideoUrl,
+        };
+        setInfo(next);
+        localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(next));
+        if (next.status === 'training') {
+          timer = setTimeout(tick, 8000);
+        } else {
+          setPolling(false);
+          if (next.status === 'ready') showToast('分身训练完成,可用于数字人页生成口播视频', 'success');
+          if (next.status === 'failed') showToast('分身训练失败,请检查视频后重试', 'error');
+        }
+      } catch {
+        if (cancelled) return;
+        timer = setTimeout(tick, 12000);
+      }
+    };
+    timer = setTimeout(tick, 2000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      setPolling(false);
+    };
+  }, [info?.avatarId, info?.status]);
+
+  const handleSubmit = async () => {
+    if (!videoUrl.trim() || !name.trim()) {
+      showToast('请填写视频 URL 和分身名称', 'error');
+      return;
+    }
+    if (!/^https?:\/\//.test(videoUrl.trim())) {
+      showToast('视频 URL 需为完整 HTTP(S) 链接', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await apiClient.post<{ avatarId: string; status: string }>('/api/ai/digital-human/avatar', {
+        videoUrl: videoUrl.trim(),
+        name: name.trim(),
+        lookalike,
+      });
+      if (!r.data?.avatarId) {
+        showToast('训练提交失败', 'error');
+        return;
+      }
+      const next: AvatarInfo = {
+        avatarId: r.data.avatarId,
+        name: name.trim(),
+        status: 'training',
+        trainedAt: Date.now(),
+      };
+      setInfo(next);
+      localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(next));
+      setVideoUrl('');
+      setName('');
+      setShowForm(false);
+      showToast('分身训练已提交,5-15 分钟完成', 'success');
+    } catch (e: any) {
+      showToast(e?.message || '提交失败', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!confirm('确认删除当前数字分身?这不影响已生成的视频。')) return;
+    localStorage.removeItem(AVATAR_STORAGE_KEY);
+    setInfo(null);
+    showToast('已删除', 'success');
+  };
+
+  return (
+    <GlassCard>
+      <div className="flex items-center gap-2 mb-3">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{ background: 'rgba(236,72,153,0.2)', border: '1px solid rgba(236,72,153,0.4)' }}
+        >
+          <UserCircle2 size={16} color="#F9A8D4" />
+        </div>
+        <div className="flex-1">
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>数字分身</p>
+          <p style={{ color: '#9CA3AF', fontSize: 11 }}>训练个人形象,一键生成口播视频(需 HEYGEN_API_KEY)</p>
+        </div>
+        {info && (
+          <button
+            onClick={handleDelete}
+            className="p-1.5 rounded-lg"
+            style={{ background: 'rgba(239,68,68,0.15)' }}
+            title="删除分身"
+          >
+            <Trash2 size={14} color="#FCA5A5" />
+          </button>
+        )}
+      </div>
+
+      {info ? (
+        <div
+          className="rounded-xl p-3 mb-2"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>{info.name}</p>
+              <p style={{ color: '#9CA3AF', fontSize: 11 }} className="mt-0.5">
+                {new Date(info.trainedAt).toLocaleString('zh-CN')}
+              </p>
+            </div>
+            <span
+              style={{
+                color: info.status === 'ready' ? '#34D399' : info.status === 'failed' ? '#FCA5A5' : '#FBBF24',
+                fontSize: 11,
+                padding: '2px 8px',
+                borderRadius: 6,
+                background: info.status === 'ready' ? 'rgba(52,211,153,0.15)'
+                  : info.status === 'failed' ? 'rgba(239,68,68,0.15)'
+                  : 'rgba(251,191,36,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {polling && <Loader2 size={10} className="animate-spin" />}
+              {info.status === 'ready' ? '已就绪' : info.status === 'failed' ? '训练失败' : '训练中'}
+            </span>
+          </div>
+
+          {info.coverUrl && (
+            <img
+              src={info.coverUrl}
+              alt={info.name}
+              className="w-full rounded-lg mb-2"
+              style={{ maxHeight: 160, objectFit: 'cover' }}
+            />
+          )}
+
+          {info.status === 'ready' && (
+            <button
+              onClick={() => router.push('/ai/digital-human?avatarId=' + info.avatarId)}
+              className="w-full py-2 rounded-lg flex items-center justify-center gap-1.5"
+              style={{ background: 'rgba(236,72,153,0.2)', color: '#F9A8D4', fontSize: 13 }}
+            >
+              <VideoIcon size={14} />
+              用此分身生成口播视频
+            </button>
+          )}
+        </div>
+      ) : (
+        !showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="w-full py-3 rounded-lg flex items-center justify-center gap-1.5"
+            style={{ background: 'rgba(236,72,153,0.15)', color: '#F9A8D4', fontSize: 13, fontWeight: 500 }}
+          >
+            <Sparkles size={14} />
+            训练我的数字分身
+          </button>
+        )
+      )}
+
+      {showForm && !info && (
+        <div className="space-y-3 mt-2">
+          <div>
+            <label style={{ color: '#9CA3AF', fontSize: 11 }} className="block mb-1">
+              分身名称(20 字以内)
+            </label>
+            <GlassInput
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, 20))}
+              placeholder="例如:创始人小明"
+            />
+          </div>
+          <div>
+            <label style={{ color: '#9CA3AF', fontSize: 11 }} className="block mb-1">
+              训练视频 URL(5-10 分钟清晰人声,正脸)
+            </label>
+            <GlassInput
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://..."
+            />
+            <p style={{ color: '#6B7280', fontSize: 10 }} className="mt-1">
+              建议:将视频上传到对象存储后粘贴公网 URL
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={lookalike}
+              onChange={(e) => setLookalike(e.target.checked)}
+              id="lookalike"
+            />
+            <label htmlFor="lookalike" style={{ color: '#D1D5DB', fontSize: 12 }}>
+              Digital Twin(高级克隆,推荐)
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowForm(false)}
+              className="flex-1 py-2 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', fontSize: 13 }}
+            >
+              取消
+            </button>
+            <PrimaryButton onClick={handleSubmit} loading={submitting} className="flex-1">
+              开始训练
+            </PrimaryButton>
+          </div>
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
 // ====== 主页面 ======
 
 function SettingsContent() {
@@ -502,6 +761,7 @@ function SettingsContent() {
       <div className="flex-1 px-4 pt-4 space-y-4">
         <ProfileSection onSaved={() => setTick(t => t + 1)} />
         <AccountTypeSection />
+        <AvatarSection />
         <SecuritySection />
         <NotificationSection />
 
