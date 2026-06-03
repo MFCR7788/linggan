@@ -1604,6 +1604,101 @@ export async function synthesizeWithClonedVoice(params: {
   }
 }
 
+// ====== 阿里 CosyVoice v2 TTS(中文 SOTA) ======
+// DashScope 同步 HTTP API:POST /api/v1/services/audio/tts/SpeechSynthesizer
+// 流程:POST → 返回 JSON 含 output.audio.url(OSS) → GET 拿 MP3 bytes
+// 价格:¥0.6/万字符(超拟人档),新用户 1 万次免费
+// 音色:cosyvoice-v2 需带 _v2 后缀(longxiaochun_v2),v3-flash 不带后缀
+// 注:cosyvoice-v1 仅支持 WebSocket,不支持 HTTP
+// 默认 v2 + 龙小淳(温柔女声·默认)
+export type CosyVoiceId = 'longxiaochun_v2' | 'longxiaoxia_v2' | 'longxiaoyu_v2' | 'longhua_v2' | 'longyue_v2' | 'longcheng_v2' | 'longjing_v2' | 'longanhuan' | 'longwan_v2' | 'longfei_v2';
+export type CosyVoiceModel = 'cosyvoice-v2' | 'cosyvoice-v3-flash';
+
+export interface CosyVoiceOptions {
+  voice?: CosyVoiceId;
+  speed?: number;     // 0.5-2.0,默认 1.0
+  pitch?: number;     // 0.5-2.0,默认 1.0
+  volume?: number;    // 0-100,默认 50
+  model?: CosyVoiceModel;
+}
+
+export async function synthesizeWithCosyVoice(params: {
+  text: string;
+  options?: CosyVoiceOptions;
+}): Promise<Buffer | null> {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) {
+    console.warn('[CosyVoice] DASHSCOPE_API_KEY 未配置');
+    return null;
+  }
+
+  const {
+    voice = 'longxiaochun_v2',
+    speed = 1.0,
+    pitch = 1.0,
+    volume = 50,
+    model = 'cosyvoice-v2',
+  } = params.options || {};
+
+  try {
+    // Step 1: 调用同步 HTTP API,获取 OSS 音频 URL
+    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        input: {
+          text: params.text,
+          voice,
+          format: 'mp3',
+          sample_rate: 24000,
+          rate: speed,
+          pitch,
+          volume,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error(`[CosyVoice] HTTP ${response.status}:`, errText.slice(0, 300));
+      return null;
+    }
+
+    const json: any = await response.json();
+    if (json.code) {
+      console.error(`[CosyVoice] 业务错误 code=${json.code}:`, json.message);
+      return null;
+    }
+
+    const audioUrl = json?.output?.audio?.url;
+    if (!audioUrl) {
+      console.warn('[CosyVoice] 响应中无 audio.url:', JSON.stringify(json).slice(0, 200));
+      return null;
+    }
+
+    // Step 2: 下载 OSS 上的 MP3
+    const audioResp = await fetch(audioUrl);
+    if (!audioResp.ok) {
+      console.error(`[CosyVoice] 下载音频失败 HTTP ${audioResp.status}`);
+      return null;
+    }
+
+    const ab = await audioResp.arrayBuffer();
+    if (ab.byteLength < 100) {
+      console.warn('[CosyVoice] 返回音频过小,可能合成失败');
+      return null;
+    }
+    return Buffer.from(ab);
+  } catch (e: any) {
+    console.warn('[CosyVoice] 调用失败:', e?.message || e);
+    return null;
+  }
+}
+
 // ====== Helpers ======
 
 function extractTags(text: string): string[] {

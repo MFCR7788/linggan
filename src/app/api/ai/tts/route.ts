@@ -1,7 +1,7 @@
 // TTS (Text-to-Speech) API — 通过火山引擎语音合成（豆包 TTS）
 import { NextResponse } from 'next/server';
 import https from 'https';
-import { synthesizeWithClonedVoice } from '@/lib/ai-services';
+import { synthesizeWithClonedVoice, synthesizeWithCosyVoice } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost, CREDIT_COSTS } from '@/lib/credit-costs';
@@ -11,16 +11,17 @@ const ACCESS_TOKEN = process.env.VOLC_TTS_ACCESS_TOKEN;
 const TTS_HOST = 'openspeech.bytedance.com';
 const TTS_PATH = '/api/v1/tts';
 
-// 音色列表 — 全部为当前账号已授权的音色
-// BV700=灿灿(女), BV007=亲切女声, BV405=甜美小源(女), BV009=知性女声(女)
-// BV701=擎苍(男), BV008=亲切男声
+// 音色列表 — CosyVoice v2 预设(中文 SOTA,听感优于豆包)
+// cosyvoice-v2 模型必须用 _v2 后缀的 voice id
+// 详见: https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list
 const VOICE_MAP: Record<string, { id: string; label: string; language: string }> = {
-  female_standard: { id: 'BV700_V2_streaming', label: '标准女声', language: 'zh' },
-  female_natural: { id: 'BV007_streaming', label: '自然女声', language: 'zh' },
-  female_emotional: { id: 'BV405_streaming', label: '甜美女声', language: 'zh' },
-  female_professional: { id: 'BV009_streaming', label: '知性女声', language: 'zh' },
-  male_standard: { id: 'BV701_V2_streaming', label: '标准男声', language: 'zh' },
-  male_natural: { id: 'BV008_streaming', label: '自然男声', language: 'zh' },
+  female_natural: { id: 'longxiaochun_v2', label: '龙小淳(温柔女声·默认)', language: 'zh' },
+  female_emotional: { id: 'longxiaoxia_v2', label: '龙小夏(活泼女声)', language: 'zh' },
+  female_professional: { id: 'longxiaoyu_v2', label: '龙小玉(知性女声)', language: 'zh' },
+  female_warm: { id: 'longhua_v2', label: '龙华(暖声女声)', language: 'zh' },
+  male_natural: { id: 'longyue_v2', label: '龙悦(磁性质声)', language: 'zh' },
+  male_warm: { id: 'longcheng_v2', label: '龙橙(暖声男声)', language: 'zh' },
+  male_professional: { id: 'longjing_v2', label: '龙靖(沉稳男声)', language: 'zh' },
 };
 
 const DEFAULT_VOICE = 'female_natural';
@@ -117,6 +118,27 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
 
+    // ─── 优先 CosyVoice(听感 SOTA) ──────────────────────
+    const cosyAudio = await synthesizeWithCosyVoice({
+      text,
+      options: {
+        voice: voiceConfig.id as any,
+        speed: speedRatio,
+        pitch: pitchRatio,
+      },
+    });
+    if (cosyAudio) {
+      return NextResponse.json({
+        success: true,
+        audioBase64: cosyAudio.toString('base64'),
+        mimeType: 'audio/mpeg',
+        voice: voiceConfig.label,
+        engine: 'cosyvoice',
+        creditsUsed: creditCost,
+      });
+    }
+    console.warn('[TTS] CosyVoice 失败/未配置,降级到豆包');
+
     const requestId = `tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const postData = JSON.stringify({
@@ -200,6 +222,7 @@ export const POST = withAuth(async ({ request, user }) => {
       audioBase64: body.data,
       mimeType: 'audio/mpeg',
       voice: voiceConfig.label,
+      engine: 'volcengine',
       creditsUsed: creditCost,
     });
   } catch (error) {
