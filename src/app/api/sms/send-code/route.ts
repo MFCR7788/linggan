@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           signName: SMS_SIGN_NAME,
           templateCode: SMS_TEMPLATE_CODE,
           templateParam: JSON.stringify({ code }),
-        });
+        } as any);
         if (result.body.code === 'OK') {
           sent = true;
         } else {
