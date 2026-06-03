@@ -109,6 +109,7 @@ function DigitalHumanContent() {
   // ─── Step 2: 音频 (manual/ai-write/multi-lang 共用) ─────
   const [audioTab, setAudioTab] = useState<'tts' | 'upload'>('tts');
   const [audioUrl, setAudioUrl] = useState('');
+  const [audioDuration, setAudioDuration] = useState<number | null>(null); // 音频实际秒数, null = 未测
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [ttsText, setTtsText] = useState('');
   const [voices, setVoices] = useState<VoiceOption[]>([]);
@@ -129,6 +130,8 @@ function DigitalHumanContent() {
     if (params.audioUrl) {
       setAudioUrl(params.audioUrl);
       setAudioTab('upload');
+      // 测预填音频的时长
+      measureAudioDuration(params.audioUrl).then(d => setAudioDuration(d)).catch(() => {});
     }
     if (params.text || params.script) {
       setTtsText((params.text || params.script || '').slice(0, 1000));
@@ -222,6 +225,18 @@ function DigitalHumanContent() {
     return uploadFile(file, 'audio');
   };
 
+  // 测音频真实时长(秒), 支持 url 或 base64 dataURL
+  const measureAudioDuration = (src: string): Promise<number> => new Promise((resolve, reject) => {
+    const a = new Audio();
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => resolve(a.duration);
+    a.onerror = () => reject(new Error('音频时长解析失败'));
+    a.src = src;
+  });
+
+  // wan2.2-s2v 硬限制 ≤ 20 秒, 超过会上游返 "input audio is longer than 20s"
+  const MAX_AUDIO_SECONDS = 20;
+
   // ─── Step 1: 图片处理 ────────────────────────────────
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -259,8 +274,19 @@ function DigitalHumanContent() {
     if (!file) return;
     setIsUploadingAudio(true);
     try {
+      // 先测本地文件时长, 超过 20 秒直接拒收(避免上传浪费)
+      const localUrl = URL.createObjectURL(file);
+      const dur = await measureAudioDuration(localUrl);
+      URL.revokeObjectURL(localUrl);
+      if (dur > MAX_AUDIO_SECONDS) {
+        setToast({ message: `音频时长 ${dur.toFixed(1)} 秒,超过 ${MAX_AUDIO_SECONDS} 秒限制,请用更短的音频`, type: 'error' });
+        setIsUploadingAudio(false);
+        e.target.value = '';
+        return;
+      }
       const url = await uploadFile(file, 'audio');
       setAudioUrl(url);
+      setAudioDuration(dur);
     } catch (err: any) {
       setToast({ message: err.message || '音频上传失败', type: 'error' });
     }
@@ -283,7 +309,16 @@ function DigitalHumanContent() {
       });
       const data = await res.json();
       if (data.success && data.audioBase64) {
+        // 测真实音频时长, 超过 20 秒直接拒收(避免数字人 API 报错)
+        const dataUrl = `data:audio/mpeg;base64,${data.audioBase64}`;
+        let dur = 0;
+        try { dur = await measureAudioDuration(dataUrl); } catch {}
+        if (dur > MAX_AUDIO_SECONDS) {
+          setToast({ message: `音频时长 ${dur.toFixed(1)} 秒,超过 ${MAX_AUDIO_SECONDS} 秒限制,请精简脚本(当前 ${txt.length} 字)`, type: 'error' });
+          return null;
+        }
         setTtsAudioBase64(data.audioBase64);
+        setAudioDuration(dur || null);
         return data.audioBase64;
       } else {
         setToast({ message: data.error || 'TTS 生成失败', type: 'error' });
@@ -318,12 +353,18 @@ function DigitalHumanContent() {
     reso: '480P' | '720P',
     onDone: (videoUrl: string) => void,
     onError: (msg: string) => void,
+    audDuration?: number | null,
   ) => {
     try {
       const res = await fetch('/api/ai/digital-human', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: imgUrl, audioUrl: audUrl, resolution: reso }),
+        body: JSON.stringify({
+          imageUrl: imgUrl,
+          audioUrl: audUrl,
+          resolution: reso,
+          audioDuration: typeof audDuration === 'number' ? audDuration : undefined,
+        }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || '提交失败');
@@ -379,6 +420,7 @@ function DigitalHumanContent() {
       imageUrl, finalAudioUrl, resolution,
       (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); },
       (msg) => { setErrorMsg(msg); setGeneratePhase('error'); },
+      audioDuration,
     );
     pollingRef.current = poll;
     if (poll) setGeneratePhase('generating');
@@ -496,6 +538,7 @@ function DigitalHumanContent() {
         submitAndPoll(imageUrl, audUrl, resolution,
           (videoUrl) => { setFinalVideoUrl(videoUrl); setOcPhase('done'); resolve(); },
           (msg) => { setOcError(msg); setOcPhase('error'); reject(new Error(msg)); },
+          audioDuration,
         );
         if (ocAbortRef.current) { setOcPhase('idle'); resolve(); }
       });
@@ -577,6 +620,7 @@ function DigitalHumanContent() {
           submitAndPoll(imageUrl, aUrl, resolution,
             (videoUrl) => { updateItem({ videoUrl, status: 'done' }); resolve(); },
             (msg) => { updateItem({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
+            audioDuration,
           );
           setTimeout(() => {
             if (batchAbortRef.current) { updateItem({ status: 'pending' }); resolve(); }
@@ -650,6 +694,7 @@ function DigitalHumanContent() {
           submitAndPoll(imageUrl, aUrl, resolution,
             (videoUrl) => { updateSeg({ videoUrl, status: 'done' }); resolve(); },
             (msg) => { updateSeg({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
+            audioDuration,
           );
           setTimeout(() => {
             if (courseAbortRef.current) { updateSeg({ status: 'pending' }); resolve(); }
@@ -786,15 +831,18 @@ function DigitalHumanContent() {
   const renderTTSPanel = (text: string, onTextChange: (v: string) => void) => {
     // 火山引擎限制 ≤1000 字节 (utf-8), 中文字符 3 字节 ≈ 300 字上限
     const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(text).length : text.length;
-    const overLimit = bytes > 1000;
+    const overBytes = bytes > 1000;
+    // 估算时长(中文常见 5 字/秒, speed 1.15 系数, 默认)
+    const estimatedSec = Math.ceil(text.length / 5);
+    const overSec = estimatedSec > MAX_AUDIO_SECONDS;
     return (
     <>
       <textarea value={text} onChange={e => onTextChange(e.target.value)}
         placeholder="输入要播报的文本内容(建议 300 字以内)..." rows={3} maxLength={1000}
         className="w-full bg-transparent p-3 rounded-xl resize-none outline-none text-sm mb-2"
         style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-      <p style={{ color: overLimit ? '#EF4444' : '#6B7280', fontSize: 10, marginBottom: 8 }}>
-        {text.length} 字 / {bytes} 字节{overLimit ? ' (超过 1000 字节限制)' : ' (建议 300 字以内)'}
+      <p style={{ color: (overBytes || overSec) ? '#EF4444' : '#6B7280', fontSize: 10, marginBottom: 8 }}>
+        {text.length} 字 / {bytes} 字节 / 预计 {estimatedSec} 秒{overSec ? ` (超过 ${MAX_AUDIO_SECONDS} 秒, 请精简)` : overBytes ? ' (超过 1000 字节)' : ' (建议 300 字以内)'}
       </p>
 
       <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>音色</p>
@@ -836,7 +884,12 @@ function DigitalHumanContent() {
       {ttsAudioBase64 && (
         <div className="mt-3 p-3 rounded-xl" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
           <audio src={`data:audio/mpeg;base64,${ttsAudioBase64}`} controls className="w-full mb-2" style={{ height: 32 }} />
-          <button onClick={handleUseTTSAudio} disabled={isUploadingAudio}
+          {audioDuration !== null && (
+            <p style={{ color: audioDuration > MAX_AUDIO_SECONDS ? '#EF4444' : '#86EFAC', fontSize: 10, marginBottom: 6 }}>
+              实际时长 {audioDuration.toFixed(1)} 秒 {audioDuration > MAX_AUDIO_SECONDS ? `(超过 ${MAX_AUDIO_SECONDS} 秒限制)` : `(${MAX_AUDIO_SECONDS} 秒内 OK)`}
+            </p>
+          )}
+          <button onClick={handleUseTTSAudio} disabled={isUploadingAudio || (audioDuration !== null && audioDuration > MAX_AUDIO_SECONDS)}
             className="w-full py-2 rounded-lg text-xs flex items-center justify-center gap-1.5"
             style={{ background: 'rgba(139,92,246,0.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.3)' }}>
             {isUploadingAudio ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
@@ -872,7 +925,14 @@ function DigitalHumanContent() {
     audioUrl ? (
       <div className="mt-3 p-3 rounded-xl flex items-center gap-3" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
         <CheckCircle2 size={16} color="#22C55E" />
-        <span style={{ color: '#86EFAC', fontSize: 12 }}>音频已就绪</span>
+        <div className="flex-1">
+          <span style={{ color: '#86EFAC', fontSize: 12 }}>音频已就绪</span>
+          {audioDuration !== null && (
+            <span style={{ color: audioDuration > MAX_AUDIO_SECONDS ? '#EF4444' : '#9CA3AF', fontSize: 10, marginLeft: 8 }}>
+              {audioDuration.toFixed(1)} 秒 {audioDuration > MAX_AUDIO_SECONDS ? `⚠️ 超过 ${MAX_AUDIO_SECONDS} 秒` : ''}
+            </span>
+          )}
+        </div>
         <audio src={audioUrl} controls className="ml-auto" style={{ height: 28, maxWidth: 160 }} />
       </div>
     ) : null

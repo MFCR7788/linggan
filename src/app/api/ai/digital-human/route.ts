@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { imageUrl, audioUrl, resolution } = await request.json();
+    const { imageUrl, audioUrl, resolution, audioDuration } = await request.json();
 
     if (!imageUrl || !audioUrl) {
       return createApiError('请提供角色图片和音频', 400);
@@ -21,6 +21,16 @@ export async function POST(request: NextRequest) {
 
     if (!imageUrl.startsWith('http') || !audioUrl.startsWith('http')) {
       return createApiError('图片和音频必须是公网可访问的URL', 400);
+    }
+
+    // 音频时长校验: wan2.2-s2v 硬限制 ≤ 20 秒, 超过会返 "input audio is longer than 20s"
+    // 接受前端测的 audioDuration (HTMLAudioElement.duration, 秒)
+    const MAX_AUDIO_SECONDS = 20;
+    if (typeof audioDuration === 'number' && audioDuration > MAX_AUDIO_SECONDS) {
+      return createApiError(
+        `音频时长 ${audioDuration.toFixed(1)} 秒,超过 wan2.2-s2v 模型的 ${MAX_AUDIO_SECONDS} 秒限制,请精简脚本(建议 300 字以内)`,
+        400
+      );
     }
 
     const result = await submitDigitalHumanTask({ imageUrl, audioUrl, resolution });
