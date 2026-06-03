@@ -393,7 +393,7 @@ function InspirationLibraryContent() {
     return false;
   };
 
-  // ====== 抖音风格卡片（所有类型） ======
+  // ====== 抖音风格卡片(所有类型) ======
   const renderCard = (item: any) => {
     const checked = selectedIds.has(item.id);
     const isVideo = item.type === "video";
@@ -401,101 +401,200 @@ function InspirationLibraryContent() {
     const thumbnailUrl = item.media_urls?.[0];
     const hasMedia = isVideo || isImage;
     const typeLabel = TYPE_LABELS[item.type] || item.type;
+    // 类型角标:有 original_file_url 用扩展名(用户上传的原始文件),否则用 typeLabel
+    // 这样 image/video 灵感会显示「图片/视频」而不是文件扩展名
+    const typeBadge = item.original_file_url
+      ? (item.original_filename?.split('.').pop()?.toUpperCase() || 'FILE')
+      : typeLabel;
+    // 视频时长(秒 → mm:ss)
+    const videoDuration = item.metadata?.duration || item.duration;
+    const formatVideoDuration = (s: number) => {
+      if (!s || !Number.isFinite(s)) return '';
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m}:${sec.toString().padStart(2, '0')}`;
+    };
 
     return (
-      <GlassCard key={item.id} hover onClick={() => isSelecting ? toggleSelect(item.id) : handleNavigate("inspiration-detail", item.id)} className="!p-0 overflow-hidden group relative">
-        {/* 选择模式勾选 */}
-        {isSelecting && (
-          <button onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }} className="absolute top-2 left-2 z-10 p-0.5 rounded" style={{ background: "rgba(0,0,0,0.5)" }}>
-            {checked ? <CheckSquare size={20} color="#3B82F6" /> : <Square size={20} color="#9CA3AF" />}
-          </button>
-        )}
-        {!isSelecting && (
-          <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all">
-            <button onClick={(e) => handleOpenEdit(e, item)} className="p-1 rounded" style={{ background: "rgba(0,0,0,0.5)" }} title="编辑">
-              <Pencil size={14} color="#E5E7EB" />
+      <GlassCard
+        key={item.id}
+        hover
+        onClick={() => isSelecting ? toggleSelect(item.id) : handleNavigate("inspiration-detail", item.id)}
+        className="!p-0 overflow-hidden group relative flex flex-col"
+      >
+        {/* 顶部操作层:选择模式勾选 / 常态编辑+删除(常驻,移动端也可见) */}
+        <div className="absolute top-2 left-2 right-2 z-20 flex items-start justify-between pointer-events-none">
+          {isSelecting ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
+              className="p-0.5 rounded pointer-events-auto"
+              style={{ background: "rgba(0,0,0,0.5)" }}
+              aria-label="选择"
+            >
+              {checked ? <CheckSquare size={20} color="#3B82F6" /> : <Square size={20} color="#E5E7EB" />}
             </button>
-            <button onClick={(e) => handleSingleDelete(e, item.id)} className="p-1 rounded" style={{ background: "rgba(0,0,0,0.5)" }} title="删除">
-              <Trash2 size={14} color="#EF4444" />
-            </button>
-          </div>
-        )}
+          ) : <span />}
 
-        {/* 上半部分：媒体/内容预览 */}
-        <div className="relative" style={{ aspectRatio: "3/4" }}>
+          {!isSelecting && (
+            <div className="flex gap-1 pointer-events-auto">
+              <button
+                onClick={(e) => handleOpenEdit(e, item)}
+                className="p-1 rounded opacity-70 group-hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+                title="编辑"
+                aria-label="编辑"
+              >
+                <Pencil size={13} color="#E5E7EB" />
+              </button>
+              <button
+                onClick={(e) => handleSingleDelete(e, item.id)}
+                className="p-1 rounded opacity-70 group-hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+                title="删除"
+                aria-label="删除"
+              >
+                <Trash2 size={13} color="#FCA5A5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 上半部分:媒体/内容预览 */}
+        <div className="relative w-full" style={{ aspectRatio: "3/4" }}>
           {hasMedia && thumbnailUrl ? (
             isVideo && !item.thumbnail_url ? (
-              <video src={thumbnailUrl} className="w-full h-full object-cover" muted preload="metadata" />
+              <>
+                <video
+                  src={thumbnailUrl}
+                  className="w-full h-full object-cover"
+                  muted
+                  preload="metadata"
+                  playsInline
+                />
+                {/* 视频中央播放圈 */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  style={{ background: "rgba(0,0,0,0.2)" }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
+                    <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                  </div>
+                </div>
+                {/* 视频时长(右下角,跟类型角标不冲突) */}
+                {videoDuration && (
+                  <span
+                    className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
+                    style={{ background: "rgba(0,0,0,0.75)", color: "#FFFFFF" }}
+                  >
+                    {formatVideoDuration(videoDuration)}
+                  </span>
+                )}
+              </>
             ) : (
               <div className="relative w-full h-full">
                 <img
                   src={item.thumbnail_url || thumbnailUrl}
-                  alt=""
+                  alt={item.title || "灵感图片"}
                   loading="lazy"
                   className="w-full h-full object-cover"
                 />
                 {isVideo && (
-                  <div className="absolute inset-0 flex items-center justify-center"
-                    style={{ background: "rgba(0,0,0,0.25)" }}>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    style={{ background: "rgba(0,0,0,0.2)" }}>
                     <div className="w-10 h-10 rounded-full flex items-center justify-center"
                       style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
                       <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                     </div>
                   </div>
                 )}
+                {/* 视频时长 */}
+                {isVideo && videoDuration && (
+                  <span
+                    className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
+                    style={{ background: "rgba(0,0,0,0.75)", color: "#FFFFFF" }}
+                  >
+                    {formatVideoDuration(videoDuration)}
+                  </span>
+                )}
               </div>
             )
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-4" style={{ background: "rgba(255,255,255,0.05)" }}>
-              <span style={{ fontSize: 36 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
-              <p style={{ color: "#D1D5DB", fontSize: 11, textAlign: "center", marginTop: 8 }} className="line-clamp-4">
-                {item.ai_summary || item.original_text?.substring(0, 120) || item.title || "暂无内容"}
+            <div
+              className="w-full h-full flex flex-col items-center justify-center p-3 overflow-hidden"
+              style={{ background: "rgba(255,255,255,0.05)" }}
+            >
+              <span style={{ fontSize: 32 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
+              <p
+                style={{ color: "#D1D5DB", fontSize: 11, textAlign: "center", marginTop: 8, lineHeight: 1.4 }}
+                className="line-clamp-4 w-full break-words"
+              >
+                {item.ai_summary || item.original_text?.substring(0, 80) || item.title || "暂无内容"}
               </p>
             </div>
           )}
-          {/* 类型角标 / AI 总结中徽标 */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
-            <span className="px-1.5 py-0.5 rounded text-xs font-medium"
-              style={{ background: "rgba(0,0,0,0.6)", color: "#FFFFFF" }}>
-              {item.original_file_url
-                ? (item.original_filename?.split('.').pop()?.toUpperCase() || 'FILE')
-                : typeLabel}
+
+          {/* 类型角标:非选择模式放左上(顶部操作层不挡),选择模式隐藏(避免和勾选重叠) */}
+          {!isSelecting && (
+            <span
+              className="absolute z-10 pointer-events-none"
+              style={{
+                bottom: 8,
+                left: 8,
+                padding: "2px 6px",
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 500,
+                background: "rgba(0,0,0,0.65)",
+                color: "#FFFFFF",
+                maxWidth: "calc(100% - 16px)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={typeBadge}
+            >
+              {typeBadge}
             </span>
-            {isExtractingOrPending(item) && (
-              <span className="px-1.5 py-0.5 rounded text-xs font-medium flex items-center gap-1"
-                style={{
-                  background: "rgba(249,115,22,0.95)",
-                  color: "#FFFFFF",
-                  boxShadow: "0 0 0 0 rgba(249,115,22,0.7)",
-                  animation: "pulse-orange 1.5s infinite",
-                }}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: '#FFFFFF', display: 'inline-block',
-                  animation: 'pulse 1s infinite',
-                }} />
-                AI 总结中
-              </span>
-            )}
-            {item.extraction_status === 'failed' && (
-              <span className="px-1.5 py-0.5 rounded text-xs font-medium"
-                style={{ background: "rgba(239,68,68,0.9)", color: "#FFFFFF" }}>
-                抽取失败
-              </span>
-            )}
-          </div>
+          )}
+
+          {/* AI 总结中徽标(右上,跟操作按钮并列,选择模式时也保留) */}
+          {isExtractingOrPending(item) && (
+            <span
+              className="absolute top-9 right-2 z-10 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 pointer-events-none"
+              style={{
+                background: "rgba(249,115,22,0.95)",
+                color: "#FFFFFF",
+                boxShadow: "0 0 0 0 rgba(249,115,22,0.7)",
+                animation: "pulse-orange 1.5s infinite",
+              }}
+            >
+              <span style={{
+                width: 5, height: 5, borderRadius: '50%',
+                background: '#FFFFFF', display: 'inline-block',
+                animation: 'pulse 1s infinite',
+              }} />
+              AI 总结中
+            </span>
+          )}
+          {item.extraction_status === 'failed' && (
+            <span
+              className="absolute top-9 right-2 z-10 px-1.5 py-0.5 rounded text-[10px] font-medium pointer-events-none"
+              style={{ background: "rgba(239,68,68,0.9)", color: "#FFFFFF" }}
+            >
+              抽取失败
+            </span>
+          )}
         </div>
 
         {/* 底部信息 */}
-        <div className="p-2.5">
-          <p style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 600 }} className="line-clamp-2 mb-1">
+        <div className="p-2.5 flex-1 flex flex-col">
+          <p style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 600 }} className="line-clamp-2 mb-1 break-words">
             {item.title || "未命名"}
           </p>
-          <p style={{ color: "#9CA3AF", fontSize: 10 }} className="line-clamp-2">
+          <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }} className="line-clamp-2 break-words">
             {item.ai_summary || item.original_text?.substring(0, 60) || "暂无描述"}
           </p>
-          <div className="flex items-center justify-between mt-1.5">
-            <span style={{ color: "#6B7280", fontSize: 10 }}>
+          <div className="flex items-center justify-between mt-1.5 gap-1.5">
+            <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">
               {new Date(item.created_at).toLocaleDateString("zh-CN")}
             </span>
             <GlassBadge>{STATUS_LABELS[item.status] || "待处理"}</GlassBadge>
