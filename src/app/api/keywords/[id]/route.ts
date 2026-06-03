@@ -42,10 +42,17 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
   return createApiResponse(data, '更新成功');
 });
 
-// 删除关键词
+// 删除关键词（级联清理关联的热点）
 export const DELETE = withAuth(async ({ user, params }) => {
   const { id } = params;
   const supabase = createAdminClient();
+
+  const { count: hotCount } = await supabase
+    .from('hot_items')
+    .delete()
+    .eq('monitor_keyword_id', id)
+    .eq('user_id', user.id)
+    .select('*', { count: 'exact', head: true });
 
   const { error } = await supabase
     .from('monitor_keywords')
@@ -54,5 +61,5 @@ export const DELETE = withAuth(async ({ user, params }) => {
     .eq('user_id', user.id);
 
   if (error) throw error;
-  return createApiResponse(null, '删除成功');
+  return createApiResponse({ removedHotspots: hotCount ?? 0 }, '删除成功');
 });

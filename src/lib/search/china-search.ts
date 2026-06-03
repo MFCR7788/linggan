@@ -1,9 +1,16 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import crypto from 'crypto';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SearchResult, HotListItem } from './types';
 
-const chinaAxios = axios.create({ timeout: 15000 });
+const chinaProxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY
+  || process.env.http_proxy || process.env.https_proxy;
+const chinaAxios = axios.create(
+  chinaProxyUrl
+    ? { timeout: 15000, httpsAgent: new HttpsProxyAgent(chinaProxyUrl), proxy: false }
+    : { timeout: 15000 }
+);
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
