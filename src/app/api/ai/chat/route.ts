@@ -738,9 +738,10 @@ export const POST = withAuth(async ({ request, user }) => {
     let userPrompt: string;
 
     if (linkContext) {
-      // 抓取质量判断:extractedContent 太短(<80字)说明 SSR 空壳/反爬失败
+      // 抓取质量判断:extractedContent 太短(<200字)说明 SSR 空壳/反爬失败
+      // analyze-link 已先试 SSR,再 fallback jina.ai reader,仍 < 200 才是真没救
       // 这种情况下 LLM 容易自我合理化为"我是离线助手",必须显式说明已联网但没拿到正文
-      const isFetchFailed = !linkContext.extractedContent || linkContext.extractedContent.trim().length < 80;
+      const isFetchFailed = !linkContext.extractedContent || linkContext.extractedContent.trim().length < 200;
       const fetchFailedHint = isFetchFailed ? `
 ⚠️ 重要提示:这个链接(如微信公众号/知乎/小红书)的页面是 JS 动态渲染的 SPA,我们已尝试抓取但没拿到正文。
 请基于你已有的知识(如果认识这个标题/主题)给出分析,绝对不要说自己"无法访问""离线""不能联网"——那是不准确的。
@@ -1124,7 +1125,9 @@ JSON 格式：
       _intent: intent.type,
       _modelErrors: modelErrors.length > 0 ? modelErrors : undefined,
       // 链接抓取失败信号:前端用这个决定是否显示"建议贴正文"提示
-      linkFetchFailed: !!(linkContext && (!linkContext.extractedContent || linkContext.extractedContent.trim().length < 80)),
+      // 阈值 200:analyze-link 已先试 SSR HTML,再 fallback jina.ai reader
+      // 仍 < 200 字说明这个 URL 真没救了(SPA 反爬 + 404 + 登录墙)
+      linkFetchFailed: !!(linkContext && (!linkContext.extractedContent || linkContext.extractedContent.trim().length < 200)),
     });
 
   } catch (error) {

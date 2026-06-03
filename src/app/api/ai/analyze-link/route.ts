@@ -206,13 +206,57 @@ async function analyzeVideoLink(url: string, html: string, transcript?: string) 
   };
 }
 
+// jina.ai reader:解决微信公众号/知乎/小红书等 JS SPA 抓不到正文的问题
+// 免费版 20 RPM,设了 JINA_API_KEY 200 RPM
+// 返回纯文本(已渲染 JS 后的页面内容)
+async function fetchWithJinaReader(url: string): Promise<string | null> {
+  try {
+    const apiKey = process.env.JINA_API_KEY;
+    const headers: Record<string, string> = {
+      'Accept': 'text/plain',
+      'X-Return-Format': 'text',
+    };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+    const response = await fetch(`https://r.jina.ai/${url}`, {
+      headers,
+      signal: AbortSignal.timeout(30000),  // jina 渲染慢一点
+    });
+    if (!response.ok) {
+      console.warn(`[Jina] HTTP ${response.status} for ${url}`);
+      return null;
+    }
+    const text = await response.text();
+    // jina 失败时返回 "Parameter error" / "Couldn't parse" 等短字符串
+    if (text.length < 200) {
+      console.warn(`[Jina] 响应过短 (${text.length} 字): ${text.slice(0, 100)}`);
+      return null;
+    }
+    return text;
+  } catch (e: any) {
+    console.warn(`[Jina] 调用失败: ${e?.message || e}`);
+    return null;
+  }
+}
+
 // 分析文章链接
 async function analyzeArticleLink(url: string, html: string) {
   const ogTitle = extractMeta(html, 'og:title') || extractMeta(html, 'twitter:title') || '';
   const ogDescription = extractMeta(html, 'og:description') || extractMeta(html, 'description') || '';
   const ogImage = extractMeta(html, 'og:image') || '';
   const pageTitle = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || '';
-  const bodyText = extractText(html);
+  let bodyText = extractText(html);
+  let jinaUsed = false;
+
+  // 兜底:SSR HTML 抓不到正文(< 200 字)→ 试 jina.ai reader
+  // 微信/知乎专栏/小红书/各种 SPA 走这条
+  if (bodyText.length < 200) {
+    const jinaText = await fetchWithJinaReader(url);
+    if (jinaText && jinaText.length > bodyText.length) {
+      bodyText = jinaText;
+      jinaUsed = true;
+    }
+  }
 
   const contentForAI = bodyText || ogDescription || pageTitle || url;
   const title = pageTitle || ogTitle || '文章内容';
@@ -223,6 +267,7 @@ async function analyzeArticleLink(url: string, html: string) {
 文章摘要: ${ogDescription || '无'}
 ${ogImage ? `封面图: ${ogImage}` : ''}
 URL: ${url}
+${jinaUsed ? '(注:此页面通过 jina.ai reader 二次抓取,正文为渲染后内容)' : ''}
 
 正文内容:
 ${contentForAI.substring(0, 3000)}
