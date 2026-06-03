@@ -52,6 +52,14 @@ class ApiClient {
         };
       }
 
+      // 成功后:如果响应里携带 balanceAfter / balance,派发 credits:updated 让横幅实时更新
+      if (typeof window !== 'undefined' && data?.success) {
+        const b = data?.data?.balanceAfter ?? data?.data?.balance;
+        if (typeof b === 'number') {
+          window.dispatchEvent(new CustomEvent('credits:updated', { detail: { balance: b } }));
+        }
+      }
+
       return data;
     } catch (error) {
       return {

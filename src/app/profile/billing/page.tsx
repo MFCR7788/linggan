@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Wallet, TrendingUp, TrendingDown, Package, Sparkles, ArrowRight, RefreshCw,
-  Clock, ChevronLeft, Check, AlertCircle, Loader2,
+  Clock, ChevronLeft, Check, AlertCircle, Loader2, Crown, XCircle,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -23,6 +23,27 @@ interface Transaction {
   metadata: Record<string, unknown>;
   createdAt: string;
 }
+
+interface SubscriptionRecord {
+  id: string;
+  tier: string;
+  status: 'active' | 'cancelled' | 'expired' | 'past_due';
+  monthly_credits: number;
+  started_at: string;
+  expires_at: string;
+  cancelled_at: string | null;
+  auto_renew: boolean;
+  payment_method: string;
+  external_subscription_id: string | null;
+  created_at: string;
+}
+
+const SUB_STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  active:    { label: '生效中', color: '#34D399', bg: 'rgba(52,211,153,0.15)' },
+  cancelled: { label: '已取消', color: '#FBBF24', bg: 'rgba(251,191,36,0.15)' },
+  expired:   { label: '已过期', color: '#9CA3AF', bg: 'rgba(156,163,175,0.15)' },
+  past_due:  { label: '待续费', color: '#FCA5A5', bg: 'rgba(252,165,165,0.15)' },
+};
 
 const TYPE_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   subscription_grant:    { label: '订阅赠送', color: '#34D399', icon: Sparkles },
@@ -59,6 +80,9 @@ function BillingContent() {
   const [lifetimeConsumed, setLifetimeConsumed] = useState(0);
   const [lifetimePurchased, setLifetimePurchased] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -83,6 +107,37 @@ function BillingContent() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const loadSubs = async () => {
+    try {
+      const r = await apiClient.get<{ subscriptions: SubscriptionRecord[] }>('/api/subscriptions');
+      if (r.success && r.data?.subscriptions) {
+        setSubscriptions(r.data.subscriptions);
+      }
+    } catch (e) {
+      // 静默
+    }
+  };
+
+  useEffect(() => { loadSubs(); }, []);
+
+  const handleCancelSubscription = async () => {
+    setCancelling(true);
+    try {
+      const r = await apiClient.delete<{ cancelled: any[]; message: string }>('/api/subscriptions');
+      if (r.success) {
+        showToast(r.data?.message || '已取消自动续费,当前订阅将持续到当前周期结束', 'success');
+        setConfirmCancel(false);
+        await loadSubs();
+      } else {
+        showToast(r.error || '取消失败', 'error');
+      }
+    } catch (e: any) {
+      showToast(e?.message || '取消失败', 'error');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen pb-12">
@@ -219,6 +274,91 @@ function BillingContent() {
           </GlassCard>
         )}
 
+        {/* 订阅记录 */}
+        {subscriptions.length > 0 && (
+          <GlassCard>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <Crown size={14} color="#C4B5FD" />
+                <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>我的订阅</p>
+              </div>
+              <button
+                onClick={() => router.push('/profile/billing/subscribe')}
+                className="text-xs flex items-center gap-0.5"
+                style={{ color: '#93C5FD' }}
+              >
+                管理 <ArrowRight size={12} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {subscriptions.map((sub) => {
+                const statusMeta = SUB_STATUS_LABELS[sub.status] || SUB_STATUS_LABELS.expired;
+                const tierColor = TIER_COLORS[sub.tier] || '#9CA3AF';
+                const tierName = TIER_LABELS[sub.tier] || sub.tier;
+                const expiresAt = new Date(sub.expires_at);
+                const isActive = sub.status === 'active';
+                const daysLeft = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 86400000));
+                return (
+                  <div
+                    key={sub.id}
+                    className="rounded-lg p-3"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  >
+                    <div className="flex items-start gap-2 mb-2">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: `${tierColor}20`, border: `1px solid ${tierColor}44` }}
+                      >
+                        <Crown size={14} color={tierColor} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>{tierName}</p>
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+                            style={{ background: statusMeta.bg, color: statusMeta.color }}
+                          >
+                            {statusMeta.label}
+                          </span>
+                          {isActive && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[9px] font-medium"
+                              style={{ background: sub.auto_renew ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)', color: sub.auto_renew ? '#34D399' : '#FBBF24' }}
+                            >
+                              {sub.auto_renew ? '自动续费' : '不续费'}
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ color: '#9CA3AF', fontSize: 10 }} className="mt-1">
+                          {sub.monthly_credits} credits/月 ·{' '}
+                          {new Date(sub.started_at).toLocaleDateString('zh-CN')} ~ {expiresAt.toLocaleDateString('zh-CN')}
+                        </p>
+                        {isActive && (
+                          <p style={{ color: '#6B7280', fontSize: 10 }} className="mt-0.5">
+                            {sub.auto_renew ? `${daysLeft} 天后自动续费` : `${daysLeft} 天后到期`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 活跃订阅:展示取消按钮 */}
+                    {isActive && sub.auto_renew && (
+                      <button
+                        onClick={() => setConfirmCancel(true)}
+                        className="w-full py-1.5 rounded-md text-xs flex items-center justify-center gap-1"
+                        style={{ background: 'rgba(255,255,255,0.04)', color: '#9CA3AF' }}
+                      >
+                        <XCircle size={11} /> 取消自动续费
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </GlassCard>
+        )}
+
         {/* 流水 */}
         <GlassCard>
           <div className="flex items-center justify-between mb-3">
@@ -276,6 +416,56 @@ function BillingContent() {
           )}
         </GlassCard>
       </div>
+
+      {/* 取消订阅确认弹窗 */}
+      {confirmCancel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => !cancelling && setConfirmCancel(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{
+              background: 'linear-gradient(160deg, #1E1B2E 0%, #2A2540 100%)',
+              border: '1px solid rgba(251,191,36,0.4)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+              style={{ background: 'rgba(251,191,36,0.15)' }}
+            >
+              <XCircle size={24} color="#FBBF24" />
+            </div>
+            <p style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700, textAlign: 'center' }} className="mb-1">
+              确认取消自动续费?
+            </p>
+            <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-4">
+              取消后当前订阅仍可使用到本周期结束<br />
+              周期结束后不再扣费,自动降级到免费版
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmCancel(false)}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF', fontSize: 13 }}
+              >
+                再想想
+              </button>
+              <button
+                onClick={handleCancelSubscription}
+                disabled={cancelling}
+                className="flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5"
+                style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}
+              >
+                {cancelling ? <><Loader2 size={14} className="animate-spin" /> 处理中</> : '确认取消'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

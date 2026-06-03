@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Sparkles, Check, X, Loader2, ArrowLeft, Star, Crown, Gift, Zap,
+  Sparkles, Check, Loader2, ArrowLeft, Star, Crown, Gift, Zap,
+  CheckCircle2, AlertCircle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -20,6 +21,17 @@ interface Tier {
   features: string[];
   sort_order: number;
 }
+
+interface OrderInfo {
+  outTradeNo: string;
+  h5Url: string;
+  amountCny: number;
+  creditsToGrant: number;
+  expiresAt: string;
+  tierName: string;
+}
+
+type OrderStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded';
 
 const TIER_ICONS: Record<string, any> = {
   free: Gift,
@@ -45,6 +57,10 @@ function SubscribeContent() {
   const [currentTier, setCurrentTier] = useState('free');
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Tier | null>(null);
+  const [order, setOrder] = useState<OrderInfo | null>(null);
+  const [orderStatus, setOrderStatus] = useState<OrderStatus>('pending');
+  const [balanceAfter, setBalanceAfter] = useState<number | null>(null);
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -63,27 +79,131 @@ function SubscribeContent() {
 
   useEffect(() => { load(); }, []);
 
-  const handleSubscribe = async (tier: Tier) => {
+  // 卸载时清轮询
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
+
+  const queryOrderStatus = async (outTradeNo: string) => {
+    const r = await apiClient.get<{
+      status: OrderStatus;
+      balanceAfter?: number;
+      creditsGranted?: number;
+    }>(`/api/pay/wechat/query?outTradeNo=${outTradeNo}`);
+    if (r.success && r.data) {
+      setOrderStatus(r.data.status);
+      if (r.data.status === 'paid') {
+        setBalanceAfter(r.data.balanceAfter ?? null);
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        // 同步当前套餐
+        await load();
+        showToast(`订阅成功!首月赠送 ${r.data.creditsGranted} credits`, 'success');
+      } else if (r.data.status === 'expired' || r.data.status === 'failed') {
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      }
+    }
+  };
+
+  const startPolling = (outTradeNo: string) => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    queryOrderStatus(outTradeNo);
+    const startedAt = Date.now();
+    pollTimerRef.current = setInterval(() => {
+      if (Date.now() - startedAt > 5 * 60 * 1000) {
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        return;
+      }
+      queryOrderStatus(outTradeNo);
+    }, 3000);
+  };
+
+  // 真实微信支付流程(订阅)
+  const handleSubscribePaid = async (tier: Tier) => {
     setSubscribing(tier.tier);
     try {
       const r = await apiClient.post<{
-        balanceAfter: number; creditsGranted: number; tier: string;
-      }>('/api/subscriptions', { tier: tier.tier });
+        outTradeNo: string;
+        h5Url: string;
+        amountCny: number;
+        creditsToGrant: number;
+        expiresAt: string;
+      }>('/api/pay/wechat/h5/create', { type: 'subscription', id: tier.tier });
+
+      if (r.success && r.data) {
+        const orderInfo: OrderInfo = { ...r.data, tierName: tier.name };
+        setOrder(orderInfo);
+        setOrderStatus('pending');
+        setConfirming(null);
+        window.open(r.data.h5Url, '_blank');
+        startPolling(r.data.outTradeNo);
+      } else {
+        showToast(r.error || '下单失败', 'error');
+      }
+    } catch (e: any) {
+      showToast(e?.message || '下单失败', 'error');
+    } finally {
+      setSubscribing(null);
+    }
+  };
+
+  // 降级到免费(无支付)
+  const handleDowngrade = async (tier: Tier) => {
+    setSubscribing(tier.tier);
+    try {
+      const r = await apiClient.post<{ tier: string }>('/api/subscriptions', { tier: 'free' });
       if (r.success) {
-        showToast(
-          `订阅成功!本月赠送 ${r.data!.creditsGranted} credits,30 天后到期`,
-          'success'
-        );
+        showToast('已降级到免费版,当前订阅周期结束后生效', 'success');
         setConfirming(null);
         setCurrentTier(r.data!.tier);
         setTimeout(() => router.push('/profile/billing'), 1500);
       } else {
-        showToast(r.error || '订阅失败', 'error');
+        showToast(r.error || '降级失败', 'error');
       }
     } catch (e: any) {
-      showToast(e?.message || '订阅失败', 'error');
+      showToast(e?.message || '降级失败', 'error');
     } finally {
       setSubscribing(null);
+    }
+  };
+
+  // 统一入口:确认弹窗的"确认订阅"按钮
+  const handleConfirm = (tier: Tier) => {
+    if (tier.tier === 'free') {
+      handleDowngrade(tier);
+    } else {
+      handleSubscribePaid(tier);
+    }
+  };
+
+  const handleManualRefresh = () => {
+    if (order) queryOrderStatus(order.outTradeNo);
+  };
+
+  const handleReopenH5 = () => {
+    if (order) window.open(order.h5Url, '_blank');
+  };
+
+  const handleCloseOrder = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    setOrder(null);
+    setOrderStatus('pending');
+    setBalanceAfter(null);
+    if (orderStatus === 'paid') {
+      router.push('/profile/billing');
     }
   };
 
@@ -212,11 +332,11 @@ function SubscribeContent() {
         <GlassCard>
           <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6 }}>
             <strong style={{ color: '#FFFFFF' }}>关于订阅:</strong><br />
+            · 微信 H5 支付,跳转微信 → 完成 → 立即生效<br />
             · 月底未消耗完的订阅赠送 credits 会清零(加油包余额不受影响)<br />
             · 升级套餐立即生效,首月 credits 按新档位赠送<br />
             · 降级套餐当前周期结束后生效,已赠送 credits 不退<br />
-            · 单 credit 越买越便宜,Studio(¥0.166) / 企业(¥0.167) 是 ROI 最高的档位<br />
-            · 当前 V2.0.3 试运行:订阅为模拟支付,真实微信/支付宝待 V2.0.4 接入
+            · 单 credit 越买越便宜,Studio(¥0.166) / 企业(¥0.167) 是 ROI 最高的档位
           </p>
         </GlassCard>
       </div>
@@ -234,7 +354,7 @@ function SubscribeContent() {
             onClick={(e) => e.stopPropagation()}
           >
             <p style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700 }} className="mb-1">
-              确认订阅 {confirming.name}
+              {confirming.tier === 'free' ? `降级到 ${confirming.name}` : `确认订阅 ${confirming.name}`}
             </p>
             <p style={{ color: '#9CA3AF', fontSize: 12 }} className="mb-3">
               {confirming.tier === 'free'
@@ -244,10 +364,10 @@ function SubscribeContent() {
             {confirming.tier !== 'free' && (
               <div
                 className="rounded-lg p-3 mb-4"
-                style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)' }}
+                style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}
               >
-                <p style={{ color: '#FBBF24', fontSize: 11 }}>
-                  ⚠️ 当前为模拟支付(V2.0.3 试运行),真实微信/支付宝支付待接入
+                <p style={{ color: '#10B981', fontSize: 11 }}>
+                  ✓ 微信支付 H5 · 安全便捷 · 支付成功立即生效
                 </p>
               </div>
             )}
@@ -261,17 +381,139 @@ function SubscribeContent() {
                 取消
               </button>
               <button
-                onClick={() => handleSubscribe(confirming)}
+                onClick={() => handleConfirm(confirming)}
                 disabled={!!subscribing}
                 className="flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5"
                 style={{
-                  background: `linear-gradient(135deg, ${TIER_COLORS[confirming.tier] || '#F472B6'} 0%, ${TIER_COLORS[confirming.tier] || '#EC4899'} 100%)`,
+                  background: confirming.tier === 'free'
+                    ? 'rgba(156,163,175,0.3)'
+                    : 'linear-gradient(135deg, #07C160 0%, #06AD56 100%)',
                   color: '#FFFFFF', fontSize: 13, fontWeight: 600,
                 }}
               >
-                {subscribing ? <><Loader2 size={14} className="animate-spin" /> 处理中</> : '确认订阅'}
+                {subscribing ? (
+                  <><Loader2 size={14} className="animate-spin" /> 处理中</>
+                ) : confirming.tier === 'free' ? (
+                  '确认降级'
+                ) : (
+                  '微信支付'
+                )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 等待支付/已支付 overlay */}
+      {order && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{
+              background: 'linear-gradient(160deg, #1E1B2E 0%, #2A2540 100%)',
+              border: '1px solid rgba(196,181,253,0.3)',
+            }}
+          >
+            {orderStatus === 'paid' ? (
+              <>
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3"
+                  style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}
+                >
+                  <CheckCircle2 size={28} color="#FFFFFF" />
+                </div>
+                <p style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 700, textAlign: 'center' }} className="mb-1">
+                  订阅成功
+                </p>
+                <p style={{ color: '#10B981', fontSize: 13, textAlign: 'center' }} className="mb-3">
+                  {order.tierName} · 首月 +{order.creditsToGrant} credits 已到账
+                </p>
+                {balanceAfter !== null && (
+                  <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-4">
+                    当前余额:<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{balanceAfter}</span> credits
+                  </p>
+                )}
+                <button
+                  onClick={handleCloseOrder}
+                  className="w-full py-2.5 rounded-lg"
+                  style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}
+                >
+                  完成
+                </button>
+              </>
+            ) : orderStatus === 'failed' || orderStatus === 'expired' ? (
+              <>
+                <div
+                  className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3"
+                  style={{ background: 'rgba(239,68,68,0.2)' }}
+                >
+                  <AlertCircle size={28} color="#EF4444" />
+                </div>
+                <p style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 700, textAlign: 'center' }} className="mb-1">
+                  {orderStatus === 'expired' ? '订单已过期' : '支付未完成'}
+                </p>
+                <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-4">
+                  可关闭后重新订阅
+                </p>
+                <button
+                  onClick={handleCloseOrder}
+                  className="w-full py-2.5 rounded-lg"
+                  style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF', fontSize: 13 }}
+                >
+                  关闭
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-center mb-3">
+                  <Loader2 size={36} color="#07C160" className="animate-spin" />
+                </div>
+                <p style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700, textAlign: 'center' }} className="mb-1">
+                  正在等待支付
+                </p>
+                <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-3">
+                  {order.tierName} · ¥{order.amountCny}/月
+                </p>
+                <div
+                  className="rounded-lg p-3 mb-3"
+                  style={{ background: 'rgba(7,193,96,0.1)', border: '1px solid rgba(7,193,96,0.3)' }}
+                >
+                  <p style={{ color: '#07C160', fontSize: 11, lineHeight: 1.5 }}>
+                    📱 已为你打开微信支付页面,请在新标签中完成付款<br />
+                    付款成功后,本月 credits 将自动到账
+                  </p>
+                </div>
+                <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }} className="mb-3">
+                  订单号 {order.outTradeNo.slice(0, 16)}...
+                </p>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={handleReopenH5}
+                    className="flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5"
+                    style={{ background: 'rgba(7,193,96,0.2)', color: '#07C160', fontSize: 12, fontWeight: 600 }}
+                  >
+                    <ExternalLink size={12} /> 重新打开
+                  </button>
+                  <button
+                    onClick={handleManualRefresh}
+                    className="flex-1 py-2.5 rounded-lg flex items-center justify-center gap-1.5"
+                    style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF', fontSize: 12, fontWeight: 600 }}
+                  >
+                    <RefreshCw size={12} /> 已支付,刷新
+                  </button>
+                </div>
+                <button
+                  onClick={handleCloseOrder}
+                  className="w-full py-2 rounded-lg"
+                  style={{ background: 'transparent', color: '#6B7280', fontSize: 11 }}
+                >
+                  取消订单
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

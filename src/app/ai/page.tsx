@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute, EmptyState } from "@/components";
 import { Toast } from "@/components/Toast";
 import { AccountTypeOnboarding } from "@/components/AccountTypeOnboarding";
+import { CreditsWarningBanner } from "@/components/CreditsWarningBanner";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useAccountType } from "@/hooks/use-account-type";
 import { getRecommendations } from "@/lib/account-presets";
@@ -83,6 +84,9 @@ function AICreationContent() {
   return (
     <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="AI 创作" />
+
+      {/* 余额不足警告横幅(< 20 时显示) */}
+      <CreditsWarningBanner />
 
       <div className="flex-1 px-4 pt-4 space-y-5">
         {/* Quick Generate */}
