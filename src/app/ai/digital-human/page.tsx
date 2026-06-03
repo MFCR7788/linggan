@@ -141,7 +141,7 @@ function DigitalHumanContent() {
   // ─── AI 写稿 ──────────────────────────────────────────
   const [aiTopic, setAiTopic] = useState('');
   const [aiStyle, setAiStyle] = useState('oral');
-  const [aiLength, setAiLength] = useState(400);
+  const [aiLength, setAiLength] = useState(100);
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [generatedScripts, setGeneratedScripts] = useState<string[]>([]);
   const [selectedVariant, setSelectedVariant] = useState(0);
@@ -165,7 +165,7 @@ function DigitalHumanContent() {
 
   // ─── 课程 ─────────────────────────────────────────────
   const [courseText, setCourseText] = useState('');
-  const [courseMaxChars, setCourseMaxChars] = useState(500);
+  const [courseMaxChars, setCourseMaxChars] = useState(200);
   const [courseSegments, setCourseSegments] = useState<{ id: string; text: string; audioUrl: string | null; taskId: string | null; videoUrl: string | null; status: BatchItem['status']; errorMsg?: string; }[]>([]);
   const [isCourseRunning, setIsCourseRunning] = useState(false);
   const courseAbortRef = useRef(false);
@@ -509,7 +509,7 @@ function DigitalHumanContent() {
       const sRes = await fetch('/api/ai/digital-human/script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: ocTopic, style: ocStyle, targetLength: 500, variantCount: 1 }),
+        body: JSON.stringify({ topic: ocTopic, style: ocStyle, targetLength: 100, variantCount: 1 }),
       });
       const sData = await sRes.json();
       if (!sData.success) throw new Error(sData.error || '写稿失败');
@@ -592,7 +592,7 @@ function DigitalHumanContent() {
         const sRes = await fetch('/api/ai/digital-human/script', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic: item.topic, style: 'oral', targetLength: 400, variantCount: 1 }),
+          body: JSON.stringify({ topic: item.topic, style: 'oral', targetLength: 100, variantCount: 1 }),
         });
         const sData = await sRes.json();
         if (!sData.success) throw new Error('写稿失败');
@@ -1157,9 +1157,9 @@ function DigitalHumanContent() {
           <div>
             <div className="flex justify-between mb-1">
               <span style={{ color: '#9CA3AF', fontSize: 11 }}>字数</span>
-              <span style={{ color: '#93C5FD', fontSize: 11 }}>{aiLength}字</span>
+              <span style={{ color: '#93C5FD', fontSize: 11 }}>{aiLength}字 · ≈{Math.ceil(aiLength / 5)}秒</span>
             </div>
-            <input type="range" min="100" max="1500" step="50" value={aiLength}
+            <input type="range" min="50" max="300" step="10" value={aiLength}
               onChange={e => setAiLength(parseInt(e.target.value))} className="w-full accent-blue-500" />
           </div>
         </div>
@@ -1511,9 +1511,9 @@ function DigitalHumanContent() {
           <div>
             <div className="flex justify-between mb-1">
               <span style={{ color: '#9CA3AF', fontSize: 11 }}>字数</span>
-              <span style={{ color: '#86EFAC', fontSize: 11 }}>{aiLength}字</span>
+              <span style={{ color: '#86EFAC', fontSize: 11 }}>{aiLength}字 · ≈{Math.ceil(aiLength / 5)}秒</span>
             </div>
-            <input type="range" min="100" max="1500" step="50" value={aiLength}
+            <input type="range" min="50" max="300" step="10" value={aiLength}
               onChange={e => setAiLength(parseInt(e.target.value))} className="w-full accent-green-500" />
           </div>
         </div>
@@ -1613,9 +1613,9 @@ function DigitalHumanContent() {
           <div>
             <div className="flex justify-between mb-1">
               <span style={{ color: '#9CA3AF', fontSize: 11 }}>每段最大字数</span>
-              <span style={{ color: '#C4B5FD', fontSize: 11 }}>{courseMaxChars}字</span>
+              <span style={{ color: '#C4B5FD', fontSize: 11 }}>{courseMaxChars}字 · ≈{Math.ceil(courseMaxChars / 5)}秒</span>
             </div>
-            <input type="range" min="200" max="2000" step="50" value={courseMaxChars}
+            <input type="range" min="100" max="300" step="20" value={courseMaxChars}
               onChange={e => setCourseMaxChars(parseInt(e.target.value))} className="w-full accent-purple-500" />
           </div>
           <div>

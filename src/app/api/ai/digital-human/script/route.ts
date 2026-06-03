@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
       topic: topic.trim(),
       style: style || 'oral',
       language: language || 'zh',
-      targetLength: Math.min(Math.max(targetLength || 500, 100), 2000),
+      // wan2.2-s2v 限制音频 ≤ 20s, 中文字符 5 字/秒 ≈ 100 字; 硬限 50-300 字防超
+      targetLength: Math.min(Math.max(targetLength || 100, 50), 300),
       variantCount: Math.min(Math.max(variantCount || 1, 1), 3),
       inspirations,
     });
