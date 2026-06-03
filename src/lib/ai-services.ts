@@ -143,7 +143,7 @@ export async function callDoubaoChat(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-mini',
+      model: options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215',
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
@@ -177,7 +177,7 @@ export async function callDoubaoVision(
           ],
         },
       ],
-      { temperature: 0.3 }
+      { temperature: 0.3, model: 'doubao-1.5-vision-pro-32k' }
     );
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
