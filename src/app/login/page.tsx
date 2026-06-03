@@ -6,6 +6,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassInput } from "@/components/GlassInput";
 import { LoadingSpinner } from "@/components";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SliderCaptcha } from "@/components/SliderCaptcha";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { syncDevAuthCookie } from "@/lib/dev-auth";
@@ -21,6 +22,7 @@ function LoginContent() {
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
   const [isLocalhost, setIsLocalhost] = useState(false);
+  const [sliderOpen, setSliderOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -43,12 +45,16 @@ function LoginContent() {
     }
   }, [countdown]);
 
-  const handleSendCode = async () => {
+  const handleSendCode = () => {
     if (!phone || !phone.match(/^1[3-9]\d{9}$/)) {
       setError("请输入正确的手机号");
       return;
     }
+    // 弹出滑块验证码
+    setSliderOpen(true);
+  };
 
+  const handleSliderSuccess = async (captchaToken: string) => {
     setIsSendingCode(true);
     setError("");
 
@@ -56,7 +62,7 @@ function LoginContent() {
       const response = await fetch("/api/sms/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, type: tab }),
+        body: JSON.stringify({ phone, captchaToken, type: tab }),
       });
 
       const data = await response.json();
@@ -64,10 +70,8 @@ function LoginContent() {
         throw new Error(data.error);
       }
 
-      // 显示成功消息
-      setError(data.message);
+      setError(data.message || "验证码已发送");
       setTimeout(() => setError(""), 3000);
-
       setCountdown(60);
     } catch (err) {
       setError(err instanceof Error ? err.message : "发送验证码失败");
@@ -330,6 +334,12 @@ function LoginContent() {
         {" "}和{" "}
         <span style={{ color: "#3B82F6" }}>隐私政策</span>
       </p>
+
+      <SliderCaptcha
+        open={sliderOpen}
+        onClose={() => setSliderOpen(false)}
+        onSuccess={handleSliderSuccess}
+      />
     </div>
   );
 }
