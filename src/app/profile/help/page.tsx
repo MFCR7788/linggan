@@ -945,17 +945,44 @@ function HelpContent() {
             <GlassCard className="!p-4">
               <h3 style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>其他联系方式</h3>
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
+                <a href="mailto:229888777@qq.com" className="flex items-center gap-3" style={{ textDecoration: 'none' }}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.15)' }}>
                     <span style={{ fontSize: 16 }}>📧</span>
                   </div>
                   <div>
-                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>邮件联系</p>
+                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>客服邮箱</p>
+                    <p style={{ color: '#6B7280', fontSize: 11 }}>229888777@qq.com</p>
+                  </div>
+                </a>
+                <a href="mailto:support@lingji.app" className="flex items-center gap-3" style={{ textDecoration: 'none' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)' }}>
+                    <span style={{ fontSize: 16 }}>✉️</span>
+                  </div>
+                  <div>
+                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>商务 / 媒体邮箱</p>
                     <p style={{ color: '#6B7280', fontSize: 11 }}>support@lingji.app</p>
                   </div>
-                </div>
+                </a>
+                <a href="tel:4000678558" className="flex items-center gap-3" style={{ textDecoration: 'none' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.15)' }}>
+                    <span style={{ fontSize: 16 }}>📞</span>
+                  </div>
+                  <div>
+                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>客服电话</p>
+                    <p style={{ color: '#6B7280', fontSize: 11 }}>400-0678-558</p>
+                  </div>
+                </a>
+                <a href="tel:15967675767" className="flex items-center gap-3" style={{ textDecoration: 'none' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(249,115,22,0.15)' }}>
+                    <span style={{ fontSize: 16 }}>📱</span>
+                  </div>
+                  <div>
+                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>客服手机</p>
+                    <p style={{ color: '#6B7280', fontSize: 11 }}>15967675767（工作日 9:00-18:00）</p>
+                  </div>
+                </a>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
                     <span style={{ fontSize: 16 }}>💬</span>
                   </div>
                   <div>
@@ -964,8 +991,8 @@ function HelpContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.15)' }}>
-                    <span style={{ fontSize: 16 }}>📱</span>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(20,184,166,0.15)' }}>
+                    <span style={{ fontSize: 16 }}>📲</span>
                   </div>
                   <div>
                     <p style={{ color: '#E5E7EB', fontSize: 12 }}>官方公众号</p>

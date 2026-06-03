@@ -35,6 +35,25 @@ export default function SupportPage() {
             label="客服邮箱"
             value="229888777@qq.com"
             hint="我们将在 15 个工作日内回复"
+            href="mailto:229888777@qq.com"
+          />
+          <ContactCard
+            label="商务 / 媒体邮箱"
+            value="support@lingji.app"
+            hint="商务合作、媒体咨询请发此邮箱"
+            href="mailto:support@lingji.app"
+          />
+          <ContactCard
+            label="客服电话"
+            value="400-0678-558"
+            hint="在线客服时段：工作日 9:00 - 18:00"
+            href="tel:4000678558"
+          />
+          <ContactCard
+            label="客服手机"
+            value="15967675767"
+            hint="工作时间外可发送短信留言"
+            href="tel:15967675767"
           />
           <ContactCard
             label="应用内反馈"
@@ -101,19 +120,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function ContactCard({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div style={{
-      background: 'rgba(255,255,255,0.05)',
-      borderRadius: 12,
-      padding: '14px 18px',
-      marginBottom: 10,
-    }}>
+function ContactCard({ label, value, hint, href }: { label: string; value: string; hint: string; href?: string }) {
+  const inner = (
+    <>
       <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>{label}</p>
-      <p style={{ color: '#FFFFFF', fontSize: 14, marginBottom: 4, fontWeight: 500 }}>{value}</p>
+      <p style={{
+        color: href ? '#60A5FA' : '#FFFFFF',
+        fontSize: 14,
+        marginBottom: 4,
+        fontWeight: 500,
+        textDecoration: href ? 'underline' : 'none',
+      }}>{value}</p>
       <p style={{ color: '#6B7280', fontSize: 12 }}>{hint}</p>
-    </div>
+    </>
   );
+  const baseStyle: React.CSSProperties = {
+    display: 'block',
+    background: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: '14px 18px',
+    marginBottom: 10,
+    textDecoration: 'none',
+  };
+  if (href) {
+    return <a href={href} style={baseStyle}>{inner}</a>;
+  }
+  return <div style={baseStyle}>{inner}</div>;
 }
 
 function FAQ({ q, a }: { q: string; a: string }) {
