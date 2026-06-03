@@ -1,9 +1,11 @@
 'use client';
 
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Bell, CreditCard, HelpCircle, LogOut, ChevronRight, Edit3, BookOpen, Sparkles, TrendingUp, Star, BarChart2, Wallet } from 'lucide-react';
+import {
+  Settings, Bell, HelpCircle, LogOut, ChevronRight, Edit3,
+  BookOpen, Sparkles, TrendingUp, Star, Wallet, ArrowRight, Globe,
+} from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
@@ -19,40 +21,68 @@ interface UserStats {
   publishedCount: number;
 }
 
+interface BillingSummary {
+  balance: number;
+  tier: string;
+}
+
 function useProfileStats() {
   return useQuery({
     queryKey: ['user-stats'],
     queryFn: async () => {
       const response = await apiClient.get<UserStats>('/user/stats');
-      if (!response.success) {
-        throw new Error(response.error);
-      }
+      if (!response.success) throw new Error(response.error);
       return response.data;
     },
     staleTime: 30_000,
   });
 }
 
-const subscriptionTiers = [
-  { id: 'free', label: '免费版', features: ['每日 5 次 AI 生成', '灵感库 100 条上限', '基础热点监控'], current: false, price: '免费' },
-  { id: 'pro', label: '专业版', features: ['无限 AI 生成', '无限灵感存储', '实时热点雷达', '优先生成队列'], current: true, price: '¥39/月' },
-  { id: 'team', label: '团队版', features: ['专业版全部功能', '团队协作空间', '专属客服支持', 'API 接入'], current: false, price: '¥199/月' },
-];
+// 拉真实余额 + 订阅档位(代替硬编码的 planLabel)
+function useBillingSummary() {
+  return useQuery({
+    queryKey: ['billing-summary'],
+    queryFn: async () => {
+      const r = await apiClient.get<BillingSummary>('/api/credits');
+      if (!r.success) throw new Error(r.error);
+      return r.data;
+    },
+    staleTime: 30_000,
+  });
+}
 
+const TIER_LABELS: Record<string, string> = {
+  free: '免费版',
+  basic: '个人版',
+  pro: '创作者版',
+  studio: '工作室版',
+  enterprise: '企业版',
+};
+
+const TIER_COLORS: Record<string, string> = {
+  free: '#9CA3AF',
+  basic: '#67E8F9',
+  pro: '#F472B6',
+  studio: '#A78BFA',
+  enterprise: '#FCD34D',
+};
+
+// 菜单项:只保留真实可达的入口
 const menuItems = [
-  { icon: <Wallet size={18} />, label: '我的灵感点', page: null, href: '/profile/billing', color: '#F472B6' },
-  { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey | null, color: '#3B82F6' },
-  { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey | null, color: '#8B5CF6' },
-  { icon: <CreditCard size={18} />, label: '订阅管理', page: null, href: '/profile/billing', color: '#F59E0B' },
-  { icon: <BarChart2 size={18} />, label: '数据分析', page: null, color: '#22C55E' },
-  { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey | null, color: '#9CA3AF' },
+  { icon: <Wallet size={18} />, label: '我的灵感点', href: '/profile/billing', color: '#F472B6', desc: '余额 · 流水 · 加油包 · 订阅' },
+  { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey, color: '#3B82F6', desc: '热点预警 · 系统消息' },
+  { icon: <TrendingUp size={18} />, label: '热点监控', page: 'hotspot' as PageKey, color: '#EF4444', desc: '关键词驱动的实时追踪' },
+  { icon: <BookOpen size={18} />, label: '灵感库', page: 'inspiration' as PageKey, color: '#F59E0B', desc: '查看 / 编辑全部素材' },
+  { icon: <Globe size={18} />, label: '平台集成', page: 'profile-integrations' as PageKey, color: '#22C55E', desc: '公众号 / 微博 OAuth 授权' },
+  { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey, color: '#8B5CF6', desc: '账号类型 · 安全 · 密码' },
+  { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey, color: '#9CA3AF', desc: '功能说明 · 常见问题' },
 ];
 
 function ProfileContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'subscription'>('overview');
   const { data: user } = useUser();
   const { data: stats } = useProfileStats();
+  const { data: billing } = useBillingSummary();
 
   const handleNavigate = (page: PageKey, params?: string) => {
     switch (page) {
@@ -77,18 +107,25 @@ function ProfileContent() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('dev_user');
-    document.cookie = 'dev_user_id=; path=/; max-age=0';
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('dev_user');
+      document.cookie = 'dev_user_id=; path=/; max-age=0';
+    }
     router.push('/login');
   };
 
   const displayName = user?.username || user?.phone || '创作者';
   const userAvatar = user?.username?.charAt(0)?.toUpperCase() || user?.phone?.charAt(0) || '🧑‍💻';
-  const planLabel = user?.plan === 'pro' ? 'Pro' : user?.plan === 'creator' ? 'Creator' : '免费';
+
+  // 真实 tier + 余额(代替硬编码的 planLabel='免费')
+  const tier = billing?.tier || 'free';
+  const tierLabel = TIER_LABELS[tier] || tier;
+  const tierColor = TIER_COLORS[tier] || '#9CA3AF';
+  const balance = billing?.balance ?? 0;
 
   const statsArray = [
     { label: '灵感记录', value: String(stats?.inspirationCount ?? 0), icon: <BookOpen size={16} />, color: '#3B82F6' },
-    { label: 'AI作品', value: String(stats?.aiWorks ?? 0), icon: <Sparkles size={16} />, color: '#8B5CF6' },
+    { label: 'AI 作品', value: String(stats?.aiWorks ?? 0), icon: <Sparkles size={16} />, color: '#8B5CF6' },
     { label: '热点追踪', value: String(stats?.hotspotCount ?? 0), icon: <TrendingUp size={16} />, color: '#EF4444' },
     { label: '已发布', value: String(stats?.publishedCount ?? 0), icon: <Star size={16} />, color: '#F59E0B' },
   ];
@@ -104,8 +141,8 @@ function ProfileContent() {
         }
       />
 
-      <div className="flex-1 px-4 pt-4 space-y-5">
-        {/* Avatar & Info */}
+      <div className="flex-1 px-4 pt-4 space-y-4">
+        {/* 头像 + 名字 + 真实订阅档位 */}
         <GlassCard className="!p-5">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -124,16 +161,23 @@ function ProfileContent() {
                 )}
               </div>
               <button
+                onClick={() => router.push('/profile/settings')}
                 className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
                 style={{ background: '#3B82F6', border: '2px solid rgba(10,22,41,1)' }}
+                title="编辑资料"
               >
                 <Edit3 size={11} color="#FFFFFF" />
               </button>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 700 }}>{displayName}</p>
-                <GlassBadge color={planLabel === '免费' ? 'default' : 'primary'}>{planLabel}</GlassBadge>
+                <span
+                  className="px-2 py-0.5 rounded-md text-[10px] font-bold"
+                  style={{ background: `${tierColor}20`, color: tierColor, border: `1px solid ${tierColor}44` }}
+                >
+                  {tierLabel}
+                </span>
               </div>
               <p style={{ color: '#9CA3AF', fontSize: 13 }}>{user?.phone ? `📱 ${user.phone}` : '欢迎使用灵集'}</p>
             </div>
@@ -156,152 +200,65 @@ function ProfileContent() {
           </div>
         </GlassCard>
 
-        {/* Tabs */}
-        <div className="flex rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-          {(['overview', 'subscription'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className="flex-1 py-2.5 text-sm transition-all"
-              style={{
-                color: activeTab === t ? '#3B82F6' : '#9CA3AF',
-                background: activeTab === t ? 'rgba(59,130,246,0.15)' : 'transparent',
-                fontWeight: activeTab === t ? 600 : 400,
-                borderBottom: activeTab === t ? '2px solid #3B82F6' : '2px solid transparent',
-              }}
+        {/* 我的灵感点 — 真实余额卡片(原「我的灵感点」+「订阅管理」合并入口) */}
+        <GlassCard
+          className="!p-4 cursor-pointer"
+          onClick={() => router.push('/profile/billing')}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, rgba(244,114,182,0.2), rgba(236,72,153,0.15))', border: '1px solid rgba(244,114,182,0.4)' }}
             >
-              {t === 'overview' ? '概览' : '订阅管理'}
+              <Wallet size={22} color="#F472B6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 700 }}>{balance.toLocaleString()}</span>
+                <span style={{ color: '#9CA3AF', fontSize: 12 }}>credits</span>
+              </div>
+              <p style={{ color: '#9CA3AF', fontSize: 11 }} className="mt-0.5">
+                余额 · {tierLabel} · 加油包 / 流水 / 取消订阅
+              </p>
+            </div>
+            <ArrowRight size={16} color="#9CA3AF" />
+          </div>
+        </GlassCard>
+
+        {/* 菜单 — 全部真实可达,删除重复/死链 */}
+        <GlassCard className="!p-2">
+          {menuItems.map(({ icon, label, page, href, color, desc }) => (
+            <button
+              key={label}
+              onClick={() => {
+                if (href) router.push(href);
+                else if (page) handleNavigate(page);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors"
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${color}20`, border: `1px solid ${color}33` }}
+              >
+                <span style={{ color }}>{icon}</span>
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p style={{ color: '#E5E7EB', fontSize: 14, fontWeight: 500 }}>{label}</p>
+                <p style={{ color: '#6B7280', fontSize: 10 }} className="mt-0.5">{desc}</p>
+              </div>
+              <ChevronRight size={16} color="#9CA3AF" />
             </button>
           ))}
-        </div>
+        </GlassCard>
 
-        {activeTab === 'overview' ? (
-          <>
-            {/* Weekly Activity */}
-            <GlassCard>
-              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 14 }}>本周活跃度</p>
-              <div className="flex items-end gap-2 h-16">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => (
-                  <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-t-lg"
-                      style={{
-                        height: (3 + Math.sin(i * 1.5) * 4 + 3) * 4,
-                        background: 'linear-gradient(to top, rgba(59,130,246,0.8), rgba(139,92,246,0.6))',
-                        boxShadow: '0 -2px 8px rgba(59,130,246,0.3)',
-                      }}
-                    />
-                    <span style={{ color: '#9CA3AF', fontSize: 9 }}>{label}</span>
-                  </div>
-                ))}
-              </div>
-              <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 8 }}>本周共使用 42 次 · 较上周 ↑ 18%</p>
-            </GlassCard>
-
-            {/* Menu */}
-            <GlassCard className="!p-2">
-              {menuItems.map(({ icon, label, page, href, color }) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    if (href) router.push(href);
-                    else if (page) handleNavigate(page);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-colors"
-                >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${color}20`, border: `1px solid ${color}33` }}
-                  >
-                    <span style={{ color }}>{icon}</span>
-                  </div>
-                  <span style={{ color: '#E5E7EB', fontSize: 14, flex: 1, textAlign: 'left' }}>{label}</span>
-                  <ChevronRight size={16} color="#9CA3AF" />
-                </button>
-              ))}
-            </GlassCard>
-
-            {/* Logout */}
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}
-            >
-              <LogOut size={16} /> 退出登录
-            </button>
-          </>
-        ) : (
-          <>
-            {/* Subscription Cards */}
-            <div className="space-y-3">
-              {subscriptionTiers.map(({ id, label, features, current, price }) => (
-                <GlassCard
-                  key={id}
-                  className="!p-4"
-                  active={current}
-                  style={current ? { border: '1px solid rgba(59,130,246,0.6)', background: 'rgba(59,130,246,0.08)' } : undefined}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700 }}>{label}</p>
-                        {current && <GlassBadge color="primary">当前套餐</GlassBadge>}
-                      </div>
-                      <p style={{ color: current ? '#3B82F6' : '#9CA3AF', fontSize: 20, fontWeight: 700 }}>{price}</p>
-                    </div>
-                    {!current && (
-                      <button
-                        className="px-4 py-2 rounded-xl text-sm"
-                        style={{
-                          background: id === 'team' ? 'rgba(139,92,246,0.2)' : 'rgba(59,130,246,0.2)',
-                          border: id === 'team' ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(59,130,246,0.4)',
-                          color: id === 'team' ? '#C4B5FD' : '#93C5FD',
-                          fontSize: 13,
-                        }}
-                      >
-                        升级
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    {features.map((f) => (
-                      <div key={f} className="flex items-center gap-2">
-                        <span style={{ color: current ? '#22C55E' : '#9CA3AF', fontSize: 12 }}>✓</span>
-                        <span style={{ color: current ? '#E5E7EB' : '#9CA3AF', fontSize: 12 }}>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                </GlassCard>
-              ))}
-            </div>
-
-            {/* Usage */}
-            <GlassCard>
-              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>本月使用量</p>
-              <div className="space-y-3">
-                {[
-                  { label: 'AI 文案生成', used: 28, total: '无限' },
-                  { label: 'AI 图片生成', used: 15, total: '无限' },
-                  { label: 'AI 视频生成', used: 6, total: '无限' },
-                  { label: '灵感存储', used: 128, total: '无限' },
-                ].map(({ label, used, total }) => (
-                  <div key={label}>
-                    <div className="flex justify-between mb-1.5">
-                      <span style={{ color: '#E5E7EB', fontSize: 13 }}>{label}</span>
-                      <span style={{ color: '#9CA3AF', fontSize: 12 }}>{used} / {total}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: '40%', background: 'linear-gradient(to right, #3B82F6, #8B5CF6)' }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
-          </>
-        )}
+        {/* 退出登录 */}
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl"
+          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}
+        >
+          <LogOut size={16} /> 退出登录
+        </button>
       </div>
 
       <BottomNav activePage="profile" onNavigate={handleNavigate} />
