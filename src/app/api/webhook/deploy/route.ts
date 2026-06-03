@@ -91,9 +91,10 @@ export async function POST(request: NextRequest) {
   console.log(`[Webhook] Trigger deploy: branch=${branch} pusher=${pusher} commits=${commits} head=${headSha}`);
 
   try {
+    const logFd = require('fs').openSync('/var/log/lingji-deploy.log', 'a');
     const child = spawn('bash', [DEPLOY_SCRIPT], {
       detached: true,
-      stdio: ['ignore', 'ignore', 'ignore'],
+      stdio: ['ignore', logFd, logFd],
       env: { ...process.env },
     });
     child.unref();
