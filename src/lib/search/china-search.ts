@@ -92,24 +92,21 @@ export async function fetchWeiboHotList(): Promise<HotListItem[]> {
 
 // 知乎热榜 API 响应
 interface ZhihuHotResponse {
-  data?: Array<{
-    target?: {
-      id: number;
-      title: string;
-      excerpt?: string;
-      url?: string;
-    };
-    detail_text?: string;
-  }>;
+  top_search?: {
+    words?: Array<{
+      query: string;
+      display_query?: string;
+      uuid?: string;
+    }>;
+  };
 }
 
 export async function fetchZhihuHotList(): Promise<HotListItem[]> {
   await zhihuHotLimiter.wait();
   try {
     const res = await chinaAxios.get<ZhihuHotResponse>(
-      'https://www.zhihu.com/api/v3/feed/topstory/hot-lists-wormhole',
+      'https://www.zhihu.com/api/v4/search/top_search',
       {
-        params: { limit: 50 },
         headers: {
           'User-Agent': getUA(),
           'Accept': 'application/json',
@@ -119,20 +116,21 @@ export async function fetchZhihuHotList(): Promise<HotListItem[]> {
         timeout: 15000,
       }
     );
-    const data = res.data?.data;
-    if (!Array.isArray(data)) return [];
-    return data.map((item, index) => {
-      const target = item.target;
-      const title = target?.title || '';
-      return {
-        title,
-        url: target?.url || (target?.id ? `https://www.zhihu.com/question/${target.id}` : `https://www.zhihu.com/search?q=${encodeURIComponent(title)}`),
-        content: target?.excerpt || '',
-        rank: index + 1,
-        hotScore: parseHotText(item.detail_text),
-        topicId: target?.id ? String(target.id) : undefined,
-      };
-    });
+    const words = res.data?.top_search?.words;
+    if (!Array.isArray(words)) return [];
+    return words
+      .filter((w) => w.query)
+      .map((item, index) => {
+        const title = item.display_query || item.query;
+        return {
+          title,
+          url: `https://www.zhihu.com/search?type=content&q=${encodeURIComponent(item.query)}`,
+          content: '',
+          rank: index + 1,
+          hotScore: words.length - index,
+          topicId: item.uuid,
+        };
+      });
   } catch (error) {
     console.error('fetchZhihuHotList error:', error instanceof Error ? error.message : error);
     return [];
