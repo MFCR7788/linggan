@@ -1,11 +1,16 @@
-// 朋友圈广告 9 宫格 API (V2.0.1)
+// 朋友圈广告 9 宫格 API (V2.0.1 + V2.0.3 扣点)
 // POST /api/ai/ads/grid
 // Body: { product: string, sellingPoints: string[], referenceImage?: string }
 // Response: { success, data: { cells: [{ imageUrl, title, prompt, sellingPointIndex }] } }
+//
+// 计费: 9 张按 2 credits/张 = 18 credits 预扣,成功的留下,失败的按张退
 
 import { withAuth } from '@/lib/api-handler';
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { generateImage, callDeepSeek, logAiUsage } from '@/lib/ai-services';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { calcAdsCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +48,27 @@ export const POST = withAuth(async ({ request, user }) => {
     }
   }
 
+  // ─── 预扣 9 张的 credits ─────────────────────────
+  const creditCost = calcAdsCost(GRID_SIZE);
+  try {
+    await consume(user.id, creditCost, 'ai_ads', `朋友圈 9 宫格 ${GRID_SIZE} 张`, {
+      product: product.substring(0, 50), gridSize: GRID_SIZE,
+    });
+  } catch (e) {
+    if (e instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+          code: 'INSUFFICIENT_CREDITS',
+          data: { required: creditCost, available: e.available },
+        },
+        { status: 402 }
+      );
+    }
+    throw e;
+  }
+
   try {
     // 1) DeepSeek 生成 9 个视觉角度 + 9 句标题
     const anglesPrompt = `你是顶级电商广告创意总监。为产品「${product}」设计朋友圈广告 9 宫格素材。
@@ -65,6 +91,8 @@ JSON:`;
 
     const llmResult = await callDeepSeek(anglesPrompt, { temperature: 0.9 });
     if (!llmResult) {
+      // 角度生成失败,全部退
+      await refund(user.id, creditCost, 'ai_ads', '9 宫格角度生成失败全退', { product: product.substring(0, 50) });
       return createApiError('生成角度失败', 500);
     }
 
@@ -72,16 +100,19 @@ JSON:`;
     const jsonMatch = llmResult.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('[ads/grid] LLM 返回无法解析:', llmResult.substring(0, 200));
+      await refund(user.id, creditCost, 'ai_ads', '9 宫格角度 JSON 解析失败全退', { product: product.substring(0, 50) });
       return createApiError('AI 返回格式错误', 500);
     }
     let parsed: { cells?: Array<{ visualAngle: string; title: string; prompt: string }> };
     try {
       parsed = JSON.parse(jsonMatch[0]);
     } catch (e) {
+      await refund(user.id, creditCost, 'ai_ads', '9 宫格角度 JSON 解析失败全退', { product: product.substring(0, 50) });
       return createApiError('AI 返回 JSON 解析失败', 500);
     }
     const cells = parsed.cells || [];
     if (cells.length !== GRID_SIZE) {
+      await refund(user.id, creditCost, 'ai_ads', `9 宫格角度数 ${cells.length} ≠ 9 全退`, { product: product.substring(0, 50), got: cells.length });
       return createApiError(`AI 返回 ${cells.length} 个角度, 需要 ${GRID_SIZE} 个`, 500);
     }
 
@@ -103,12 +134,26 @@ JSON:`;
       )
     );
 
-    // 4) 拼装返回
+    // 4) 失败格子按张退
+    let successCount = 0;
+    for (let i = 0; i < imageResults.length; i++) {
+      const r = imageResults[i];
+      if (r.status === 'fulfilled' && (r as any).value?.imageUrl) {
+        successCount++;
+      } else {
+        // 单张失败,退 2 credits
+        await refund(user.id, CREDIT_COSTS.ai_ads.perGrid, 'ai_ads', `9 宫格第 ${i + 1} 张失败退点`, {
+          product: product.substring(0, 50), cellIndex: i, reason: r.status === 'rejected' ? String((r as any).reason?.message) : 'no imageUrl',
+        }).catch((e) => console.warn('[ads/grid] 单张退款失败:', e));
+      }
+    }
+
+    // 5) 拼装返回
     const finalCells: CellResult[] = cells.map((c, i) => {
       const r = imageResults[i];
-      if (r.status === 'fulfilled' && r.value?.imageUrl) {
+      if (r.status === 'fulfilled' && (r as any).value?.imageUrl) {
         return {
-          imageUrl: r.value.imageUrl,
+          imageUrl: (r as any).value.imageUrl,
           title: c.title,
           prompt: c.prompt,
           sellingPointIndex: i % sellingPoints.length,
@@ -124,8 +169,10 @@ JSON:`;
       };
     });
 
-    // 5) 记录 AI 用量（按 9 张计）
-    const successCount = finalCells.filter((c) => c.imageUrl).length;
+    const failedCount = GRID_SIZE - successCount;
+    const creditsUsed = successCount * CREDIT_COSTS.ai_ads.perGrid;
+
+    // 6) 记录 AI 用量（按 9 张计,实际成功几张就几张）
     try {
       await logAiUsage(user.id, 'image', 100 * successCount);
     } catch (e: any) {
@@ -138,12 +185,15 @@ JSON:`;
         sellingPoints,
         cells: finalCells,
         successCount,
-        failedCount: GRID_SIZE - successCount,
+        failedCount,
+        creditsUsed,
       },
-      `已生成 ${successCount}/${GRID_SIZE} 张封面`
+      `已生成 ${successCount}/${GRID_SIZE} 张封面${failedCount > 0 ? `,${failedCount} 张失败已退点` : ''}`
     );
   } catch (e: any) {
     console.error('[ads/grid] 失败:', e);
+    // 兜底:整个流程崩了,全退
+    await refund(user.id, creditCost, 'ai_ads', '9 宫格异常全退', { product: product.substring(0, 50), error: String(e?.message) });
     return createApiError(e.message || '生成失败', 500);
   }
 });

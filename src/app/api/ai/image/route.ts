@@ -3,6 +3,8 @@ import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { generateImage, logAiUsage } from '@/lib/ai-services';
 import { findImagePreset, findImagePalette } from '@/lib/preset-templates';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +56,30 @@ export async function POST(request: NextRequest) {
     }
 
     const count = Math.min(n || 1, 4);
+
+    // ─── 扣点(预扣,按张数 × 单价) ──────────────────
+    const creditCost = count * CREDIT_COSTS.ai_image.perImage;
+    try {
+      await consume(user.id, creditCost, 'ai_image', `AI 图片 ${count} 张`, {
+        count,
+        presetId: presetId || null,
+        ratio: finalRatio,
+      });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+            code: 'INSUFFICIENT_CREDITS',
+            data: { required: creditCost, available: e.available },
+          },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     // 解析 seed：支持正整数，未传或无效则不传（保持随机）
     let finalSeed: number | undefined;
     if (seed !== undefined && seed !== null && seed !== '') {
@@ -62,7 +88,16 @@ export async function POST(request: NextRequest) {
         finalSeed = Math.floor(parsed);
       }
     }
-    const result = await generateImage(finalPrompt, { ratio: finalRatio, n: count, seed: finalSeed });
+
+    let result;
+    try {
+      result = await generateImage(finalPrompt, { ratio: finalRatio, n: count, seed: finalSeed });
+    } catch (e: any) {
+      // 失败退点
+      await refund(user.id, creditCost, 'ai_image', 'AI 图片生成失败退点', { count, error: String(e?.message) });
+      console.error('[AI image] generateImage failed:', e);
+      return createApiError(`AI 图片生成失败: ${e?.message || '未知错误'}`, 500);
+    }
 
     // 记录AI使用
     await logAiUsage(user.id, 'image', 100 * count);

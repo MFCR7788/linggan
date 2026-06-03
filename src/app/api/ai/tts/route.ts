@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
 import { synthesizeWithClonedVoice } from '@/lib/ai-services';
+import { getCurrentUser } from '@/lib/supabase-server';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { calcAiTtsCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
 const APP_ID = process.env.VOLC_TTS_APP_ID;
 const ACCESS_TOKEN = process.env.VOLC_TTS_ACCESS_TOKEN;
@@ -40,6 +43,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: '请先登录' }, { status: 401 });
+    }
+
     const { text, voice, speed, pitch, cloned_voice_id: clonedVoiceId } = await request.json();
 
     if (!text || text.length === 0) {
@@ -57,6 +65,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'TTS 服务未配置' }, { status: 500 });
     }
 
+    // ─── 扣点(预扣) ──────────────────────────────────
+    const creditCost = calcAiTtsCost(text.length);
+    try {
+      await consume(user.id, creditCost, 'ai_tts', `AI 配音 ${text.length} 字`, {
+        chars: text.length,
+        voice: voice || DEFAULT_VOICE,
+        isCloned: voice === 'cloned_voice' && !!clonedVoiceId,
+      });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+            code: 'INSUFFICIENT_CREDITS',
+            data: { required: creditCost, available: e.available },
+          },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     const speedRatio = Math.min(Math.max(Number(speed) || DEFAULT_SPEED, 0.5), 2.0);
     const pitchRatio = Math.min(Math.max(Number(pitch) || DEFAULT_PITCH, 0.5), 2.0);
 
@@ -70,6 +101,8 @@ export async function POST(request: NextRequest) {
           pitch: pitchRatio,
         });
         if (!audioBuffer) {
+          // 退点
+          await refund(user.id, creditCost, 'ai_tts', '克隆音色合成失败退点', { chars: text.length });
           return NextResponse.json({ success: false, error: '克隆音色合成失败,请检查音色 ID 是否有效' }, { status: 502 });
         }
         return NextResponse.json({
@@ -78,8 +111,11 @@ export async function POST(request: NextRequest) {
           mimeType: 'audio/mpeg',
           voice: '我的克隆',
           isCloned: true,
+          creditsUsed: creditCost,
         });
       } catch (e: any) {
+        // 退点
+        await refund(user.id, creditCost, 'ai_tts', '克隆音色调用失败退点', { chars: text.length, error: String(e?.message) });
         return NextResponse.json({ success: false, error: `克隆音色调用失败: ${e?.message || '未知错误'}` }, { status: 502 });
       }
     }
@@ -113,43 +149,54 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const result = await new Promise<any>((resolve, reject) => {
-      const req = https.request({
-        hostname: TTS_HOST,
-        path: TTS_PATH,
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer; ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
-        },
-      }, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            resolve({ ok: res.statusCode === 200, status: res.statusCode, body: parsed });
-          } catch {
-            resolve({ ok: false, status: res.statusCode, body: data });
-          }
+    let result: { ok: boolean; status: number; body: any };
+    try {
+      result = await new Promise<any>((resolve, reject) => {
+        const req = https.request({
+          hostname: TTS_HOST,
+          path: TTS_PATH,
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer; ${ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData),
+          },
+        }, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ ok: res.statusCode === 200, status: res.statusCode, body: parsed });
+            } catch {
+              resolve({ ok: false, status: res.statusCode, body: data });
+            }
+          });
         });
-      });
 
-      req.on('error', (err) => reject(err));
-      req.write(postData);
-      req.end();
-    });
+        req.on('error', (err) => reject(err));
+        req.write(postData);
+        req.end();
+      });
+    } catch (e: any) {
+      // 网络错误,退点
+      await refund(user.id, creditCost, 'ai_tts', 'TTS 网络错误退点', { chars: text.length, error: String(e?.message) });
+      return NextResponse.json({ success: false, error: `TTS 网络错误: ${e?.message || '未知'}` }, { status: 502 });
+    }
 
     if (!result.ok || result.status !== 200) {
       console.error('[TTS] Volcengine HTTP error:', result.status, JSON.stringify(result.body).slice(0, 200));
       const detail = typeof result.body === 'object' ? (result.body.message || JSON.stringify(result.body).slice(0, 100)) : String(result.body).slice(0, 100);
+      // 退点
+      await refund(user.id, creditCost, 'ai_tts', 'TTS 上游错误退点', { chars: text.length, httpStatus: result.status });
       return NextResponse.json({ success: false, error: `语音合成失败(HTTP ${result.status}): ${detail}` }, { status: 502 });
     }
 
     const body = result.body;
     if (body.code !== 3000) {
       console.error('[TTS] Volcengine business error:', body.code, body.message);
+      // 退点
+      await refund(user.id, creditCost, 'ai_tts', 'TTS 业务错误退点', { chars: text.length, upstreamCode: body.code, upstreamMsg: body.message });
       return NextResponse.json({ success: false, error: `语音合成失败(code ${body.code}): ${body.message || '未知原因'}` }, { status: 502 });
     }
 
@@ -158,6 +205,7 @@ export async function POST(request: NextRequest) {
       audioBase64: body.data,
       mimeType: 'audio/mpeg',
       voice: voiceConfig.label,
+      creditsUsed: creditCost,
     });
   } catch (error) {
     console.error('[TTS] Error:', error);

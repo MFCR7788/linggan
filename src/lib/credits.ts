@@ -262,6 +262,79 @@ export async function grant(
 }
 
 /**
+ * 退款(把已扣的 credits 加回余额,不更新 lifetime_purchased)
+ *
+ * 用法: AI 调用失败时退点
+ *   await refund(userId, cost, 'ai_video', 'AI 视频生成失败', { taskId, errorMsg });
+ *
+ * 与 grant 的区别:
+ *   - 不更新 lifetime_purchased(退款不是充值)
+ *   - 写 type='refund' 流水,审计/对账清晰
+ *   - 不允许金额过大(单次退款上限 10000 credits,防止 bug 导致余额爆炸)
+ */
+export async function refund(
+  userId: string,
+  amount: number,
+  source: string,
+  description: string,
+  metadata: Record<string, unknown> = {}
+): Promise<{ balanceAfter: number }> {
+  if (amount <= 0) throw new Error('refund amount 必须为正数');
+  if (amount > 10000) throw new Error('单次退款超过 10000 credits 上限');
+
+  const supabase = createAdminClient();
+  const before = await getBalance(userId);
+
+  const { data, error } = await supabase
+    .from('user_credits')
+    .update({
+      balance: before.balance + amount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .select('balance')
+    .single();
+
+  if (error || !data) {
+    throw new Error('退款失败:用户记录不存在');
+  }
+
+  await supabase.from('credit_transactions').insert({
+    user_id: userId,
+    amount,  // 正数表示「加回」
+    type: 'refund',
+    balance_after: data.balance,
+    source,
+    description,
+    metadata,
+  });
+
+  return { balanceAfter: data.balance };
+}
+
+/**
+ * 检查某个 taskId 是否已经退过款(避免异步任务状态轮询时重复退)
+ * 通过 credit_transactions 表的 metadata->>taskId 查询
+ *
+ * @returns true = 已退过, false = 没退过
+ */
+export async function hasRefunded(
+  userId: string,
+  taskId: string
+): Promise<boolean> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from('credit_transactions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('type', 'refund')
+    .eq('metadata->>taskId', taskId)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
  * 查最近 N 条流水
  */
 export async function getTransactions(userId: string, limit = 50): Promise<CreditTransaction[]> {

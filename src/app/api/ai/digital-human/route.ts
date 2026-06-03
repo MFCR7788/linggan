@@ -1,8 +1,10 @@
 // 数字人 API — Audio2Video（wan2.2-s2v）
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { submitDigitalHumanTask, getDigitalHumanTaskStatus, logAiUsage } from '@/lib/ai-services';
+import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
+import { calcDigitalHumanCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +35,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await submitDigitalHumanTask({ imageUrl, audioUrl, resolution });
+    // ─── 扣点(按分辨率预扣,异步任务失败时在 GET 状态查询时退) ──────
+    const finalRes = (resolution === '480P' || resolution === '720P') ? resolution : '720P';
+    const creditCost = calcDigitalHumanCost(finalRes);
+    try {
+      await consume(user.id, creditCost, 'ai_digital_human', `数字人 ${finalRes}`, {
+        resolution: finalRes,
+        audioDuration,
+      });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+            code: 'INSUFFICIENT_CREDITS',
+            data: { required: creditCost, available: e.available },
+          },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
+    let result;
+    try {
+      result = await submitDigitalHumanTask({ imageUrl, audioUrl, resolution: finalRes });
+    } catch (e: any) {
+      // 提交阶段失败,直接退点
+      await refund(user.id, creditCost, 'ai_digital_human', '数字人提交失败退点', {
+        resolution: finalRes, error: String(e?.message),
+      });
+      return createApiError(`提交失败: ${e?.message || '未知错误'}`, 500);
+    }
+
     if (!result.taskId) {
+      // 没拿到 taskId,退点
+      await refund(user.id, creditCost, 'ai_digital_human', '数字人任务创建失败退点', {
+        resolution: finalRes, upstreamMsg: result.message,
+      });
       return createApiError(result.message || '提交失败', 500);
     }
 
@@ -63,7 +102,7 @@ export async function POST(request: NextRequest) {
         session_id: sessionId,
         user_id: user.id,
         type: 'ai',
-        content: `数字人视频生成 · ${resolution || '720P'}`,
+        content: `数字人视频生成 · ${finalRes}`,
         content_type: 'video',
         metadata: {
           source: 'digital_human',
@@ -71,7 +110,8 @@ export async function POST(request: NextRequest) {
           imageUrl,
           audioUrl,
           taskId: result.taskId,
-          resolution: resolution || '720P',
+          resolution: finalRes,
+          creditCost,
         },
       });
     }
@@ -79,6 +119,7 @@ export async function POST(request: NextRequest) {
     return createApiResponse({
       taskId: result.taskId,
       batchId,
+      creditsUsed: creditCost,
     }, '数字人任务已提交');
   } catch (error) {
     console.error('Digital human submit error:', error);
@@ -100,6 +141,29 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getDigitalHumanTaskStatus(taskId);
+
+    // 异步任务失败 → 自动退点(防止用户白花)
+    // 用 hasRefunded 查 taskId 是否已退过,避免重复退
+    if (result.status === 'failed' || result.status === 'error') {
+      const already = await hasRefunded(user.id, taskId);
+      if (!already) {
+        // 找原始扣点:从 chat_messages 里查这条任务的 creditCost
+        const supabase = createAdminClient();
+        const { data: msg } = await supabase
+          .from('chat_messages')
+          .select('metadata')
+          .eq('user_id', user.id)
+          .eq('metadata->>taskId', taskId)
+          .maybeSingle();
+        const cost = (msg?.metadata as any)?.creditCost;
+        if (cost && cost > 0) {
+          await refund(user.id, cost, 'ai_digital_human', '数字人任务失败退点', {
+            taskId, status: result.status, message: result.message,
+          });
+        }
+      }
+    }
+
     return createApiResponse(result);
   } catch (error) {
     console.error('Digital human query error:', error);

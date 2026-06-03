@@ -1,9 +1,11 @@
 // 并行视频生成 API — 提交所有分段 + 批量查询状态
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
 import { QUALITY_TIERS, type VideoProvider } from '@/lib/video-models';
+import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
+import { calcAiVideoCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { storyboard, inspirations, qualityTier, firstFrameUrl, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
-    const tier = qualityTier || 'fast';
+    const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
     const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
     const hasMultiFrame = videoMode === 'multi' && (lastFrameUrl || (Array.isArray(extraFrameUrls) && extraFrameUrls.length > 0));
 
@@ -37,6 +39,34 @@ export async function POST(request: NextRequest) {
 
     const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
 
+    // ─── 预计算每段成本(按秒 × 档位系数) ─────────────────
+    const segmentsMeta = (storyboard as StoryboardScene[]).map((scene) => {
+      const duration = Math.min(Math.max(scene.duration, 3), 10);
+      return { duration, cost: calcAiVideoCost(duration, tier) };
+    });
+    const totalCost = segmentsMeta.reduce((sum, s) => sum + s.cost, 0);
+
+    // ─── 扣点(预扣 total,提交失败时全退,段失败时按段退) ───
+    try {
+      await consume(user.id, totalCost, 'ai_video', `AI 视频 ${storyboard.length} 段 × ${tier}`, {
+        tier, segmentCount: storyboard.length, totalDuration: segmentsMeta.reduce((s, x) => s + x.duration, 0),
+        perSegment: segmentsMeta.map(s => s.cost),
+      });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `余额不足:需要 ${totalCost} credits,当前 ${e.available} credits`,
+            code: 'INSUFFICIENT_CREDITS',
+            data: { required: totalCost, available: e.available },
+          },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     // 并行提交所有分段
     const segments = await Promise.all(
       (storyboard as StoryboardScene[]).map(async (scene, i) => {
@@ -52,17 +82,33 @@ export async function POST(request: NextRequest) {
         }
 
         const duration = Math.min(Math.max(scene.duration, 3), 10);
-        const modelConfig = imageUrl ? qt.i2v : qt.t2v;
 
-        const result = await submitVideoGenerationTask(
-          tier,
-          scene.visualPrompt,
-          duration,
-          imageUrl,
-          hasMultiFrame ? lastFrameUrl : undefined,
-          hasMultiFrame ? extraFrameUrls : undefined,
-          hasMultiFrame ? 'multi' : 'i2v'
-        );
+        let result;
+        try {
+          result = await submitVideoGenerationTask(
+            tier,
+            scene.visualPrompt,
+            duration,
+            imageUrl,
+            hasMultiFrame ? lastFrameUrl : undefined,
+            hasMultiFrame ? extraFrameUrls : undefined,
+            hasMultiFrame ? 'multi' : 'i2v'
+          );
+        } catch (e: any) {
+          // 单段提交失败 → 标 error,稍后状态查询时退点
+          return {
+            index: scene.index,
+            taskId: '',
+            model: '',
+            provider: 'dashscope' as VideoProvider,
+            status: 'error' as const,
+            duration,
+            materialType: imageUrl ? 'image' as const : 'text' as const,
+            imageUrl,
+            creditCost: calcAiVideoCost(duration, tier),
+            error: String(e?.message),
+          };
+        }
 
         return {
           index: scene.index,
@@ -73,6 +119,7 @@ export async function POST(request: NextRequest) {
           duration,
           materialType: imageUrl ? 'image' as const : 'text' as const,
           imageUrl,
+          creditCost: calcAiVideoCost(duration, tier),
         };
       })
     );
@@ -105,12 +152,14 @@ export async function POST(request: NextRequest) {
         metadata: {
           source: 'ai_creation',
           batchId,
-          generatedVideo: { segments: segments.map((s) => ({ taskId: s.taskId, model: s.model })) },
+          tier,
+          totalCost,
+          segments: segments.map((s) => ({ taskId: s.taskId, model: s.model, creditCost: s.creditCost })),
         },
       });
     }
 
-    return createApiResponse({ batchId, segments }, '视频任务已提交');
+    return createApiResponse({ batchId, segments, creditsUsed: totalCost }, '视频任务已提交');
   } catch (error) {
     console.error('Video generate error:', error);
     return createApiError('视频生成失败', 500);
@@ -172,6 +221,37 @@ export async function GET(request: NextRequest) {
     const videoUrls = resultsArray
       .filter((r) => r.status === 'succeeded' && r.videoUrl)
       .map((r) => r.videoUrl as string);
+
+    // ─── 失败段自动退点(异步) ───────────────────────
+    // 检测到 failed/error 段时,按段 creditCost 退(从 chat_messages.metadata 查)
+    // 用 hasRefunded 防重复退
+    const supabase = createAdminClient();
+    for (const r of resultsArray) {
+      if (r.status === 'failed' || r.status === 'error') {
+        if (!r.taskId) continue;  // 提交时就失败的,无需退点(已在外层 try/catch 退过)
+        const already = await hasRefunded(user.id, r.taskId);
+        if (already) continue;
+        // 查原始扣点金额
+        const { data: msg } = await supabase
+          .from('chat_messages')
+          .select('metadata')
+          .eq('user_id', user.id)
+          .eq('metadata->>taskId', r.taskId)
+          .maybeSingle();
+        const meta = msg?.metadata as any;
+        // 视频段存的是 segments[].taskId,查 segments 数组
+        let segCost = 0;
+        if (meta?.segments && Array.isArray(meta.segments)) {
+          const seg = meta.segments.find((s: any) => s.taskId === r.taskId);
+          segCost = seg?.creditCost || 0;
+        }
+        if (segCost > 0) {
+          await refund(user.id, segCost, 'ai_video', '视频段失败退点', {
+            taskId: r.taskId, status: r.status, message: r.message,
+          });
+        }
+      }
+    }
 
     return createApiResponse({
       results,
