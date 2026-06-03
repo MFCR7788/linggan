@@ -738,6 +738,14 @@ export const POST = withAuth(async ({ request, user }) => {
     let userPrompt: string;
 
     if (linkContext) {
+      // 抓取质量判断:extractedContent 太短(<80字)说明 SSR 空壳/反爬失败
+      // 这种情况下 LLM 容易自我合理化为"我是离线助手",必须显式说明已联网但没拿到正文
+      const isFetchFailed = !linkContext.extractedContent || linkContext.extractedContent.trim().length < 80;
+      const fetchFailedHint = isFetchFailed ? `
+⚠️ 重要提示:这个链接(如微信公众号/知乎/小红书)的页面是 JS 动态渲染的 SPA,我们已尝试抓取但没拿到正文。
+请基于你已有的知识(如果认识这个标题/主题)给出分析,绝对不要说自己"无法访问""离线""不能联网"——那是不准确的。
+如果对主题也不熟悉,直接告诉用户"这个链接我们没抓到正文,你可以把全文贴过来让我分析",而不是说自己是离线助手。` : '';
+
       // Layer 1 链接路由：注入提取内容到对应模块
       switch (linkContext.linkType) {
         case 'article':
@@ -747,10 +755,10 @@ export const POST = withAuth(async ({ request, user }) => {
 
 来源平台：${linkContext.sourcePlatform}
 页面标题：${linkContext.title}
-内容摘要：${linkContext.extractedContent}
-原始链接：${linkContext.sourceUrl}
+内容摘要：${linkContext.extractedContent || '(未能抓到正文)'}
+原始链接：${linkContext.sourceUrl}${fetchFailedHint}
 
-请基于以上内容，对这篇文章进行深度分析和总结：
+请基于以上信息(标题 + 摘要 + 你的知识),对这篇文章进行深度分析和总结:
 1. 提炼核心观点和关键信息
 2. 分析文章的结构和论证逻辑
 3. 指出可借鉴的亮点和创作思路
@@ -764,13 +772,13 @@ export const POST = withAuth(async ({ request, user }) => {
 
 用户粘贴了一个图片链接，以下是图片分析结果：
 
-图片描述：${linkContext.extractedContent}
-来源链接：${linkContext.sourceUrl}
+图片描述：${linkContext.extractedContent || '(未能获取图片描述)'}
+来源链接：${linkContext.sourceUrl}${fetchFailedHint}
 
-请基于以上描述，对这张图片进行分析：
+请基于以上信息,对这张图片进行分析:
 1. 图片的内容特点和风格
 2. 可能的创作用途和灵感价值
-3. 如果需要类似风格/内容的图片，给出创作建议
+3. 如果需要类似风格/内容的图片,给出创作建议
 
 请直接以自然语言输出分析内容。`;
           break;
@@ -784,13 +792,13 @@ export const POST = withAuth(async ({ request, user }) => {
 用户粘贴了一个视频链接，以下是视频信息：
 
 视频标题：${linkContext.title}
-内容摘要：${linkContext.extractedContent}
-来源链接：${linkContext.sourceUrl}${transcriptBlock}
-请基于以上信息，对这个视频进行分析：
+内容摘要：${linkContext.extractedContent || '(未能抓到视频描述)'}
+来源链接：${linkContext.sourceUrl}${transcriptBlock}${fetchFailedHint}
+请基于以上信息(标题 + 描述 + 你的知识),对这个视频进行分析:
 1. 可能的内容方向和创作风格
 2. 值得关注的亮点和可借鉴之处
-3. 如果用户想做类似视频，给出创作建议
-${linkContext.transcript ? '4. 基于逐字稿，分析视频的文案结构和表达技巧' : ''}
+3. 如果用户想做类似视频,给出创作建议
+${linkContext.transcript ? '4. 基于逐字稿,分析视频的文案结构和表达技巧' : ''}
 
 请直接以自然语言输出分析内容。`;
           break;
@@ -1109,7 +1117,15 @@ JSON 格式：
       analysis.sourceUrl = linkContext.sourceUrl;
       analysis.sourcePlatform = linkContext.sourcePlatform;
     }
-    return NextResponse.json({ success: true, ...analysis, _model: modelUsed, _intent: intent.type, _modelErrors: modelErrors.length > 0 ? modelErrors : undefined });
+    return NextResponse.json({
+      success: true,
+      ...analysis,
+      _model: modelUsed,
+      _intent: intent.type,
+      _modelErrors: modelErrors.length > 0 ? modelErrors : undefined,
+      // 链接抓取失败信号:前端用这个决定是否显示"建议贴正文"提示
+      linkFetchFailed: !!(linkContext && (!linkContext.extractedContent || linkContext.extractedContent.trim().length < 80)),
+    });
 
   } catch (error) {
     console.error('聊天 API 错误:', error);

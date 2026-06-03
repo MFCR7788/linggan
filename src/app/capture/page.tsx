@@ -437,6 +437,7 @@ function CaptureContent() {
       });
       const data = await res.json();
       const aiContent = data.response || data.summary || data.title || '已收到';
+      const linkFetchFailed = !!data.linkFetchFailed;  // 后端 SPA/反爬 抓不到正文
 
       // 处理日程数据：优先用 AI 里的 schedule/schedules，没有则后台提取
       let scheduleData = data.schedules || (data.schedule ? [data.schedule] : undefined);
@@ -465,6 +466,7 @@ function CaptureContent() {
         generatedVideo: data.generatedVideo || undefined,
         schedule: data.schedule || undefined,
         schedules: scheduleData,
+        linkFetchFailed,  // SPA/反爬 抓不到正文时显示"建议贴正文"提示
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
@@ -775,6 +777,20 @@ function CaptureContent() {
                       <div className="flex items-center gap-2"><Mic size={14} className="text-orange-400" /><span>{msg.content}</span></div>
                     ) : (
                       <FormattedText text={msg.content} color={msg.type === 'user' ? '#FFFFFF' : '#D1D5DB'} fontSize={14} compact />
+                    )}
+                    {msg.type === 'ai' && msg.linkFetchFailed && (
+                      <div className="mt-2.5 flex items-start gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-200/90">
+                        <span className="text-base leading-none">💡</span>
+                        <span>
+                          这个链接(如微信公众号)是动态渲染的页面,我们没能自动抓取到正文。
+                          <button
+                            onClick={() => { setInputText('以下是这篇文章的全文,请帮我分析:\n\n'); setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus(), 50); }}
+                            className="ml-1 underline text-amber-300 hover:text-amber-100"
+                          >
+                            粘贴全文获得更精准的分析
+                          </button>
+                        </span>
+                      </div>
                     )}
                   </div>
                   <p className="text-[10px] text-gray-500 mt-1.5">
