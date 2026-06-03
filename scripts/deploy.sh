@@ -115,7 +115,8 @@ bash -c "$RUN_AS git -C $DEPLOY_DIR symbolic-ref HEAD refs/heads/main" 2>/dev/nu
 
 # 10. npm install
 log "📦 npm install"
-bash -c "$RUN_AS npm install --no-audit --no-fund" 2>&1 | tail -5 | tee -a "$LOG_FILE"
+# 清空 NODE_ENV, 强制安装 devDependencies (typescript, tailwindcss 等 Next.js build 必需)
+bash -c "NODE_ENV= $RUN_AS npm install --include=dev --no-audit --no-fund" 2>&1 | tail -5 | tee -a "$LOG_FILE"
 
 # 11. 构建
 log "🔨 npm run build"
