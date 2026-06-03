@@ -924,6 +924,18 @@ async function submitDashScopeVideoTask(
 
 // ====== Seedance 视频提交（ARK） ======
 
+/**
+ * Seedance 离线推理档位(`service_tier`):
+ * - flex: 5 折,延迟小时级,适合非实时批量任务(降本首选)
+ * - default: 全价,延迟分钟级,适合即时预览
+ *
+ * 默认 flex。可通过 env `SEEDANCE_SERVICE_TIER=default` 切回快速档。
+ * 适用范围:Seedance 1.x 全系(1.0-pro / 1.0-pro-fast / 1.0-lite / 1.5-pro);
+ *          Seedance 2.0 不支持 flex,代码会自动回退到 default。
+ */
+const SEEDANCE_SERVICE_TIER = (process.env.SEEDANCE_SERVICE_TIER === 'default' ? 'default' : 'flex') as 'flex' | 'default';
+const SEEDANCE_SUPPORTS_FLEX = (model: string) => model.includes('seedance-1-');
+
 async function submitSeedanceTask(
   config: VideoModelConfig,
   prompt: string,
@@ -964,6 +976,9 @@ async function submitSeedanceTask(
     }
   }
 
+  // Seedance 2.0 不支持 flex,自动回退到 default
+  const tier = SEEDANCE_SUPPORTS_FLEX(config.model) ? SEEDANCE_SERVICE_TIER : 'default';
+
   try {
     const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks`, {
       method: 'POST',
@@ -978,7 +993,7 @@ async function submitSeedanceTask(
         ratio: '16:9',
         duration: Math.min(Math.max(duration, 4), 15),
         watermark: false,
-        service_tier: 'default',
+        service_tier: tier,
       }),
     });
 
@@ -993,7 +1008,7 @@ async function submitSeedanceTask(
     if (!taskId) {
       return { taskId: null, status: 'error', message: '未获取到任务ID' };
     }
-    return { taskId, status: 'queued', message: '任务已提交' };
+    return { taskId, status: 'queued', message: tier === 'flex' ? '任务已提交(离线推理,5 折)' : '任务已提交' };
   } catch (error) {
     console.error(`[Seedance:${config.model}] 提交错误:`, error);
     return { taskId: null, status: 'error', message: '网络错误' };
@@ -1046,7 +1061,7 @@ export async function submitVideoGenerationTask(
   extraFrameUrls?: string[],
   mode?: 'i2v' | 'multi'
 ): Promise<VideoTaskResult & { model: string; provider: VideoProvider }> {
-  const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['standard'];
+  const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
   // multi 模式: 首帧 + 尾帧 + 中间关键帧,优先用 multiImageI2v 配置
   let config: VideoModelConfig;
   if (mode === 'multi' && qt.multiImageI2v) {

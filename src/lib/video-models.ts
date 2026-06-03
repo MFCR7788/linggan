@@ -16,11 +16,15 @@ export interface QualityTier {
   label: string;
   icon: string;
   description: string;
+  recommended?: boolean;
   t2v: VideoModelConfig;
   i2v: VideoModelConfig;
   /** 多关键帧模式（首帧 + 尾帧 + 可选中间关键帧） */
   multiImageI2v?: VideoModelConfig;
 }
+
+/** 默认档位 — fast(降本 + 提毛利),用户手动改 standard/premium */
+export const DEFAULT_TIER: keyof typeof QUALITY_TIERS = 'fast';
 
 export const QUALITY_TIERS: Record<string, QualityTier> = {
   fast: {
@@ -28,23 +32,24 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
     label: '流畅',
     icon: '⚡',
     description: '快速省流 · 适合批量生成',
+    recommended: true,
     t2v: {
       provider: 'ark',
       model: process.env.SEEDANCE_FAST_MODEL_ID || 'doubao-seedance-1-0-pro-fast-251015',
       resolution: '720p',
-      price: '约¥0.16/秒',
+      price: '约¥0.08/秒(离线5折)',
     },
     i2v: {
       provider: 'ark',
       model: process.env.SEEDANCE_LITE_I2V_MODEL_ID || 'doubao-seedance-1-0-lite-i2v-250428',
       resolution: '720p',
-      price: '约¥0.3/秒',
+      price: '约¥0.15/秒(离线5折)',
     },
     multiImageI2v: {
       provider: 'ark',
       model: process.env.SEEDANCE_LITE_I2V_MODEL_ID || 'doubao-seedance-1-0-lite-i2v-250428',
       resolution: '720p',
-      price: '约¥0.4/秒(多帧)',
+      price: '约¥0.2/秒(离线5折)',
     },
   },
   standard: {
@@ -52,6 +57,7 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
     label: '标准',
     icon: '🎯',
     description: '均衡画质 · Wan 2.6 引擎',
+    recommended: false,
     t2v: {
       provider: 'dashscope',
       model: 'wan2.6-t2v',
@@ -72,7 +78,7 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
       provider: 'ark',
       model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
       resolution: '720p',
-      price: '约¥0.6/秒(多帧)',
+      price: '约¥0.3/秒(多帧+离线5折)',
     },
   },
   premium: {
@@ -80,11 +86,12 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
     label: '高清',
     icon: '💎',
     description: '大片画质 · 最佳效果',
+    recommended: false,
     t2v: {
       provider: 'ark',
       model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
       resolution: '1080p',
-      price: '约¥0.56/秒',
+      price: '约¥0.28/秒(离线5折)',
     },
     i2v: {
       provider: 'dashscope',
@@ -96,7 +103,7 @@ export const QUALITY_TIERS: Record<string, QualityTier> = {
       provider: 'ark',
       model: process.env.SEEDANCE_VIDEO_MODEL_ARK_ID || 'doubao-seedance-1-5-pro-251215',
       resolution: '1080p',
-      price: '约¥0.8/秒(多帧高清)',
+      price: '约¥0.4/秒(多帧+离线5折)',
     },
   },
 };

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       inspirations,
       topic,
       stylePreset = 'douyin_hot',
-      qualityTier = 'standard',
+      qualityTier = 'fast',
       language = 'zh',
     } = await request.json();
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 2. 并行提交所有分段
-    const qt = QUALITY_TIERS[qualityTier] || QUALITY_TIERS['standard'];
+    const qt = QUALITY_TIERS[qualityTier] || QUALITY_TIERS['fast'];
     const segments = await Promise.all(
       storyboard.map(async (scene, i) => {
         const insp = inspirations[i];

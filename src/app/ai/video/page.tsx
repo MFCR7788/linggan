@@ -98,7 +98,7 @@ function AIVideoContent() {
   const [topic, setTopic] = useState('');
   const [stylePreset, setStylePreset] = useState('douyin_hot');
   const [duration, setDuration] = useState(10);
-  const [qualityTier, setQualityTier] = useState('standard');
+  const [qualityTier, setQualityTier] = useState('fast');
   const [language, setLanguage] = useState('zh');
 
   // ─── 首帧图片（关键：图生视频入口） ──────────────────────
@@ -983,13 +983,26 @@ function AIVideoContent() {
                     <button
                       key={tier.value}
                       onClick={(e) => { e.stopPropagation(); setQualityTier(tier.value); }}
-                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
+                      className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all relative"
                       style={{
                         background: qualityTier === tier.value ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
                         border: qualityTier === tier.value ? '1px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.1)',
                       }}
                     >
                       <span style={{ fontSize: 20 }}>{tier.icon}</span>
+                      {tier.recommended && (
+                        <span style={{
+                          background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)',
+                          color: '#FFFFFF',
+                          fontSize: 8,
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          position: 'absolute',
+                          top: -4,
+                          right: -4,
+                        }}>推荐</span>
+                      )}
                       <span style={{
                         color: qualityTier === tier.value ? '#FCD34D' : '#E5E7EB',
                         fontSize: 13, fontWeight: 700,

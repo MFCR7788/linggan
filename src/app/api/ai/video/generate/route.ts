@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { storyboard, inspirations, qualityTier, firstFrameUrl, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
-    const tier = qualityTier || 'standard';
+    const tier = qualityTier || 'fast';
     const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
     const hasMultiFrame = videoMode === 'multi' && (lastFrameUrl || (Array.isArray(extraFrameUrls) && extraFrameUrls.length > 0));
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['standard'];
+    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
 
     // 并行提交所有分段
     const segments = await Promise.all(
