@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
-import Dysmsapi from '@alicloud/dysmsapi20170525';
+import Dysmsapi, * as $Dysmsapi from '@alicloud/dysmsapi20170525';
 import { Config } from '@alicloud/openapi-client';
 
 export const dynamic = 'force-dynamic';
@@ -88,12 +88,13 @@ export async function POST(request: Request) {
           endpoint: `dysmsapi.${regionId}.aliyuncs.com`,
         });
         const client = new Dysmsapi(config);
-        const result = await client.sendSms({
+        const sendSmsRequest = new $Dysmsapi.SendSmsRequest({
           phoneNumbers: phone,
           signName: SMS_SIGN_NAME,
           templateCode: SMS_TEMPLATE_CODE,
           templateParam: JSON.stringify({ code }),
-        } as any);
+        });
+        const result = await client.sendSms(sendSmsRequest);
         if (result.body?.code === 'OK') {
           sent = true;
         } else {
