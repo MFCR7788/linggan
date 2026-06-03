@@ -156,18 +156,30 @@ export const POST = withAuth(async ({ request, user }) => {
   const value = randomBytes(32).toString('hex');
 
   // 加密 + 写库
-  let encrypted: string;
+  // 特殊场景:若是 PLATFORM_ENCRYPTION_KEY 自己首次配置(bootstrap),Vercel env 还没设,
+  // encryptToken 会抛错。这种情况下用明文直接存(unsafe),前端强提示「立即复制到 Vercel,
+  // 等 env 设上后再次更新此 key 即可加密」,避免 bootstrap 死锁。
+  const supabase = createAdminClient();
+  let value_encrypted: string;
+  let unsafe_mode = false;
   try {
-    encrypted = encryptToken(value);
+    value_encrypted = encryptToken(value);
   } catch (e: any) {
-    return createApiError(`加密失败: ${e.message}`, 500);
+    if (keyName === 'PLATFORM_ENCRYPTION_KEY') {
+      value_encrypted = value;  // 明文兜底
+      unsafe_mode = true;
+    } else {
+      return createApiError(
+        `加密失败: ${e.message}。请先在 Vercel 配置 PLATFORM_ENCRYPTION_KEY,或在站内「平台集成」点击「自动生成」来初始化。`,
+        500
+      );
+    }
   }
 
-  const supabase = createAdminClient();
   const { error } = await supabase
     .from('platform_integration_settings')
     .update({
-      value_encrypted: encrypted,
+      value_encrypted,
       is_configured: true,
       configured_by: user.id,
       configured_at: new Date().toISOString(),
@@ -177,7 +189,9 @@ export const POST = withAuth(async ({ request, user }) => {
   if (error) return createApiError(error.message, 500);
 
   return createApiResponse(
-    { keyName, value },
-    '已生成(只显示一次,请立即复制到 Vercel)'
+    { keyName, value, unsafe: unsafe_mode },
+    unsafe_mode
+      ? '已生成(明文兜底,因 Vercel 还没 PLATFORM_ENCRYPTION_KEY)请立即复制到 Vercel → 重新部署 → 回来再次更新此 key 即可启用加密'
+      : '已生成(只显示一次,请立即复制到 Vercel)'
   );
 });

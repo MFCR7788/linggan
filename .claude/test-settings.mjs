@@ -6,10 +6,13 @@ const BASE = 'http://localhost:3000';
 
 const browser = await chromium.launch({ executablePath: CHROME_PATH, headless: true });
 const context = await browser.newContext({ viewport: { width: 414, height: 896 } });
-await context.addCookies([{
-  name: 'dev_user_id', value: '11111111-1111-1111-1111-111111111111',
-  domain: 'localhost', path: '/',
-}]);
+// 注入 localStorage dev_user(用 addInitScript 在每页加载前注入)
+const DEV_USER_ID = '11111111-1111-1111-1111-111111111111';
+await context.addInitScript((uid) => {
+  window.localStorage.setItem('dev_user', JSON.stringify({
+    id: uid, phone: '11111111111', username: '线上测试用户',
+  }));
+}, DEV_USER_ID);
 const page = await context.newPage();
 const results = [];
 const log = (m) => { console.log(m); results.push(m); };
@@ -20,10 +23,26 @@ page.on('console', (msg) => {
 });
 
 try {
-  log('=== 1. /profile ===');
-  await page.goto(`${BASE}/profile`, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForTimeout(1500);
+  log('=== 1. 注入 dev 凭据 + localStorage ===');
+  // 先去主页(任何能跑的页),addInitScript 才会跑
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(1000);
+  // 显式设 localStorage + cookie
+  await context.addCookies([{
+    name: 'dev_user_id', value: DEV_USER_ID,
+    domain: 'localhost', path: '/',
+  }]);
+  await page.evaluate((uid) => {
+    document.cookie = `dev_user_id=${uid}; path=/; max-age=${7 * 24 * 60 * 60}; sameSite=lax`;
+    localStorage.setItem('dev_user', JSON.stringify({ id: uid, phone: '13800000000', username: '本地测试用户' }));
+  }, DEV_USER_ID);
+  await page.waitForTimeout(500);
+
+  log('=== 2. /profile ===');
+  await page.goto(`${BASE}/profile`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(4000);
   await page.screenshot({ path: '/tmp/ss-1-profile.png' });
+  log(`  URL after profile: ${page.url()}`);
 
   log('=== 2. 点击"账号设置" ===');
   await page.getByText('账号设置', { exact: false }).first().click();
