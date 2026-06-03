@@ -116,6 +116,14 @@ function DigitalHumanContent() {
   const [pitch, setPitch] = useState(1.0);
   const [isGeneratingTTS, setIsGeneratingTTS] = useState(false);
   const [ttsAudioBase64, setTtsAudioBase64] = useState<string | null>(null);
+  const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null); // 声音克隆 ID
+
+  // 加载已保存的克隆音色
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('lingji_cloned_voice_id');
+    if (stored) setClonedVoiceId(stored);
+  }, []);
 
   // ─── 接收 handoff URL 参数（从 AI 生图 / AI 配音 带入） ──
   useEffect(() => {
@@ -318,7 +326,13 @@ function DigitalHumanContent() {
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: txt, voice, speed, pitch }),
+        body: JSON.stringify({
+          text: txt,
+          voice,
+          speed,
+          pitch,
+          cloned_voice_id: voice === 'cloned_voice' ? clonedVoiceId : undefined,
+        }),
       });
       const data = await res.json();
       if (data.success && data.audioBase64) {
@@ -801,6 +815,15 @@ function DigitalHumanContent() {
 
       <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>音色</p>
       <div className="grid grid-cols-3 gap-1.5 mb-3">
+        {clonedVoiceId && (
+          <button onClick={() => setVoice('cloned_voice')}
+            className="py-1.5 rounded-lg text-xs transition-all"
+            style={{
+              background: voice === 'cloned_voice' ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.06)',
+              border: voice === 'cloned_voice' ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.08)',
+              color: voice === 'cloned_voice' ? '#F9A8D4' : '#9CA3AF',
+            }}>⭐ 我的克隆</button>
+        )}
         {voices.map(v => (
           <button key={v.key} onClick={() => setVoice(v.key)}
             className="py-1.5 rounded-lg text-xs transition-all"
@@ -1358,6 +1381,7 @@ function DigitalHumanContent() {
             <select value={voice} onChange={e => setVoice(e.target.value)}
               className="w-full bg-transparent px-2 py-1.5 rounded-lg text-xs outline-none"
               style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}>
+              {clonedVoiceId && <option value="cloned_voice" style={{ background: '#0F172A' }}>⭐ 我的克隆</option>}
               {voices.map(v => <option key={v.key} value={v.key} style={{ background: '#0F172A' }}>{v.label}</option>)}
             </select>
           </div>

@@ -1,6 +1,7 @@
 // TTS (Text-to-Speech) API — 通过火山引擎语音合成（豆包 TTS）
 import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
+import { synthesizeWithClonedVoice } from '@/lib/ai-services';
 
 const APP_ID = process.env.VOLC_TTS_APP_ID;
 const ACCESS_TOKEN = process.env.VOLC_TTS_ACCESS_TOKEN;
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, voice, speed, pitch } = await request.json();
+    const { text, voice, speed, pitch, cloned_voice_id: clonedVoiceId } = await request.json();
 
     if (!text || text.length === 0) {
       return NextResponse.json({ success: false, error: '文本不能为空' }, { status: 400 });
@@ -56,9 +57,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'TTS 服务未配置' }, { status: 500 });
     }
 
-    const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
     const speedRatio = Math.min(Math.max(Number(speed) || DEFAULT_SPEED, 0.5), 2.0);
     const pitchRatio = Math.min(Math.max(Number(pitch) || DEFAULT_PITCH, 0.5), 2.0);
+
+    // 声音克隆分支:voice === 'cloned_voice' 且 client 传了 cloned_voice_id
+    if (voice === 'cloned_voice' && clonedVoiceId) {
+      try {
+        const audioBuffer = await synthesizeWithClonedVoice({
+          text,
+          speakerId: clonedVoiceId,
+          speed: speedRatio,
+          pitch: pitchRatio,
+        });
+        if (!audioBuffer) {
+          return NextResponse.json({ success: false, error: '克隆音色合成失败,请检查音色 ID 是否有效' }, { status: 502 });
+        }
+        return NextResponse.json({
+          success: true,
+          audioBase64: audioBuffer.toString('base64'),
+          mimeType: 'audio/mpeg',
+          voice: '我的克隆',
+          isCloned: true,
+        });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: `克隆音色调用失败: ${e?.message || '未知错误'}` }, { status: 502 });
+      }
+    }
+
+    const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
 
     const requestId = `tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
