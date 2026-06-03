@@ -1014,7 +1014,7 @@ ${forecastText}
       // 手动指定模型
       const modelMap: Record<string, () => Promise<string>> = {
         'deepseek': () => callDeepSeek(messages[messages.length - 1].content as string, { temperature: 0.7, maxTokens: genMaxTokens }),
-        'doubao': () => callDoubaoChat(messages, { temperature: 0.7, maxTokens: genMaxTokens }),
+        'doubao': () => callDoubaoChat(messages, { model: isMultimodal ? 'doubao-1.5-vision-pro-32k' : 'doubao-seed-2.0-241215', temperature: 0.7, maxTokens: genMaxTokens }),
         'qwen-vl-plus': () => callQwen(messages, { model: 'qwen-vl-plus', temperature: 0.7, maxTokens: genMaxTokens }),
         'qwen-plus': () => callQwen(messages, { model: 'qwen-plus', temperature: 0.7, maxTokens: genMaxTokens }),
         'qwen-turbo': () => callQwen(messages, { model: 'qwen-turbo', temperature: 0.7, maxTokens: genMaxTokens }),
@@ -1036,7 +1036,7 @@ ${forecastText}
           callQwen(messages, { model: 'qwen-vl-plus', temperature: 0.7, maxTokens: genMaxTokens }));
         if (!ok) {
           await tryModel('doubao-vision', () =>
-            callDoubaoChat(messages, { temperature: 0.7, maxTokens: genMaxTokens }));
+            callDoubaoChat(messages, { model: 'doubao-1.5-vision-pro-32k', temperature: 0.7, maxTokens: genMaxTokens }));
         }
       } else {
         // 纯文本：DeepSeek 优先，豆包兜底
