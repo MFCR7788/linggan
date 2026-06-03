@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflow: "auto", fontFamily }}>
-        {/* 渐变背景 */}
+        {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{
             position: "fixed",
@@ -34,14 +34,25 @@ export default function RootLayout({
         />
         {/* 星空背景 */}
         <StarBackground />
-        {/* 页面内容 */}
-        <div style={{ position: "relative", zIndex: 10 }}>
+        {/* "手机壳" 容器: 移动端撑满, 桌面端居中并限制 448px (iPhone Pro Max 宽) */}
+        <main
+          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)]"
+          style={{
+            maxWidth: 448,
+            minHeight: "100vh",
+            // iOS safe area: 顶部给 status bar 留位置, 底部让 BottomNav 加 padding
+            paddingTop: "env(safe-area-inset-top)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+            paddingLeft: "env(safe-area-inset-left)",
+            paddingRight: "env(safe-area-inset-right)",
+          }}
+        >
           <ReactQueryProvider>
             <ToastProvider>
               {children}
             </ToastProvider>
           </ReactQueryProvider>
-        </div>
+        </main>
       </body>
     </html>
   );

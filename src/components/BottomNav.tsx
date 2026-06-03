@@ -23,13 +23,12 @@ export function BottomNav({
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0"
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full"
       style={{
         zIndex: 50,
-        maxWidth: 480,
-        margin: "0 auto",
-        right: "auto",
-        width: "100%",
+        maxWidth: 448,
+        // 兼容 iPhone X+ 底部 home indicator
+        paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {/* Navigation Tabs */}
