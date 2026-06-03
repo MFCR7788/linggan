@@ -15,7 +15,6 @@ import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
-import { splitLongText } from '@/lib/text-utils';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 
 // ─── 类型 ────────────────────────────────────────────────
@@ -36,7 +35,7 @@ interface InspirationItem {
   ai_summary?: string;
 }
 
-type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang' | 'course';
+type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang';
 
 interface BatchItem {
   id: string;
@@ -57,12 +56,11 @@ const RESOLUTION_OPTIONS = [
 ];
 
 const MODES: { key: DigitalHumanMode; label: string; icon: string; desc: string }[] = [
-  { key: 'manual', label: '手动配置', icon: '⚙️', desc: '逐步设置' },
+  { key: 'one-click', label: '一键生数字人', icon: '⚡', desc: '全自动流水线' },
   { key: 'ai-write', label: 'AI 写稿', icon: '✍️', desc: '主题→AI脚本' },
-  { key: 'one-click', label: '一键成片', icon: '⚡', desc: '全自动流水线' },
-  { key: 'batch', label: '批量生成', icon: '📦', desc: '多主题串行' },
-  { key: 'multi-lang', label: '多语言', icon: '🌐', desc: '英/日/韩播报' },
-  { key: 'course', label: '课程/培训', icon: '📖', desc: '长文拆分' },
+  { key: 'batch', label: '批量生成', icon: '📦', desc: '20s 短视频合集' },
+  { key: 'multi-lang', label: '多语言', icon: '🌐', desc: '20s 多语种短讲解' },
+  { key: 'manual', label: '手动配置', icon: '⚙️', desc: '逐步设置' },
 ];
 
 const ORAL_STYLES = [
@@ -96,7 +94,7 @@ function DigitalHumanContent() {
   const { receive } = useContentHandoff();
 
   // ─── 模式 ─────────────────────────────────────────────
-  const [dhMode, setDhMode] = useState<DigitalHumanMode>('manual');
+  const [dhMode, setDhMode] = useState<DigitalHumanMode>('one-click');
 
   // ─── Step 1: 角色图片（所有模式共用）────────────────────
   const [imageTab, setImageTab] = useState<'upload' | 'inspiration' | 'url'>('upload');
@@ -163,13 +161,6 @@ function DigitalHumanContent() {
   // ─── 多语言 ───────────────────────────────────────────
   const [targetLang, setTargetLang] = useState('zh');
 
-  // ─── 课程 ─────────────────────────────────────────────
-  const [courseText, setCourseText] = useState('');
-  const [courseMaxChars, setCourseMaxChars] = useState(200);
-  const [courseSegments, setCourseSegments] = useState<{ id: string; text: string; audioUrl: string | null; taskId: string | null; videoUrl: string | null; status: BatchItem['status']; errorMsg?: string; }[]>([]);
-  const [isCourseRunning, setIsCourseRunning] = useState(false);
-  const courseAbortRef = useRef(false);
-
   // ─── 通用 Step/生成状态 ────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
   const [resolution, setResolution] = useState<'480P' | '720P'>('720P');
@@ -178,7 +169,29 @@ function DigitalHumanContent() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const savedVideoUrls = useRef<Set<string>>(new Set()); // 防止重复自动保存
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // 自动保存生成的数字人视频到灵感库(标签含"数字人")
+  const autoSaveDigitalHuman = async (videoUrl: string, title?: string) => {
+    if (!videoUrl || savedVideoUrls.current.has(videoUrl)) return;
+    savedVideoUrls.current.add(videoUrl);
+    try {
+      const res = await fetch('/api/inspiration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'video',
+          title: title || `数字人视频 · ${resolution}`,
+          media_urls: [videoUrl],
+          tags: ['数字人', 'AI生成', 'video_material'],
+        }),
+      });
+      const data = await res.json();
+      if (data.success) setToast({ message: '已自动保存到灵感库', type: 'success' });
+      else setToast({ message: '自动保存失败,可手动重试', type: 'error' });
+    } catch { setToast({ message: '自动保存失败', type: 'error' }); }
+  };
 
   // ─── 初始化 ───────────────────────────────────────────
   useEffect(() => {
@@ -418,7 +431,7 @@ function DigitalHumanContent() {
 
     const poll = await submitAndPoll(
       imageUrl, finalAudioUrl, resolution,
-      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); },
+      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); autoSaveDigitalHuman(videoUrl, '手动配置数字人'); },
       (msg) => { setErrorMsg(msg); setGeneratePhase('error'); },
       audioDuration,
     );
@@ -527,18 +540,30 @@ function DigitalHumanContent() {
       if (!ttsData.success || !ttsData.audioBase64) throw new Error(ttsData.error || '配音失败');
       if (ocAbortRef.current) return;
 
-      // Step 3: 上传音频
+      // Step 3: 上传音频 + 测真实时长
       setOcPhase('uploading');
       const audUrl = await base64ToUrl(ttsData.audioBase64);
       if (ocAbortRef.current) return;
+      // 测真实 audio.duration, 一键成片流程不依赖 state.audioDuration
+      let ocAudioDuration: number | undefined;
+      try {
+        ocAudioDuration = await measureAudioDuration(audUrl);
+        setAudioDuration(ocAudioDuration);
+        if (ocAudioDuration > MAX_AUDIO_SECONDS) {
+          throw new Error(`音频时长 ${ocAudioDuration.toFixed(1)} 秒,超过 wan2.2-s2v 模型的 ${MAX_AUDIO_SECONDS} 秒限制,请精简主题或换更短的口播脚本`);
+        }
+      } catch (e: any) {
+        if (e.message?.includes('超过') || e.message?.includes('限制')) throw e;
+        // 测时长失败不阻塞, 让后端兜底
+      }
 
       // Step 4-6: 提交 + 轮询
       setOcPhase('submitting');
       await new Promise<void>((resolve, reject) => {
         submitAndPoll(imageUrl, audUrl, resolution,
-          (videoUrl) => { setFinalVideoUrl(videoUrl); setOcPhase('done'); resolve(); },
+          (videoUrl) => { setFinalVideoUrl(videoUrl); setOcPhase('done'); autoSaveDigitalHuman(videoUrl, `数字人 · ${ocTopic}`); resolve(); },
           (msg) => { setOcError(msg); setOcPhase('error'); reject(new Error(msg)); },
-          audioDuration,
+          ocAudioDuration ?? audioDuration,
         );
         if (ocAbortRef.current) { setOcPhase('idle'); resolve(); }
       });
@@ -618,7 +643,7 @@ function DigitalHumanContent() {
         updateItem({ status: 'submitting' });
         await new Promise<void>((resolve, reject) => {
           submitAndPoll(imageUrl, aUrl, resolution,
-            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); resolve(); },
+            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); autoSaveDigitalHuman(videoUrl, `数字人 · ${item.topic}`); resolve(); },
             (msg) => { updateItem({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
             audioDuration,
           );
@@ -637,77 +662,6 @@ function DigitalHumanContent() {
     }
 
     setIsBatchRunning(false);
-  };
-
-  // ─── 课程拆分 ────────────────────────────────────────
-  const handleSplitText = () => {
-    if (!courseText.trim()) return;
-    const segs = splitLongText(courseText, courseMaxChars);
-    setCourseSegments(segs.map((text: string, i: number) => ({
-      id: `c_${Date.now()}_${i}`,
-      text,
-      audioUrl: null,
-      taskId: null,
-      videoUrl: null,
-      status: 'pending' as const,
-    })));
-  };
-
-  useEffect(() => {
-    if (courseText.trim()) handleSplitText();
-  }, [courseMaxChars]);
-
-  const runCourse = async () => {
-    if (!imageUrl) { setToast({ message: '请先选择角色图片', type: 'error' }); return; }
-    if (courseSegments.length === 0) { setToast({ message: '请粘贴文本并拆分', type: 'error' }); return; }
-
-    courseAbortRef.current = false;
-    setIsCourseRunning(true);
-
-    for (let i = 0; i < courseSegments.length; i++) {
-      if (courseAbortRef.current) break;
-      const seg = courseSegments[i];
-
-      const updateSeg = (updates: Partial<typeof courseSegments[0]>) => {
-        setCourseSegments(prev => prev.map(s => s.id === seg.id ? { ...s, ...updates } : s));
-      };
-
-      try {
-        // TTS
-        updateSeg({ status: 'tts' });
-        const tRes = await fetch('/api/ai/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: seg.text, voice, speed, pitch }),
-        });
-        const tData = await tRes.json();
-        if (!tData.success || !tData.audioBase64) throw new Error('配音失败');
-
-        // 上传
-        updateSeg({ status: 'uploading' });
-        const aUrl = await base64ToUrl(tData.audioBase64);
-        updateSeg({ audioUrl: aUrl });
-
-        // 提交 + 轮询
-        updateSeg({ status: 'submitting' });
-        await new Promise<void>((resolve, reject) => {
-          submitAndPoll(imageUrl, aUrl, resolution,
-            (videoUrl) => { updateSeg({ videoUrl, status: 'done' }); resolve(); },
-            (msg) => { updateSeg({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
-            audioDuration,
-          );
-          setTimeout(() => {
-            if (courseAbortRef.current) { updateSeg({ status: 'pending' }); resolve(); }
-          }, 1000);
-        });
-      } catch { /* handled in updateSeg */ }
-
-      if (i < courseSegments.length - 1 && !courseAbortRef.current) {
-        await new Promise(r => setTimeout(r, 1100));
-      }
-    }
-
-    setIsCourseRunning(false);
   };
 
   // ─── 导航 ────────────────────────────────────────────
@@ -1587,121 +1541,6 @@ function DigitalHumanContent() {
   );
 
   // ══════════════════════════════════════════════════════════
-  // 模式：课程/培训
-  // ══════════════════════════════════════════════════════════
-
-  const renderCourseMode = () => (
-    <>
-      {renderImagePicker()}
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#8B5CF6' }}>📖 课程/培训</span> · 长文本拆分口播
-        </p>
-
-        {/* 文本输入 */}
-        <textarea value={courseText} onChange={e => { setCourseText(e.target.value); }}
-          onBlur={handleSplitText}
-          placeholder="粘贴课件、培训材料、演讲稿等长文本内容..."
-          rows={6} maxLength={10000}
-          className="w-full bg-transparent p-3 rounded-xl resize-none outline-none text-sm mb-2"
-          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-        <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 10 }}>{courseText.length}/10000</p>
-
-        {/* 分段设置 */}
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <div className="flex justify-between mb-1">
-              <span style={{ color: '#9CA3AF', fontSize: 11 }}>每段最大字数</span>
-              <span style={{ color: '#C4B5FD', fontSize: 11 }}>{courseMaxChars}字 · ≈{Math.ceil(courseMaxChars / 5)}秒</span>
-            </div>
-            <input type="range" min="100" max="300" step="20" value={courseMaxChars}
-              onChange={e => setCourseMaxChars(parseInt(e.target.value))} className="w-full accent-purple-500" />
-          </div>
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 2 }}>音色</p>
-            <select value={voice} onChange={e => setVoice(e.target.value)}
-              className="w-full bg-transparent px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}>
-              {voices.map(v => <option key={v.key} value={v.key} style={{ background: '#0F172A' }}>{v.label}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {/* 拆分预览 */}
-        {courseSegments.length > 0 && (
-          <div className="mb-3 space-y-2 max-h-64 overflow-y-auto">
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>
-              拆分预览 · {courseSegments.length} 段 · 总字数 {courseSegments.reduce((s, seg) => s + seg.text.length, 0)}
-            </p>
-            {courseSegments.map((seg, idx) => (
-              <div key={seg.id} className="p-2.5 rounded-xl" style={{
-                background: seg.status === 'done' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)',
-                border: seg.status === 'done' ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.08)',
-              }}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-                      style={{ background: 'rgba(139,92,246,0.2)', color: '#C4B5FD' }}>{idx + 1}</span>
-                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>{seg.text.length}字</span>
-                  </div>
-                  {seg.status === 'done' && <CheckCircle2 size={12} color="#22C55E" />}
-                  {seg.status === 'error' && <XCircle size={12} color="#EF4444" />}
-                  {(seg.status !== 'pending' && seg.status !== 'done' && seg.status !== 'error') && (
-                    <Loader2 size={12} color="#C4B5FD" className="animate-spin" />
-                  )}
-                </div>
-                <p style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.4 }} className="line-clamp-2">
-                  {seg.text.substring(0, 100)}{seg.text.length > 100 ? '...' : ''}
-                </p>
-                {seg.videoUrl && (
-                  <div className="mt-2">
-                    <video src={seg.videoUrl} controls playsInline className="w-full rounded-lg"
-                      style={{ background: '#000', maxHeight: 160 }} />
-                    <div className="flex gap-2 mt-1">
-                      <button onClick={() => handleDownload(seg.videoUrl!)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs"
-                        style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF' }}>
-                        <Download size={11} /> 下载
-                      </button>
-                      <button onClick={() => handleSave(seg.videoUrl ?? undefined, `课程段落 ${idx + 1}`)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs"
-                        style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF' }}>
-                        <Save size={11} /> 保存
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 操作按钮 */}
-        {isCourseRunning ? (
-          <button onClick={() => { courseAbortRef.current = true; }}
-            className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>
-            <Square size={14} /> 停止生成
-          </button>
-        ) : (
-          <>
-            <PrimaryButton size="sm" variant="ghost" onClick={handleSplitText} disabled={!courseText.trim()}>
-              <RefreshCw size={14} /> 重新拆分
-            </PrimaryButton>
-            <div className="mt-2">
-              <PrimaryButton fullWidth size="lg" onClick={runCourse}
-                disabled={courseSegments.length === 0 || !imageUrl || isCourseRunning}>
-                <Zap size={18} /> 生成全部 {courseSegments.length} 段
-              </PrimaryButton>
-            </div>
-          </>
-        )}
-      </GlassCard>
-    </>
-  );
-
-  // ══════════════════════════════════════════════════════════
   // 主渲染
   // ══════════════════════════════════════════════════════════
 
@@ -1744,7 +1583,6 @@ function DigitalHumanContent() {
         {dhMode === 'one-click' && renderOneClickMode()}
         {dhMode === 'batch' && renderBatchMode()}
         {dhMode === 'multi-lang' && renderMultiLangMode()}
-        {dhMode === 'course' && renderCourseMode()}
       </div>
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
