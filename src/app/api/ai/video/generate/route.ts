@@ -16,8 +16,10 @@ export async function POST(request: NextRequest) {
       return createUnauthorizedResponse();
     }
 
-    const { storyboard, inspirations, qualityTier, firstFrameUrl, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
+    const { storyboard, inspirations, qualityTier, firstFrameUrl, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
     const tier = qualityTier || 'standard';
+    const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
+    const hasMultiFrame = videoMode === 'multi' && (lastFrameUrl || (Array.isArray(extraFrameUrls) && extraFrameUrls.length > 0));
 
     if (!storyboard || !Array.isArray(storyboard) || storyboard.length === 0) {
       return createApiError('请提供分镜脚本', 400);
@@ -56,7 +58,10 @@ export async function POST(request: NextRequest) {
           tier,
           scene.visualPrompt,
           duration,
-          imageUrl
+          imageUrl,
+          hasMultiFrame ? lastFrameUrl : undefined,
+          hasMultiFrame ? extraFrameUrls : undefined,
+          hasMultiFrame ? 'multi' : 'i2v'
         );
 
         return {

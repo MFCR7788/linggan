@@ -103,6 +103,10 @@ function AIVideoContent() {
 
   // ─── 首帧图片（关键：图生视频入口） ──────────────────────
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null);
+  // ─── 多首尾帧模式（高级:首帧 + 尾帧 + 中间关键帧）──
+  const [multiFrameMode, setMultiFrameMode] = useState(false);
+  const [lastFrameUrl, setLastFrameUrl] = useState('');
+  const [extraFramesText, setExtraFramesText] = useState(''); // 逗号/换行分隔,parse 时取 http 开头
   const [firstFrameInput, setFirstFrameInput] = useState('');
   const [firstFrameTab, setFirstFrameTab] = useState<'inspiration' | 'url' | 'upload'>('inspiration');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -259,6 +263,11 @@ function AIVideoContent() {
     setGenError(null);
 
     const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
+    // 解析多帧模式(中间关键帧:逗号/换行分隔,取 http 开头,最多 5 张)
+    const extraFrameUrls = multiFrameMode
+      ? extraFramesText.split(/[,\n]/).map((s) => s.trim()).filter((s) => s.startsWith('http')).slice(0, 5)
+      : undefined;
+    const lastFrame = multiFrameMode && lastFrameUrl.trim() ? lastFrameUrl.trim() : undefined;
 
     try {
       const res = await fetch('/api/ai/video/generate', {
@@ -269,6 +278,9 @@ function AIVideoContent() {
           inspirations: selectedData,
           qualityTier,
           firstFrameUrl: firstFrameUrl || undefined,
+          lastFrameUrl: lastFrame,
+          extraFrameUrls,
+          mode: multiFrameMode ? 'multi' : 'i2v',
           bgmStyle,
           subtitleStyle,
           subtitlePosition: subtitlePos,
@@ -744,6 +756,106 @@ function AIVideoContent() {
             >
               <Upload size={14} /> 点击选择本地图片
             </button>
+          </div>
+        )}
+      </GlassCard>
+
+      {/* 多首尾帧模式（高级：首帧 + 尾帧 + 中间关键帧） */}
+      <GlassCard>
+        <div className="flex items-center justify-between mb-2">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+            <span style={{ color: '#A78BFA' }}>多帧</span> · 首尾帧 + 关键帧
+            <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 6 }}>
+              (可选 · 适合产品 360° / 分镜衔接)
+            </span>
+          </p>
+          <button
+            onClick={() => setMultiFrameMode(!multiFrameMode)}
+            className="px-2.5 py-1 rounded-lg text-xs"
+            style={{
+              background: multiFrameMode ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.05)',
+              border: multiFrameMode ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)',
+              color: multiFrameMode ? '#C4B5FD' : '#9CA3AF',
+            }}
+          >
+            {multiFrameMode ? '✓ 启用' : '启用'}
+          </button>
+        </div>
+
+        {multiFrameMode && (
+          <div className="space-y-2 mt-3">
+            <p style={{ color: '#9CA3AF', fontSize: 10, lineHeight: 1.6 }}>
+              ✨ 多帧模式会用首张 + 末张作起止画面,中间帧作参考。适合:产品 360° 展示、人物多角度切换、场景过渡。
+              <span style={{ color: '#FBBF24' }}>注意:中间关键帧不限制张数,但会按 ¥0.4-0.8/秒 计费</span>
+            </p>
+
+            <div>
+              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>尾帧 URL（视频最后一帧）</p>
+              <input
+                value={lastFrameUrl}
+                onChange={(e) => setLastFrameUrl(e.target.value)}
+                placeholder="https://... 末帧图片 URL（可与首帧选同一张）"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none"
+                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              {lastFrameUrl && (
+                <div className="mt-1.5">
+                  <img src={lastFrameUrl} alt="尾帧" className="w-full h-20 object-cover rounded-lg"
+                    onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>中间关键帧 URL（可选,逗号或换行分隔）</p>
+              <textarea
+                value={extraFramesText}
+                onChange={(e) => setExtraFramesText(e.target.value)}
+                placeholder={'https://...中间帧1\nhttps://...中间帧2\n（最多 5 张）'}
+                rows={3}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none resize-none"
+                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              {(() => {
+                const urls = extraFramesText.split(/[,\n]/).map((s) => s.trim()).filter((s) => s.startsWith('http'));
+                if (urls.length > 5) {
+                  return <p style={{ color: '#FCA5A5', fontSize: 10, marginTop: 2 }}>最多 5 张,已自动取前 5 张</p>;
+                }
+                if (urls.length > 0) {
+                  return <p style={{ color: '#86EFAC', fontSize: 10, marginTop: 2 }}>已识别 {urls.length} 张关键帧</p>;
+                }
+                return null;
+              })()}
+            </div>
+
+            <div className="flex items-center gap-1.5 mt-1">
+              <span style={{ color: '#6B7280', fontSize: 10 }}>预览：</span>
+              <div className="flex gap-1 flex-1 overflow-x-auto">
+                {firstFrameUrl && (
+                  <div className="flex flex-col items-center">
+                    <img src={firstFrameUrl} className="w-12 h-12 object-cover rounded" alt="首" />
+                    <span style={{ fontSize: 9, color: '#9CA3AF' }}>首</span>
+                  </div>
+                )}
+                {(() => {
+                  const urls = extraFramesText.split(/[,\n]/).map((s) => s.trim()).filter((s) => s.startsWith('http')).slice(0, 5);
+                  return urls.map((u, i) => (
+                    <div key={i} className="flex flex-col items-center">
+                      <img src={u} className="w-12 h-12 object-cover rounded" alt={`关键${i+1}`}
+                        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                      <span style={{ fontSize: 9, color: '#A78BFA' }}>关键{i + 1}</span>
+                    </div>
+                  ));
+                })()}
+                {lastFrameUrl && (
+                  <div className="flex flex-col items-center">
+                    <img src={lastFrameUrl} className="w-12 h-12 object-cover rounded" alt="尾"
+                      onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                    <span style={{ fontSize: 9, color: '#FCA5A5' }}>尾</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </GlassCard>
