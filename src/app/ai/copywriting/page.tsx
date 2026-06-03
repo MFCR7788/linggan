@@ -102,9 +102,9 @@ function AICopywritingContent() {
   const [refinedMessage, setRefinedMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
 
-  // 第二层新增:Step 1 过滤 + 排序 state
+  // 第二层新增:Step 1 过滤 + 排序 state(方案 B:默认显示全部,AI 加 ⚠️ 标签警示)
   const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video'>('all');
-  const [showAiWorks, setShowAiWorks] = useState(false);
+  const [hideAiWorks, setHideAiWorks] = useState(false);  // 用户可手动隐藏 AI 作品
   const [sortMode, setSortMode] = useState<'smart' | 'recent'>('smart');
   // 智能助手产物对比 Modal
   const [refineModalOpen, setRefineModalOpen] = useState(false);
@@ -155,12 +155,13 @@ function AICopywritingContent() {
     }
   }, [userInput]);
 
-  // ─── 加载灵感列表(支持 type / showAiWorks) ─────────────
-  const loadInspirations = useCallback(async (type: string, includeAi: boolean) => {
+  // ─── 加载灵感列表(支持 type / hideAiWorks) ─────────────
+  // 方案 B:默认显示全部(包含 AI);用户可手动开启「隐藏 AI」开关过滤掉
+  const loadInspirations = useCallback(async (type: string, hideAi: boolean) => {
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (type !== 'all') params.set('type', type);
-      if (includeAi) params.set('includeSourcePlatforms', 'ai');
+      if (hideAi) params.set('excludeSourcePlatforms', 'ai');
       const inspRes = await fetch(`/api/inspiration?${params.toString()}`);
       if (inspRes.ok) {
         const data = await inspRes.json();
@@ -171,10 +172,10 @@ function AICopywritingContent() {
     }
   }, []);
 
-  // typeFilter / showAiWorks 变化时重新 fetch
+  // typeFilter / hideAiWorks 变化时重新 fetch
   useEffect(() => {
-    loadInspirations(typeFilter, showAiWorks);
-  }, [typeFilter, showAiWorks, loadInspirations]);
+    loadInspirations(typeFilter, hideAiWorks);
+  }, [typeFilter, hideAiWorks, loadInspirations]);
 
   // 第三层:URL 自动检测 — 500ms debounce 后调 analyze-link
   useEffect(() => {
@@ -226,7 +227,7 @@ function AICopywritingContent() {
           // 4. 清空输入框(URL 已经被处理)
           setUserInput('');
           // 5. 重新拉灵感库
-          loadInspirations(typeFilter, showAiWorks);
+          loadInspirations(typeFilter, hideAiWorks);
           showToast(`已解析: ${data.title}`, 'success');
         } else {
           setUrlError(data.error || '链接解析失败');
@@ -241,7 +242,7 @@ function AICopywritingContent() {
     return () => {
       if (urlDebounceRef.current) clearTimeout(urlDebounceRef.current);
     };
-  }, [userInput, loadInspirations, typeFilter, showAiWorks, showToast]);
+  }, [userInput, loadInspirations, typeFilter, hideAiWorks, showToast]);
 
   // 第三层:处理图片文件(粘贴/拖拽/选择)
   const handleImageFile = useCallback(async (file: File) => {
@@ -298,14 +299,14 @@ function AICopywritingContent() {
       showToast(`已分析图片: ${analyzeData.data.tags?.slice(0, 2).join(' / ') || '已加入灵感库'}`, 'success');
 
       // 5. 重新拉灵感库
-      loadInspirations(typeFilter, showAiWorks);
+      loadInspirations(typeFilter, hideAiWorks);
     } catch (e: any) {
       console.error('[image] 处理失败:', e);
       setImageError(e?.message || '图片处理失败');
     } finally {
       setUploadingImage(false);
     }
-  }, [loadInspirations, typeFilter, showAiWorks, showToast]);
+  }, [loadInspirations, typeFilter, hideAiWorks, showToast]);
 
   // 从 URL 接收上游页面带入的参数
   useEffect(() => {
@@ -702,16 +703,16 @@ function AICopywritingContent() {
                 </button>
               ))}
               <button
-                onClick={() => setShowAiWorks(!showAiWorks)}
+                onClick={() => setHideAiWorks(!hideAiWorks)}
                 className="px-2.5 py-0.5 rounded-full text-[10px] ml-auto"
                 style={{
-                  background: showAiWorks ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: showAiWorks ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                  color: showAiWorks ? '#FDE68A' : '#6B7280',
+                  background: hideAiWorks ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: hideAiWorks ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                  color: hideAiWorks ? '#FDE68A' : '#6B7280',
                 }}
-                title={showAiWorks ? '当前:显示 AI 作品' : '当前:隐藏 AI 作品'}
+                title={hideAiWorks ? '当前:已隐藏 AI 作品' : '当前:显示所有(含 AI 作品)'}
               >
-                {showAiWorks ? '⚠️ AI 已显示' : '⚠️ 显示 AI 作品'}
+                {hideAiWorks ? '⚠️ AI 已隐藏' : '⚠️ 隐藏 AI 作品'}
               </button>
             </div>
             <div
@@ -763,7 +764,7 @@ function AICopywritingContent() {
                 ))
               ) : (
                 <p style={{ color: "#6B7280", fontSize: 11, textAlign: 'center', padding: 8 }}>
-                  {showAiWorks ? '暂无灵感数据' : '暂无非 AI 灵感,试试展开「显示 AI 作品」'}
+                  {hideAiWorks ? '暂无灵感数据(已隐藏 AI 作品,试试关掉「隐藏 AI 作品」开关)' : '暂无灵感数据'}
                 </p>
               )}
             </div>
