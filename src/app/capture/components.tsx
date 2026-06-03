@@ -1,6 +1,6 @@
 // ====== Capture 页面子组件 ======
 
-import { Clipboard, Check, Share2, Edit3, Trash2, Volume2, Square, RefreshCw, BookmarkPlus, CalendarPlus, Image as ImageIcon, Video } from 'lucide-react';
+import { Clipboard, Check, Share2, Edit3, Trash2, Volume2, Square, RefreshCw, BookmarkPlus, CalendarPlus, Image as ImageIcon, Video, X } from 'lucide-react';
 import type { Message } from './types';
 
 // ====== 小操作按钮 ======
@@ -75,14 +75,21 @@ export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId,
   onAddToSchedule: (msg: Message) => void;
   onDelete: (msg: Message) => void;
 }) {
+  const isSpeaking = speakingId === msg.id;
   return (
-    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+    <div className="flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity duration-150">
       <ActionBtn icon={copiedId === msg.id ? Check : Clipboard} tooltip="复制" onClick={() => onCopy(msg)} />
-      <ActionBtn
-        icon={speakingId === msg.id ? Square : Volume2}
-        tooltip={speakingId === msg.id ? '停止播报' : '语音播报'}
+      <button
         onClick={() => onSpeak(msg)}
-      />
+        className={`w-7 h-7 flex items-center justify-center rounded-full transition-all ${
+          isSpeaking
+            ? 'bg-blue-500 text-white shadow-md shadow-blue-500/40'
+            : 'hover:bg-white/10 text-gray-400'
+        }`}
+        title={isSpeaking ? '停止播报' : '语音播报'}
+      >
+        {isSpeaking ? <Square size={14} color="white" fill="white" /> : <Volume2 size={14} color="currentColor" />}
+      </button>
       <ActionBtn icon={Share2} tooltip="分享" onClick={() => onShare(msg)} />
       <ActionBtn
         icon={RefreshCw}
@@ -103,6 +110,44 @@ export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId,
         />
       )}
       <ActionBtn icon={Trash2} tooltip="删除" onClick={() => onDelete(msg)} />
+    </div>
+  );
+}
+
+// ====== 抖音式悬浮播放器 ======
+// 语音播报开始时,在屏幕底部居中显示一个带波形动画+显眼 ✕ 关闭键的悬浮条
+// 用户滚动到任何位置都能看到/停止播报
+export function FloatingPlayer({ visible, onStop }: {
+  visible: boolean;
+  onStop: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <div
+      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50
+                 bg-gradient-to-r from-blue-500 to-cyan-500
+                 rounded-full pl-4 pr-2 py-2 shadow-2xl shadow-blue-500/30
+                 flex items-center gap-3 animate-[slideUp_0.25s_ease-out]"
+      style={{ animation: 'slideUp 0.25s ease-out' }}
+    >
+      {/* 跳动波形 */}
+      <div className="flex items-end gap-0.5 h-4">
+        <span className="block w-0.5 h-3 bg-white rounded-full animate-[wave_0.9s_ease-in-out_infinite]" />
+        <span className="block w-0.5 h-2 bg-white rounded-full animate-[wave_0.9s_ease-in-out_infinite_0.15s]" />
+        <span className="block w-0.5 h-4 bg-white rounded-full animate-[wave_0.9s_ease-in-out_infinite_0.3s]" />
+        <span className="block w-0.5 h-2 bg-white rounded-full animate-[wave_0.9s_ease-in-out_infinite_0.45s]" />
+      </div>
+      <span className="text-white text-sm font-medium pr-1">正在朗读</span>
+      <button
+        onClick={onStop}
+        className="w-8 h-8 rounded-full bg-white/30 hover:bg-white/50 active:bg-white/70
+                   flex items-center justify-center transition-colors
+                   border-2 border-white/60"
+        aria-label="停止播报"
+        title="停止播报"
+      >
+        <X size={18} color="white" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }

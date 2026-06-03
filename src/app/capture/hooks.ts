@@ -146,6 +146,7 @@ export function useMessageActions() {
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const copyMessage = useCallback(async (msg: Message) => {
     try {
@@ -180,29 +181,17 @@ export function useMessageActions() {
   }, []);
 
   const speakMessage = useCallback(async (msg: Message) => {
-    // 如果正在播放同一条消息，停止
+    // 1. 同条再点 → 停止
     if (speakingId === msg.id) {
-      if (audioRef.current) {
-        audioRef.current.audio.pause();
-        audioRef.current.audio.src = '';
-        URL.revokeObjectURL(audioRef.current.url);
-        audioRef.current = null;
-      }
-      setSpeakingId(null);
+      stopSpeakingInternal();
       return;
     }
+    // 2. 停掉之前的任何播放
+    stopSpeakingInternal();
+    setSpeakingId(msg.id);
 
-    // 停止之前的任何播放
-    if (audioRef.current) {
-      audioRef.current.audio.pause();
-      audioRef.current.audio.src = '';
-      URL.revokeObjectURL(audioRef.current.url);
-      audioRef.current = null;
-    }
-
+    // 3. 优先豆包 TTS
     try {
-      // 先尝试通过 API 获取豆包 TTS 音频
-      setSpeakingId(msg.id);
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -212,27 +201,77 @@ export function useMessageActions() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.audioBase64) {
-          // 用 data URI 避免 blob/autoplay 问题
           const dataUrl = `data:${data.mimeType || 'audio/mpeg'};base64,${data.audioBase64}`;
           const audio = new Audio(dataUrl);
           audioRef.current = { audio, url: dataUrl };
           audio.onended = () => {
             audioRef.current = null;
-            setSpeakingId(null);
+            // 如果还在播这条才清状态(避免被 stopSpeaking 后又清一次)
+            setSpeakingId(prev => (prev === msg.id ? null : prev));
           };
           audio.onerror = () => {
             audioRef.current = null;
-            setSpeakingId(null);
+            setSpeakingId(prev => (prev === msg.id ? null : prev));
           };
           await audio.play();
           return;
         }
       }
     } catch (e) {
-      console.warn('[TTS] API 失败:', e);
-      setSpeakingId(null);
+      console.warn('[TTS] 豆包 API 失败,降级到浏览器 TTS:', e);
     }
-  }, [speakingId]);
+
+    // 4. 降级:浏览器 speechSynthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(msg.content);
+        u.lang = 'zh-CN';
+        u.rate = 1.15;
+        u.pitch = 1.0;
+        // 选中文音色(如可用)
+        const voices = window.speechSynthesis.getVoices();
+        const zhVoice = voices.find(v => /^zh/i.test(v.lang));
+        if (zhVoice) u.voice = zhVoice;
+        u.onend = () => {
+          synthRef.current = null;
+          setSpeakingId(prev => (prev === msg.id ? null : prev));
+        };
+        u.onerror = () => {
+          synthRef.current = null;
+          setSpeakingId(prev => (prev === msg.id ? null : prev));
+        };
+        synthRef.current = u;
+        window.speechSynthesis.speak(u);
+        return;
+      } catch (e) {
+        console.warn('[TTS] 浏览器 TTS 也失败:', e);
+      }
+    }
+
+    // 5. 都没成功
+    setSpeakingId(null);
+    showToast('当前环境不支持语音播报', 'error');
+  }, [speakingId, showToast]);
+
+  const stopSpeaking = useCallback(() => {
+    stopSpeakingInternal();
+  }, []);
+
+  // 内部停止(不通过 callback 引用避免循环)
+  function stopSpeakingInternal() {
+    if (audioRef.current) {
+      audioRef.current.audio.pause();
+      audioRef.current.audio.src = '';
+      URL.revokeObjectURL(audioRef.current.url);
+      audioRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    }
+    synthRef.current = null;
+    setSpeakingId(null);
+  }
 
   const regenerateMessage = useCallback(async (msg: Message, messages: Message[], sessionId?: string | null) => {
     const idx = messages.findIndex(m => m.id === msg.id);
@@ -369,7 +408,7 @@ export function useMessageActions() {
     copiedId, regeneratingId, savingId, schedulingId, speakingId,
     setCopiedId, setRegeneratingId, setSavingId, setSchedulingId, setSpeakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
-    speakMessage, regenerateMessage, saveToInspiration, addToSchedule,
+    speakMessage, stopSpeaking, regenerateMessage, saveToInspiration, addToSchedule,
   };
 }
 

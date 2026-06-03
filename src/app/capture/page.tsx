@@ -14,7 +14,7 @@ import FormattedText from "@/components/FormattedText";
 import type { Message, AttachedFile } from "./types";
 import { REWRITE_STYLES } from "./types";
 import { useSessionManager, useMessageActions, useVoiceRecording, useFileUpload } from "./hooks";
-import { ActionBtn, UserActions, AiActions } from "./components";
+import { ActionBtn, UserActions, AiActions, FloatingPlayer } from "./components";
 import { useToast } from "@/components/Toast";
 
 function formatScheduleTime(isoStr: string): string {
@@ -45,7 +45,7 @@ function CaptureContent() {
   const {
     copiedId, regeneratingId, savingId, schedulingId, speakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
-    speakMessage, regenerateMessage, saveToInspiration, addToSchedule,
+    speakMessage, stopSpeaking, regenerateMessage, saveToInspiration, addToSchedule,
   } = msgActions;
 
   // 语音
@@ -99,6 +99,30 @@ function CaptureContent() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 抖音式自动播报:最新 AI 消息生成完成 → 自动朗读
+  // 用 ref 持有 msgActions,避免 callback 引用变化触发 effect 重复执行
+  const lastAutoSpokenRef = useRef<string | null>(null);
+  const msgActionsRef = useRef(msgActions);
+  useEffect(() => { msgActionsRef.current = msgActions; });
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (
+      last?.type === 'ai' &&
+      last.content.length > 0 &&
+      speakingId !== last.id &&
+      lastAutoSpokenRef.current !== last.id
+    ) {
+      lastAutoSpokenRef.current = last.id;
+      msgActionsRef.current.speakMessage(last);
+    }
+  }, [messages, speakingId]);
+
+  // 卸载时停止播报(避免切页后台朗读)
+  useEffect(() => {
+    return () => { stopSpeaking(); };
+  }, [stopSpeaking]);
 
   // 自动调整输入框高度 + 检测是否多行
   useEffect(() => {
@@ -925,9 +949,9 @@ function CaptureContent() {
               </div>
             )}
 
-            {hoveredMessageId === msg.id && (
-              <div className={`flex mt-0.5 ${msg.type === 'user' ? 'justify-end mr-2' : 'justify-start ml-[52px]'}`}>
-                {msg.type === 'user' ? (
+            <div className={`flex mt-0.5 ${msg.type === 'user' ? 'justify-end mr-2' : 'justify-start ml-[52px]'}`}>
+              {msg.type === 'user' ? (
+                hoveredMessageId === msg.id ? (
                   <UserActions
                     msg={msg}
                     copiedId={copiedId}
@@ -939,25 +963,25 @@ function CaptureContent() {
                     onImg2Img={handleImg2Img}
                     onImg2Vid={handleImg2Vid}
                   />
-                ) : (
-                  <AiActions
-                    msg={msg}
-                    copiedId={copiedId}
-                    speakingId={speakingId}
-                    regeneratingId={regeneratingId}
-                    savingId={savingId}
-                    schedulingId={schedulingId}
-                    onCopy={copyMessage}
-                    onSpeak={speakMessage}
-                    onShare={shareMessage}
-                    onRegenerate={handleRegenerate}
-                    onSave={(msg: any) => saveToInspiration(msg, messages).catch(() => showToast('保存失败，请重试', 'error'))}
-                    onAddToSchedule={(msg) => addToSchedule(msg, messages)}
-                    onDelete={handleDelete}
-                  />
-                )}
-              </div>
-            )}
+                ) : null
+              ) : (
+                <AiActions
+                  msg={msg}
+                  copiedId={copiedId}
+                  speakingId={speakingId}
+                  regeneratingId={regeneratingId}
+                  savingId={savingId}
+                  schedulingId={schedulingId}
+                  onCopy={copyMessage}
+                  onSpeak={speakMessage}
+                  onShare={shareMessage}
+                  onRegenerate={handleRegenerate}
+                  onSave={(msg: any) => saveToInspiration(msg, messages).catch(() => showToast('保存失败，请重试', 'error'))}
+                  onAddToSchedule={(msg) => addToSchedule(msg, messages)}
+                  onDelete={handleDelete}
+                />
+              )}
+            </div>
           </div>
         ))}
 
@@ -1269,6 +1293,8 @@ function CaptureContent() {
           </div>
         </>
       )}
+
+      <FloatingPlayer visible={!!speakingId} onStop={stopSpeaking} />
     </div>
   );
 }

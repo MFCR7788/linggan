@@ -139,3 +139,15 @@ body {
 .animate-mic-pulse {
   animation: mic-pulse 1.4s ease-in-out infinite;
 }
+
+/* 语音播报悬浮条: 波形跳动 */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+/* 悬浮条入场 */
+@keyframes slideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
