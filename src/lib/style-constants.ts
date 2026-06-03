@@ -56,6 +56,8 @@ export function getPlatformColor(platform: string): string {
 }
 
 // 导航路由映射
+// 注意: 带 id 的详情页(inspiration-detail / hotspot-detail)不带 query,
+// 调用方应直接用 router.push(`/hotspot/detail?id=${item.id}`) 而非 handleNavigate
 export const PAGE_ROUTES: Record<string, string> = {
   home: '/home',
   inspiration: '/inspiration',

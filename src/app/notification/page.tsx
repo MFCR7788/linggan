@@ -113,7 +113,7 @@ function NotificationContent() {
 
   const isRead = (n: NotificationItem) => n.is_read || readState[n.id];
 
-  const handleNavigate = (page: PageKey) => {
+  const handleNavigate = (page: PageKey, params?: string) => {
     switch (page) {
       case 'home': router.push('/home'); break;
       case 'inspiration': router.push('/inspiration'); break;
@@ -125,7 +125,7 @@ function NotificationContent() {
       case 'ai-copywriting': router.push('/ai/copywriting'); break;
       case 'ai-image': router.push('/ai/image'); break;
       case 'ai-video': router.push('/ai/video'); break;
-      case 'hotspot-detail': router.push('/hotspot/detail'); break;
+      case 'hotspot-detail': router.push(`/hotspot/detail${params || ''}`); break;
       case 'hotspot-library': router.push('/hotspot/library'); break;
       case 'notification': router.push('/notification'); break;
       default: router.push('/home'); break;

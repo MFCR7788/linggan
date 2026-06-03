@@ -200,14 +200,14 @@ function InspirationDetailContent() {
     router.push(`/ai/copywriting?${params.toString()}`);
   };
 
-  const handleNavigate = (page: PageKey) => {
+  const handleNavigate = (page: PageKey, params?: string) => {
     switch (page) {
       case "home": router.push("/home"); break;
       case "inspiration": router.push("/inspiration"); break;
       case "ai-copywriting": router.push("/ai/copywriting"); break;
       case "ai": router.push("/ai"); break;
       case "hotspot": router.push("/hotspot"); break;
-      case "hotspot-detail": router.push("/hotspot/detail"); break;
+      case "hotspot-detail": router.push(`/hotspot/detail${params || ''}`); break;
       case "profile": router.push("/profile"); break;
       default: router.push("/home");
     }
