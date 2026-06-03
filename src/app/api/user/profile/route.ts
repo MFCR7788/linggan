@@ -6,11 +6,14 @@
 import { withAuth } from '@/lib/api-handler';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
+import { AccountTypeId } from '@/lib/account-presets';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_PROFILE_FIELDS = ['username', 'avatar_url'] as const;
-type ProfileField = typeof ALLOWED_PROFILE_FIELDS[number];
+const VALID_ACCOUNT_TYPES: AccountTypeId[] = [
+  'startup', 'knowledge', 'ecommerce', 'b2b',
+  'personal', 'training', 'restaurant', 'medical',
+];
 
 export const GET = withAuth(async ({ user }) => {
   const supabase = createAdminClient();
@@ -50,8 +53,15 @@ export const PATCH = withAuth(async ({ request, user }) => {
     update.avatar_url = body.avatar_url;
   }
 
+  if (body.account_type !== undefined) {
+    if (!VALID_ACCOUNT_TYPES.includes(body.account_type)) {
+      return createApiError('account_type 值无效', 400);
+    }
+    update.account_type = body.account_type;
+  }
+
   if (Object.keys(update).length === 0) {
-    return createApiError('无可更新字段(允许: username, avatar_url)', 400);
+    return createApiError('无可更新字段(允许: username, avatar_url, account_type)', 400);
   }
 
   const supabase = createAdminClient();
