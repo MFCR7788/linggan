@@ -85,7 +85,7 @@ export async function POST(request: Request) {
           accessKeyId,
           accessKeySecret,
           regionId,
-          endpoint: `dysmsapi.${regionId}.aliyuncs.com`,
+          endpoint: 'dysmsapi.aliyuncs.com',
         });
         const client = new Dysmsapi(config);
         const sendSmsRequest = new $Dysmsapi.SendSmsRequest({
