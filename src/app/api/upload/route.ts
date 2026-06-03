@@ -75,20 +75,19 @@ export const POST = withAuth(async ({ request, user }) => {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
-    // 根据扩展名映射 contentType，避免 Supabase Storage 拒绝不支持的 MIME
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const extContentType: Record<string, string> = {
-      pdf: 'application/pdf', txt: 'text/plain', md: 'text/plain',
-      docx: 'application/zip', // .docx 本质是 zip
+    const extToMime: Record<string, string> = {
+      pdf: 'application/pdf', docx: 'application/zip',
+      md: 'text/markdown', txt: 'text/plain',
     };
-    const uploadOptions: { upsert: boolean; contentType?: string } = { upsert: false };
-    if (extContentType[ext] || file.type.startsWith('image/') || file.type.startsWith('video/')) {
-      uploadOptions.contentType = extContentType[ext] || file.type;
-    }
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const contentType = extToMime[ext] || file.type;
 
     const { error: uploadError } = await supabase.storage
       .from('lingji-media')
-      .upload(filePath, buffer, uploadOptions);
+      .upload(filePath, buffer, {
+        contentType,
+        upsert: false,
+      });
 
     if (uploadError) {
       console.error('文件上传失败:', uploadError);
