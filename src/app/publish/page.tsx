@@ -7,6 +7,7 @@ import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
+import { WorkflowStepper } from '@/components/WorkflowStepper';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { ProtectedRoute } from '@/components';
 import { apiClient } from '@/lib/api-client';
@@ -235,6 +236,11 @@ function PublishContent() {
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
       <TopNav title="多平台分发" showBack onBack={() => router.push('/ai')} />
+
+      {/* 工作流步骤(标识当前在第 6 步) */}
+      <div className="px-4 pt-3">
+        <WorkflowStepper completed={[0, 1, 2, 3, 4]} compact />
+      </div>
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
         {/* 顶部说明 */}

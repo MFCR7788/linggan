@@ -7,7 +7,7 @@ import {
   AlertCircle, Loader2, CheckCircle2, XCircle, Wand2,
   ImageIcon, Upload, Link, Mic, Music, Volume2,
   FileText, Globe, BookOpen, Layers, ChevronDown, ChevronUp,
-  Settings, Trash2, Plus, Square,
+  Settings, Trash2, Plus, Square, Share2, Video as VideoIcon, ArrowRight,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -91,7 +91,7 @@ const BATCH_STATUS_LABELS: Record<BatchItem['status'], { text: string; color: st
 function DigitalHumanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { receive } = useContentHandoff();
+  const { receive, handoff } = useContentHandoff();
 
   // ─── 模式 ─────────────────────────────────────────────
   const [dhMode, setDhMode] = useState<DigitalHumanMode>('one-click');
@@ -917,6 +917,37 @@ function DigitalHumanContent() {
             <span style={{ color: '#06B6D4' }}>{icon}</span> {label}
           </button>
         ))}
+      </div>
+
+      {/* 下一步:反向 handoff 到其他工作流 */}
+      <div
+        className="mt-3 p-3 rounded-2xl"
+        style={{
+          background: 'linear-gradient(135deg, rgba(244,114,182,0.06), rgba(139,92,246,0.06))',
+          border: '1px solid rgba(244,114,182,0.15)',
+        }}
+      >
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>
+          下一步:把数字人用到别处
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => handoff('/ai/video', { firstFrame: videoUrl, topic: ocTopic || '我的数字人', imageUrl: imageUrl || '' })}
+            className="flex flex-col items-center gap-1 py-2.5 rounded-xl"
+            style={{ background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.3)' }}
+          >
+            <VideoIcon size={16} color="#F43F5E" />
+            <span style={{ color: '#F43F5E', fontSize: 11, fontWeight: 600 }}>做更长视频</span>
+          </button>
+          <button
+            onClick={() => handoff('/publish', { text: ocTopic || '我的数字人', topic: ocTopic || '我的数字人' })}
+            className="flex flex-col items-center gap-1 py-2.5 rounded-xl"
+            style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)' }}
+          >
+            <Share2 size={16} color="#22C55E" />
+            <span style={{ color: '#22C55E', fontSize: 11, fontWeight: 600 }}>多平台分发</span>
+          </button>
+        </div>
       </div>
     </div>
   );

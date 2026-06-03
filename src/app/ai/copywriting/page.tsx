@@ -2,7 +2,7 @@
 
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X } from "lucide-react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3 } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -559,6 +559,25 @@ function AICopywritingContent() {
       text: currentContent.slice(0, 300),
       topic: selectedType,
       style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label,
+    });
+  };
+
+  // 跳到 AI 数字人 — 用文案做口播脚本
+  const handleImportToDigitalHuman = () => {
+    handoff('/ai/digital-human', {
+      topic: currentContent.slice(0, 100), // 数字人 20s 限制,取前 100 字
+      script: currentContent,
+      style: selectedStyle,
+      industry: selectedIndustry,
+    });
+  };
+
+  // 跳到朋友圈 9 宫格 — 用文案做产品/卖点
+  const handleImportToAds = () => {
+    handoff('/ai/ads', {
+      topic: currentContent.slice(0, 200),
+      text: currentContent,
+      industry: selectedIndustry,
     });
   };
 
@@ -1119,6 +1138,18 @@ function AICopywritingContent() {
                     icon={<VideoIcon size={15} />}
                     label="导入 AI 视频"
                     onClick={handleImportToVideo}
+                    highlight
+                  />
+                  <ActionButton
+                    icon={<Mic size={15} />}
+                    label="导入数字人"
+                    onClick={handleImportToDigitalHuman}
+                    highlight
+                  />
+                  <ActionButton
+                    icon={<Grid3x3 size={15} />}
+                    label="导入 9 宫格"
+                    onClick={handleImportToAds}
                     highlight
                   />
                   <ActionButton

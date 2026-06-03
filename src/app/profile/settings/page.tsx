@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   User as UserIcon, Shield, Bell, Plug, ChevronRight, Lock, LogOut,
   Smartphone, Edit3, Save, X, Check, AlertTriangle, Loader2, Eye, EyeOff,
+  Sparkles,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -14,6 +15,8 @@ import { useToast } from '@/components/Toast';
 import { ProtectedRoute } from '@/components';
 import { IntegrationSettings } from '@/components/IntegrationSettings';
 import { useUser } from '@/hooks/use-user';
+import { useAccountType } from '@/hooks/use-account-type';
+import { ACCOUNT_TYPE_PRESETS, type AccountTypeId } from '@/lib/account-presets';
 import { apiClient } from '@/lib/api-client';
 
 // ====== 1. 资料 Section ======
@@ -137,6 +140,94 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
               <Save size={14} /> 保存
             </PrimaryButton>
           </div>
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+// ====== 账号类型 Section (媒体运营场景) ======
+
+function AccountTypeSection() {
+  const { showToast } = useToast();
+  const { accountType, setAccountType } = useAccountType();
+  const [savingId, setSavingId] = useState<AccountTypeId | null>(null);
+
+  const handleSelect = async (id: AccountTypeId) => {
+    if (id === accountType || savingId) return;
+    setSavingId(id);
+    const result = await setAccountType(id);
+    setSavingId(null);
+    if (result.ok) {
+      const preset = ACCOUNT_TYPE_PRESETS.find((p) => p.id === id);
+      showToast(`已切换到「${preset?.label}」,AI 创作中心推荐组合已更新`, 'success');
+    } else {
+      showToast(result.error || '切换失败', 'error');
+    }
+  };
+
+  return (
+    <GlassCard>
+      <div className="flex items-center gap-2 mb-1">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{ background: 'rgba(244,114,182,0.2)', border: '1px solid rgba(244,114,182,0.4)' }}
+        >
+          <Sparkles size={16} color="#F9A8D4" />
+        </div>
+        <div>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>账号类型</p>
+          <p style={{ color: '#9CA3AF', fontSize: 11 }}>选择最贴近的场景,AI 创作中心会推荐对应视频组合</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        {ACCOUNT_TYPE_PRESETS.map((preset) => {
+          const selected = preset.id === accountType;
+          const saving = savingId === preset.id;
+          return (
+            <button
+              key={preset.id}
+              onClick={() => handleSelect(preset.id)}
+              disabled={!!savingId}
+              className="text-left p-3 rounded-2xl transition-all active:scale-[0.98]"
+              style={{
+                background: selected
+                  ? 'linear-gradient(135deg, rgba(244,114,182,0.18), rgba(139,92,246,0.18))'
+                  : 'rgba(255,255,255,0.04)',
+                border: selected
+                  ? '1px solid rgba(244,114,182,0.5)'
+                  : '1px solid rgba(255,255,255,0.08)',
+                opacity: savingId && !saving ? 0.5 : 1,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span style={{ fontSize: 20 }}>{preset.emoji}</span>
+                <span style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>{preset.label}</span>
+                {selected && !saving && (
+                  <Check size={14} color="#F9A8D4" className="ml-auto" />
+                )}
+                {saving && (
+                  <Loader2 size={14} color="#F9A8D4" className="ml-auto animate-spin" />
+                )}
+              </div>
+              <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.4 }}>
+                {preset.desc}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {accountType && (
+        <div
+          className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2"
+          style={{ background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.2)' }}
+        >
+          <Sparkles size={12} color="#F9A8D4" />
+          <p style={{ color: '#F9A8D4', fontSize: 11 }}>
+            去「AI 创作」看为你推荐的 {ACCOUNT_TYPE_PRESETS.find((p) => p.id === accountType)?.combos.length ?? 0} 套视频组合
+          </p>
         </div>
       )}
     </GlassCard>
@@ -410,6 +501,7 @@ function SettingsContent() {
 
       <div className="flex-1 px-4 pt-4 space-y-4">
         <ProfileSection onSaved={() => setTick(t => t + 1)} />
+        <AccountTypeSection />
         <SecuritySection />
         <NotificationSection />
 

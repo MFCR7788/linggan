@@ -19,6 +19,9 @@ export interface User {
   username?: string;
   avatar_url?: string;
   plan: UserPlan;
+  // 账号类型(媒体运营场景):startup/knowledge/ecommerce/b2b/personal/training/restaurant/medical
+  // 后端 User 类型暂未持久化, dev 模式走 localStorage, 生产环境后端 /user/profile 接受扩展字段
+  account_type?: string;
   created_at: string;
   updated_at: string;
 }

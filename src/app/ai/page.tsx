@@ -1,15 +1,19 @@
 "use client";
 
 
-import { useState } from "react";
-import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Zap, FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute, EmptyState } from "@/components";
 import { Toast } from "@/components/Toast";
+import { AccountTypeOnboarding } from "@/components/AccountTypeOnboarding";
 import { useInspirations } from "@/hooks/use-inspiration";
+import { useAccountType } from "@/hooks/use-account-type";
+import { getRecommendations } from "@/lib/account-presets";
+import { buildHandoffUrl } from "@/hooks/use-content-handoff";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
 
 const quickActions = [
@@ -31,7 +35,26 @@ const creationEntries = [
 
 function AICreationContent() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const router = useRouter();
+  const { accountType, preset } = useAccountType();
+  const recommendations = getRecommendations(accountType);
+
+  // 新用户首次进入:弹账号类型引导(localStorage 记录 'lingji_onboarding_done' 避免重复弹)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (accountType) return; // 已有账号类型不弹
+    const done = localStorage.getItem('lingji_onboarding_done');
+    if (done) return;
+    // 延迟 0.5s 弹,避免和页面首屏加载冲突
+    const t = setTimeout(() => setShowOnboarding(true), 500);
+    return () => clearTimeout(t);
+  }, [accountType]);
+
+  const closeOnboarding = () => {
+    setShowOnboarding(false);
+    try { localStorage.setItem('lingji_onboarding_done', '1'); } catch {}
+  };
 
   // 拉取最近的 AI 作品（灵感库中 source_platform='ai' 的记录）
   const { data: aiWorks = [], isLoading: loadingWorks } = useInspirations({
@@ -83,6 +106,96 @@ function AICreationContent() {
             ))}
           </div>
         </div>
+
+        {/* 推荐组合 — 根据账号类型智能推荐 3-4 套视频组合 + 4 步流水线 */}
+        {recommendations.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Sparkles size={14} color="#F9A8D4" />
+                <p style={{ color: "#9CA3AF", fontSize: 12 }}>
+                  {preset ? `为「${preset.label}」推荐` : '推荐组合'}
+                </p>
+                <span
+                  className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+                  style={{
+                    background: 'linear-gradient(135deg, #F472B6, #8B5CF6)',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  智能
+                </span>
+              </div>
+              <button
+                onClick={() => router.push('/profile/settings')}
+                className="text-xs flex items-center gap-0.5"
+                style={{ color: "#93C5FD" }}
+              >
+                换账号类型 <ChevronRight size={14} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {recommendations.map((combo) => (
+                <GlassCard
+                  key={combo.id}
+                  hover
+                  className="!p-3.5"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(244,114,182,0.06), rgba(139,92,246,0.06))',
+                    border: '1px solid rgba(244,114,182,0.15)',
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span style={{ fontSize: 26 }}>{combo.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 700 }}>
+                        {combo.title}
+                      </p>
+                      <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>
+                        {combo.desc}
+                      </p>
+
+                      {/* 4 步流水线 */}
+                      <div className="flex items-center gap-1 mt-2.5 flex-wrap">
+                        {combo.steps.map((step, i) => (
+                          <span key={i} className="flex items-center gap-1">
+                            <span
+                              className="px-1.5 py-0.5 rounded-md text-[10px] font-medium"
+                              style={{
+                                background: 'rgba(255,255,255,0.08)',
+                                color: '#E5E7EB',
+                              }}
+                            >
+                              {i + 1}. {step.label}
+                            </span>
+                            {i < combo.steps.length - 1 && (
+                              <ArrowRight size={10} color="#6B7280" />
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const firstStep = combo.steps[0];
+                        const url = buildHandoffUrl(firstStep.entry, combo.prefills || {});
+                        router.push(url);
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95"
+                      style={{
+                        background: 'linear-gradient(135deg, #F472B6, #8B5CF6)',
+                        color: '#FFFFFF',
+                      }}
+                    >
+                      开始 <ArrowRight size={12} />
+                    </button>
+                  </div>
+                </GlassCard>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Creation Entry */}
         <div>
@@ -217,6 +330,7 @@ function AICreationContent() {
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <AccountTypeOnboarding open={showOnboarding} onClose={closeOnboarding} />
     </div>
   );
 }
