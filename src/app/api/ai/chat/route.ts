@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
-import { extractText } from '@/lib/extract/document-extractor';
+import { extractTextFromBuffer } from '@/lib/extract/document-extractor';
 
 // ====== 意图类型定义 ======
 type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal' | 'weather';
@@ -676,22 +676,41 @@ export const POST = withAuth(async ({ request, user }) => {
     // ====== 文档附件抽取 ======
     let documentContext: string[] = [];
     if (hasDocuments) {
+      const supabase = createAdminClient();
+      const mimeMap: Record<string, string> = {
+        pdf: 'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        txt: 'text/plain',
+        md: 'text/markdown',
+      };
       for (const docUrl of documents) {
         try {
-          const ext = (docUrl as string).split('.').pop()?.toLowerCase() || '';
-          const mimeMap: Record<string, string> = {
-            pdf: 'application/pdf',
-            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            txt: 'text/plain',
-            md: 'text/markdown',
-          };
+          // 从 Supabase 公网 URL 中提取 bucket 和路径
+          const url = new URL(docUrl as string);
+          const parts = url.pathname.split('/').filter(Boolean);
+          // pathname 格式: /storage/v1/object/public/<bucket>/<path>
+          const publicIdx = parts.indexOf('public');
+          if (publicIdx === -1 || publicIdx + 2 >= parts.length) {
+            console.warn(`无法解析文档 URL: ${docUrl}`);
+            continue;
+          }
+          const bucket = parts[publicIdx + 1];
+          const storagePath = parts.slice(publicIdx + 2).join('/');
+          const ext = storagePath.split('.').pop()?.toLowerCase() || '';
           const mimeType = mimeMap[ext];
-          if (mimeType) {
-            const result = await extractText(docUrl, mimeType);
-            if (result.text) {
-              const label = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : ext.toUpperCase();
-              documentContext.push(`[${label} 文档内容]\n${result.text}`);
-            }
+          if (!mimeType) continue;
+
+          const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+          if (error || !data) {
+            console.warn(`文档下载失败 (${docUrl}):`, error);
+            continue;
+          }
+          const arrayBuffer = await data.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const result = await extractTextFromBuffer(buffer, mimeType);
+          if (result.text) {
+            const label = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : ext.toUpperCase();
+            documentContext.push(`[${label} 文档内容]\n${result.text}`);
           }
         } catch (e) {
           console.warn(`文档抽取失败 (${docUrl}):`, e);
