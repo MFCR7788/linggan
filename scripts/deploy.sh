@@ -27,6 +27,9 @@ fi
 log() { echo "[$(date -Iseconds)] $log_user_prefix $*" | tee -a "$LOG_FILE"; }
 
 # 防并发: 同一时间只允许一个部署
+# 用 umask 0 保证 lock 文件创建后 666, 不论 root/deploy 都能后续打开
+( umask 000 && touch "$LOCK_FILE" 2>/dev/null ) || true
+chmod 666 "$LOCK_FILE" 2>/dev/null || true
 exec 9>"$LOCK_FILE"
 flock -n 9 || { log "⏳ 上一个部署还在进行, 跳过本次"; exit 0; }
 
