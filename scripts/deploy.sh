@@ -1,6 +1,7 @@
 #!/bin/bash
 # 灵集 - 自动部署脚本 (由 GitHub webhook 触发)
 # 代码同步: GitHub codeload tarball + PAT (HTTPS 走国内可达, 不需要 SSH key)
+# 既支持 root 手动跑(SSH 进去),也支持 deploy 用户跑(Next.js webhook spawn)
 set -e
 
 DEPLOY_DIR="/opt/lingji"
@@ -11,9 +12,19 @@ TOKEN_FILE="/home/deploy/.lingji_github_token"
 REPO="MFCR7788/linggan"
 BRANCH="main"
 TMP_DIR="/tmp/lingji-deploy-$$"
-LOCK_FILE="/var/lock/lingji-deploy.lock"
+LOCK_FILE="/tmp/lingji-deploy.lock"
 
-log() { echo "[$(date -Iseconds)] $*" | tee -a "$LOG_FILE"; }
+# 决定执行用户: 当前是 root → 用 sudo 切到 deploy; 当前是 deploy → 直接跑
+CURRENT_USER=$(id -un)
+if [ "$CURRENT_USER" = "root" ]; then
+  RUN_AS="sudo -u deploy HOME=/home/deploy"
+  log_user_prefix="[root→deploy]"
+else
+  RUN_AS="HOME=/home/deploy"
+  log_user_prefix="[$CURRENT_USER]"
+fi
+
+log() { echo "[$(date -Iseconds)] $log_user_prefix $*" | tee -a "$LOG_FILE"; }
 
 # 防并发: 同一时间只允许一个部署
 exec 9>"$LOCK_FILE"
@@ -34,7 +45,7 @@ TOKEN=$(cat "$TOKEN_FILE")
 cd "$DEPLOY_DIR"
 
 # 1. 记录当前 commit, 用于回滚
-OLD_COMMIT=$(sudo -u deploy HOME=/home/deploy git -C "$DEPLOY_DIR" rev-parse HEAD 2>/dev/null || echo "none")
+OLD_COMMIT=$(bash -c "$RUN_AS git -C $DEPLOY_DIR rev-parse HEAD" 2>/dev/null || echo "none")
 log "📌 当前 commit: $OLD_COMMIT"
 
 # 2. 拉取最新 commit sha
@@ -99,29 +110,45 @@ rsync -a --delete \
 chown -R deploy:deploy "$DEPLOY_DIR"
 
 # 9. 更新 git ref (保持 HEAD 与远程同步)
-sudo -u deploy HOME=/home/deploy git -C "$DEPLOY_DIR" update-ref refs/heads/main "$NEW_COMMIT" 2>/dev/null || true
-sudo -u deploy HOME=/home/deploy git -C "$DEPLOY_DIR" symbolic-ref HEAD refs/heads/main 2>/dev/null || true
+bash -c "$RUN_AS git -C $DEPLOY_DIR update-ref refs/heads/main $NEW_COMMIT" 2>/dev/null || true
+bash -c "$RUN_AS git -C $DEPLOY_DIR symbolic-ref HEAD refs/heads/main" 2>/dev/null || true
 
 # 10. npm install
 log "📦 npm install"
-sudo -u deploy HOME=/home/deploy npm install --no-audit --no-fund 2>&1 | tail -5 | tee -a "$LOG_FILE"
+bash -c "$RUN_AS npm install --no-audit --no-fund" 2>&1 | tail -5 | tee -a "$LOG_FILE"
 
 # 11. 构建
 log "🔨 npm run build"
-if ! sudo -u deploy HOME=/home/deploy npm run build 2>&1 | tail -15 | tee -a "$LOG_FILE"; then
+if ! bash -c "$RUN_AS npm run build" 2>&1 | tail -15 | tee -a "$LOG_FILE"; then
   log "❌ 构建失败, 请查看上方日志"
   exit 1
 fi
 
-# 12. 重启
-log "🔄 重启服务"
-systemctl restart lingji
-sleep 3
-
-if systemctl is-active --quiet lingji; then
-  log "✅ 部署完成 - 当前 $OLD_COMMIT → $NEW_COMMIT"
+# 12. 重启 (需要 root)
+if [ "$CURRENT_USER" = "root" ]; then
+  log "🔄 重启服务"
+  systemctl restart lingji
+  sleep 3
+  if systemctl is-active --quiet lingji; then
+    log "✅ 部署完成 - 当前 $OLD_COMMIT → $NEW_COMMIT"
+  else
+    log "❌ 部署失败 - 服务未运行"
+    journalctl -u lingji --no-pager -n 30 | tee -a "$LOG_FILE"
+    exit 1
+  fi
 else
-  log "❌ 部署失败 - 服务未运行"
-  journalctl -u lingji --no-pager -n 30 | tee -a "$LOG_FILE"
-  exit 1
+  # deploy 用户: 用 sudo 调 systemctl
+  log "🔄 重启服务 (sudo)"
+  sudo -n systemctl restart lingji 2>&1 | tee -a "$LOG_FILE" || {
+    log "❌ deploy 用户无法 sudo 重启服务, 请配置 NOPASSWD"
+    exit 1
+  }
+  sleep 3
+  if sudo -n systemctl is-active --quiet lingji; then
+    log "✅ 部署完成 - 当前 $OLD_COMMIT → $NEW_COMMIT"
+  else
+    log "❌ 部署失败 - 服务未运行"
+    sudo -n journalctl -u lingji --no-pager -n 30 | tee -a "$LOG_FILE"
+    exit 1
+  fi
 fi
