@@ -109,7 +109,22 @@ export async function POST(request: NextRequest) {
       authUserId = created.user.id;
       console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
     } else {
-      // 4. 已存在,更新 username(若有)
+      // 4. 已存在
+      // 4a. 老用户(Phase C 前的)只有 phone 字段,迁移到 email 登录
+      if (existing.email !== authEmail) {
+        const { error: migrateErr } = await supabase.auth.admin.updateUserById(authUserId, {
+          email: authEmail,
+          email_confirm: true,
+          password: deterministicPassword,
+        });
+        if (migrateErr) {
+          console.error('[login] 老用户迁移到 email 失败:', migrateErr);
+          // 不阻断登录,先尝试 signIn(可能老密码碰巧对了)
+        } else {
+          console.log(`[login] 老用户已迁移: ${authUserId} → email=${authEmail}`);
+        }
+      }
+      // 4b. 更新 username(若有)
       if (username) {
         await supabase.auth.admin.updateUserById(authUserId, {
           user_metadata: { phone, username, source: 'phone_code' },
