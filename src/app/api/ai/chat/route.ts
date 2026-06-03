@@ -1107,7 +1107,7 @@ JSON 格式：
       analysis.sourceUrl = linkContext.sourceUrl;
       analysis.sourcePlatform = linkContext.sourcePlatform;
     }
-    return NextResponse.json({ success: true, ...analysis, _model: modelUsed, _intent: intent.type });
+    return NextResponse.json({ success: true, ...analysis, _model: modelUsed, _intent: intent.type, _modelErrors: modelErrors.length > 0 ? modelErrors : undefined });
 
   } catch (error) {
     console.error('聊天 API 错误:', error);
