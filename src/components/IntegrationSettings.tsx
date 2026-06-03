@@ -53,11 +53,14 @@ export function IntegrationSettings() {
   const [autoGenFor, setAutoGenFor] = useState<string | null>(null);
   const [autoGenValue, setAutoGenValue] = useState<string | null>(null);
 
+  const [degradedReason, setDegradedReason] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
-    const resp = await apiClient.get<{ settings: PlatformSetting[] }>('/admin/platform-settings');
+    const resp = await apiClient.get<{ settings: PlatformSetting[]; degraded?: boolean; reason?: string }>('/admin/platform-settings');
     if (resp.success && resp.data) {
       setSettings(resp.data.settings);
+      setDegradedReason(resp.data.degraded ? (resp.data.reason || '表不存在') : null);
     } else {
       showToast(resp.error || '加载失败', 'error');
     }
@@ -113,6 +116,29 @@ export function IntegrationSettings() {
     );
   }
 
+  if (degradedReason) {
+    return (
+      <div
+        className="px-3 py-2.5 rounded-lg flex items-start gap-2"
+        style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
+      >
+        <AlertTriangle size={14} color="#FDE047" className="flex-shrink-0 mt-0.5" />
+        <div>
+          <p style={{ color: '#FDE68A', fontSize: 12, lineHeight: 1.6 }}>
+            配置中心未初始化。请在 Supabase SQL 编辑器里跑
+            <code style={{ background: 'rgba(0,0,0,0.3)', padding: '0 4px', borderRadius: 4, margin: '0 4px' }}>
+              supabase/migrations/011_platform_integration_settings.sql
+            </code>
+            一次即可。
+          </p>
+          {degradedReason && (
+            <p style={{ color: '#9CA3AF', fontSize: 10, marginTop: 4 }}>技术细节: {degradedReason}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* 顶部进度 banner */}
@@ -143,7 +169,7 @@ export function IntegrationSettings() {
         >
           <AlertTriangle size={14} color="#FDE047" className="flex-shrink-0 mt-0.5" />
           <p style={{ color: '#FDE68A', fontSize: 11, lineHeight: 1.5 }}>
-            站内只是"配置中心"，生效需把值同步到 Vercel → Settings → Environment Variables → 重新部署。
+            站内只是「配置中心」，生效需把值同步到 Vercel → Settings → Environment Variables → 重新部署。
           </p>
         </div>
       </GlassCard>

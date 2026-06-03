@@ -34,6 +34,7 @@ function isValidKey(k: string): k is KeyName {
 
 /**
  * 拉 6 行元信息(永远不返 value_encrypted)
+ * 若表不存在(用户没跑 011 迁移),降级返空数组 + degraded=true,前端展示「请先跑迁移」
  */
 export const GET = withAuth(async () => {
   const supabase = createAdminClient();
@@ -42,7 +43,10 @@ export const GET = withAuth(async () => {
     .select('key_name, is_configured, configured_at, configured_by, description, apply_url, category, value_encrypted')
     .order('category', { ascending: true });
 
-  if (error) return createApiError(error.message, 500);
+  if (error) {
+    // 降级:表不存在时返 200 + degraded,不让整页崩
+    return createApiResponse({ settings: [], degraded: true, reason: error.message });
+  }
 
   // value_encrypted → hasValue 布尔(不返明文)
   const settings = (data || []).map((row: any) => ({

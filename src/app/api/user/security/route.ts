@@ -77,6 +77,11 @@ export const POST = withAuth(async ({ request, user }) => {
 
   if (action === 'sign-out-all') {
     // 直连 Postgres(PostgREST 默认不暴露 auth schema)
+    // Vercel serverless 不允许直连 db.xxx.supabase.co,需要用 pooler
+    // 若 DATABASE_URL 不可用,降级:提示用户用「改密码」代替
+    if (!process.env.DATABASE_URL) {
+      return createApiError('DATABASE_URL 未配置,无法直连。改用「改密码」,Supabase 会让所有 refresh_token 失效。', 503);
+    }
     const pool = createPgPool();
     try {
       // 1. 删 auth.refresh_tokens(等价于让所有 refresh token 失效)
@@ -100,9 +105,11 @@ export const POST = withAuth(async ({ request, user }) => {
           : '没有可退出的设备'
       );
     } catch (e: any) {
+      // Vercel serverless 直连 db 域名被防火墙挡:ENOTFOUND / ETIMEDOUT
+      // 降级:建议改密码(也能让所有 session 失效)
       return createApiError(
-        `退出失败: ${e.message}。建议直接「改密码」,Supabase 会让所有 refresh_token 失效。`,
-        500
+        `退出失败: ${e.message}。如需退出其他设备,请用「改密码」,Supabase 会让所有 refresh_token 失效。`,
+        503
       );
     } finally {
       await pool.end();
@@ -146,7 +153,12 @@ export const GET = withAuth(async ({ request, user }) => {
 
     return createApiResponse({ sessions: simplified });
   } catch (e: any) {
-    return createApiError(`列 session 失败: ${e.message}`, 500);
+    // Vercel serverless 直连 db 域名被防火墙挡:返 503 让前端降级显示
+    return createApiResponse({
+      sessions: [],
+      degraded: true,
+      reason: e.message,
+    });
   } finally {
     await pool.end();
   }
