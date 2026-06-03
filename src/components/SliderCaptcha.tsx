@@ -21,6 +21,7 @@ interface CaptchaData {
   width: number;
   height: number;
   puzzleSize: number;
+  puzzleY: number;
   bgImage: string;
   puzzleImage: string;
   expiresAt: string;
@@ -123,7 +124,7 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl p-5"
+        className="w-full max-w-md rounded-2xl p-5"
         style={{
           background: "rgba(10, 22, 41, 0.95)",
           border: "1px solid rgba(255,255,255,0.15)",
@@ -150,22 +151,50 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
           {status === "success" ? "✓ 验证通过" : "拖动滑块使拼图对齐缺口"}
         </p>
 
-        {/* 底图 (含缺口) */}
-        <div
-          className="relative rounded-lg overflow-hidden mb-3"
-          style={{ background: "rgba(0,0,0,0.3)" }}
-          key={`bg-${shake}-${data?.token ?? "init"}`}
-        >
-          {data ? (
-            <img src={data.bgImage} alt="背景图" className="block w-full" />
-          ) : (
-            <div
-              className="w-full"
-              style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <span style={{ color: "#6B7280", fontSize: 13 }}>加载中...</span>
-            </div>
-          )}
+        {/* 底图 (含缺口) — 固定 400x200, 居中显示 */}
+        <div className="flex justify-center mb-3">
+          <div
+            className="relative rounded-lg overflow-hidden"
+            style={{
+              background: "rgba(0,0,0,0.3)",
+              width: data?.width ?? 400,
+              height: data?.height ?? 200,
+            }}
+            key={`bg-${shake}-${data?.token ?? "init"}`}
+          >
+            {data ? (
+              <>
+                <img
+                  src={data.bgImage}
+                  alt="背景图"
+                  className="block"
+                  style={{ width: data.width, height: data.height }}
+                />
+                {/* 拼图块 (跟随滑块位置, 与缺口同 Y) */}
+                {status !== "success" && (
+                  <img
+                    src={data.puzzleImage}
+                    alt="拼图块"
+                    className="pointer-events-none absolute"
+                    style={{
+                      top: data.puzzleY,
+                      left: offset,
+                      width: data.puzzleSize,
+                      height: data.puzzleSize,
+                      filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))",
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <div
+                className="w-full h-full"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <span style={{ color: "#6B7280", fontSize: 13 }}>加载中...</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 滑块轨道 */}
@@ -220,25 +249,6 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
             )}
           </div>
         </div>
-
-        {/* 拼图块 (跟随滑块位置) */}
-        {data && status !== "success" && (
-          <img
-            src={data.puzzleImage}
-            alt="拼图块"
-            className="pointer-events-none"
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: `calc(50% - ${data.width / 2}px + ${offset}px)`,
-              transform: "translateY(-100%)",
-              width: data.puzzleSize,
-              height: data.puzzleSize,
-              filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.3))",
-              zIndex: 1,
-            }}
-          />
-        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between mt-3" style={{ minHeight: 20 }}>

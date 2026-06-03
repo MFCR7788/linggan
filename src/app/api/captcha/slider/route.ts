@@ -39,7 +39,8 @@ export async function GET() {
     puzzleSize: puzzle.puzzleSize,
     bgImage: svgToDataUrl(puzzle.bgSvg),
     puzzleImage: svgToDataUrl(puzzle.puzzleSvg),
-    // 注意: puzzleX/Y 故意不发, 客户端只能猜
+    // puzzleX 故意不发(校验用); puzzleY 必须发, 前端按此 Y 定位拼图块, 否则上下对不齐
+    puzzleY: puzzle.puzzleY,
     expiresAt: expiresAt.toISOString(),
   });
 }
