@@ -62,9 +62,12 @@ const DURATION_OPTIONS = [
 ];
 
 const bgmOptions = [
+  { id: 'auto', label: 'AI 自动', wave: [5, 7, 4, 8, 6, 9, 5, 7, 8, 6] },
   { id: 'tech', label: '科技感', wave: [3, 6, 4, 8, 5, 7, 3, 9, 6, 4] },
   { id: 'chill', label: '轻松舒缓', wave: [3, 4, 3, 5, 4, 3, 4, 5, 3, 4] },
   { id: 'hype', label: '热血激昂', wave: [6, 8, 9, 7, 9, 8, 9, 7, 8, 9] },
+  { id: 'elegant', label: '优雅高级', wave: [2, 3, 4, 3, 2, 4, 3, 2, 3, 4] },
+  { id: 'energetic', label: '活力激情', wave: [7, 9, 6, 8, 9, 7, 8, 9, 7, 8] },
 ];
 
 const subtitleStyles = ['白色粗体', '黄色描边', '黑底白字', '渐变彩色'];
@@ -1033,8 +1036,8 @@ function AIVideoContent() {
               </button>
             ))}
           </div>
-          {/* 试听按钮 */}
-          {bgmStyle && (
+          {/* 试听按钮(AI 自动模式不显示,合并时会智能选择) */}
+          {bgmStyle && bgmStyle !== 'auto' && (
             <audio
               key={bgmStyle}
               controls
@@ -1043,6 +1046,11 @@ function AIVideoContent() {
               className="w-full mt-2"
               style={{ height: 32 }}
             />
+          )}
+          {bgmStyle === 'auto' && (
+            <p style={{ color: '#FBBF24', fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
+              ✨ AI 将根据主题「{topic || '(未填)'}」自动匹配最合适的 BGM 风格
+            </p>
           )}
         </div>
 

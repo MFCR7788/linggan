@@ -11,6 +11,7 @@ import {
   type StoryboardScene as FfmpegScene,
 } from '@/lib/ffmpeg-utils';
 import { readFileSync, statSync } from 'fs';
+import { recommendBgmAuto, type BgmStyle } from '@/lib/bgm-recommender';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,6 +150,19 @@ export async function POST(request: NextRequest) {
       return createApiError('请提供视频链接列表', 400);
     }
 
+    // BGM auto 模式: 根据 topic/stylePreset 智能推荐风格
+    let actualBgmStyle: BgmStyle | string = bgmStyle || 'tech';
+    let bgmRecommendNote: string | null = null;
+    if (bgmStyle === 'auto') {
+      const recommended = recommendBgmAuto({
+        topic: topic || '',
+        style: stylePreset || '',
+      });
+      actualBgmStyle = recommended;
+      bgmRecommendNote = `根据「${topic || stylePreset || '主题'}」自动推荐: ${recommended}`;
+      console.log(`[Merge] BGM auto → ${recommended}`);
+    }
+
     const dir = getTempDir('merge');
     console.log(`[Merge] 开始合并 ${videoUrls.length} 个视频片段, 临时目录: ${dir}`);
 
@@ -172,7 +186,7 @@ export async function POST(request: NextRequest) {
     try {
       finalPath = await mergeVideoSegments({
         segmentPaths: localPaths,
-        bgmStyle: bgmStyle || 'tech',
+        bgmStyle: actualBgmStyle as any,
         subtitleStyle: subtitleStyle || '白色粗体',
         subtitlePosition: subtitlePosition || '底部',
         storyboard: (storyboard || []) as FfmpegScene[],
@@ -235,6 +249,8 @@ export async function POST(request: NextRequest) {
       videoUrl: publicUrl,
       size: fileSize,
       saved: true,
+      bgmStyle: actualBgmStyle,
+      bgmRecommendNote,
     }, '视频合并完成，已自动保存');
   } catch (error) {
     console.error('Video merge error:', error);

@@ -47,7 +47,7 @@ export interface StoryboardScene {
 
 export interface MergeOptions {
   segmentPaths: string[];
-  bgmStyle: 'tech' | 'chill' | 'hype';
+  bgmStyle: 'tech' | 'chill' | 'hype' | 'elegant' | 'energetic' | 'auto';
   subtitleStyle: string;
   subtitlePosition: string;
   storyboard: StoryboardScene[];
@@ -122,7 +122,17 @@ export function addBGM(
   bgmStyle: string,
   outputPath: string
 ): string {
-  const bgmPath = join(process.cwd(), 'public', 'bgm', `${bgmStyle}.mp3`);
+  // 风格降级映射: 若目标 mp3 不存在, 用最接近的本地 mp3 替代
+  const BGM_FALLBACK: Record<string, string> = {
+    elegant: 'chill',
+    energetic: 'hype',
+  };
+  let actualStyle = bgmStyle;
+  let bgmPath = join(process.cwd(), 'public', 'bgm', `${actualStyle}.mp3`);
+  if (!existsSync(bgmPath) && BGM_FALLBACK[actualStyle]) {
+    actualStyle = BGM_FALLBACK[actualStyle];
+    bgmPath = join(process.cwd(), 'public', 'bgm', `${actualStyle}.mp3`);
+  }
   if (!existsSync(bgmPath)) {
     console.warn(`[ffmpeg] BGM 文件不存在: ${bgmPath}，跳过BGM合成`);
     // 没有 BGM 文件时直接复制
@@ -130,7 +140,7 @@ export function addBGM(
     return outputPath;
   }
 
-  const volumeMap: Record<string, string> = { tech: '0.25', chill: '0.3', hype: '0.2' };
+  const volumeMap: Record<string, string> = { tech: '0.25', chill: '0.3', hype: '0.2', elegant: '0.22', energetic: '0.25' };
   const volume = volumeMap[bgmStyle] || '0.25';
 
   ffmpegExec(
