@@ -1106,8 +1106,10 @@ JSON 格式：
 
   } catch (error) {
     console.error('聊天 API 错误:', error);
+    const errMsg = error instanceof Error ? `${error.message}\n${error.stack || ''}` : String(error);
     return NextResponse.json({
-      success: true,
+      success: false,
+      error: errMsg.substring(0, 500),
       title: '未命名灵感',
       summary: '这是您记录的灵感内容，请查看详细信息。',
       keyPoints: ['这是您记录的原始内容', '建议保存到灵感库'],
