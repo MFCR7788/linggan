@@ -927,7 +927,8 @@ ${forecastText}
         return true;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.warn(`${name} 失败:`, msg);
+        const stack = e instanceof Error ? e.stack : '';
+        console.warn(`${name} 失败:`, msg, stack);
         modelErrors.push(`${name}: ${msg.substring(0, 200)}`);
       }
       return false;

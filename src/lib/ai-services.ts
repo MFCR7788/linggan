@@ -72,7 +72,7 @@ export async function callDeepSeek(
   if (!response.ok) {
     const error = await response.text();
     console.error('DeepSeek API error:', error);
-    throw new Error('DeepSeek API call failed');
+    throw new Error(`DeepSeek API call failed: ${error.substring(0, 200)}`);
   }
 
   const data = await response.json();
@@ -153,7 +153,7 @@ export async function callDoubaoChat(
   if (!response.ok) {
     const error = await response.text();
     console.error('Doubao API error:', error);
-    throw new Error('Doubao API call failed');
+    throw new Error(`Doubao API call failed: ${error.substring(0, 200)}`);
   }
 
   const data = await response.json();
