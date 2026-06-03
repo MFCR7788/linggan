@@ -3,9 +3,9 @@
 // POST   /api/subscriptions { tier }     → 订阅/升级到指定档位(模拟支付 V2.0.3)
 // DELETE /api/subscriptions              → 取消订阅(auto_renew=false,到期不续)
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { grant } from '@/lib/credits';
 import type { CreditTier } from '@/lib/credits';
 
@@ -13,11 +13,8 @@ export const dynamic = 'force-dynamic';
 
 const VALID_TIERS: CreditTier[] = ['free', 'basic', 'pro', 'studio', 'enterprise'];
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const supabase = createAdminClient();
 
     // 查 user_credits 当前档位 + 过期时间
@@ -55,13 +52,10 @@ export async function GET(request: NextRequest) {
     console.error('[Subscriptions] GET error:', e);
     return createApiError(e?.message || '查询失败', 500);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const { tier } = await request.json();
     if (!tier || !VALID_TIERS.includes(tier)) {
       return createApiError(`tier 必须是 ${VALID_TIERS.join('/')} 之一`, 400);
@@ -173,13 +167,10 @@ export async function POST(request: NextRequest) {
     console.error('[Subscriptions] POST error:', e);
     return createApiError(e?.message || '订阅失败', 500);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const supabase = createAdminClient();
 
     // 取消 active 订阅(不立即降级,等 expires_at 到期)
@@ -203,4 +194,4 @@ export async function DELETE(request: NextRequest) {
     console.error('[Subscriptions] DELETE error:', e);
     return createApiError(e?.message || '取消失败', 500);
   }
-}
+});

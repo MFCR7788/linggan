@@ -1,19 +1,14 @@
 // 视频生成 API — 异步任务模式
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { submitVideoTask, getVideoTaskStatus, logAiUsage } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
 // 提交视频生成任务
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const {
       prompt,
       duration = 5,
@@ -101,16 +96,11 @@ export async function POST(request: NextRequest) {
     console.error('AI video generation error:', error);
     return createApiError('视频生成失败', 500);
   }
-}
+});
 
 // 查询视频生成任务状态
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { searchParams } = new URL(request.url);
     const taskId = searchParams.get('taskId');
     if (!taskId) {
@@ -123,4 +113,4 @@ export async function GET(request: NextRequest) {
     console.error('Video task status error:', error);
     return createApiError('查询失败', 500);
   }
-}
+});

@@ -2,17 +2,13 @@
 // POST { imageUrl, videoUrl, mode? }              → 提交 Animate 任务
 // GET  ?taskId=xxx                                 → 查状态
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { submitAnimateTask, getAnimateTaskStatus } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
     const { imageUrl, videoUrl, mode = 'animate', resolution = '720P' } = await request.json();
 
@@ -44,16 +40,13 @@ export async function POST(request: NextRequest) {
     console.error('[Animate] POST error:', e);
     return createApiError(e?.message || '服务器错误', 500);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user: _user }) => {
   const { searchParams } = new URL(request.url);
   const taskId = searchParams.get('taskId');
   if (!taskId) return createApiError('缺少 taskId', 400);
 
   const result = await getAnimateTaskStatus(taskId);
   return createApiResponse(result, '状态已获取');
-}
+});

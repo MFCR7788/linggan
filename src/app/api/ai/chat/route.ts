@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
+import { withAuth } from '@/lib/api-handler';
 
 // ====== 意图类型定义 ======
 type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal' | 'weather';
@@ -580,7 +581,7 @@ async function executeGenerationFallback(
 }
 
 // ====== POST 处理器 ======
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   const modelErrors: string[] = [];
   try {
     const body = await request.json();
@@ -1126,10 +1127,10 @@ JSON 格式：
       intent: '灵感记录',
     });
   }
-}
+});
 
-// GET /api/ai/chat?action=video_status&taskId=xxx — 查询视频生成状态（无认证）
-export async function GET(request: NextRequest) {
+// GET /api/ai/chat?action=video_status&taskId=xxx — 查询视频生成状态
+export const GET = withAuth(async ({ request }) => {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action');
 
@@ -1148,4 +1149,4 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ success: false, error: '未知操作' }, { status: 400 });
-}
+});

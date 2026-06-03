@@ -1,18 +1,12 @@
 // AI 写稿 — 为数字人生成口播脚本
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateOralScript } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { topic, style, language, targetLength, variantCount, inspirations } = await request.json();
 
     if (!topic || !topic.trim()) {
@@ -34,4 +28,4 @@ export async function POST(request: NextRequest) {
     console.error('Script generation error:', error);
     return createApiError('脚本生成失败', 500);
   }
-}
+});

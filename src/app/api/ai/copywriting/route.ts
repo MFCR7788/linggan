@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateCopywriting, logAiUsage } from '@/lib/ai-services';
 import { findIndustry, renderIndustryInstruction, COPYWRITING_TYPES } from '@/lib/preset-templates';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
@@ -10,13 +11,8 @@ export const dynamic = 'force-dynamic';
 // 单次文案消耗 2 credits;n 个变体按 n 倍扣
 const CREDIT_PER_COPY = 2;
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { inspirations, type, style, noAiTaste, n, industry, userInstruction } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations)) {
@@ -103,4 +99,4 @@ export async function POST(request: NextRequest) {
     console.error('AI copywriting error:', error);
     return createApiError('Failed to generate copywriting', 500);
   }
-}
+});

@@ -1,7 +1,8 @@
 // 一键成片 API — 自动分镜 + 提交 + 合并
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateStoryboardV2, submitVideoGenerationTask, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
 import { QUALITY_TIERS } from '@/lib/video-models';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
@@ -17,13 +18,8 @@ function autoDuration(inspirationCount: number): number {
   return 10;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const {
       inspirations,
       topic,
@@ -180,4 +176,4 @@ export async function POST(request: NextRequest) {
     console.error('One-click video error:', error);
     return createApiError('一键成片失败', 500);
   }
-}
+});

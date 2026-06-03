@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek, callDoubaoChat, callQwen } from '@/lib/ai-services';
+import { withAuth } from '@/lib/api-handler';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
   try {
     const body = await request.json();
     const { content, type } = body;
@@ -171,7 +172,7 @@ ${content}
       ...fallbackAnalysis
     });
   }
-}
+});
 
 // 备用分析生成
 function getFallbackAnalysis(content: string, type: string) {

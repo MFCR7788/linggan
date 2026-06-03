@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
 import http from 'http';
+import { withAuth } from '@/lib/api-handler';
 
 interface SearchResult {
   title: string;
@@ -8,7 +9,7 @@ interface SearchResult {
   snippet: string;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
   try {
     const { query } = await request.json();
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     console.error('Search API error:', error);
     return NextResponse.json({ success: false, error: '搜索失败' }, { status: 500 });
   }
-}
+});
 
 function httpGet(url: string): Promise<string> {
   return new Promise((resolve, reject) => {

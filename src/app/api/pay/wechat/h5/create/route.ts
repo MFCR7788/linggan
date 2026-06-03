@@ -4,18 +4,15 @@
 //
 // 浏览器外打开:用户跳转 h5Url → 微信 App 拉起 → 支付 → 微信回调 /notify
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { createH5Order, genOutTradeNo } from '@/lib/wechat-pay';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const { type, id } = await request.json();
     if (type !== 'package' && type !== 'subscription') {
       return createApiError('type 必须是 package 或 subscription', 400);
@@ -131,4 +128,4 @@ export async function POST(request: NextRequest) {
     console.error('[Pay/H5 create] error:', e);
     return createApiError(e?.message || '创建订单失败', 500);
   }
-}
+});

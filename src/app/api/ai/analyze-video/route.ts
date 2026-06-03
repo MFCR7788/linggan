@@ -1,10 +1,11 @@
 // 视频内容分析 API — 基于视频元数据 + AI 分析
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek } from '@/lib/ai-services';
+import { withAuth } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
   try {
     const { fileName, fileSize, fileType, videoUrl } = await request.json();
 
@@ -61,4 +62,4 @@ ${videoUrl ? `- 视频地址: ${videoUrl}` : ''}
       reuseScore: 3,
     });
   }
-}
+});

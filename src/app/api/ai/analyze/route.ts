@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { callDeepSeek } from '@/lib/ai-services';
+import { withAuth } from '@/lib/api-handler';
 
-export async function POST(request: Request) {
+export const POST = withAuth(async ({ request }: { request: Request }) => {
   try {
     const { content, contentType } = await request.json();
     
@@ -49,7 +50,7 @@ ${content}
     const fallbackAnalysis = getFallbackAnalysis('', 'text');
     return NextResponse.json({ success: true, analysis: fallbackAnalysis });
   }
-}
+});
 
 function getFallbackAnalysis(content: string, contentType: string) {
   const scheduleKeywords = ['明天', '后天', '下周', '提醒', '记得', '约会', '会议', '安排', '日程', '计划'];

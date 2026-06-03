@@ -9,7 +9,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClickTextCaptcha } from "@/components/ClickTextCaptcha";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
-import { syncDevAuthCookie } from "@/lib/dev-auth";
 
 
 function LoginContent() {
@@ -99,17 +98,14 @@ function LoginContent() {
 
       // 设置会话
       if (data.session) {
-        // 开发模式：保存用户信息到 localStorage
+        // 保存用户信息到 localStorage(用于 useUser 乐观渲染)
         localStorage.setItem('dev_user', JSON.stringify({
           id: data.session.user.id,
-          phone: data.session.user.user_metadata.phone,
-          username: data.session.user.user_metadata.username,
+          phone: data.user?.phone || phone,
+          username: data.user?.username || phone,
         }));
 
-        // 同步 localStorage → cookie（确保 middleware 能读取）
-        syncDevAuthCookie();
-
-        // 使用硬导航确保 cookie 被正确发送
+        // 后端已 set sb-access-token cookie,硬导航跳首页
         window.location.href = "/home";
       }
     } catch (err) {
@@ -130,7 +126,7 @@ function LoginContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, code, username }),
       });
-      
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error);
@@ -138,17 +134,14 @@ function LoginContent() {
 
       // 设置会话
       if (data.session) {
-        // 开发模式：保存用户信息到 localStorage
+        // 保存用户信息到 localStorage(用于 useUser 乐观渲染)
         localStorage.setItem('dev_user', JSON.stringify({
           id: data.session.user.id,
-          phone: data.session.user.user_metadata.phone,
-          username: data.session.user.user_metadata.username,
+          phone: data.user?.phone || phone,
+          username: data.user?.username || phone,
         }));
 
-        // 同步 localStorage → cookie（确保 middleware 能读取）
-        syncDevAuthCookie();
-
-        // 使用硬导航确保 cookie 被正确发送
+        // 后端已 set sb-access-token cookie,硬导航跳首页
         window.location.href = "/home";
       }
     } catch (err) {

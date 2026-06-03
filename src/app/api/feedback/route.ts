@@ -1,15 +1,10 @@
 // 用户反馈 API
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { type, content, contact } = await request.json();
 
     if (!content || !content.trim()) {
@@ -45,4 +40,4 @@ export async function POST(request: NextRequest) {
     console.error('[Feedback] Error:', error);
     return createApiError('提交失败，请稍后重试', 500);
   }
-}
+});

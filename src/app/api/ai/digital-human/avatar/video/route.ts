@@ -2,17 +2,13 @@
 // POST { avatarId, script, voiceId?, backgroundColor? }  → 提交生成
 // GET  ?videoId=xxx                                       → 查状态
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateAvatarVideo, getAvatarVideoStatus } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
     const { avatarId, script, voiceId, backgroundColor } = await request.json();
 
@@ -42,16 +38,13 @@ export async function POST(request: NextRequest) {
     console.error('[Avatar Video] POST error:', e);
     return createApiError(e?.message || '服务器错误', 500);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user: _user }) => {
   const { searchParams } = new URL(request.url);
   const videoId = searchParams.get('videoId');
   if (!videoId) return createApiError('缺少 videoId', 400);
 
   const result = await getAvatarVideoStatus(videoId);
   return createApiResponse(result, '状态已获取');
-}
+});

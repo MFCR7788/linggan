@@ -1,19 +1,13 @@
 // AI 分镜生成 v2 — 一步到位：素材 + 风格 + 时长 + 主题 → 分镜
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateStoryboardV2, calcSegmentDurations } from '@/lib/ai-services';
 import { STYLE_PRESETS } from '@/lib/style-constants';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { inspirations, stylePreset, duration, topic, language, firstFrameUrl } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations) || inspirations.length === 0) {
@@ -56,4 +50,4 @@ export async function POST(request: NextRequest) {
     console.error('StoryboardV2 generation error:', error);
     return createApiError('分镜生成失败', 500);
   }
-}
+});

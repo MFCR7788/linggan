@@ -1,20 +1,16 @@
 // 数字人 API — Audio2Video（wan2.2-s2v）
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { submitDigitalHumanTask, getDigitalHumanTaskStatus, logAiUsage } from '@/lib/ai-services';
 import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
 import { calcDigitalHumanCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { imageUrl, audioUrl, resolution, audioDuration } = await request.json();
 
     if (!imageUrl || !audioUrl) {
@@ -125,15 +121,10 @@ export async function POST(request: NextRequest) {
     console.error('Digital human submit error:', error);
     return createApiError('提交失败', 500);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { searchParams } = new URL(request.url);
     const taskId = searchParams.get('taskId');
     if (!taskId) {
@@ -169,4 +160,4 @@ export async function GET(request: NextRequest) {
     console.error('Digital human query error:', error);
     return createApiError('查询失败', 500);
   }
-}
+});

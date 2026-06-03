@@ -3,10 +3,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek } from '@/lib/ai-services';
+import { withAuth } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async ({ request: req }: { request: NextRequest }) => {
   const { text, aiResponse } = await req.json();
 
   // text 是用户原始输入，aiResponse 是 AI 的详细分析（可选，但强烈建议提供）
@@ -95,4 +96,4 @@ ${sourceText.trim().substring(0, 3000)}`;
     console.error('[extract-schedule] 失败:', e.message);
     return NextResponse.json({ success: true, schedules: [] });
   }
-}
+});

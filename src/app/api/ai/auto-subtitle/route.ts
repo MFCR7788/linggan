@@ -1,9 +1,8 @@
 // AI 智能字幕 — 用 LLM 把分镜字幕改写为朗朗上口的短句（适合视频口播/字幕）
 // POST { storyboard: [{index, visualPrompt, subtitle}] } → { storyboard: [{...newSubtitle}] }
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
@@ -15,10 +14,7 @@ interface SceneInput {
   duration?: number;
 }
 
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
     const { storyboard } = await request.json();
 
@@ -79,4 +75,4 @@ ${sceneList}
     console.error('[auto-subtitle] error:', e);
     return createApiError(e?.message || '服务器错误', 500);
   }
-}
+});

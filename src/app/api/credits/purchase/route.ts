@@ -3,18 +3,15 @@
 // body: { packageId: string }
 // 真实支付待 V2.0.4 接入(微信/支付宝/微信 H5)
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { grant } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const { packageId } = await request.json();
     if (!packageId || typeof packageId !== 'string') {
       return createApiError('packageId 必填', 400);
@@ -69,4 +66,4 @@ export async function POST(request: NextRequest) {
     console.error('[Credits] purchase error:', e);
     return createApiError(e?.message || '购买失败', 500);
   }
-}
+});

@@ -4,17 +4,13 @@
 //
 // 价格说明:HeyGen 训练本身免费,按生成视频秒数计费(约 $0.05-0.067/秒)
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { trainAvatar, getAvatarTrainingStatus } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
     const { videoUrl, name, lookalike = true } = await request.json();
 
@@ -44,16 +40,13 @@ export async function POST(request: NextRequest) {
     console.error('[Avatar] POST error:', e);
     return createApiError(e?.message || '服务器错误', 500);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user: _user }) => {
   const { searchParams } = new URL(request.url);
   const avatarId = searchParams.get('avatarId');
   if (!avatarId) return createApiError('缺少 avatarId', 400);
 
   const result = await getAvatarTrainingStatus(avatarId);
   return createApiResponse(result, '状态已获取');
-}
+});

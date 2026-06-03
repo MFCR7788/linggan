@@ -1,8 +1,8 @@
 // TTS (Text-to-Speech) API — 通过火山引擎语音合成（豆包 TTS）
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import https from 'https';
 import { synthesizeWithClonedVoice } from '@/lib/ai-services';
-import { getCurrentUser } from '@/lib/supabase-server';
+import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost, CREDIT_COSTS } from '@/lib/credit-costs';
 
@@ -27,7 +27,7 @@ const DEFAULT_VOICE = 'female_natural';
 const DEFAULT_SPEED = 1.15;
 const DEFAULT_PITCH = 1.0;
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user: _user }) => {
   const { searchParams } = new URL(request.url);
   const lang = searchParams.get('language');
   const voices = Object.entries(VOICE_MAP)
@@ -39,15 +39,10 @@ export async function GET(request: NextRequest) {
       language,
     }));
   return NextResponse.json({ success: true, data: { voices } });
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ success: false, error: '请先登录' }, { status: 401 });
-    }
-
     const { text, voice, speed, pitch, cloned_voice_id: clonedVoiceId } = await request.json();
 
     if (!text || text.length === 0) {
@@ -211,4 +206,4 @@ export async function POST(request: NextRequest) {
     console.error('[TTS] Error:', error);
     return NextResponse.json({ success: false, error: '语音合成服务错误' }, { status: 500 });
   }
-}
+});

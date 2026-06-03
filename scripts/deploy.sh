@@ -128,6 +128,16 @@ if ! bash -c "$RUN_AS npm run build" 2>&1 | tail -15 | tee -a "$LOG_FILE"; then
   exit 1
 fi
 
+# 11.5 BUILD_ID 自检(防止 build 部分完成导致 systemd 重启后 502)
+log "🔍 检查构建产物"
+if [ ! -s "$DEPLOY_DIR/.next/BUILD_ID" ]; then
+  log "❌ .next/BUILD_ID 缺失或为空, 构建可能未完成, 拒绝重启(避免上线后 502)"
+  ls -la "$DEPLOY_DIR/.next/" 2>&1 | tee -a "$LOG_FILE"
+  exit 1
+fi
+BUILD_ID=$(cat "$DEPLOY_DIR/.next/BUILD_ID")
+log "✅ BUILD_ID: $BUILD_ID"
+
 # 12. 重启 (需要 root)
 if [ "$CURRENT_USER" = "root" ]; then
   log "🔄 重启服务"

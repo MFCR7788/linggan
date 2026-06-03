@@ -3,23 +3,15 @@
 // GET  ?speakerId=xxx                                                       → 查状态
 // DEL  ?speakerId=xxx                                                       → 预留(火山 V1 删除接口较复杂,先不实现)
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import {
-  createApiResponse,
-  createApiError,
-  createUnauthorizedResponse,
-} from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { cloneVoiceUpload, cloneVoiceStatus } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // 10MB 火山限制
 
-export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const {
       audioBase64,
@@ -66,12 +58,9 @@ export async function POST(request: NextRequest) {
     console.error('[VoiceClone] POST error:', e);
     return createApiError(e?.message || '服务器错误', 500);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user }) => {
   const { searchParams } = new URL(request.url);
   const speakerId = searchParams.get('speakerId');
 
@@ -85,4 +74,4 @@ export async function GET(request: NextRequest) {
     status: result.status,
     error: result.error,
   }, '状态已获取');
-}
+});

@@ -5,19 +5,16 @@
 // 前端在用户从微信跳回后轮询此接口直到 status=paid 或 timeout
 // 同时:如果回调晚到,这里会主动调微信查询订单 → 如果实际已 SUCCESS 但我们还是 pending,触发补单逻辑
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { queryOrderByOutTradeNo } from '@/lib/wechat-pay';
 import { grant, getBalance } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const { searchParams } = new URL(request.url);
     const outTradeNo = searchParams.get('outTradeNo');
     if (!outTradeNo) return createApiError('缺少 outTradeNo', 400);
@@ -170,4 +167,4 @@ export async function GET(request: NextRequest) {
     console.error('[Pay/query] error:', e);
     return createApiError(e?.message || '查询失败', 500);
   }
-}
+});

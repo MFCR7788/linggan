@@ -1,8 +1,7 @@
 // AI 生图的"智能提示"端点
 // 接收 {inspirations, userInput, presetId} → 用 DeepSeek 提炼成 50-150 字的精准 prompt
-import { NextRequest } from 'next/server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
-import { getCurrentUser } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
 import { findImagePreset } from '@/lib/preset-templates';
 
@@ -17,11 +16,8 @@ interface SmartPromptBody {
   paletteName?: string;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const body: SmartPromptBody = await request.json().catch(() => ({}));
     const { inspirations = [], userInput = '', presetId, style, ratio, paletteName } = body;
 
@@ -107,4 +103,4 @@ ${systemContext}
     console.error('Smart prompt error:', error);
     return createApiError('生成提示词失败', 500);
   }
-}
+});

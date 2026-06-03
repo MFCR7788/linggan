@@ -4,6 +4,7 @@ import { callDeepSeek, callDoubaoVision } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 import { extractVideoText, canExtractTranscript } from '@/lib/video-transcriber';
 import type { TranscriptResult } from '@/lib/video-transcriber';
+import { withAuth } from '@/lib/api-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,7 +258,7 @@ function tryParseJSON(str: string): any | null {
 }
 
 // 主入口
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
   try {
     const { url } = await request.json();
     if (!url) {
@@ -355,4 +356,4 @@ export async function POST(request: NextRequest) {
       reuseScore: 3,
     });
   }
-}
+});

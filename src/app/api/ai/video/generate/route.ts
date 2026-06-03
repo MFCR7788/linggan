@@ -1,7 +1,8 @@
 // 并行视频生成 API — 提交所有分段 + 批量查询状态
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
 import { QUALITY_TIERS, type VideoProvider } from '@/lib/video-models';
 import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
@@ -11,13 +12,8 @@ export const dynamic = 'force-dynamic';
 
 // ─── 批量提交 ────────────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { storyboard, inspirations, qualityTier, firstFrameUrl, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
     const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
     const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
@@ -164,17 +160,12 @@ export async function POST(request: NextRequest) {
     console.error('Video generate error:', error);
     return createApiError('视频生成失败', 500);
   }
-}
+});
 
 // ─── 批量查询 ────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
 
@@ -277,4 +268,4 @@ export async function GET(request: NextRequest) {
     console.error('Video status error:', error);
     return createApiError('查询失败', 500);
   }
-}
+});

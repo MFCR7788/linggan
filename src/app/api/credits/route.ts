@@ -4,17 +4,13 @@
 // GET /api/credits?packages=1 → 加油包目录(给前端展示用)
 // GET /api/credits?tiers=1   → 订阅档位(给前端展示用)
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { getBalance, getTransactions, getPackages, getTiers } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user }) => {
   const { searchParams } = new URL(request.url);
   const txLimit = Math.min(parseInt(searchParams.get('t') || '50'), 200);
   const wantPackages = searchParams.get('packages') === '1';
@@ -50,4 +46,4 @@ export async function GET(request: NextRequest) {
     console.error('[Credits] GET error:', e);
     return createApiError(e?.message || '查询失败', 500);
   }
-}
+});

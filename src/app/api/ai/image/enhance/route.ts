@@ -1,7 +1,6 @@
 // 图片增强 API — 超分辨率 / 背景替换 / 风格迁移
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { callDoubaoVision, generateImage, logAiUsage } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
@@ -15,13 +14,8 @@ const STYLE_TRANSFER_PRESETS: Record<string, { label: string; prompt: string }> 
   vintage: { label: '复古胶片', prompt: 'vintage film photography style, warm tones, film grain, nostalgic look' },
 };
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const { imageUrl, mode, options } = await request.json();
 
     if (!imageUrl) {
@@ -91,4 +85,4 @@ export async function POST(request: NextRequest) {
     console.error('Image enhance error:', error);
     return createApiError('图片增强失败', 500);
   }
-}
+});

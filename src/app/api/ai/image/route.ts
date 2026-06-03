@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { generateImage, logAiUsage } from '@/lib/ai-services';
 import { findImagePreset, findImagePalette } from '@/lib/preset-templates';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
@@ -8,13 +9,8 @@ import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return createUnauthorizedResponse();
-    }
-
     const {
       prompt,
       ratio,
@@ -141,4 +137,4 @@ export async function POST(request: NextRequest) {
     console.error('AI image generation error:', error);
     return createApiError('Failed to generate image', 500);
   }
-}
+});

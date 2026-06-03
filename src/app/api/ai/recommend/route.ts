@@ -2,17 +2,13 @@
 // 前端目前直接从 src/lib/account-presets.ts 读(避免多一跳网络请求)
 // 此 API 主要是给未来扩展预留:基于用户历史的动态推荐 / 个性化排序
 
-import { NextRequest } from 'next/server';
-import { getCurrentUser } from '@/lib/supabase-server';
-import { createApiResponse, createUnauthorizedResponse } from '@/lib/api-utils';
+import { createApiResponse } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { getRecommendations, getAccountTypePreset } from '@/lib/account-presets';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return createUnauthorizedResponse();
-
+export const GET = withAuth(async ({ request, user }) => {
   // 优先从 query 参数读,其次从 user.account_type,最后 null(给默认通用推荐)
   const { searchParams } = new URL(request.url);
   const accountType =
@@ -39,4 +35,4 @@ export async function GET(request: NextRequest) {
       : null,
     recommendations,
   }, '推荐组合已获取');
-}
+});

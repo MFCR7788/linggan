@@ -1,8 +1,7 @@
 // AI 文案的"智能助手"端点
 // 把用户输入 + 灵感素材提炼成 50-150 字的"核心信息"（用于喂给 AI 文案生成）
-import { NextRequest } from 'next/server';
-import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
-import { getCurrentUser } from '@/lib/supabase-server';
+import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
 
 export const dynamic = 'force-dynamic';
@@ -12,11 +11,8 @@ interface RefineBody {
   userInput?: string;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request, user: _user }) => {
   try {
-    const user = await getCurrentUser();
-    if (!user) return createUnauthorizedResponse();
-
     const body: RefineBody = await request.json().catch(() => ({}));
     const { inspirations = [], userInput = '' } = body;
 
@@ -66,4 +62,4 @@ ${inspContext || '（无）'}
     console.error('Refine copywriting error:', error);
     return createApiError('提炼失败', 500);
   }
-}
+});

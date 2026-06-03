@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDoubaoChat } from '@/lib/ai-services';
+import { withAuth } from '@/lib/api-handler';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
   try {
     const { content, style } = await request.json();
 
@@ -43,4 +44,4 @@ ${content}
     console.error('改写 API 错误:', error);
     return NextResponse.json({ success: false, error: '改写失败' }, { status: 500 });
   }
-}
+});
