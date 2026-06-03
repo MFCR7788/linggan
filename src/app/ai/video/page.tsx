@@ -111,6 +111,7 @@ function AIVideoContent() {
 
   const [storyboard, setStoryboard] = useState<StoryboardScene[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAutoSubtitling, setIsAutoSubtitling] = useState(false);
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -220,7 +221,12 @@ function AIVideoContent() {
       });
       const data = await res.json();
       if (data.success && data.data.storyboard) {
-        setStoryboard(data.data.storyboard);
+        // 兜底: LLM 未生成 subtitle 时, 用 visualPrompt 截短作字幕
+        const sb = (data.data.storyboard as any[]).map((s, i) => ({
+          ...s,
+          subtitle: s.subtitle?.trim() || s.visualPrompt?.split(/[，。,.\n]/)[0]?.trim()?.slice(0, 30) || `第${i + 1}段`,
+        }));
+        setStoryboard(sb);
         // 应用服务端返回的 styleDefaults
         if (data.data.styleDefaults) {
           setBgmStyle(data.data.styleDefaults.bgm);
@@ -371,7 +377,11 @@ function AIVideoContent() {
 
       // 设置分镜
       if (data.data.storyboard) {
-        setStoryboard(data.data.storyboard);
+        const sb = (data.data.storyboard as any[]).map((s, i) => ({
+          ...s,
+          subtitle: s.subtitle?.trim() || s.visualPrompt?.split(/[，。,.\n]/)[0]?.trim()?.slice(0, 30) || `第${i + 1}段`,
+        }));
+        setStoryboard(sb);
       }
 
       const segs: SegmentState[] = data.data.segments.map((s: any) => ({
@@ -498,6 +508,40 @@ function AIVideoContent() {
       hotspot: '/hotspot', profile: '/profile',
     };
     router.push(routes[page] || '/home');
+  };
+  // ─── AI 智能字幕:用 LLM 改写分镜字幕为朗朗上口的短句 ──
+  const handleAutoSubtitle = async () => {
+    if (isAutoSubtitling || storyboard.length === 0) return;
+    setIsAutoSubtitling(true);
+    try {
+      const res = await fetch('/api/ai/auto-subtitle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyboard: storyboard.map((s) => ({
+            index: s.index,
+            visualPrompt: s.visualPrompt,
+            subtitle: s.subtitle,
+            duration: s.duration || s.timeEnd - s.timeStart,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.storyboard) {
+        setStoryboard((prev) =>
+          prev.map((orig) => {
+            const updated = (data.data.storyboard as any[]).find((u) => u.index === orig.index);
+            return updated ? { ...orig, subtitle: updated.subtitle } : orig;
+          })
+        );
+        setToast({ message: data.data.fallback ? 'LLM 不可用,已保留原字幕' : '✨ 字幕已优化', type: 'success' });
+      } else {
+        setToast({ message: data.error || '优化失败', type: 'error' });
+      }
+    } catch {
+      setToast({ message: '网络错误', type: 'error' });
+    }
+    setIsAutoSubtitling(false);
   };
 
   // ─── Step 3 完成后:合并视频 + BGM + 字幕 ───────────
@@ -938,6 +982,22 @@ function AIVideoContent() {
             <p style={{ color: '#9CA3AF', fontSize: 12 }}>
               {storyboard.length} 段分镜 · 总 {duration} 秒 · 点击画面 Prompt 可编辑
             </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleAutoSubtitle}
+                disabled={isAutoSubtitling}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
+                style={{
+                  background: 'rgba(34,197,94,0.15)',
+                  border: '1px solid rgba(34,197,94,0.3)',
+                  color: '#86EFAC',
+                  opacity: isAutoSubtitling ? 0.6 : 1,
+                }}
+                title="AI 改写每段字幕为朗朗上口的短句"
+              >
+                <Wand2 size={11} /> {isAutoSubtitling ? '优化中...' : 'AI 字幕'}
+              </button>
+            </div>
             <button
               onClick={handleGenerateStoryboardV2}
               disabled={isGenerating}
