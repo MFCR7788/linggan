@@ -381,24 +381,43 @@ function CaptureContent() {
     setInputText("");
 
     const uploadedImages: { url: string; name: string }[] = [];
+    const uploadedDocs: { url: string; name: string; type: string }[] = [];
     setIsAnalyzing(true);
 
     for (const af of files) {
       const url = await uploadFile(af.file);
-      uploadedImages.push({ url: url || af.preview, name: af.file.name });
+      if (af.type === 'document') {
+        uploadedDocs.push({ url: url || '', name: af.file.name, type: af.file.type });
+      } else {
+        uploadedImages.push({ url: url || af.preview, name: af.file.name });
+      }
     }
 
     const hasImages = uploadedImages.length > 0;
-    const isLink = !hasImages && (text.startsWith('http') || text.startsWith('www.'));
+    const hasDocs = uploadedDocs.length > 0;
+    const isLink = !hasImages && !hasDocs && (text.startsWith('http') || text.startsWith('www.'));
+
+    let contentType: 'text' | 'image' | 'link' = 'text';
+    let contentText = text;
+    if (hasDocs) {
+      contentType = 'text';
+      if (!contentText) contentText = `请分析这份文档：${uploadedDocs.map(d => d.name).join('、')}`;
+    } else if (hasImages) {
+      contentType = 'image';
+      if (!contentText) contentText = `📸 ${uploadedImages.length} 张图片`;
+    } else if (isLink) {
+      contentType = 'link';
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      contentType: hasImages ? 'image' : (isLink ? 'link' : 'text'),
-      content: text || (hasImages ? `📸 ${uploadedImages.length} 张图片` : ''),
-      attachments: uploadedImages.length > 0
-        ? uploadedImages.map(img => ({ url: img.url, name: img.name, type: 'image' as const }))
-        : undefined,
+      contentType,
+      content: contentText,
+      attachments: [
+        ...uploadedImages.map(img => ({ url: img.url, name: img.name, type: 'image' as const })),
+        ...uploadedDocs.map(doc => ({ url: doc.url, name: doc.name, type: 'document' as const })),
+      ],
       sourceUrl: isLink ? (text.startsWith('http') ? text : `https://${text}`) : undefined,
       timestamp: new Date(),
     };
@@ -433,7 +452,7 @@ function CaptureContent() {
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text, images: uploadedImages.map(img => img.url), searchResults, session_id: currentSessionId, model: selectedModel }),
+        body: JSON.stringify({ content: contentText, images: uploadedImages.map(img => img.url), documents: uploadedDocs.map(d => d.url), searchResults, session_id: currentSessionId, model: selectedModel }),
       });
       const data = await res.json();
       const aiContent = data.response || data.summary || data.title || '已收到';
@@ -514,10 +533,25 @@ function CaptureContent() {
     input.click();
   };
 
+  const attachDocument = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.docx,.txt,.md';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file || !validateFile(file, 'document')) return;
+      setAttachedFiles(prev => [...prev, { id: Date.now().toString(), file, preview: file.name, type: 'document' }]);
+    };
+    input.click();
+  };
+
   const removeAttachedFile = (id: string) => {
     setAttachedFiles(prev => {
       const file = prev.find(f => f.id === id);
-      if (file) { URL.revokeObjectURL(file.preview); objectUrlsRef.current = objectUrlsRef.current.filter(u => u !== file.preview); }
+      if (file && file.type === 'image') {
+        URL.revokeObjectURL(file.preview);
+        objectUrlsRef.current = objectUrlsRef.current.filter(u => u !== file.preview);
+      }
       return prev.filter(f => f.id !== id);
     });
   };
@@ -768,6 +802,12 @@ function CaptureContent() {
                     ))}
                     {msg.attachments?.filter(a => a.type === 'image').map((att, i) => (
                       <img key={i} src={att.url} alt="" loading="lazy" className="max-w-[180px] max-h-[180px] rounded-lg object-cover mb-2 cursor-pointer" onClick={() => window.open(att.url, '_blank')} />
+                    ))}
+                    {msg.attachments?.filter(a => a.type === 'document').map((att, i) => (
+                      <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 p-2 rounded-lg text-xs hover:opacity-80 transition-opacity" style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)' }}>
+                        <FileText size={16} color="#60A5FA" className="flex-shrink-0" />
+                        <span className="truncate max-w-[160px]" style={{ color: '#93C5FD' }}>{att.name}</span>
+                      </a>
                     ))}
                     {msg.contentType === 'link' && msg.sourceUrl ? (
                       <a href={msg.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-200 underline break-all">{msg.content}</a>
@@ -1155,7 +1195,16 @@ function CaptureContent() {
               <div className="flex gap-2 overflow-x-auto">
                 {attachedFiles.map(af => (
                   <div key={af.id} className="relative flex-shrink-0">
-                    <img src={af.preview} alt="" loading="lazy" className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
+                    {af.type === 'document' ? (
+                      <div className="w-14 h-14 rounded-lg border border-gray-700 flex flex-col items-center justify-center gap-0.5" style={{ background: 'rgba(59,130,246,0.1)' }}>
+                        <FileText size={20} color="#60A5FA" />
+                        <span className="text-[9px] text-gray-400 truncate max-w-[48px] leading-none">
+                          {af.file.name.split('.').pop()?.toUpperCase()}
+                        </span>
+                      </div>
+                    ) : (
+                      <img src={af.preview} alt="" loading="lazy" className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
+                    )}
                     <button onClick={() => removeAttachedFile(af.id)} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-gray-800 border border-gray-600 flex items-center justify-center">
                       <X size={8} color="#9CA3AF" />
                     </button>
@@ -1182,6 +1231,9 @@ function CaptureContent() {
                       </button>
                       <button onClick={() => { handleAnalyzeVideo(); setShowMoreTools(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm">
                         <Video size={16} color="#9CA3AF" /> <span className="text-gray-200">视频</span>
+                      </button>
+                      <button onClick={() => { attachDocument(); setShowMoreTools(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm">
+                        <FileText size={16} color="#9CA3AF" /> <span className="text-gray-200">文档</span>
                       </button>
                       <button onClick={() => { setSearchEnabled(!searchEnabled); setShowMoreTools(false); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm">
                         <Globe size={16} color={searchEnabled ? '#60A5FA' : '#9CA3AF'} /> <span className="text-gray-200">联网搜索</span>

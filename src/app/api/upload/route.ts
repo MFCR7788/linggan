@@ -4,7 +4,9 @@ import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import {
   MEDIA_ALLOWED_TYPES,
+  DOCUMENT_ALLOWED_TYPES,
   checkMediaSize,
+  checkDocumentSize,
   verifyMagicNumber,
   sanitizeFilename,
 } from '@/lib/upload/validate';
@@ -28,13 +30,21 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError('请选择文件', 400);
   }
 
-  if (!MEDIA_ALLOWED_TYPES.includes(file.type as any)) {
+  const isDocument = DOCUMENT_ALLOWED_TYPES.includes(file.type as any);
+  if (!MEDIA_ALLOWED_TYPES.includes(file.type as any) && !isDocument) {
     return createApiError('UNSUPPORTED_FILE_TYPE', 415);
   }
 
-  const sizeCheck = checkMediaSize(file, file.type.startsWith('video') ? 'video' : 'image');
-  if (!sizeCheck.ok) {
-    return createApiError(`FILE_TOO_LARGE（${sizeCheck.maxMB}MB）`, 413);
+  if (isDocument) {
+    const sizeCheck = checkDocumentSize(file);
+    if (!sizeCheck.ok) {
+      return createApiError(`FILE_TOO_LARGE（${sizeCheck.maxMB}MB）`, 413);
+    }
+  } else {
+    const sizeCheck = checkMediaSize(file, file.type.startsWith('video') ? 'video' : 'image');
+    if (!sizeCheck.ok) {
+      return createApiError(`FILE_TOO_LARGE（${sizeCheck.maxMB}MB）`, 413);
+    }
   }
 
   // Magic number 校验：防止 MIME 伪造

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
+import { extractText } from '@/lib/extract/document-extractor';
 
 // ====== 意图类型定义 ======
 type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal' | 'weather';
@@ -213,6 +214,7 @@ ${GLOBAL_CAPABILITIES}
     systemPrompt: `你是一位专业的办公效率专家，精通数据分析、报告撰写和办公文档制作。
 
 你的能力包括：
+- **文档分析**：快速阅读并分析 PDF、DOCX、TXT、MD 等格式的文档，提取核心内容、结构和关键信息
 - **表格思路**：帮助设计表格结构、数据组织方式和公式逻辑
 - **报告生成**：撰写工作总结、项目报告、市场分析等
 - **数据分析**：解读数据趋势，提炼关键洞察，给出数据驱动的建议
@@ -220,10 +222,11 @@ ${GLOBAL_CAPABILITIES}
 - **文档优化**：改进文档结构、措辞和排版
 
 回复要求：
-1. 结构清晰：使用标题、分段、编号让内容一目了然
-2. 逻辑严谨：论点有依据，数据有来源
-3. 可执行性强：给出的建议具体、可落地
-4. 如果涉及表格/图表，用文字清晰描述结构和思路
+1. 对于文档分析：先给出整体总结，再分点列出关键要点，最后给出可行的建议或行动方案
+2. 结构清晰：使用标题、分段、编号让内容一目了然
+3. 逻辑严谨：论点有依据，数据有来源
+4. 可执行性强：给出的建议具体、可落地
+5. 如果涉及表格/图表，用文字清晰描述结构和思路
 
 ${GLOBAL_CAPABILITIES}
 
@@ -585,9 +588,9 @@ export const POST = withAuth(async ({ request, user }) => {
   const modelErrors: string[] = [];
   try {
     const body = await request.json();
-    const { content = '', images = [], videos = [], searchResults, session_id, model: selectedModel } = body;
+    const { content = '', images = [], videos = [], documents = [], searchResults, session_id, model: selectedModel } = body;
 
-    if (!content && images.length === 0 && videos.length === 0) {
+    if (!content && images.length === 0 && videos.length === 0 && documents.length === 0) {
       return NextResponse.json({
         success: false,
         error: '内容不能为空'
@@ -596,6 +599,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const hasImages = images.length > 0;
     const hasVideos = videos.length > 0;
+    const hasDocuments = documents.length > 0;
     const isMultimodal = hasImages || hasVideos;
 
     // 加载历史消息作为上下文
@@ -621,7 +625,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // ====== Layer 1: 链接检测与路由 ======
     const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
-    const isLink = !hasImages && !hasVideos && (
+    const isLink = !hasImages && !hasVideos && !hasDocuments && (
       urlPattern.test(content.trim()) || content.trim().startsWith('http') || content.trim().startsWith('www.')
     );
 
@@ -669,10 +673,44 @@ export const POST = withAuth(async ({ request, user }) => {
       }
     }
 
+    // ====== 文档附件抽取 ======
+    let documentContext: string[] = [];
+    if (hasDocuments) {
+      for (const docUrl of documents) {
+        try {
+          const ext = (docUrl as string).split('.').pop()?.toLowerCase() || '';
+          const mimeMap: Record<string, string> = {
+            pdf: 'application/pdf',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            txt: 'text/plain',
+            md: 'text/markdown',
+          };
+          const mimeType = mimeMap[ext];
+          if (mimeType) {
+            const result = await extractText(docUrl, mimeType);
+            if (result.text) {
+              const label = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : ext.toUpperCase();
+              documentContext.push(`[${label} 文档内容]\n${result.text}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`文档抽取失败 (${docUrl}):`, e);
+        }
+      }
+    }
+
     // ====== 意图检测 ======
     let intent: DetectedIntent;
 
-    if (linkContext) {
+    if (hasDocuments && documentContext.length > 0) {
+      // 文档内容直接走 office 意图
+      intent = {
+        type: 'office', label: '文档分析', needsChat: true,
+        hasImage: false, hasVideo: false,
+        description: '文档内容分析与总结',
+        wantsGeneration: false,
+      };
+    } else if (linkContext) {
       // Layer 1: 链接类型决定路由目标
       switch (linkContext.linkType) {
         case 'article':
@@ -733,7 +771,12 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     // ====== 构造 Prompt ======
-    const { systemPrompt, userPrompt: baseUserPrompt, requiresJSON } = buildPrompt(intent, content);
+    // 注入文档抽取文本到用户内容
+    const effectiveContent = documentContext.length > 0
+      ? `用户上传了文档文件，以下是文档内容：\n\n${documentContext.join('\n\n---\n\n')}\n\n用户指令：${content || '请分析以上文档内容，给出总结、关键要点和创作建议'}`
+      : content;
+
+    const { systemPrompt, userPrompt: baseUserPrompt, requiresJSON } = buildPrompt(intent, effectiveContent);
 
     let userPrompt: string;
 

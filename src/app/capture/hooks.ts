@@ -612,7 +612,11 @@ export function useFileUpload() {
   const uploadFile = async (file: File): Promise<string | null> => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('type', file.type.startsWith('image') ? 'image' : 'video');
+    const isDoc = file.type === 'application/pdf' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.type === 'text/plain' ||
+      file.type === 'text/markdown';
+    formData.append('type', isDoc ? 'document' : (file.type.startsWith('image') ? 'image' : 'video'));
     try {
       syncDevAuthCookie();
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -623,7 +627,18 @@ export function useFileUpload() {
     } catch { setUploadError('网络错误，上传失败'); return null; }
   };
 
-  const validateFile = (file: File, type: 'image' | 'video'): boolean => {
+  const validateFile = (file: File, type: 'image' | 'video' | 'document'): boolean => {
+    if (type === 'document') {
+      const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown'];
+      const validExts = ['.pdf', '.docx', '.txt', '.md'];
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      const mimeOk = validTypes.includes(file.type);
+      const extOk = validExts.includes(ext);
+      const maxSize = 20 * 1024 * 1024;
+      if (!mimeOk && !extOk) { showToast('仅支持 PDF/DOCX/TXT/MD 格式', 'warning'); return false; }
+      if (file.size > maxSize) { showToast(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），最大 20MB`, 'warning'); return false; }
+      return true;
+    }
     const validTypes = type === 'image'
       ? ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
       : ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];

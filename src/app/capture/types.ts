@@ -8,7 +8,7 @@ export interface Message {
   content: string;
   contentType?: 'text' | 'link' | 'image' | 'video' | 'voice';
   linkFetchFailed?: boolean;       // 链接抓取失败(SPA/反爬) — 前端显示"建议贴正文"
-  attachments?: { url: string; name: string; type: 'image' | 'video' }[];
+  attachments?: { url: string; name: string; type: 'image' | 'video' | 'document' }[];
   mediaUrl?: string;
   sourceUrl?: string;
   generatedImage?: { imageUrl: string; prompt: string };
@@ -34,7 +34,7 @@ export interface AttachedFile {
   id: string;
   file: File;
   preview: string;
-  type: 'image';
+  type: 'image' | 'document';
 }
 
 export interface ChatSession {
