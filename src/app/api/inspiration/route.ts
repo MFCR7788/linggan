@@ -156,6 +156,24 @@ export const POST = withAuth(async ({ request, user }) => {
 
   const supabase = createAdminClient();
 
+  // 如果未指定 category_id，根据 type 自动分配到对应分类
+  const isValidUUID = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  let effectiveCategoryId: string | null = (category_id && isValidUUID(category_id)) ? category_id : null;
+
+  if (!effectiveCategoryId) {
+    const typeToCategory: Record<string, string> = {
+      image: '图片', video: '视频', text: '灵感', voice: '灵感', link: '灵感',
+    };
+    const catName = typeToCategory[normalizedType] || '灵感';
+    const { data: cat } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('name', catName)
+      .single();
+    effectiveCategoryId = cat?.id || null;
+  }
+
   console.log('[POST] Saving inspiration for user:', user.id, 'type:', normalizedType, 'title:', title);
 
   const { data, error } = await supabase
@@ -166,7 +184,7 @@ export const POST = withAuth(async ({ request, user }) => {
       title: title || null,
       original_text: original_text || null,
       ai_summary: summary || null,
-      category_id: (category_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category_id)) ? category_id : null,
+      category_id: effectiveCategoryId,
       source_url: source_url || null,
       source_platform: source_platform || null,
       media_urls: media_urls || null,

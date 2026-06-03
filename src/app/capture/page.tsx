@@ -522,13 +522,25 @@ function CaptureContent() {
         if (data.generatedVideo?.videoUrl) mediaUrls.push(data.generatedVideo.videoUrl);
 
         let inspType = 'text';
-        if (data.generatedVideo) inspType = 'video';
-        else if (data.generatedImage) inspType = 'image';
-        else if (uploadedImages.length > 0) inspType = 'image';
-        else if (hasDocs) inspType = 'text';
+        let inspTitle = '';
+        if (data.generatedVideo) {
+          inspType = 'video';
+          inspTitle = 'AI 生成视频';
+        } else if (data.generatedImage) {
+          inspType = 'image';
+          inspTitle = 'AI 生成图片';
+        } else if (uploadedImages.length > 0) {
+          inspType = 'image';
+          inspTitle = '图片分析';
+        } else if (hasDocs) {
+          inspType = 'text';
+          const docNames = uploadedDocs.map(d => d.name).join('、');
+          inspTitle = docNames ? `文档分析 - ${docNames}` : '文档分析';
+        }
 
-        const rawContent = text || aiContent || '';
-        const inspTitle = rawContent.length > 50 ? rawContent.substring(0, 50) + '...' : rawContent;
+        if (text && (!inspTitle || inspTitle === '图片分析')) {
+          inspTitle = text.length > 40 ? text.substring(0, 40) + '...' : text;
+        }
 
         fetch('/api/inspiration', {
           method: 'POST',
