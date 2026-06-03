@@ -16,18 +16,6 @@ import { getUsage, addStorageUsage } from '@/lib/upload/usage';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Supabase Storage 仅支持有限的 MIME 类型，不支持的映射为 octet-stream
-function toSupabaseContentType(mime: string): string {
-  const supported = new Set([
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-    'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
-    'audio/mpeg', 'audio/wav', 'audio/ogg',
-    'application/pdf', 'application/json', 'application/zip',
-    'text/plain', 'text/html', 'text/css', 'text/javascript',
-  ]);
-  return supported.has(mime) ? mime : 'application/octet-stream';
-}
-
 export const POST = withAuth(async ({ request, user }) => {
   let formData: FormData;
   try {
@@ -87,12 +75,20 @@ export const POST = withAuth(async ({ request, user }) => {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
+    // 根据扩展名映射 contentType，避免 Supabase Storage 拒绝不支持的 MIME
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const extContentType: Record<string, string> = {
+      pdf: 'application/pdf', txt: 'text/plain', md: 'text/plain',
+      docx: 'application/zip', // .docx 本质是 zip
+    };
+    const uploadOptions: { upsert: boolean; contentType?: string } = { upsert: false };
+    if (extContentType[ext] || file.type.startsWith('image/') || file.type.startsWith('video/')) {
+      uploadOptions.contentType = extContentType[ext] || file.type;
+    }
+
     const { error: uploadError } = await supabase.storage
       .from('lingji-media')
-      .upload(filePath, buffer, {
-        contentType: toSupabaseContentType(file.type),
-        upsert: false,
-      });
+      .upload(filePath, buffer, uploadOptions);
 
     if (uploadError) {
       console.error('文件上传失败:', uploadError);
