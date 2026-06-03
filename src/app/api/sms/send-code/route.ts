@@ -94,10 +94,10 @@ export async function POST(request: Request) {
           templateCode: SMS_TEMPLATE_CODE,
           templateParam: JSON.stringify({ code }),
         } as any);
-        if (result.body.code === 'OK') {
+        if (result.body?.code === 'OK') {
           sent = true;
         } else {
-          sendError = result.body.message || '未知短信错误';
+          sendError = result.body?.message || '未知短信错误';
         }
       } catch (e) {
         sendError = e instanceof Error ? e.message : '短信 SDK 异常';
