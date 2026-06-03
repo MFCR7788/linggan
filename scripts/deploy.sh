@@ -5,7 +5,9 @@ set -e
 
 DEPLOY_DIR="/opt/lingji"
 LOG_FILE="/var/log/lingji-deploy.log"
-TOKEN_FILE="/root/.lingji_github_token"
+# token 优先从 deploy 用户家目录读(Next.js 进程以 deploy 身份运行时可达)
+TOKEN_FILE="/home/deploy/.lingji_github_token"
+[ -f "$TOKEN_FILE" ] || TOKEN_FILE="/root/.lingji_github_token"
 REPO="MFCR7788/linggan"
 BRANCH="main"
 TMP_DIR="/tmp/lingji-deploy-$$"
