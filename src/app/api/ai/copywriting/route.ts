@@ -3,8 +3,12 @@ import { getCurrentUser, createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError, createUnauthorizedResponse } from '@/lib/api-utils';
 import { generateCopywriting, logAiUsage } from '@/lib/ai-services';
 import { findIndustry, renderIndustryInstruction, COPYWRITING_TYPES } from '@/lib/preset-templates';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
+
+// 单次文案消耗 2 credits;n 个变体按 n 倍扣
+const CREDIT_PER_COPY = 2;
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +27,25 @@ export async function POST(request: NextRequest) {
     const typeDef = COPYWRITING_TYPES.find(t => t.id === type);
     const typeLabel = typeDef?.label || type || '小红书笔记';
     const count = Math.min(n || 1, 5);
+
+    // ─── Credit 扣点(在生成前) ──────────────────
+    const creditCost = count * CREDIT_PER_COPY;
+    try {
+      await consume(user.id, creditCost, 'ai_copywriting', `AI 文案 ${count} 个变体`, { type, style, n: count });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+            code: 'INSUFFICIENT_CREDITS',
+            data: { required: creditCost, available: e.available },
+          },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
 
     // 行业模板注入
     const industryDef = industry ? findIndustry(industry) : undefined;

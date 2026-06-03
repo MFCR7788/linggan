@@ -581,6 +581,7 @@ async function executeGenerationFallback(
 
 // ====== POST 处理器 ======
 export async function POST(request: NextRequest) {
+  const modelErrors: string[] = [];
   try {
     const body = await request.json();
     const { content = '', images = [], videos = [], searchResults, session_id, model: selectedModel } = body;
@@ -897,7 +898,6 @@ ${forecastText}
     // ====== 3. 调用 AI 模型 ======
     let analysis: any = null;
     let modelUsed = '';
-    const modelErrors: string[] = [];
     const genMaxTokens = isGeneration ? 4096 : 1000;
 
     const tryModel = async (name: string, fn: () => Promise<string>): Promise<boolean> => {

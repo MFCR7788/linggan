@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Bell, CreditCard, HelpCircle, LogOut, ChevronRight, Edit3, BookOpen, Sparkles, TrendingUp, Star, BarChart2 } from 'lucide-react';
+import { Settings, Bell, CreditCard, HelpCircle, LogOut, ChevronRight, Edit3, BookOpen, Sparkles, TrendingUp, Star, BarChart2, Wallet } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
@@ -40,9 +40,10 @@ const subscriptionTiers = [
 ];
 
 const menuItems = [
+  { icon: <Wallet size={18} />, label: '我的灵感点', page: null, href: '/profile/billing', color: '#F472B6' },
   { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey | null, color: '#3B82F6' },
   { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey | null, color: '#8B5CF6' },
-  { icon: <CreditCard size={18} />, label: '订阅管理', page: null, color: '#F59E0B' },
+  { icon: <CreditCard size={18} />, label: '订阅管理', page: null, href: '/profile/billing', color: '#F59E0B' },
   { icon: <BarChart2 size={18} />, label: '数据分析', page: null, color: '#22C55E' },
   { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey | null, color: '#9CA3AF' },
 ];
@@ -199,10 +200,13 @@ function ProfileContent() {
 
             {/* Menu */}
             <GlassCard className="!p-2">
-              {menuItems.map(({ icon, label, page, color }) => (
+              {menuItems.map(({ icon, label, page, href, color }) => (
                 <button
                   key={label}
-                  onClick={() => page && handleNavigate(page)}
+                  onClick={() => {
+                    if (href) router.push(href);
+                    else if (page) handleNavigate(page);
+                  }}
                   className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-colors"
                 >
                   <div
