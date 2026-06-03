@@ -18,6 +18,17 @@ export const GET = withAuth(async ({ request, user }) => {
   const sortOrder = searchParams.get('sortOrder') || 'desc';
   const tagIds = searchParams.get('tagIds'); // 逗号分隔的 tag id 列表
   const sourcePlatform = searchParams.get('sourcePlatform'); // 按来源平台筛选（如 'ai'）
+  // ─── AI 创作 Step 1 专用过滤(向后兼容,默认排除 AI 作品 + 空内容) ───
+  // excludeSourcePlatforms: 逗号分隔,默认 'ai'(AI 作品不默认进 Step 1)
+  // includeSourcePlatforms: 逗号分隔,显式包含(覆盖 exclude)
+  // minOriginalLength: 原文最小字符数,默认 1(过滤空)
+  // minAiSummaryLength: ai_summary 最小字符数,默认 0
+  const excludeSourcePlatforms = (searchParams.get('excludeSourcePlatforms') || 'ai')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const includeSourcePlatforms = (searchParams.get('includeSourcePlatforms') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const minOriginalLength = parseInt(searchParams.get('minOriginalLength') || '1', 10);
+  const minAiSummaryLength = parseInt(searchParams.get('minAiSummaryLength') || '0', 10);
 
   const supabase = createAdminClient();
 
@@ -49,6 +60,25 @@ export const GET = withAuth(async ({ request, user }) => {
       if (startDate) query = query.gte('created_at', startDate);
       if (endDate) query = query.lte('created_at', endDate);
 
+      // 应用 sourcePlatform 排除/包含逻辑
+      if (includeSourcePlatforms.length > 0) {
+        query = query.in('source_platform', includeSourcePlatforms);
+      } else if (excludeSourcePlatforms.length > 0) {
+        // PostgREST:用 .not('source_platform', 'in', '(...)') 形式
+        // supabase-js 接受字符串表示数组,格式为 (item1,item2)
+        const arr = `(${excludeSourcePlatforms.join(',')})`;
+        query = query.filter('source_platform', 'not.in', arr);
+      }
+
+      // 最小长度过滤(过滤空内容)—— PostgREST length() 在 filter 中不被识别,改用
+      // .not('column', 'is', null) 兜底
+      if (minOriginalLength > 0) {
+        query = query.not('original_text', 'is', null);
+      }
+      if (minAiSummaryLength > 0) {
+        query = query.not('ai_summary', 'is', null);
+      }
+
       const sortAsc = sortOrder === 'asc';
       const validSortFields = ['created_at', 'title', 'updated_at'];
       const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
@@ -77,6 +107,22 @@ export const GET = withAuth(async ({ request, user }) => {
   if (categoryId) query = query.eq('category_id', categoryId);
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);
+
+  // 应用 sourcePlatform 排除/包含逻辑
+  if (includeSourcePlatforms.length > 0) {
+    query = query.in('source_platform', includeSourcePlatforms);
+  } else if (excludeSourcePlatforms.length > 0) {
+    const arr = `(${excludeSourcePlatforms.join(',')})`;
+    query = query.filter('source_platform', 'not.in', arr);
+  }
+
+  // 最小长度过滤(过滤空内容)
+  if (minOriginalLength > 0) {
+    query = query.not('original_text', 'is', null);
+  }
+  if (minAiSummaryLength > 0) {
+    query = query.not('ai_summary', 'is', null);
+  }
 
   const sortAsc = sortOrder === 'asc';
   const validSortFields = ['created_at', 'title', 'updated_at'];

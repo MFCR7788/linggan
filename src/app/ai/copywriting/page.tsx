@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
@@ -11,6 +11,7 @@ import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import FormattedText from "@/components/FormattedText";
+import { Step1MaterialRefineModal } from "@/components/Step1MaterialRefineModal";
 import {
   COPYWRITING_TYPES,
   COPYWRITING_STYLES,
@@ -61,6 +62,22 @@ interface InspirationItem {
   type?: string;
   original_text?: string;
   ai_summary?: string;
+  source_platform?: string;
+  created_at?: string;
+}
+
+// ─── 智能排序评分(只在 client 算,后端返 created_at desc) ─────────
+function scoreInspiration(item: InspirationItem, now: number = Date.now()): number {
+  // recency: 7 天内 = 1,线性衰减
+  const created = item.created_at ? new Date(item.created_at).getTime() : now;
+  const days = Math.max(0, (now - created) / (1000 * 60 * 60 * 24));
+  const recency = Math.max(0, 1 - days / 7);
+  // 内容长度
+  const textLen = (item.original_text || '').length;
+  const lengthScore = Math.min(1, textLen / 200);
+  // 有 ai_summary 加分
+  const summaryScore = (item.ai_summary && item.ai_summary.length > 50) ? 1 : 0;
+  return 0.4 * recency + 0.35 * lengthScore + 0.25 * summaryScore;
 }
 
 const STYLE_CATEGORY_LABELS: Record<string, string> = {
@@ -84,6 +101,23 @@ function AICopywritingContent() {
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+
+  // 第二层新增:Step 1 过滤 + 排序 state
+  const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video'>('all');
+  const [showAiWorks, setShowAiWorks] = useState(false);
+  const [sortMode, setSortMode] = useState<'smart' | 'recent'>('smart');
+  // 智能助手产物对比 Modal
+  const [refineModalOpen, setRefineModalOpen] = useState(false);
+  const [refineModalInput, setRefineModalInput] = useState({ userInput: '', inspirations: [] as InspirationItem[], result: '' });
+  const [refineModalResult, setRefineModalResult] = useState('');
+
+  // 第三层新增:URL 自动检测 + 图片粘贴/拖拽
+  const [analyzingUrl, setAnalyzingUrl] = useState<string | null>(null);  // 正在解析的 URL
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const urlDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // ─── Step 2: 平台类型 ─────────────────────────────────
   const [selectedType, setSelectedType] = useState('xiaohongshu');
@@ -121,20 +155,157 @@ function AICopywritingContent() {
     }
   }, [userInput]);
 
-  // ─── 初始化：加载灵感 + URL 参数 ──────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const inspRes = await fetch('/api/inspiration?limit=20');
-        if (inspRes.ok) {
-          const data = await inspRes.json();
-          setInspirations(data.data || []);
-        }
-      } catch (e) {
-        console.error('Failed to load inspirations', e);
+  // ─── 加载灵感列表(支持 type / showAiWorks) ─────────────
+  const loadInspirations = useCallback(async (type: string, includeAi: boolean) => {
+    try {
+      const params = new URLSearchParams({ limit: '30' });
+      if (type !== 'all') params.set('type', type);
+      if (includeAi) params.set('includeSourcePlatforms', 'ai');
+      const inspRes = await fetch(`/api/inspiration?${params.toString()}`);
+      if (inspRes.ok) {
+        const data = await inspRes.json();
+        setInspirations(data.data || []);
       }
-    })();
+    } catch (e) {
+      console.error('Failed to load inspirations', e);
+    }
   }, []);
+
+  // typeFilter / showAiWorks 变化时重新 fetch
+  useEffect(() => {
+    loadInspirations(typeFilter, showAiWorks);
+  }, [typeFilter, showAiWorks, loadInspirations]);
+
+  // 第三层:URL 自动检测 — 500ms debounce 后调 analyze-link
+  useEffect(() => {
+    if (urlDebounceRef.current) clearTimeout(urlDebounceRef.current);
+    setUrlError(null);
+
+    const trimmed = userInput.trim();
+    const urlMatch = trimmed.match(/^https?:\/\/\S+$/);
+    if (!urlMatch) return;
+
+    const url = trimmed;
+    urlDebounceRef.current = setTimeout(async () => {
+      setAnalyzingUrl(url);
+      try {
+        const res = await fetch('/api/ai/analyze-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          // 1. 入库到 content_items
+          const inspirationType = data.linkType === 'image' ? 'image'
+            : data.linkType === 'video' ? 'video' : 'link';
+          const inspirationRes = await fetch('/api/inspiration', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: inspirationType,
+              title: data.title,
+              original_text: data.summary || data.keyPoints?.join(' / '),
+              ai_summary: data.summary,
+              source_url: url,
+              source_platform: 'link',
+              media_urls: data.mediaUrl ? [data.mediaUrl] : null,
+            }),
+          });
+          const inspData = await inspirationRes.json();
+          if (inspData.success && inspData.data?.id) {
+            // 2. 自动加入选中
+            setSelectedInspirations(prev => {
+              const next = new Set(prev);
+              next.add(inspData.data.id);
+              return next;
+            });
+          }
+          // 3. 顺手把 summary 写入提炼结果
+          setRefinedMessage(data.summary || '');
+          // 4. 清空输入框(URL 已经被处理)
+          setUserInput('');
+          // 5. 重新拉灵感库
+          loadInspirations(typeFilter, showAiWorks);
+          showToast(`已解析: ${data.title}`, 'success');
+        } else {
+          setUrlError(data.error || '链接解析失败');
+        }
+      } catch (e: any) {
+        setUrlError(e?.message || '网络错误');
+      } finally {
+        setAnalyzingUrl(null);
+      }
+    }, 500);
+
+    return () => {
+      if (urlDebounceRef.current) clearTimeout(urlDebounceRef.current);
+    };
+  }, [userInput, loadInspirations, typeFilter, showAiWorks, showToast]);
+
+  // 第三层:处理图片文件(粘贴/拖拽/选择)
+  const handleImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setImageError('只支持图片文件');
+      return;
+    }
+    setUploadingImage(true);
+    setImageError(null);
+    try {
+      // 1. 上传到 Supabase Storage
+      const formData = new FormData();
+      formData.append('file', file);
+      const upRes = await fetch('/api/upload/inspiration', {
+        method: 'POST',
+        body: formData,
+      });
+      const upData = await upRes.json();
+      if (!upRes.ok || !upData.success) {
+        throw new Error(upData.error || '上传失败');
+      }
+      const imageUrl = upData.data.url;
+
+      // 2. 调豆包视觉理解
+      const analyzeRes = await fetch('/api/ai/copywriting/analyze-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl }),
+      });
+      const analyzeData = await analyzeRes.json();
+      if (!analyzeData.success) {
+        throw new Error(analyzeData.error || '图片分析失败');
+      }
+
+      // 3. 更新已上传的灵感记录(写 ai_summary,替换占位标题)
+      //    上传 API 已建好 content_item,这里用 PUT 补一下
+      const itemId = upData.data.id;
+      await fetch(`/api/inspiration/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ai_summary: analyzeData.data.description,
+          title: analyzeData.data.text?.substring(0, 50) || analyzeData.data.description?.substring(0, 50) || '图片素材',
+        }),
+      }).catch(() => {});
+
+      // 4. 自动加入选中 + 写入提炼
+      setSelectedInspirations(prev => {
+        const next = new Set(prev);
+        next.add(itemId);
+        return next;
+      });
+      setRefinedMessage(analyzeData.data.description);
+      showToast(`已分析图片: ${analyzeData.data.tags?.slice(0, 2).join(' / ') || '已加入灵感库'}`, 'success');
+
+      // 5. 重新拉灵感库
+      loadInspirations(typeFilter, showAiWorks);
+    } catch (e: any) {
+      console.error('[image] 处理失败:', e);
+      setImageError(e?.message || '图片处理失败');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [loadInspirations, typeFilter, showAiWorks, showToast]);
 
   // 从 URL 接收上游页面带入的参数
   useEffect(() => {
@@ -182,7 +353,7 @@ function AICopywritingContent() {
   const noAiContent = noAiContents[currentBatchIndex] || noAiContents[0];
   const currentContent = resultTab === "standard" ? standardContent : noAiContent;
 
-  // 智能助手：把"素材 + 输入"提炼成核心信息
+  // 智能助手：把"素材 + 输入"提炼成核心信息(弹 Modal 让用户确认/编辑)
   const handleRefine = async () => {
     if (!userInput.trim() && selectedInspirations.size === 0) {
       showToast('请先输入主题或选择素材', 'error');
@@ -190,9 +361,10 @@ function AICopywritingContent() {
     }
     setIsRefining(true);
     try {
-      const inspData = inspirations
-        .filter(i => selectedInspirations.has(i.id))
-        .map(i => ({ title: i.title, originalText: i.original_text, aiSummary: i.ai_summary }));
+      const selectedItems = inspirations.filter(i => selectedInspirations.has(i.id));
+      const inspData = selectedItems.map(i => ({
+        title: i.title, originalText: i.original_text, aiSummary: i.ai_summary,
+      }));
 
       const res = await fetch('/api/ai/copywriting/refine', {
         method: 'POST',
@@ -201,8 +373,10 @@ function AICopywritingContent() {
       });
       const data = await res.json();
       if (data.success) {
-        setRefinedMessage(data.data.refined);
-        showToast('已提炼核心信息', 'success');
+        // 打开对比 Modal,让用户在确认前编辑
+        setRefineModalInput({ userInput, inspirations: selectedItems, result: data.data.refined });
+        setRefineModalResult(data.data.refined);
+        setRefineModalOpen(true);
       } else {
         showToast('提炼失败：' + (data.error || '未知错误'), 'error');
       }
@@ -211,6 +385,13 @@ function AICopywritingContent() {
     } finally {
       setIsRefining(false);
     }
+  };
+
+  // 确认 Modal 提炼结果
+  const handleConfirmRefine = () => {
+    setRefinedMessage(refineModalResult);
+    setRefineModalOpen(false);
+    showToast('已提炼核心信息', 'success');
   };
 
   // 保存最近设置
@@ -238,7 +419,9 @@ function AICopywritingContent() {
         }));
 
       if (selectedData.length === 0 && !userInput.trim() && !refinedMessage) {
-        selectedData.push({ title: '通用内容创作', originalText: '用户未提供具体素材', aiSummary: '' });
+        showToast('请先选择灵感、输入主题,或粘贴链接/图片', 'error');
+        setIsLoading(false);
+        return;
       }
 
       const finalInstruction = refinedMessage || userInput.trim() || undefined;
@@ -392,6 +575,26 @@ function AICopywritingContent() {
   const currentSelectedCount = selectedInspirations.size;
   const currentIndustry = findIndustry(selectedIndustry);
 
+  // 选中的 AI 作品数(用于顶部黄色警告)
+  const selectedAiCount = useMemo(() => {
+    return inspirations
+      .filter(i => selectedInspirations.has(i.id) && i.source_platform === 'ai')
+      .length;
+  }, [inspirations, selectedInspirations]);
+
+  // 应用智能排序
+  const displayedInspirations = useMemo(() => {
+    if (sortMode === 'recent') return inspirations;
+    return [...inspirations].sort((a, b) => {
+      const sb = scoreInspiration(b) - scoreInspiration(a);
+      if (sb !== 0) return sb;
+      // tie-break: 新的在前
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta;
+    });
+  }, [inspirations, sortMode]);
+
   // 按 category 分组文风
   const stylesByCategory = COPYWRITING_STYLES.reduce<Record<string, typeof COPYWRITING_STYLES>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = [];
@@ -426,21 +629,97 @@ function AICopywritingContent() {
 
         {/* Step 1: 选材 + 输入 + 智能助手 */}
         <GlassCard>
-          <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
             <span style={{ color: "#3B82F6" }}>Step 1</span> · 选材与意图
           </p>
 
+          {/* 1.0 选 3 提示 */}
+          {currentSelectedCount >= 3 && (
+            <div
+              className="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
+            >
+              <span style={{ color: '#FDE047', fontSize: 11 }}>💡</span>
+              <span style={{ color: '#FDE68A', fontSize: 11, lineHeight: 1.4 }}>
+                选了 {currentSelectedCount} 条素材,AI 容易分心。3 条以内最佳,多余的会稀释核心信息。
+              </span>
+            </div>
+          )}
+
+          {/* 1.0b AI 作品警告(选中 AI 作品时) */}
+          {selectedAiCount > 0 && (
+            <div
+              className="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}
+            >
+              <span style={{ color: '#FDE047', fontSize: 11 }}>⚠️</span>
+              <span style={{ color: '#FDE68A', fontSize: 11, lineHeight: 1.4 }}>
+                选了 {selectedAiCount} 条 AI 作品,二次创作会放大 AI 味,建议开启「去 AI 味」开关(下方)。
+              </span>
+            </div>
+          )}
+
           {/* 1a. 灵感库多选 */}
           <div className="mb-3">
-            <p style={{ color: "#9CA3AF", fontSize: 11, marginBottom: 6 }}>
-              📚 灵感库多选（{currentSelectedCount} / {inspirations.length}）
-            </p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p style={{ color: "#9CA3AF", fontSize: 11 }}>
+                📚 灵感库多选（{currentSelectedCount} / {inspirations.length}）
+              </p>
+              {/* 排序下拉 */}
+              <button
+                onClick={() => setSortMode(sortMode === 'smart' ? 'recent' : 'smart')}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#9CA3AF',
+                }}
+                title={sortMode === 'smart' ? '当前:智能排序' : '当前:最新优先'}
+              >
+                {sortMode === 'smart' ? <>✨ 智能</> : <>🕐 最新</>}
+              </button>
+            </div>
+
+            {/* 类型 chips + 显示 AI 开关 */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {([
+                { key: 'all', label: '全部' },
+                { key: 'text', label: '📝 灵感' },
+                { key: 'image', label: '🖼️ 图片' },
+                { key: 'video', label: '🎬 视频' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setTypeFilter(key)}
+                  className="px-2.5 py-0.5 rounded-full text-[10px]"
+                  style={{
+                    background: typeFilter === key ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                    border: typeFilter === key ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                    color: typeFilter === key ? '#93C5FD' : '#9CA3AF',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowAiWorks(!showAiWorks)}
+                className="px-2.5 py-0.5 rounded-full text-[10px] ml-auto"
+                style={{
+                  background: showAiWorks ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: showAiWorks ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                  color: showAiWorks ? '#FDE68A' : '#6B7280',
+                }}
+                title={showAiWorks ? '当前:显示 AI 作品' : '当前:隐藏 AI 作品'}
+              >
+                {showAiWorks ? '⚠️ AI 已显示' : '⚠️ 显示 AI 作品'}
+              </button>
+            </div>
             <div
               className="space-y-2 overflow-y-auto custom-scrollbar"
               style={{ maxHeight: 180 }}
             >
-              {inspirations.length > 0 ? (
-                inspirations.map((item) => (
+              {displayedInspirations.length > 0 ? (
+                displayedInspirations.map((item) => (
                   <div
                     key={item.id}
                     className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer"
@@ -464,10 +743,28 @@ function AICopywritingContent() {
                     <span style={{ color: "#E5E7EB", fontSize: 12 }} className="truncate flex-1">
                       {item.title || item.ai_summary || item.original_text?.substring(0, 30) || "未命名灵感"}
                     </span>
+                    {item.source_platform === 'ai' && (
+                      <span
+                        style={{
+                          color: '#FDE68A',
+                          fontSize: 9,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: 'rgba(245,158,11,0.15)',
+                          border: '1px solid rgba(245,158,11,0.3)',
+                          flexShrink: 0,
+                        }}
+                        title="AI 作品 — 二次创作会放大 AI 味"
+                      >
+                        AI
+                      </span>
+                    )}
                   </div>
                 ))
               ) : (
-                <p style={{ color: "#6B7280", fontSize: 11, textAlign: 'center', padding: 8 }}>暂无灵感数据</p>
+                <p style={{ color: "#6B7280", fontSize: 11, textAlign: 'center', padding: 8 }}>
+                  {showAiWorks ? '暂无灵感数据' : '暂无非 AI 灵感,试试展开「显示 AI 作品」'}
+                </p>
               )}
             </div>
           </div>
@@ -475,13 +772,28 @@ function AICopywritingContent() {
           {/* 1b. 用户输入框 */}
           <div className="mb-3">
             <p style={{ color: "#9CA3AF", fontSize: 11, marginBottom: 6 }}>
-              ✏️ 自由输入（主题/补充信息）
+              ✏️ 自由输入（主题 / 粘贴链接自动解析 / 粘贴或拖入图片自动识别）
             </p>
             <textarea
               ref={userInputRef}
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              placeholder="例：写一篇面向 25-30 岁职场女性的抗老精华推荐..."
+              onPaste={(e) => {
+                // 检测剪贴板里的图片
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                  if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                      e.preventDefault();
+                      handleImageFile(file);
+                      return;
+                    }
+                  }
+                }
+              }}
+              placeholder="例：写一篇面向 25-30 岁职场女性的抗老精华推荐... 也可直接粘贴 URL 或图片"
               className="w-full p-3 rounded-lg text-sm resize-none custom-scrollbar"
               style={{
                 background: "rgba(255,255,255,0.05)",
@@ -491,6 +803,74 @@ function AICopywritingContent() {
                 maxHeight: 200,
               }}
             />
+            {/* URL 解析 / 上传中提示 */}
+            {(analyzingUrl || urlError || uploadingImage || imageError) && (
+              <div
+                className="mt-1.5 px-2 py-1.5 rounded-lg flex items-center gap-1.5"
+                style={{
+                  background: (urlError || imageError) ? 'rgba(239,68,68,0.08)' : 'rgba(59,130,246,0.08)',
+                  border: `1px solid ${(urlError || imageError) ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)'}`,
+                }}
+              >
+                {analyzingUrl ? (
+                  <>
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+                    <span style={{ color: '#93C5FD', fontSize: 10 }}>🔗 正在解析链接...</span>
+                  </>
+                ) : uploadingImage ? (
+                  <>
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+                    <span style={{ color: '#93C5FD', fontSize: 10 }}>🖼️ 正在上传并分析图片...</span>
+                  </>
+                ) : (
+                  <span style={{ color: '#FCA5A5', fontSize: 10 }}>❌ {urlError || imageError}</span>
+                )}
+              </div>
+            )}
+
+            {/* 拖拽上传 hint */}
+            <div
+              className="mt-1.5 flex items-center gap-1.5"
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+              onDragLeave={() => setIsDraggingImage(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingImage(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file && file.type.startsWith('image/')) handleImageFile(file);
+              }}
+            >
+              <label
+                className="flex-1 px-2 py-1 rounded-lg flex items-center justify-center gap-1 cursor-pointer"
+                style={{
+                  background: isDraggingImage ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
+                  border: isDraggingImage ? '1px dashed rgba(59,130,246,0.6)' : '1px dashed rgba(255,255,255,0.15)',
+                  color: isDraggingImage ? '#93C5FD' : '#6B7280',
+                  fontSize: 10,
+                }}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                onDragLeave={() => setIsDraggingImage(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingImage(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && file.type.startsWith('image/')) handleImageFile(file);
+                }}
+              >
+                <ImageIcon size={11} />
+                <span>点击或拖入图片 (自动识别文字与场景)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageFile(file);
+                    e.target.value = ''; // 允许重复选同一张
+                  }}
+                />
+              </label>
+            </div>
           </div>
 
           {/* 1c. 智能助手按钮 */}
@@ -840,6 +1220,19 @@ function AICopywritingContent() {
       </div>
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
+
+      {/* 智能助手产物对比 Modal */}
+      <Step1MaterialRefineModal
+        open={refineModalOpen}
+        userInput={refineModalInput.userInput}
+        inspirations={refineModalInput.inspirations}
+        initialResult={refineModalInput.result}
+        onClose={() => setRefineModalOpen(false)}
+        onConfirm={(finalText) => {
+          setRefineModalResult(finalText);
+          handleConfirmRefine();
+        }}
+      />
     </div>
   );
 }
