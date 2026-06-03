@@ -45,8 +45,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '文本不能为空' }, { status: 400 });
     }
 
-    if (text.length > 2000) {
-      return NextResponse.json({ success: false, error: '文本过长（最多 2000 字）' }, { status: 400 });
+    // 火山引擎限制: 单次请求文本 ≤ 1024 字节(utf-8), 超过会返 "exceed max len limit"
+    // 留 24 字节余量到 1000, 避免边界失败
+    const textBytes = Buffer.byteLength(text, 'utf-8');
+    if (textBytes > 1000) {
+      return NextResponse.json({ success: false, error: `文本过长（${textBytes}/1000 字节, 约 ${text.length} 字符, 请精简到 1000 字节以内）` }, { status: 400 });
     }
 
     if (!APP_ID || !ACCESS_TOKEN) {
