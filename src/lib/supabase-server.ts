@@ -4,26 +4,6 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import { Pool } from 'pg';
 
-// 创建代理 fetch — 每个 Supabase 客户端注入独立 dispatcher，不污染全局
-function createProxyFetch(): typeof globalThis.fetch {
-  const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-  if (!proxyUrl) return globalThis.fetch;
-
-  try {
-    const { ProxyAgent, fetch: undiciFetch } = require('undici');
-    const agent = new ProxyAgent(proxyUrl);
-    console.log('[proxy] Supabase 客户端代理已启用:', proxyUrl);
-    return ((url: any, init?: any) => {
-      return undiciFetch(url, { ...init, dispatcher: agent });
-    }) as typeof globalThis.fetch;
-  } catch (e) {
-    console.warn('[proxy] 创建代理 fetch 失败:', e);
-    return globalThis.fetch;
-  }
-}
-
-const proxyFetch = createProxyFetch();
-
 // 简单的服务端客户端 - 用于 API routes（不需要 cookie 处理）
 export function createClient() {
   return createSupabaseClient(
@@ -34,7 +14,6 @@ export function createClient() {
         autoRefreshToken: false,
         persistSession: false
       },
-      global: { fetch: proxyFetch },
     }
   );
 }
@@ -49,7 +28,6 @@ export function createAdminClient() {
         autoRefreshToken: false,
         persistSession: false
       },
-      global: { fetch: proxyFetch },
     }
   );
 }
@@ -81,7 +59,6 @@ export function createSupabaseServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_ANON_KEY!,
     {
-      global: { fetch: proxyFetch },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
