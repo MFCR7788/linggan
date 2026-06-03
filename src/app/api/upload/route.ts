@@ -16,6 +16,18 @@ import { getUsage, addStorageUsage } from '@/lib/upload/usage';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Supabase Storage 仅支持有限的 MIME 类型，不支持的映射为 octet-stream
+function toSupabaseContentType(mime: string): string {
+  const supported = new Set([
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
+    'audio/mpeg', 'audio/wav', 'audio/ogg',
+    'application/pdf', 'application/json', 'application/zip',
+    'text/plain', 'text/html', 'text/css', 'text/javascript',
+  ]);
+  return supported.has(mime) ? mime : 'application/octet-stream';
+}
+
 export const POST = withAuth(async ({ request, user }) => {
   let formData: FormData;
   try {
@@ -78,7 +90,7 @@ export const POST = withAuth(async ({ request, user }) => {
     const { error: uploadError } = await supabase.storage
       .from('lingji-media')
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: toSupabaseContentType(file.type),
         upsert: false,
       });
 
