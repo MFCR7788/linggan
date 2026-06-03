@@ -897,6 +897,7 @@ ${forecastText}
     // ====== 3. 调用 AI 模型 ======
     let analysis: any = null;
     let modelUsed = '';
+    const modelErrors: string[] = [];
     const genMaxTokens = isGeneration ? 4096 : 1000;
 
     const tryModel = async (name: string, fn: () => Promise<string>): Promise<boolean> => {
@@ -924,7 +925,11 @@ ${forecastText}
           analysis._needsGenerationFallback = true;
         }
         return true;
-      } catch (e) { console.warn(`${name} 失败:`, e); }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(`${name} 失败:`, msg);
+        modelErrors.push(`${name}: ${msg.substring(0, 200)}`);
+      }
       return false;
     };
 
@@ -978,7 +983,7 @@ ${forecastText}
     }
 
     // ====== 4. JSON 重试：AI 没输出 JSON 时，用纯 JSON 指令再试一次 ======
-    if (analysis._needsGenerationFallback && intent.genType) {
+    if (analysis?._needsGenerationFallback && intent.genType) {
       console.log(`[${intent.label}] AI 未输出 JSON，尝试纯 JSON 重试`);
       const isVideo = intent.genType === 'text2vid' || intent.genType === 'img2vid' || intent.genType === 'vid2vid';
       const jsonOnlyPrompt = `请为以下需求生成一个 JSON，不要输出任何其他内容，不要用 markdown 代码块，只输出纯 JSON：
@@ -1110,6 +1115,7 @@ JSON 格式：
     return NextResponse.json({
       success: false,
       error: errMsg.substring(0, 500),
+      modelErrors: modelErrors.slice(0, 5),
       title: '未命名灵感',
       summary: '这是您记录的灵感内容，请查看详细信息。',
       keyPoints: ['这是您记录的原始内容', '建议保存到灵感库'],
