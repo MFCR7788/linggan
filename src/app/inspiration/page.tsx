@@ -517,6 +517,30 @@ function InspirationLibraryContent() {
                 )}
               </div>
             )
+          ) : item.type === "text" && thumbnailUrl ? (
+            // 文档：显示文件图标 + 可点击链接
+            <div
+              className="w-full h-full flex flex-col items-center justify-center p-4 gap-3 overflow-hidden"
+              style={{ background: "rgba(30,64,175,0.12)" }}
+            >
+              <FileText size={36} color="#60A5FA" />
+              <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>文档</span>
+              <a
+                href={thumbnailUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs underline truncate max-w-full px-2"
+                style={{ color: "#60A5FA" }}
+              >
+                {(() => {
+                  try {
+                    const url = new URL(thumbnailUrl);
+                    return decodeURIComponent(url.pathname.split('/').pop() || '查看文件');
+                  } catch { return '查看文件'; }
+                })()}
+              </a>
+            </div>
           ) : (
             <div
               className="w-full h-full flex flex-col items-center justify-center p-3 overflow-hidden"
