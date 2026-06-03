@@ -34,6 +34,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/check-hotspots",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/jobs/claim",
       "schedule": "0 0 * * *"
     },
