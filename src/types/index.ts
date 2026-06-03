@@ -242,6 +242,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  code?: string;  // 业务错误码,如 INSUFFICIENT_CREDITS
 }
 
 // 分页响应

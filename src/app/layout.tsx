@@ -3,6 +3,7 @@ import "./globals.css";
 import { StarBackground } from "@/components/StarBackground";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
 import { ToastProvider } from "@/components/Toast";
+import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'default-cache';
@@ -50,6 +51,7 @@ export default function RootLayout({
           <ReactQueryProvider>
             <ToastProvider>
               {children}
+              <InsufficientCreditsModal />
             </ToastProvider>
           </ReactQueryProvider>
         </main>
