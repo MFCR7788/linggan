@@ -1,11 +1,12 @@
-// 后台定时热点检查 - 供 Vercel Cron Jobs 或外部定时服务调用
+// 后台定时热点检查 - 供外部定时服务调用
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { runHotspotCheck } from '@/lib/jobs/hotspot-checker';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = process.env.CRON_SECRET;
+  const expectedSecret = getCronSecret();
   if (!expectedSecret) {
     return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
   }
