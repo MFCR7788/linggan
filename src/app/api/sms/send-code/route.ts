@@ -77,8 +77,8 @@ export async function POST(request: Request) {
 
     // 5. 发送短信 (阿里云)
     const regionId = process.env.ALIYUN_SMS_REGION_ID || 'cn-hangzhou';
-    const accessKeyId = process.env.ALIYUN_ACCESS_KEY_ID;
-    const accessKeySecret = process.env.ALIYUN_ACCESS_KEY_SECRET;
+    const accessKeyId = process.env.ALIYUN_SMS_ACCESS_KEY_ID || process.env.ALIYUN_ACCESS_KEY_ID;
+    const accessKeySecret = process.env.ALIYUN_SMS_ACCESS_KEY_SECRET || process.env.ALIYUN_ACCESS_KEY_SECRET;
 
     let sent = false;
     let sendError: string | undefined;
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         sendError = e instanceof Error ? e.message : '短信 SDK 异常';
       }
     } else {
-      sendError = '未配置 ALIYUN_ACCESS_KEY_ID / SECRET';
+      sendError = '未配置 ALIYUN_SMS_ACCESS_KEY_ID / SECRET';
     }
 
     // 即使短信发送失败, 验证码已存; 生产环境考虑告警
