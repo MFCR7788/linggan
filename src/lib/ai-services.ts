@@ -1400,7 +1400,7 @@ const WEATHER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Appl
 export async function fetchWeather(city: string): Promise<WeatherData | null> {
   try {
     const encodedCity = encodeURIComponent(city.trim());
-    const url = `http://wttr.in/${encodedCity}?format=j1`;
+    const url = `https://wttr.in/${encodedCity}?format=j1`;
 
     const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY
       || process.env.http_proxy || process.env.https_proxy;
