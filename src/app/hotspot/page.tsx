@@ -22,7 +22,7 @@ interface HotspotItem {
   id: string; title: string; platform: string; original_url: string;
   original_content?: string; ai_summary?: string; relevance_reason?: string;
   relevance_score: number; importance_level: string; credibility_level: string;
-  captured_at: string; published_at?: string; status: string;
+  captured_at: string; published_at?: string; status: string; is_read?: boolean;
   view_count?: number; like_count?: number; comment_count?: number; share_count?: number;
   author?: string; monitor_keyword_id?: string;
   credibility_score?: number;
@@ -170,7 +170,7 @@ function RadarTab({
   onToggleSelect, onDeleteSingle, onSelectAll, onExitSelection,
   onBatchDelete, onFilterDelete, page, setPage, totalCount, totalPages,
   activeFilter, setActiveFilter,
-  expandedId, setExpandedId,
+  expandedId, onExpand,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
@@ -309,7 +309,7 @@ function RadarTab({
             const isExpanded = expandedId === item.id;
             return (
             <div key={item.id}
-              onClick={() => { if (!selectionMode) setExpandedId(isExpanded ? null : item.id); }}
+              onClick={() => { if (!selectionMode) onExpand(item); }}
               className={selectionMode ? '' : 'cursor-pointer'}>
               <div className="flex items-start">
                 {selectionMode && (
@@ -427,7 +427,7 @@ function KeywordsTab({
   keywords, selectedKeywordId, setSelectedKeywordId, keywordHotspots, loadingKeywordHotspots,
   showAddKeyword, setShowAddKeyword, newKeyword, setNewKeyword, addingKeyword,
   handleAddKeyword, handleToggleKeyword, handleDeleteKeyword,
-  onToInspiration, expandedId, setExpandedId,
+  onToInspiration, expandedId, onExpand,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
@@ -568,7 +568,7 @@ function KeywordsTab({
                 {keywordHotspots.map((item: HotspotItem) => {
                   const isExpanded = expandedId === item.id;
                   return (
-                  <div key={item.id} onClick={() => setExpandedId(isExpanded ? null : item.id)} className="cursor-pointer">
+                  <div key={item.id} onClick={() => onExpand(item)} className="cursor-pointer">
                     <div className="flex items-center justify-between" style={{ paddingRight: 8 }}>
                       <HotspotCard item={item} onToInspiration={onToInspiration} showKeyword />
                       <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 10 }}>
@@ -1011,6 +1011,22 @@ function HotspotRadarInner() {
     } catch { setToast({ type: 'error', message: '保存失败，请重试' }); }
   };
 
+  const handleExpand = async (item: HotspotItem) => {
+    if (expandedId === item.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(item.id);
+      if (!item.is_read) {
+        // 乐观更新：标记已读 + 减未读数
+        setHotspots((prev) => prev.map((h) => h.id === item.id ? { ...h, is_read: true } : h));
+        setStats((prev) => prev ? { ...prev, unread: Math.max(0, (prev.unread || 0) - 1) } : prev);
+        // 后台同步 API
+        syncDevAuthCookie();
+        fetch(`/api/hotspot/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ is_read: true }) }).catch(() => {});
+      }
+    }
+  };
+
   // ─── 渲染 ────────────────────────────────────────
 
   if (initialLoading) {
@@ -1087,7 +1103,7 @@ function HotspotRadarInner() {
               onBatchDelete={handleBatchDelete} onFilterDelete={handleFilterDelete}
               page={page} setPage={setPage} totalCount={totalCount} totalPages={totalPages}
               activeFilter={activeFilter} setActiveFilter={setActiveFilter}
-              expandedId={expandedId} setExpandedId={setExpandedId}
+              expandedId={expandedId} onExpand={handleExpand}
             />
           )}
           {activeTab === 'keywords' && (
@@ -1099,7 +1115,7 @@ function HotspotRadarInner() {
               handleAddKeyword={handleAddKeyword} handleToggleKeyword={handleToggleKeyword}
               handleDeleteKeyword={handleDeleteKeyword}
               onToInspiration={handleToInspiration}
-              expandedId={expandedId} setExpandedId={setExpandedId}
+              expandedId={expandedId} onExpand={handleExpand}
             />
           )}
           {activeTab === 'search' && (
