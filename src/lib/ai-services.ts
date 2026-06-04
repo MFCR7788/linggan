@@ -278,7 +278,6 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
 // ====== Seedance Image Generation ======
 
 function getSizeForRatio(ratio: string): string {
-  const minPixels = 1920 * 1920;
   switch (ratio) {
     case '1:1':
       return '1920x1920';
@@ -287,9 +286,9 @@ function getSizeForRatio(ratio: string): string {
     case '9:16':
       return '1440x2560';
     case '4:3':
-      return '2216x1662';
+      return '2240x1680';
     case '3:4':
-      return '1662x2216';
+      return '1680x2240';
     default:
       return '1920x1920';
   }
