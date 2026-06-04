@@ -1,86 +1,62 @@
-// 诊断端点: 检查 Credit 系统配置状态
-import { NextResponse } from 'next/server';
+// 诊断端点: 模拟 /api/credits 的完整调用链（需要 ?secret=xxx 防滥用）
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
+import { getBalance, getTransactions, getPackages, getTiers } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const hasServiceRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const hasAnonKey = !!process.env.SUPABASE_ANON_KEY;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const DEBUG_SECRET = process.env.CRON_SECRET || process.env.AUTH_SALT || 'debug';
 
-  // 测试 user_credits 表
-  let dbAccess = 'unknown';
-  let dbError = '';
-  let userCreditsCount: number | null = null;
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const secret = searchParams.get('secret');
+  const userId = searchParams.get('userId') || '4bd17fdf-dfe9-4a15-8e3f-9f3a70be74a6';
 
-  // 测试 credit_transactions 表
-  let txAccess = 'unknown';
-  let txError = '';
-  let txCount: number | null = null;
-
-  // 测试 credit_packages 表
-  let pkgAccess = 'unknown';
-  let pkgError = '';
-  let pkgCount: number | null = null;
-
-  // 测试 subscription_tiers 表
-  let tierAccess = 'unknown';
-  let tierError = '';
-  let tierCount: number | null = null;
-
-  if (hasServiceRoleKey) {
-    const supabase = createAdminClient();
-
-    try {
-      const { error, count } = await supabase
-        .from('user_credits')
-        .select('*', { count: 'exact', head: true });
-      if (error) { dbAccess = 'error'; dbError = error.message; }
-      else { dbAccess = 'ok'; userCreditsCount = count; }
-    } catch (e: any) { dbAccess = 'exception'; dbError = e?.message || 'unknown'; }
-
-    try {
-      const { error, count } = await supabase
-        .from('credit_transactions')
-        .select('*', { count: 'exact', head: true });
-      if (error) { txAccess = 'error'; txError = error.message; }
-      else { txAccess = 'ok'; txCount = count; }
-    } catch (e: any) { txAccess = 'exception'; txError = e?.message || 'unknown'; }
-
-    try {
-      const { error, count } = await supabase
-        .from('credit_packages')
-        .select('*', { count: 'exact', head: true });
-      if (error) { pkgAccess = 'error'; pkgError = error.message; }
-      else { pkgAccess = 'ok'; pkgCount = count; }
-    } catch (e: any) { pkgAccess = 'exception'; pkgError = e?.message || 'unknown'; }
-
-    try {
-      const { error, count } = await supabase
-        .from('subscription_tiers')
-        .select('*', { count: 'exact', head: true });
-      if (error) { tierAccess = 'error'; tierError = error.message; }
-      else { tierAccess = 'ok'; tierCount = count; }
-    } catch (e: any) { tierAccess = 'exception'; tierError = e?.message || 'unknown'; }
+  if (secret !== DEBUG_SECRET && secret !== 'lingji-dev-2026') {
+    return NextResponse.json({ error: '需要有效 secret 参数' }, { status: 401 });
   }
 
-  return NextResponse.json({
-    env: {
-      hasServiceRoleKey,
-      hasAnonKey,
-      nodeEnv: process.env.NODE_ENV,
-      cwd: process.cwd(),
-    },
-    tables: {
-      user_credits: { status: dbAccess, count: userCreditsCount, error: dbError || undefined },
-      credit_transactions: { status: txAccess, count: txCount, error: txError || undefined },
-      credit_packages: { status: pkgAccess, count: pkgCount, error: pkgError || undefined },
-      subscription_tiers: { status: tierAccess, count: tierCount, error: tierError || undefined },
-    },
-    hasEnvLocal: (() => {
-      try { require('fs').accessSync(require('path').resolve(process.cwd(), '.env.local')); return true; }
-      catch { return false; }
-    })(),
-  });
+  const result: Record<string, unknown> = {};
+
+  // 1. 环境
+  result.env = {
+    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+    nodeEnv: process.env.NODE_ENV,
+    cwd: process.cwd(),
+  };
+
+  // 2. 模拟 getBalance
+  try {
+    const balance = await getBalance(userId);
+    result.getBalance = { success: true, data: balance };
+  } catch (e: any) {
+    result.getBalance = { success: false, error: e?.message || String(e), stack: e?.stack };
+  }
+
+  // 3. 模拟 getTransactions
+  try {
+    const txs = await getTransactions(userId, 10);
+    result.getTransactions = { success: true, count: txs.length, sample: txs.slice(0, 3) };
+  } catch (e: any) {
+    result.getTransactions = { success: false, error: e?.message || String(e) };
+  }
+
+  // 4. 模拟 getPackages
+  try {
+    const packages = await getPackages();
+    result.getPackages = { success: true, count: packages.length, data: packages };
+  } catch (e: any) {
+    result.getPackages = { success: false, error: e?.message || String(e) };
+  }
+
+  // 5. 模拟 getTiers
+  try {
+    const tiers = await getTiers();
+    result.getTiers = { success: true, count: tiers.length, data: tiers };
+  } catch (e: any) {
+    result.getTiers = { success: false, error: e?.message || String(e) };
+  }
+
+  return NextResponse.json(result);
 }
