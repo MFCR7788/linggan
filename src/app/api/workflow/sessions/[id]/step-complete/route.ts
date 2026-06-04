@@ -81,8 +81,8 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
     const nextStep = steps[nextStepIndex];
 
     if (nextStep?.entry) {
-      nextStepUrl = buildHandoffUrl(nextStep.entry, mergedHandoff) +
-        '&workflow_session_id=' + data.id;
+      const base = buildHandoffUrl(nextStep.entry, mergedHandoff);
+      nextStepUrl = `${base}${base.includes('?') ? '&' : '?'}workflow_session_id=${data.id}`;
     }
   }
 

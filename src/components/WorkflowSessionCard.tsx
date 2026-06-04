@@ -39,8 +39,8 @@ export function WorkflowSessionCard({ session, onResume }: Props) {
     // 导航到当前步骤
     const currentStep = steps[session.current_step_index];
     if (currentStep?.entry) {
-      const url = buildHandoffUrl(currentStep.entry, session.accumulated_handoff) +
-        '&workflow_session_id=' + session.id;
+      const base = buildHandoffUrl(currentStep.entry, session.accumulated_handoff);
+      const url = `${base}${base.includes('?') ? '&' : '?'}workflow_session_id=${session.id}`;
       router.push(url);
     }
   };
