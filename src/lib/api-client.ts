@@ -24,6 +24,7 @@ class ApiClient {
 
       const response = await fetch(url, {
         ...options,
+        credentials: 'include',
         headers: {
           ...this.defaultHeaders,
           ...getDevUserIdHeader(),

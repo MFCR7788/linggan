@@ -83,9 +83,11 @@ function BillingContent() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const r = await apiClient.get<{
         balance: number; tier: string;
@@ -98,8 +100,12 @@ function BillingContent() {
         setLifetimeConsumed(r.data!.lifetimeConsumed);
         setLifetimePurchased(r.data!.lifetimePurchased);
         setTransactions(r.data!.transactions || []);
+      } else {
+        setLoadError(r.error || '请求失败');
+        showToast(r.error || '查询失败', 'error');
       }
     } catch (e: any) {
+      setLoadError(e?.message || '查询失败');
       showToast(e?.message || '查询失败', 'error');
     } finally {
       setLoading(false);
@@ -164,6 +170,9 @@ function BillingContent() {
                   {loading ? '—' : balance.toLocaleString()}
                   <span style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 400, marginLeft: 4 }}>credits</span>
                 </p>
+                {loadError && (
+                  <p style={{ color: '#FCA5A5', fontSize: 11, marginTop: 2 }}>{loadError}</p>
+                )}
               </div>
             </div>
             <button

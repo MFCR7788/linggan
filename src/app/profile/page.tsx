@@ -108,8 +108,17 @@ function ProfileContent() {
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
+      // 清除 dev auth
       localStorage.removeItem('dev_user');
-      document.cookie = 'dev_user_id=; path=/; max-age=0';
+      // 清除 Supabase auth cookies
+      document.cookie.split(';').forEach(c => {
+        const name = c.trim().split('=')[0];
+        if (name) {
+          document.cookie = `${name}=; path=/; max-age=0; domain=.zjsifan.com`;
+          document.cookie = `${name}=; path=/; max-age=0; domain=ai.zjsifan.com`;
+          document.cookie = `${name}=; path=/; max-age=0`;
+        }
+      });
     }
     router.push('/login');
   };
