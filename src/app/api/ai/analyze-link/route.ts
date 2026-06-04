@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase-server';
 import { extractVideoText, canExtractTranscript } from '@/lib/video-transcriber';
 import type { TranscriptResult } from '@/lib/video-transcriber';
 import { withAuth } from '@/lib/api-handler';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -303,7 +305,7 @@ function tryParseJSON(str: string): any | null {
 }
 
 // 主入口
-export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { url } = await request.json();
     if (!url) {
@@ -324,9 +326,21 @@ export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
       contentType = response.headers.get('content-type') || '';
       finalUrl = response.url || url;
     } catch {
-      // 如果页面抓取失败，尝试当图片链接处理
+      // 如果页面抓取失败，尝试当图片链接处理(需要 AI,先扣点)
       const isImageUrl = IMAGE_EXTENSIONS.some(ext => url.toLowerCase().includes(ext));
       if (isImageUrl) {
+        const creditCost = CREDIT_COSTS.ai_extract.image;
+        try {
+          await consume(user.id, creditCost, 'ai_analyze_link', '链接分析 image', { url: url.substring(0, 200) });
+        } catch (e) {
+          if (e instanceof InsufficientCreditsError) {
+            return NextResponse.json(
+              { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+              { status: 402 }
+            );
+          }
+          throw e;
+        }
         const storedUrl = await uploadImageFromUrl(url);
         const visionResult = await callDoubaoVision(url, '描述这张图片的内容和用途');
         return NextResponse.json({
@@ -342,7 +356,7 @@ export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
         });
       }
 
-      // 完全无法获取，返回基本信息
+      // 完全无法获取，返回基本信息(无 AI 调用,不扣点)
       return NextResponse.json({
         success: true,
         linkType: 'article',
@@ -355,17 +369,29 @@ export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
       });
     }
 
-    // 2. 检测链接类型
+    // 2. 检测链接类型 + 扣点
     const linkType = detectLinkType(finalUrl, contentType, html);
+    const creditCost = linkType === 'video' ? CREDIT_COSTS.ai_extract.video
+      : linkType === 'image' ? CREDIT_COSTS.ai_extract.image
+      : CREDIT_COSTS.ai_extract.article;
+    try {
+      await consume(user.id, creditCost, 'ai_analyze_link', `链接分析 ${linkType}`, { url: url.substring(0, 200) });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
 
     // 3. 根据类型分流分析
     let result;
     if (linkType === 'image') {
-      // 获取图片 URL：og:image 或者直接就是图片链接
       const ogImage = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image') || '';
       result = await analyzeImageLink(finalUrl, extractMeta(html, 'og:title') || '', ogImage);
     } else if (linkType === 'video') {
-      // 对国内视频平台，尝试提取语音逐字稿
       let transcript: string | undefined;
       if (canExtractTranscript(finalUrl)) {
         try {
@@ -378,9 +404,7 @@ export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
           if (transcriptResult.success && transcriptResult.transcript) {
             transcript = transcriptResult.transcript;
           }
-        } catch {
-          // 转录失败不影响主流程
-        }
+        } catch { /* 转录失败不影响主流程 */ }
       }
       result = await analyzeVideoLink(finalUrl, html, transcript);
     } else {

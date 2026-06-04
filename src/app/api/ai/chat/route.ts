@@ -3,6 +3,8 @@ import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask,
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { extractTextFromBuffer } from '@/lib/extract/document-extractor';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 // ====== 意图类型定义 ======
 type IntentType = 'writing' | 'knowledge' | 'life' | 'schedule' | 'office' | 'image' | 'video' | 'coding' | 'creative' | 'legal' | 'weather';
@@ -601,6 +603,19 @@ export const POST = withAuth(async ({ request, user }) => {
     const hasVideos = videos.length > 0;
     const hasDocuments = documents.length > 0;
     const isMultimodal = hasImages || hasVideos;
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_chat', 'AI 对话', { contentLen: content.length, hasImages, hasVideos, hasDocuments });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
 
     // 加载历史消息作为上下文
     let historyMessages: { role: 'user' | 'assistant'; content: string }[] = [];

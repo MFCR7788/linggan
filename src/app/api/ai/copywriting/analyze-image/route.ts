@@ -2,13 +2,16 @@
 // 输入: { imageUrl, prompt? }
 // 输出: { description, text, tags, analyzedAt }
 
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDoubaoVision } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAuth(async ({ request }) => {
+export const POST = withAuth(async ({ request, user }) => {
   let body: { imageUrl?: string; prompt?: string };
   try {
     body = await request.json();
@@ -22,6 +25,19 @@ export const POST = withAuth(async ({ request }) => {
   }
   if (!/^https?:\/\//.test(imageUrl)) {
     return createApiError('imageUrl 必须是 http(s) 链接', 400);
+  }
+
+  const creditCost = CREDIT_COSTS.ai_extract.image;
+  try {
+    await consume(user.id, creditCost, 'ai_analyze_image', 'AI 图片分析', { imageUrl: imageUrl.substring(0, 200) });
+  } catch (e) {
+    if (e instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+        { status: 402 }
+      );
+    }
+    throw e;
   }
 
   // 默认 prompt 偏文案创作场景

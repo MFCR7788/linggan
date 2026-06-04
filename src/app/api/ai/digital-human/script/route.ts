@@ -1,16 +1,32 @@
 // AI 写稿 — 为数字人生成口播脚本
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { generateOralScript } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { topic, style, language, targetLength, variantCount, inspirations } = await request.json();
 
     if (!topic || !topic.trim()) {
       return createApiError('请输入主题', 400);
+    }
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_script', 'AI 口播脚本生成', { topic });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     const scripts = await generateOralScript({

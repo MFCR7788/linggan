@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import { callDeepSeek } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
-export const POST = withAuth(async ({ request }: { request: Request }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { content, contentType } = await request.json();
+
+    // ─── Credit 扣点 ──────────────────────────────────
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_analyze', 'AI 内容分析', { contentType });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
     
     // 构建分析提示词
     const prompt = `请分析以下内容，判断它是属于日程安排还是灵感记录，并进行相应的处理。

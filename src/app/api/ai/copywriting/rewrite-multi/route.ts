@@ -1,7 +1,10 @@
 // 多平台改写 API — 一键生成小红书/抖音/公众号/微博版本
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek, logAiUsage } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +13,19 @@ export const POST = withAuth(async ({ request, user }) => {
     const { content } = await request.json();
     if (!content || content.trim().length === 0) {
       return createApiError('请提供原文内容', 400);
+    }
+
+    const creditCost = CREDIT_COSTS.ai_copywriting.perVariant;
+    try {
+      await consume(user.id, creditCost, 'ai_rewrite_multi', 'AI 多平台改写', { contentLen: content.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     const prompt = `请将以下内容改写为四个主流平台的版本。每个版本要保留核心信息，但调整表达方式、格式和语气来匹配对应平台的风格。

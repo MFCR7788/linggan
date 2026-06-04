@@ -1,7 +1,10 @@
 // 图片增强 API — 超分辨率 / 背景替换 / 风格迁移
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDoubaoVision, generateImage, logAiUsage } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +27,19 @@ export const POST = withAuth(async ({ request, user }) => {
 
     if (!mode || !['upscale', 'bg_replace', 'style_transfer'].includes(mode)) {
       return createApiError('请选择增强模式：upscale / bg_replace / style_transfer', 400);
+    }
+
+    const creditCost = CREDIT_COSTS.ai_image.perImage;
+    try {
+      await consume(user.id, creditCost, 'ai_image', `AI 图片增强 ${mode}`, { mode });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     // 1. 先用 Vision 分析原图

@@ -1,4 +1,5 @@
 // FFmpeg 视频合并 API — 拼接 + BGM + 字幕 + 自动保存到作品
+import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
@@ -12,6 +13,8 @@ import {
 } from '@/lib/ffmpeg-utils';
 import { readFileSync, statSync } from 'fs';
 import { recommendBgmAuto, type BgmStyle } from '@/lib/bgm-recommender';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +148,19 @@ export const POST = withAuth(async ({ request, user }) => {
       return createApiError('请提供视频链接列表', 400);
     }
 
+    const creditCost = CREDIT_COSTS.ai_video_post.merge;
+    try {
+      await consume(user.id, creditCost, 'ai_video_merge', `视频合并 ${videoUrls.length} 段`, { segmentCount: videoUrls.length, bgmStyle });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     // BGM auto 模式: 根据 topic/stylePreset 智能推荐风格
     let actualBgmStyle: BgmStyle | string = bgmStyle || 'tech';
     let bgmRecommendNote: string | null = null;
@@ -190,6 +206,7 @@ export const POST = withAuth(async ({ request, user }) => {
     } catch (e: any) {
       console.error('[Merge] ffmpeg 处理失败:', e);
       cleanupTempDir(dir);
+      await refund(user.id, creditCost, 'ai_video_merge', '视频合并处理失败退点', { error: e?.message }).catch(() => {});
       return createApiError(`视频合并失败: ${e.message || '未知错误'}`, 500);
     }
 
@@ -211,6 +228,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     if (!publicUrl) {
       cleanupTempDir(dir);
+      await refund(user.id, creditCost, 'ai_video_merge', '视频上传存储失败退点', {}).catch(() => {});
       return createApiError('视频上传存储失败，请重试', 500);
     }
 

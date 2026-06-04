@@ -2,13 +2,16 @@
 // POST { avatarId, script, voiceId?, backgroundColor? }  → 提交生成
 // GET  ?videoId=xxx                                       → 查状态
 
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { generateAvatarVideo, getAvatarVideoStatus } from '@/lib/ai-services';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { calcAvatarVideoCost } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { avatarId, script, voiceId, backgroundColor } = await request.json();
 
@@ -20,6 +23,19 @@ export const POST = withAuth(async ({ request, user: _user }) => {
       return createApiError('口播脚本不能超过 5000 字', 400);
     }
 
+    const creditCost = calcAvatarVideoCost(script.length);
+    try {
+      await consume(user.id, creditCost, 'ai_avatar_video', `数字分身视频 ${script.length} 字`, { avatarId, chars: script.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     const result = await generateAvatarVideo({
       avatarId,
       script: script.slice(0, 5000),
@@ -28,6 +44,7 @@ export const POST = withAuth(async ({ request, user: _user }) => {
     });
 
     if (!result.ok) {
+      await refund(user.id, creditCost, 'ai_avatar_video', '分身视频生成失败退点', { error: result.error }).catch(() => {});
       return createApiError(result.error || '生成失败', 500);
     }
 

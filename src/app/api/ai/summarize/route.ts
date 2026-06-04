@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek, callDoubaoChat, callQwen } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
-export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const body = await request.json();
     const { content, type } = body;
@@ -12,6 +14,19 @@ export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
         success: false,
         error: '内容不能为空'
       }, { status: 400 });
+    }
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_summarize', 'AI 内容总结', { type, contentLen: content.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     // 根据内容类型构建不同的提示

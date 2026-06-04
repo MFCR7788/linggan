@@ -4,16 +4,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDeepSeek } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAuth(async ({ request: req }: { request: NextRequest }) => {
+export const POST = withAuth(async ({ request: req, user }) => {
   const { text, aiResponse } = await req.json();
 
   // text 是用户原始输入，aiResponse 是 AI 的详细分析（可选，但强烈建议提供）
   const sourceText = text || '';
   if ((!sourceText || typeof sourceText !== 'string' || sourceText.trim().length < 5) && !aiResponse) {
     return NextResponse.json({ success: true, schedules: [] });
+  }
+
+  const creditCost = CREDIT_COSTS.ai_text.perCall;
+  try {
+    await consume(user.id, creditCost, 'ai_extract_schedule', 'AI 日程提取', { textLen: sourceText.length });
+  } catch (e) {
+    if (e instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+        { status: 402 }
+      );
+    }
+    throw e;
   }
 
   const today = new Date().toISOString().split('T')[0];

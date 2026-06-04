@@ -1,9 +1,12 @@
 // AI 生图的"智能提示"端点
 // 接收 {inspirations, userInput, presetId} → 用 DeepSeek 提炼成 50-150 字的精准 prompt
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
 import { findImagePreset } from '@/lib/preset-templates';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +19,23 @@ interface SmartPromptBody {
   paletteName?: string;
 }
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const body: SmartPromptBody = await request.json().catch(() => ({}));
     const { inspirations = [], userInput = '', presetId, style, ratio, paletteName } = body;
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_smart_prompt', 'AI 生图提示词提炼', { presetId });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
 
     // 拼接素材上下文
     const inspContext = inspirations

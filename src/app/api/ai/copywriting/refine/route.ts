@@ -1,8 +1,11 @@
 // AI 文案的"智能助手"端点
 // 把用户输入 + 灵感素材提炼成 50-150 字的"核心信息"（用于喂给 AI 文案生成）
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,13 +14,26 @@ interface RefineBody {
   userInput?: string;
 }
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const body: RefineBody = await request.json().catch(() => ({}));
     const { inspirations = [], userInput = '' } = body;
 
     if (!userInput.trim() && inspirations.length === 0) {
       return createApiError('需要至少提供用户输入或灵感素材', 400);
+    }
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_refine', 'AI 内容提炼', { inputLen: userInput.length, inspCount: inspirations.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     const inspContext = inspirations

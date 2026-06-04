@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callDoubaoChat } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
-export const POST = withAuth(async ({ request }: { request: NextRequest }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { content, style } = await request.json();
 
     if (!content || content.length < 10) {
       return NextResponse.json({ success: false, error: '内容太短，无法改写' }, { status: 400 });
+    }
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_rewrite', 'AI 改写', { style, contentLen: content.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     const styleMap: Record<string, string> = {

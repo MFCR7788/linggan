@@ -4,13 +4,16 @@
 //
 // 价格说明:HeyGen 训练本身免费,按生成视频秒数计费(约 $0.05-0.067/秒)
 
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { trainAvatar, getAvatarTrainingStatus } from '@/lib/ai-services';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { videoUrl, name, lookalike = true } = await request.json();
 
@@ -22,6 +25,19 @@ export const POST = withAuth(async ({ request, user: _user }) => {
       return createApiError('videoUrl 需为完整 HTTP(S) URL', 400);
     }
 
+    const creditCost = CREDIT_COSTS.digital_twin.oneTime;
+    try {
+      await consume(user.id, creditCost, 'ai_digital_twin', '数字分身训练', { name });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
+    }
+
     const result = await trainAvatar({
       videoUrl,
       name: name.slice(0, 30),
@@ -29,6 +45,7 @@ export const POST = withAuth(async ({ request, user: _user }) => {
     });
 
     if (!result.ok) {
+      await refund(user.id, creditCost, 'ai_digital_twin', '分身训练提交失败退点', { error: result.error }).catch(() => {});
       return createApiError(result.error || '训练提交失败', 500);
     }
 

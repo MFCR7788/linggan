@@ -1,8 +1,11 @@
 // 视频生成 API — 异步任务模式
+import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { submitVideoTask, getVideoTaskStatus, logAiUsage } from '@/lib/ai-services';
+import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { calcAiVideoCost } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +24,19 @@ export const POST = withAuth(async ({ request, user }) => {
 
     if (!prompt) {
       return createApiError('请输入提示词', 400);
+    }
+
+    const creditCost = calcAiVideoCost(duration || 5, 'standard');
+    try {
+      await consume(user.id, creditCost, 'ai_video', `AI 视频生成 ${duration || 5}s standard`, { duration, prompt: prompt.substring(0, 100) });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     // 将所有选择参数融入 prompt，指导 AI 生成更匹配的结果
@@ -61,6 +77,7 @@ export const POST = withAuth(async ({ request, user }) => {
     const result = await submitVideoTask(enrichedPrompt, duration || 5, ratio);
     if (!result.taskId) {
       console.error('[Video] submitVideoTask 失败:', result.message);
+      await refund(user.id, creditCost, 'ai_video', '视频任务提交失败退点', { error: result.message }).catch(() => {});
       return createApiError(result.message || '视频生成服务暂不可用', 503);
     }
 

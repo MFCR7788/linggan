@@ -1,6 +1,9 @@
 // AI 智能字幕 — 用 LLM 把分镜字幕改写为朗朗上口的短句（适合视频口播/字幕）
 // POST { storyboard: [{index, visualPrompt, subtitle}] } → { storyboard: [{...newSubtitle}] }
 
+import { NextResponse } from 'next/server';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { callDeepSeek } from '@/lib/ai-services';
@@ -14,12 +17,25 @@ interface SceneInput {
   duration?: number;
 }
 
-export const POST = withAuth(async ({ request, user: _user }) => {
+export const POST = withAuth(async ({ request, user }) => {
   try {
     const { storyboard } = await request.json();
 
     if (!Array.isArray(storyboard) || storyboard.length === 0) {
       return createApiError('请提供分镜数据', 400);
+    }
+
+    const creditCost = CREDIT_COSTS.ai_text.perCall;
+    try {
+      await consume(user.id, creditCost, 'ai_auto_subtitle', 'AI 字幕优化', { segmentCount: storyboard.length });
+    } catch (e) {
+      if (e instanceof InsufficientCreditsError) {
+        return NextResponse.json(
+          { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+          { status: 402 }
+        );
+      }
+      throw e;
     }
 
     // 限制最多 30 段（避免 prompt 过长）

@@ -8,6 +8,8 @@ import { withAuth } from '@/lib/api-handler';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { enqueueBatch } from '@/lib/jobs/queue';
 import { logAiUsage } from '@/lib/ai-services';
+import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
 import type { EnqueueBatchItem } from '@/lib/jobs/queue';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,19 @@ export const POST = withAuth(async ({ request, user }) => {
     if (items[i].prompt.length > 2000) {
       return createApiError(`items[${i}].prompt 超过 2000 字符`, 400);
     }
+  }
+
+  const creditCost = items.length * CREDIT_COSTS.ai_image.perImage;
+  try {
+    await consume(user.id, creditCost, 'ai_image', `AI 批量生图 ${items.length} 张`, { count: items.length });
+  } catch (e) {
+    if (e instanceof InsufficientCreditsError) {
+      return NextResponse.json(
+        { success: false, error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+        { status: 402 }
+      );
+    }
+    throw e;
   }
 
   try {

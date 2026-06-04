@@ -67,15 +67,39 @@ export const CREDIT_COSTS = {
     video: 3,  // 视频 ASR 60-90s,稍贵
   },
 
+  // ─── 通用文本 AI(DeepSeek 等低价 LLM,~¥0.001/次) ──
+  ai_text: {
+    perCall: 1,  // 单次 LLM 调用:分析/改写/提炼/加标点/字幕优化等
+  },
+
+  // ─── 视频后期 ────────────────────────────────────────
+  ai_video_post: {
+    merge: 5,       // FFmpeg 视频拼接 + BGM + 字幕
+    storyboard: 3,   // AI 分镜生成
+  },
+
+  // ─── 数字人 Animate ──────────────────────────────────
+  ai_animate: {
+    '480P': 10,
+    '720P': 20,
+  },
+
+  // ─── 数字分身视频生成(HeyGen) ────────────────────────
+  // HeyGen Instant Avatar ~$0.05/s ≈ ¥0.36/s
+  // 按脚本字数估算时长(~5 字/s 口播),3 credits/s ≈ ¥0.54 → 33% margin
+  ai_avatar_video: {
+    perSecond: 3,
+    minCost: 10,
+  },
+
   // ─── 训练类(一次性) ──────────────────────────────────
-  // HeyGen Digital Twin 训练约 ¥50 一次性 → 100 credits(¥30 零售)毛亏但留口
-  // 火山 TTS 复刻 ¥99 一次性 → 200 credits(¥60 零售)毛亏但留口
-  // 实际生产应按官方调价,这里先打平 + 给用户便宜点拉新
+  // HeyGen Digital Twin 训练约 ¥50 → 300 credits ≈ ¥42-72(视套餐) → 盈亏平衡+
+  // 火山 TTS 复刻 ¥99 一次性 → 600 credits ≈ ¥85-145 → 盈亏平衡+
   voice_clone: {
-    oneTime: 200,
+    oneTime: 600,
   },
   digital_twin: {
-    oneTime: 100,
+    oneTime: 300,
   },
 } as const;
 
@@ -113,4 +137,17 @@ export function calcDigitalHumanCost(resolution: '480P' | '720P' = '720P'): numb
  */
 export function calcAdsCost(gridCount: number): number {
   return gridCount * CREDIT_COSTS.ai_ads.perGrid;
+}
+
+/**
+ * 数字分身视频扣点:按脚本字数估算时长,× 每秒单价
+ * 中文口播 ~5 字/秒,HeyGen ~$0.05/s ≈ ¥0.36/s
+ * @param chars 口播脚本文本长度
+ */
+export function calcAvatarVideoCost(chars: number): number {
+  const estimatedSeconds = Math.ceil(chars / 5);
+  return Math.max(
+    CREDIT_COSTS.ai_avatar_video.minCost,
+    estimatedSeconds * CREDIT_COSTS.ai_avatar_video.perSecond
+  );
 }
