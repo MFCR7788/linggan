@@ -1,6 +1,7 @@
 // AI Services - DeepSeek, Doubao/ARK, Seedance
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
+import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken } from './runtime-config';
 
 // 通用 fetch 超时包装
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
@@ -101,7 +102,7 @@ export async function callQwen(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY || process.env.QWEN_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
@@ -1534,8 +1535,8 @@ export async function cloneVoiceUpload(params: {
   language?: 0 | 1 | 2 | 3 | 4 | 5; // 0=cn, 1=en, 2=ja, 3=es, 4=id, 5=pt
   modelType?: 1 | 2 | 3 | 4 | 5; // 1=ICL 1.0, 2=DiT 标准, 4=ICL V2
 }): Promise<VoiceCloneUploadResult> {
-  const appid = process.env.VOLC_TTS_APP_ID;
-  const accessToken = process.env.VOLC_TTS_ACCESS_TOKEN;
+  const appid = getVolcTtsAppId();
+  const accessToken = getVolcTtsAccessToken();
   if (!appid || !accessToken) {
     return { ok: false, speakerId: params.speakerId, status: 'Failed', error: 'TTS 服务未配置(VOLC_TTS_APP_ID / VOLC_TTS_ACCESS_TOKEN)' };
   }
@@ -1596,8 +1597,8 @@ export async function cloneVoiceUpload(params: {
 
 /** 查询声音复刻训练状态 */
 export async function cloneVoiceStatus(speakerId: string): Promise<VoiceCloneStatusResult> {
-  const appid = process.env.VOLC_TTS_APP_ID;
-  const accessToken = process.env.VOLC_TTS_ACCESS_TOKEN;
+  const appid = getVolcTtsAppId();
+  const accessToken = getVolcTtsAccessToken();
   if (!appid || !accessToken) {
     return { speakerId, status: 'NotFound', error: 'TTS 服务未配置' };
   }
@@ -1634,8 +1635,8 @@ export async function synthesizeWithClonedVoice(params: {
   speed?: number;
   pitch?: number;
 }): Promise<Buffer | null> {
-  const appid = process.env.VOLC_TTS_APP_ID;
-  const accessToken = process.env.VOLC_TTS_ACCESS_TOKEN;
+  const appid = getVolcTtsAppId();
+  const accessToken = getVolcTtsAccessToken();
   if (!appid || !accessToken) return null;
 
   const speedRatio = Math.min(Math.max(params.speed ?? 1.15, 0.5), 2.0);
@@ -1701,7 +1702,7 @@ export async function synthesizeWithCosyVoice(params: {
   text: string;
   options?: CosyVoiceOptions;
 }): Promise<Buffer | null> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     console.warn('[CosyVoice] DASHSCOPE_API_KEY 未配置');
     return null;

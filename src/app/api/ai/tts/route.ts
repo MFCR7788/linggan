@@ -1,15 +1,21 @@
-// TTS (Text-to-Speech) API — 通过火山引擎语音合成（豆包 TTS）
+// TTS (Text-to-Speech) API — 通过阿里 CosyVoice v2（主）+ 火山引擎豆包 TTS（降级）
 import { NextResponse } from 'next/server';
 import https from 'https';
 import { synthesizeWithClonedVoice, synthesizeWithCosyVoice } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost, CREDIT_COSTS } from '@/lib/credit-costs';
+import { getVolcTtsAppId, getVolcTtsAccessToken } from '@/lib/runtime-config';
 
-const APP_ID = process.env.VOLC_TTS_APP_ID;
-const ACCESS_TOKEN = process.env.VOLC_TTS_ACCESS_TOKEN;
 const TTS_HOST = 'openspeech.bytedance.com';
 const TTS_PATH = '/api/v1/tts';
+
+// 豆包 TTS voice type 映射（豆包用数字 ID，非 CosyVoice 名称）
+const VOLC_VOICE_MAP: Record<string, string> = {
+  female_natural: 'zh_female_qingxin',       // 清新女声
+  female_emotional: 'zh_female_tianmei',     // 甜美女生
+  male_natural: 'zh_male_qingse',            // 青涩男声
+};
 
 // 音色列表 — CosyVoice v2 预设(中文 SOTA,听感优于豆包)
 // cosyvoice-v2 模型必须用 _v2 后缀的 voice id
@@ -57,9 +63,8 @@ export const POST = withAuth(async ({ request, user }) => {
       return NextResponse.json({ success: false, error: `文本过长（${textBytes}/1000 字节, 约 ${text.length} 字符, 请精简到 1000 字节以内）` }, { status: 400 });
     }
 
-    if (!APP_ID || !ACCESS_TOKEN) {
-      return NextResponse.json({ success: false, error: 'TTS 服务未配置' }, { status: 500 });
-    }
+    const volcAppId = getVolcTtsAppId();
+    const volcToken = getVolcTtsAccessToken();
 
     // ─── 扣点(预扣) ──────────────────────────────────
     const creditCost = calcAiTtsCost(text.length);
@@ -139,19 +144,25 @@ export const POST = withAuth(async ({ request, user }) => {
     }
     console.warn('[TTS] CosyVoice 失败/未配置,降级到豆包');
 
+    if (!volcAppId || !volcToken) {
+      await refund(user.id, creditCost, 'ai_tts', '豆包 TTS 未配置退点', { chars: text.length });
+      return NextResponse.json({ success: false, error: '语音服务未配置' }, { status: 500 });
+    }
+
+    const volcVoiceType = VOLC_VOICE_MAP[voice || DEFAULT_VOICE] || 'zh_female_qingxin';
     const requestId = `tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const postData = JSON.stringify({
       app: {
-        appid: APP_ID,
-        token: ACCESS_TOKEN,
+        appid: volcAppId,
+        token: volcToken,
         cluster: 'volcano_tts',
       },
       user: {
         uid: 'lingji',
       },
       audio: {
-        voice_type: voiceConfig.id,
+        voice_type: volcVoiceType,
         encoding: 'mp3',
         rate: 24000,
         speed_ratio: speedRatio,
@@ -174,7 +185,7 @@ export const POST = withAuth(async ({ request, user }) => {
           path: TTS_PATH,
           method: 'POST',
           headers: {
-            'Authorization': `Bearer; ${ACCESS_TOKEN}`,
+            'Authorization': `Bearer; ${volcToken}`,
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
           },

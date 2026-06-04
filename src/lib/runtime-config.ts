@@ -5,32 +5,54 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-let _cachedCronSecret: string | undefined;
+let _envCache: Record<string, string> | null = null;
 
-function parseEnvFile(content: string, key: string): string | undefined {
-  const regex = new RegExp(`^${key}=(.+)`, 'm');
-  const match = content.match(regex);
-  return match ? match[1].trim() : undefined;
-}
-
-export function getCronSecret(): string | undefined {
-  if (_cachedCronSecret !== undefined) return _cachedCronSecret;
-
-  // 优先 process.env（如果在 build 时已设置则有效）
-  if (process.env.CRON_SECRET) {
-    _cachedCronSecret = process.env.CRON_SECRET;
-    return _cachedCronSecret;
-  }
-
-  // 运行时从 .env.local 读取
+function loadEnvFile(): Record<string, string> {
+  if (_envCache) return _envCache;
   try {
     const envPath = resolve(process.cwd(), '.env.local');
     const content = readFileSync(envPath, 'utf-8');
-    _cachedCronSecret = parseEnvFile(content, 'CRON_SECRET') || '';
+    _envCache = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      _envCache[key] = val;
+    }
   } catch {
-    // .env.local 不存在
-    _cachedCronSecret = '';
+    _envCache = {};
   }
+  return _envCache;
+}
 
+/** 读取 env var，优先 process.env（build 时已设置），其次 .env.local 运行时文件 */
+function getEnv(key: string): string | undefined {
+  if (process.env[key]) return process.env[key];
+  const fileEnv = loadEnvFile();
+  return fileEnv[key] || undefined;
+}
+
+let _cachedCronSecret: string | undefined;
+
+export function getCronSecret(): string | undefined {
+  if (_cachedCronSecret !== undefined) return _cachedCronSecret;
+  _cachedCronSecret = getEnv('CRON_SECRET') || '';
   return _cachedCronSecret || undefined;
 }
+
+export function getDashScopeApiKey(): string | undefined {
+  return getEnv('DASHSCOPE_API_KEY') || getEnv('QWEN_API_KEY');
+}
+
+export function getVolcTtsAppId(): string | undefined {
+  return getEnv('VOLC_TTS_APP_ID');
+}
+
+export function getVolcTtsAccessToken(): string | undefined {
+  return getEnv('VOLC_TTS_ACCESS_TOKEN');
+}
+
+export { getEnv };
