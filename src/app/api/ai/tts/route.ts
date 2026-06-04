@@ -10,11 +10,15 @@ import { getVolcTtsAppId, getVolcTtsAccessToken } from '@/lib/runtime-config';
 const TTS_HOST = 'openspeech.bytedance.com';
 const TTS_PATH = '/api/v1/tts';
 
-// 豆包 TTS voice type 映射（豆包用数字 ID，非 CosyVoice 名称）
+// 豆包 TTS voice type 映射（火山引擎 BV 系列语音合成）
 const VOLC_VOICE_MAP: Record<string, string> = {
-  female_natural: 'zh_female_qingxin',       // 清新女声
-  female_emotional: 'zh_female_tianmei',     // 甜美女生
-  male_natural: 'zh_male_qingse',            // 青涩男声
+  female_natural: 'BV700_streaming',         // 标准女声
+  female_emotional: 'BV405_streaming',       // 活泼女声
+  female_professional: 'BV406_streaming',    // 知性女声
+  female_warm: 'BV701_streaming',            // 暖声女声
+  male_natural: 'BV702_streaming',           // 磁性男声
+  male_warm: 'BV001_streaming',              // 暖声男声
+  male_professional: 'BV008_streaming',      // 沉稳男声
 };
 
 // 音色列表 — CosyVoice v2 预设(中文 SOTA,听感优于豆包)
@@ -150,7 +154,7 @@ export const POST = withAuth(async ({ request, user }) => {
       return NextResponse.json({ success: false, error: '语音服务未配置' }, { status: 500 });
     }
 
-    const volcVoiceType = VOLC_VOICE_MAP[voice || DEFAULT_VOICE] || 'zh_female_qingxin';
+    const volcVoiceType = VOLC_VOICE_MAP[voice || DEFAULT_VOICE] || 'BV700_streaming';
     const requestId = `tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const postData = JSON.stringify({
