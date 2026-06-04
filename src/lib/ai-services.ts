@@ -1775,6 +1775,57 @@ export async function synthesizeWithCosyVoice(params: {
   }
 }
 
+// ====== 本地 Kokoro TTS (CPU 友好, 开源, Apache 2.0) ======
+
+const KOKORO_API_URL = process.env.KOKORO_API_URL || "";
+
+/** 内部 voice key → Kokoro voice 映射 */
+const KOKORO_VOICE_MAP: Record<string, string> = {
+  female_natural: "zf_xiaobei",
+  female_emotional: "zf_xiaoni",
+  female_professional: "zf_xiaoxiao",
+  female_warm: "zf_xiaoyi",
+  male_natural: "zm_yunjian",
+  male_warm: "zm_yunxi",
+  male_professional: "zm_yunyang",
+};
+
+export async function synthesizeWithLocalKokoro(text: string, voiceKey: string): Promise<Buffer | null> {
+  if (!KOKORO_API_URL) return null;
+
+  const kokoroVoice = KOKORO_VOICE_MAP[voiceKey] || "zf_xiaobei";
+
+  try {
+    const res = await fetch(`${KOKORO_API_URL}/v1/audio/speech`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "kokoro",
+        input: text,
+        voice: kokoroVoice,
+        speed: 1.0,
+        response_format: "mp3",
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      console.warn(`[Kokoro] HTTP ${res.status}`);
+      return null;
+    }
+
+    const ab = await res.arrayBuffer();
+    if (ab.byteLength < 100) {
+      console.warn("[Kokoro] 返回音频过小");
+      return null;
+    }
+    return Buffer.from(ab);
+  } catch (e: unknown) {
+    console.warn("[Kokoro] 本地服务不可用:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 // ====== Helpers ======
 
 function extractTags(text: string): string[] {

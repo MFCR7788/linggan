@@ -93,7 +93,7 @@ function BillingContent() {
         balance: number; tier: string;
         lifetimeConsumed: number; lifetimePurchased: number;
         transactions: Transaction[];
-      }>('/api/credits?t=30');
+      }>('/credits?t=30');
       if (r.success) {
         setBalance(r.data!.balance);
         setTier(r.data!.tier);
@@ -116,7 +116,7 @@ function BillingContent() {
 
   const loadSubs = async () => {
     try {
-      const r = await apiClient.get<{ subscriptions: SubscriptionRecord[] }>('/api/subscriptions');
+      const r = await apiClient.get<{ subscriptions: SubscriptionRecord[] }>('/subscriptions');
       if (r.success && r.data?.subscriptions) {
         setSubscriptions(r.data.subscriptions);
       }
@@ -130,7 +130,7 @@ function BillingContent() {
   const handleCancelSubscription = async () => {
     setCancelling(true);
     try {
-      const r = await apiClient.delete<{ cancelled: any[]; message: string }>('/api/subscriptions');
+      const r = await apiClient.delete<{ cancelled: any[]; message: string }>('/subscriptions');
       if (r.success) {
         showToast(r.data?.message || '已取消自动续费,当前订阅将持续到当前周期结束', 'success');
         setConfirmCancel(false);

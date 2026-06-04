@@ -65,7 +65,7 @@ function SubscribeContent() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiClient.get<{ tiers: Tier[]; currentTier: string }>('/api/subscriptions');
+      const r = await apiClient.get<{ tiers: Tier[]; currentTier: string }>('/subscriptions');
       if (r.success) {
         setTiers(r.data!.tiers || []);
         setCurrentTier(r.data!.currentTier || 'free');
@@ -91,7 +91,7 @@ function SubscribeContent() {
       status: OrderStatus;
       balanceAfter?: number;
       creditsGranted?: number;
-    }>(`/api/pay/wechat/query?outTradeNo=${outTradeNo}`);
+    }>(`/pay/wechat/query?outTradeNo=${outTradeNo}`);
     if (r.success && r.data) {
       setOrderStatus(r.data.status);
       if (r.data.status === 'paid') {
@@ -138,7 +138,7 @@ function SubscribeContent() {
         amountCny: number;
         creditsToGrant: number;
         expiresAt: string;
-      }>('/api/pay/wechat/h5/create', { type: 'subscription', id: tier.tier });
+      }>('/pay/wechat/h5/create', { type: 'subscription', id: tier.tier });
 
       if (r.success && r.data) {
         const orderInfo: OrderInfo = { ...r.data, tierName: tier.name };
@@ -161,7 +161,7 @@ function SubscribeContent() {
   const handleDowngrade = async (tier: Tier) => {
     setSubscribing(tier.tier);
     try {
-      const r = await apiClient.post<{ tier: string }>('/api/subscriptions', { tier: 'free' });
+      const r = await apiClient.post<{ tier: string }>('/subscriptions', { tier: 'free' });
       if (r.success) {
         showToast('已降级到免费版,当前订阅周期结束后生效', 'success');
         setConfirming(null);

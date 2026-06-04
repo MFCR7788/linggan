@@ -55,4 +55,12 @@ export function getVolcTtsAccessToken(): string | undefined {
   return getEnv('VOLC_TTS_ACCESS_TOKEN');
 }
 
+export function getFunASRUrl(): string | undefined {
+  return getEnv('FUNASR_API_URL');
+}
+
+export function getKokoroApiUrl(): string | undefined {
+  return getEnv('KOKORO_API_URL');
+}
+
 export { getEnv };

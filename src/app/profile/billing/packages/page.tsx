@@ -49,7 +49,7 @@ function PackagesContent() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await apiClient.get<{ packages: Package[] }>('/api/credits?packages=1');
+        const r = await apiClient.get<{ packages: Package[] }>('/credits?packages=1');
         if (r.success && r.data?.packages) {
           setPackages(r.data.packages);
         }
@@ -78,7 +78,7 @@ function PackagesContent() {
       status: OrderStatus;
       balanceAfter?: number;
       creditsGranted?: number;
-    }>(`/api/pay/wechat/query?outTradeNo=${outTradeNo}`);
+    }>(`/pay/wechat/query?outTradeNo=${outTradeNo}`);
     if (r.success && r.data) {
       setOrderStatus(r.data.status);
       if (r.data.status === 'paid') {
@@ -124,7 +124,7 @@ function PackagesContent() {
         creditsToGrant: number;
         bonusCredits: number;
         expiresAt: string;
-      }>('/api/pay/wechat/h5/create', { type: 'package', id: pkg.id });
+      }>('/pay/wechat/h5/create', { type: 'package', id: pkg.id });
 
       if (r.success && r.data) {
         const orderInfo: OrderInfo = { ...r.data, packageName: pkg.name };

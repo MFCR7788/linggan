@@ -26,7 +26,7 @@ export function CreditsWarningBanner() {
     let cancelled = false;
     const fetchBalance = async () => {
       try {
-        const r = await apiClient.get<{ balance: number }>('/api/credits');
+        const r = await apiClient.get<{ balance: number }>('/credits');
         if (!cancelled && r.success && typeof r.data?.balance === 'number') {
           setBalance(r.data.balance);
         }

@@ -43,7 +43,7 @@ function useBillingSummary() {
   return useQuery({
     queryKey: ['billing-summary'],
     queryFn: async () => {
-      const r = await apiClient.get<BillingSummary>('/api/credits');
+      const r = await apiClient.get<BillingSummary>('/credits');
       if (!r.success) throw new Error(r.error);
       return r.data;
     },

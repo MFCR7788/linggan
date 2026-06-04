@@ -1,7 +1,7 @@
-// TTS (Text-to-Speech) API — 通过阿里 CosyVoice v2（主）+ 火山引擎豆包 TTS（降级）
+// TTS (Text-to-Speech) API — 本地 Kokoro (优先) → 阿里 CosyVoice v2 → 火山引擎豆包 TTS (降级)
 import { NextResponse } from 'next/server';
 import https from 'https';
-import { synthesizeWithClonedVoice, synthesizeWithCosyVoice } from '@/lib/ai-services';
+import { synthesizeWithClonedVoice, synthesizeWithCosyVoice, synthesizeWithLocalKokoro } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost, CREDIT_COSTS } from '@/lib/credit-costs';
@@ -127,7 +127,22 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
 
-    // ─── 优先 CosyVoice(听感 SOTA) ──────────────────────
+    // ─── 优先本地 Kokoro (免费, CPU) ──────────────────────
+    console.log('[TTS] 尝试本地 Kokoro, voice:', voice || DEFAULT_VOICE);
+    const kokoroAudio = await synthesizeWithLocalKokoro(text, voice || DEFAULT_VOICE);
+    if (kokoroAudio) {
+      return NextResponse.json({
+        success: true,
+        audioBase64: kokoroAudio.toString('base64'),
+        mimeType: 'audio/mpeg',
+        voice: voiceConfig.label,
+        engine: 'kokoro',
+        creditsUsed: creditCost,
+      });
+    }
+    console.warn('[TTS] 本地 Kokoro 不可用, 降级到 CosyVoice');
+
+    // ─── CosyVoice(听感 SOTA) ─────────────────────────
     console.log('[TTS] 尝试 CosyVoice, voice:', voiceConfig.id);
     const cosyAudio = await synthesizeWithCosyVoice({
       text,

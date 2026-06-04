@@ -533,7 +533,7 @@ function AvatarSection() {
     const tick = async () => {
       try {
         const r = await apiClient.get<{ status: string; coverUrl?: string; previewVideoUrl?: string; error?: string }>(
-          `/api/ai/digital-human/avatar?avatarId=${encodeURIComponent(info.avatarId)}`
+          `/ai/digital-human/avatar?avatarId=${encodeURIComponent(info.avatarId)}`
         );
         if (cancelled) return;
         const next: AvatarInfo = {
@@ -575,7 +575,7 @@ function AvatarSection() {
     }
     setSubmitting(true);
     try {
-      const r = await apiClient.post<{ avatarId: string; status: string }>('/api/ai/digital-human/avatar', {
+      const r = await apiClient.post<{ avatarId: string; status: string }>('/ai/digital-human/avatar', {
         videoUrl: videoUrl.trim(),
         name: name.trim(),
         lookalike,
