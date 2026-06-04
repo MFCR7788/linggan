@@ -683,7 +683,7 @@ function InspirationLibraryContent() {
             {dateItems.length === 0 ? (
               <p style={{ color: "#6B7280", fontSize: 13, textAlign: "center", padding: "16px 0" }}>当天无日程</p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {dateItems.map((item: any) => renderCard(item))}
               </div>
             )}
@@ -966,7 +966,7 @@ function InspirationLibraryContent() {
           <EmptyState icon="📝" title="还没有灵感"
             description="点击右上角上传按钮导入文件，或到灵感助手中记录灵感" />
         ) : !isLoading && !isScheduleType && items.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {items.map((item: any) => renderCard(item))}
           </div>
         ) : null}
