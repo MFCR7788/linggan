@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2 } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -16,6 +17,7 @@ import { getRecommendations } from "@/lib/account-presets";
 import { useWorkflowSessions, useWorkflowSession } from "@/hooks/use-workflow-session";
 import { WorkflowSessionCard } from "@/components/WorkflowSessionCard";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
+import { apiClient } from "@/lib/api-client";
 
 // ─── AI 创作工具 ──────────────────────────────
 const aiCreationTools = [
@@ -36,7 +38,9 @@ const utilityTools = [
 function AICreationContent() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { accountType, preset } = useAccountType();
   const recommendations = getRecommendations(accountType);
 
@@ -44,7 +48,35 @@ function AICreationContent() {
   const { createSession, isCreating } = useWorkflowSession(null);
   const { data: activeSessions = [] } = useWorkflowSessions({ status: 'active' });
   const { data: pausedSessions = [] } = useWorkflowSessions({ status: 'paused' });
-  const inProgressSessions = [...activeSessions, ...pausedSessions];
+  // 按 combo_id 去重:同方案只保留最新一条,active 优先于 paused
+  const allRaw = [...activeSessions, ...pausedSessions];
+  const inProgressSessions = (() => {
+    const seen = new Map<string, (typeof allRaw)[number]>();
+    for (const s of allRaw) {
+      const existing = seen.get(s.combo_id);
+      if (!existing || (s.status === 'active' && existing.status !== 'active') || s.updated_at > existing.updated_at) {
+        seen.set(s.combo_id, s);
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  })();
+  const duplicateCount = allRaw.length - inProgressSessions.length;
+
+  // 清理重复会话:同一 combo_id 只留最新一条,其余软删除
+  const handleCleanDuplicates = useCallback(async () => {
+    setCleaning(true);
+    const keepIds = new Set(inProgressSessions.map((s) => s.id));
+    const toDelete = allRaw.filter((s) => !keepIds.has(s.id));
+    try {
+      await Promise.all(toDelete.map((s) => apiClient.delete(`/workflow/sessions/${s.id}`)));
+      queryClient.invalidateQueries({ queryKey: ['workflow-sessions'] });
+      setToast({ message: `已清理 ${toDelete.length} 条重复会话`, type: 'success' });
+    } catch {
+      setToast({ message: '清理失败，请重试', type: 'error' });
+    } finally {
+      setCleaning(false);
+    }
+  }, [allRaw, inProgressSessions, queryClient]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -109,9 +141,25 @@ function AICreationContent() {
               >
                 {inProgressSessions.length}
               </span>
+              {duplicateCount > 0 && (
+                <button
+                  onClick={handleCleanDuplicates}
+                  disabled={cleaning}
+                  className="ml-auto px-2 py-1 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-all hover:opacity-80"
+                  style={{
+                    background: 'rgba(239,68,68,0.12)',
+                    border: '1px solid rgba(239,68,68,0.25)',
+                    color: '#FCA5A5',
+                    opacity: cleaning ? 0.5 : 1,
+                  }}
+                >
+                  <Trash2 size={10} />
+                  {cleaning ? '清理中...' : `清理 ${duplicateCount} 条重复`}
+                </button>
+              )}
             </div>
             <div className="space-y-2">
-              {inProgressSessions.slice(0, 3).map((session) => (
+              {inProgressSessions.slice(0, 6).map((session) => (
                 <WorkflowSessionCard
                   key={session.id}
                   session={session}
