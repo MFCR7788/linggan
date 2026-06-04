@@ -14,13 +14,20 @@ export type AccountTypeId =
   | 'personal'     // 个人创作者
   | 'training'     // 教培
   | 'restaurant'   // 餐饮
-  | 'medical';     // 医美
+  | 'medical'      // 医美
+  | 'real_estate'  // 房产
+  | 'travel'       // 旅游
+  | 'parenting'    // 母婴亲子
+  | 'fitness'      // 健身运动
+  | 'pet'          // 宠物
+  | 'home_decor';  // 家居装修
 
 // 灵集核心入口路径
 export type LingjiEntry =
   | '/inspiration'        // 灵感库
   | '/ai/copywriting'     // AI 文案
   | '/ai/image'           // AI 图片
+  | '/ai/image-editor'    // AI 图片编辑
   | '/ai/digital-human'   // AI 数字人
   | '/ai/video'           // AI 视频合成
   | '/ai/ads'             // 朋友圈 9 宫格
@@ -477,6 +484,324 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
           { label: '多平台分发', entry: '/publish' },
         ],
         prefills: { topic: '医美知识', style: 'science', industry: 'beauty_medical' },
+      },
+    ],
+  },
+
+  // ─── 9. 房产 ────────────────────────────────────────────
+  {
+    id: 'real_estate',
+    label: '房产',
+    emoji: '🏠',
+    desc: '房源展示 + 小区讲解 + 看房视频，新房二手都适用',
+    audience: '房产中介 / 新房销售 / 租赁代理 / 个人房东',
+    recommendedStyles: ['tutorial', 'analysis', 'planting'],
+    recommendedIndustries: ['real_estate', 'general'],
+    recommendedPlatforms: ['xiaohongshu', 'douyin', 'wechat_article', 'script'],
+    combos: [
+      {
+        id: 'realestate-listing',
+        title: '房源短视频',
+        emoji: '🏡',
+        desc: '户型图 + 卖点 → AI 文案 → AI 视频 → 多平台分发',
+        steps: [
+          { label: '选素材图', entry: '/inspiration' },
+          { label: 'AI 写房源文案', entry: '/ai/copywriting', paramKey: 'topic' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { topic: '精品房源推荐', style: 'planting', industry: 'real_estate' },
+      },
+      {
+        id: 'realestate-tour',
+        title: '小区讲解片',
+        emoji: '🏘️',
+        desc: '小区配套 → 深度文案 → AI 数字人口播 → 分发',
+        steps: [
+          { label: '写小区亮点', entry: '/ai/copywriting' },
+          { label: 'AI 写讲解稿', entry: '/ai/copywriting' },
+          { label: 'AI 数字人', entry: '/ai/digital-human' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'analysis', industry: 'real_estate' },
+      },
+      {
+        id: 'realestate-renovation',
+        title: '装修前后对比',
+        emoji: '🔨',
+        desc: '改造前图 → AI 效果图 → 前后对比 → 短片合成',
+        steps: [
+          { label: '上传原图', entry: '/ai/image' },
+          { label: 'AI 设计效果图', entry: '/ai/image' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { preset: 'product_main', style: 'tutorial', industry: 'home' },
+      },
+    ],
+  },
+
+  // ─── 10. 旅游 ────────────────────────────────────────────
+  {
+    id: 'travel',
+    label: '旅游',
+    emoji: '✈️',
+    desc: '攻略/游记/酒店种草，旅行博主 + OTA 运营必备',
+    audience: '旅行社 / 酒店民宿 / 景区 / 旅行博主 / OTA 运营',
+    recommendedStyles: ['story', 'planting', 'healing'],
+    recommendedIndustries: ['travel', 'food', 'general'],
+    recommendedPlatforms: ['xiaohongshu', 'douyin', 'wechat_article', 'bilibili'],
+    combos: [
+      {
+        id: 'travel-guide',
+        title: '旅行攻略 Vlog',
+        emoji: '🗺️',
+        desc: '目的地 → 攻略文案 → 景点图片 → AI 视频 + BGM',
+        steps: [
+          { label: '写攻略大纲', entry: '/ai/copywriting' },
+          { label: 'AI 写攻略文', entry: '/ai/copywriting' },
+          { label: 'AI 配景点图', entry: '/ai/image' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+        ],
+        prefills: { style: 'story', industry: 'travel' },
+      },
+      {
+        id: 'travel-hotel',
+        title: '酒店/民宿种草',
+        emoji: '🏨',
+        desc: '房型图 + 亮点 → 种草文案 → 9 宫格 → 分发',
+        steps: [
+          { label: '上传房型图', entry: '/inspiration' },
+          { label: 'AI 写种草文', entry: '/ai/copywriting' },
+          { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'planting', industry: 'travel' },
+      },
+      {
+        id: 'travel-scene',
+        title: '景点大片拍摄',
+        emoji: '📸',
+        desc: '景点 → 出片攻略 → AI 封面图 → AI 短片',
+        steps: [
+          { label: '写景点主题', entry: '/ai/copywriting' },
+          { label: 'AI 写出片指南', entry: '/ai/copywriting' },
+          { label: 'AI 封面配图', entry: '/ai/image' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+        ],
+        prefills: { style: 'healing', industry: 'travel' },
+      },
+    ],
+  },
+
+  // ─── 11. 母婴亲子 ────────────────────────────────────────
+  {
+    id: 'parenting',
+    label: '母婴亲子',
+    emoji: '🍼',
+    desc: '育儿知识 + 用品种草 + 成长记录，宝妈博主核心场景',
+    audience: '母婴博主 / 亲子机构 / 早教中心 / 母婴品牌',
+    recommendedStyles: ['healing', 'science', 'planting'],
+    recommendedIndustries: ['baby', 'education', 'general'],
+    recommendedPlatforms: ['xiaohongshu', 'douyin', 'wechat_article'],
+    combos: [
+      {
+        id: 'parenting-knowledge',
+        title: '育儿知识科普',
+        emoji: '📖',
+        desc: '育儿主题 → 科普文案 → AI 数字人口播 → 分发',
+        steps: [
+          { label: '选育儿主题', entry: '/ai/copywriting' },
+          { label: 'AI 写科普', entry: '/ai/copywriting' },
+          { label: 'AI 数字人', entry: '/ai/digital-human' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'science', industry: 'baby' },
+      },
+      {
+        id: 'parenting-product',
+        title: '母婴好物种草',
+        emoji: '🎁',
+        desc: '产品图 → 种草文案 → 9 宫格 → 分发',
+        steps: [
+          { label: '上传产品图', entry: '/inspiration' },
+          { label: 'AI 写种草文', entry: '/ai/copywriting' },
+          { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'planting', industry: 'baby' },
+      },
+      {
+        id: 'parenting-story',
+        title: '成长记录短片',
+        emoji: '🎬',
+        desc: '成长点滴 → 故事脚本 → AI 视频分镜 → 成片',
+        steps: [
+          { label: '写成长故事', entry: '/ai/copywriting' },
+          { label: 'AI 写脚本', entry: '/ai/copywriting' },
+          { label: 'AI 视频分镜', entry: '/ai/video' },
+          { label: '合并 + BGM', entry: '/ai/video' },
+        ],
+        prefills: { style: 'story', industry: 'baby' },
+      },
+    ],
+  },
+
+  // ─── 12. 健身运动 ────────────────────────────────────────
+  {
+    id: 'fitness',
+    label: '健身运动',
+    emoji: '💪',
+    desc: '教学跟练 + 饮食搭配 + 打卡激励，健身博主三件套',
+    audience: '健身教练 / 健身房 / 运动品牌 / 健身博主',
+    recommendedStyles: ['tutorial', 'passionate', 'science'],
+    recommendedIndustries: ['fitness', 'general'],
+    recommendedPlatforms: ['douyin', 'xiaohongshu', 'bilibili', 'script'],
+    combos: [
+      {
+        id: 'fitness-tutorial',
+        title: '动作教学短片',
+        emoji: '🏋️',
+        desc: '动作 → 教学文案 → AI 视频分镜 → 字幕 + BGM',
+        steps: [
+          { label: '写动作要点', entry: '/ai/copywriting' },
+          { label: 'AI 写教学稿', entry: '/ai/copywriting' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'tutorial', industry: 'fitness' },
+      },
+      {
+        id: 'fitness-meal',
+        title: '健身饮食搭配',
+        emoji: '🥗',
+        desc: '食材 → 饮食文案 → AI 美食图 → 分发',
+        steps: [
+          { label: '写饮食计划', entry: '/ai/copywriting' },
+          { label: 'AI 写食谱文', entry: '/ai/copywriting' },
+          { label: 'AI 配美食图', entry: '/ai/image' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'science', industry: 'fitness' },
+      },
+      {
+        id: 'fitness-challenge',
+        title: '打卡挑战激励',
+        emoji: '🔥',
+        desc: '挑战主题 → 励志文案 → AI 视频 → 分发',
+        steps: [
+          { label: '写挑战主题', entry: '/ai/copywriting' },
+          { label: 'AI 写励志文', entry: '/ai/copywriting' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'passionate', industry: 'fitness' },
+      },
+    ],
+  },
+
+  // ─── 13. 宠物 ────────────────────────────────────────────
+  {
+    id: 'pet',
+    label: '宠物',
+    emoji: '🐶',
+    desc: '萌宠日常 + 用品推荐 + 养护知识，铲屎官内容矩阵',
+    audience: '宠物博主 / 宠物店 / 宠物医院 / 宠物食品品牌',
+    recommendedStyles: ['healing', 'story', 'planting'],
+    recommendedIndustries: ['pet', 'general'],
+    recommendedPlatforms: ['xiaohongshu', 'douyin', 'kuaishou'],
+    combos: [
+      {
+        id: 'pet-daily',
+        title: '萌宠日常 Vlog',
+        emoji: '🐕',
+        desc: '萌宠瞬间 → 文案 → AI 视频 → 多平台分发',
+        steps: [
+          { label: '写今日主题', entry: '/ai/copywriting' },
+          { label: 'AI 写文案', entry: '/ai/copywriting' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'healing', industry: 'pet' },
+      },
+      {
+        id: 'pet-product',
+        title: '宠物用品种草',
+        emoji: '🦴',
+        desc: '产品图 → 种草文案 → 9 宫格封面 → 分发',
+        steps: [
+          { label: '上传产品图', entry: '/inspiration' },
+          { label: 'AI 写种草文', entry: '/ai/copywriting' },
+          { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'planting', industry: 'pet' },
+      },
+      {
+        id: 'pet-guide',
+        title: '宠物养护指南',
+        emoji: '🏥',
+        desc: '养护主题 → 科普文案 → AI 数字人 → 分发',
+        steps: [
+          { label: '选养护主题', entry: '/ai/copywriting' },
+          { label: 'AI 写科普', entry: '/ai/copywriting' },
+          { label: 'AI 数字人', entry: '/ai/digital-human' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'science', industry: 'pet' },
+      },
+    ],
+  },
+
+  // ─── 14. 家居装修 ────────────────────────────────────────
+  {
+    id: 'home_decor',
+    label: '家居装修',
+    emoji: '🛋️',
+    desc: '设计案例 + 改造展示 + 好物推荐，装修博主全链路',
+    audience: '室内设计师 / 装修公司 / 家居品牌 / 家居博主',
+    recommendedStyles: ['tutorial', 'planting', 'healing'],
+    recommendedIndustries: ['home', 'general'],
+    recommendedPlatforms: ['xiaohongshu', 'douyin', 'bilibili'],
+    combos: [
+      {
+        id: 'home-case',
+        title: '设计案例展示',
+        emoji: '📐',
+        desc: '设计理念 → 文案 → AI 效果图 → 视频展示',
+        steps: [
+          { label: '写设计理念', entry: '/ai/copywriting' },
+          { label: 'AI 写案文', entry: '/ai/copywriting' },
+          { label: 'AI 效果图', entry: '/ai/image' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+        ],
+        prefills: { style: 'tutorial', industry: 'home' },
+      },
+      {
+        id: 'home-renovation',
+        title: '改造前后对比',
+        emoji: '🔨',
+        desc: '改造前图 → AI 文案 → AI 效果图 → 前后对比视频',
+        steps: [
+          { label: '上传改造前图', entry: '/inspiration' },
+          { label: 'AI 写改造故事', entry: '/ai/copywriting' },
+          { label: 'AI 效果图', entry: '/ai/image' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
+        ],
+        prefills: { style: 'planting', industry: 'home' },
+      },
+      {
+        id: 'home-items',
+        title: '家居好物种草',
+        emoji: '🪴',
+        desc: '好物 → 种草文案 → AI 图片 → 分发',
+        steps: [
+          { label: '写好物清单', entry: '/ai/copywriting' },
+          { label: 'AI 写种草文', entry: '/ai/copywriting' },
+          { label: 'AI 配图', entry: '/ai/image' },
+          { label: '多平台分发', entry: '/publish' },
+        ],
+        prefills: { style: 'planting', industry: 'home' },
       },
     ],
   },

@@ -134,7 +134,7 @@ export const POST = withAuth(async ({ request, user }) => {
       return NextResponse.json({
         success: true,
         audioBase64: kokoroAudio.toString('base64'),
-        mimeType: 'audio/mpeg',
+        mimeType: 'audio/wav',  // Kokoro via sherpa-onnx 返回 WAV
         voice: voiceConfig.label,
         engine: 'kokoro',
         creditsUsed: creditCost,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2 } from "lucide-react";
+import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2, TrendingUp, Scissors, Plus, Wrench } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -18,20 +18,33 @@ import { useWorkflowSessions, useWorkflowSession } from "@/hooks/use-workflow-se
 import { WorkflowSessionCard } from "@/components/WorkflowSessionCard";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
 import { apiClient } from "@/lib/api-client";
+import { CustomComboBuilder, getCustomCombos } from "@/components/CustomComboBuilder";
 
 // ─── AI 创作工具 ──────────────────────────────
-const aiCreationTools = [
+interface AITool {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  color: string;
+  page?: PageKey;
+  path?: string;
+  badge?: string;
+}
+
+const aiCreationTools: AITool[] = [
   { icon: <FileText size={28} />, title: "AI 文案", desc: "小红书/公众号/短视频脚本/多平台改写", color: "#3B82F6", page: "ai-copywriting" as PageKey },
-  { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "封面图/配图/海报 · 增强/抠图", color: "#8B5CF6", page: "ai-image" as PageKey },
+  { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "封面图/配图/海报生成", color: "#8B5CF6", page: "ai-image" as PageKey },
+  { icon: <Scissors size={28} />, title: "AI 图片编辑", desc: "背景移除 · 画质增强 · 智能扩图", color: "#A78BFA", path: "/ai/image-editor", badge: "新" },
   { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "短视频自动合成 · 分镜/字幕/BGM", color: "#F43F5E", page: "ai-video" as PageKey },
   { icon: <Mic size={28} />, title: "AI 数字人", desc: "AI写稿 · 一键成片 · 批量口播", color: "#06B6D4", page: "ai-digital-human" as PageKey },
   { icon: <Music size={28} />, title: "AI 配音", desc: "多音色文本转语音 · 男女声可选", color: "#22C55E", page: "ai-tts" as PageKey },
-  { icon: <Grid3x3 size={28} />, title: "朋友圈 9 宫格", desc: "产品+卖点 → 9 张封面 + ZIP", color: "#F59E0B", page: "ai-ads" as PageKey, badge: "新" },
+  { icon: <TrendingUp size={28} />, title: "AI 热点选题", desc: "关键词追踪 · 热搜趋势 · 爆款参考", color: "#EF4444", path: "/hotspot" },
+  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "产品+卖点 → 9 张封面 + ZIP", color: "#F59E0B", page: "ai-ads" as PageKey },
+  { icon: <Send size={28} />, title: "多平台分发", desc: "公众号/微博自动发 + 复制引导", color: "#F43F5E", path: "/publish" },
 ];
 
-// ─── 分发 & 数据 ──────────────────────────────
-const utilityTools = [
-  { icon: <Send size={20} />, title: "多平台分发", desc: "公众号/微博自动发 + 复制引导", color: "#F43F5E", path: "/publish", badge: "新" },
+// ─── 数据 ──────────────────────────────
+const utilityTools: AITool[] = [
   { icon: <BarChart3 size={20} />, title: "效果数据", desc: "公众号/微博自动抓 + 手动录入", color: "#06B6D4", path: "/insights" },
 ];
 
@@ -39,6 +52,8 @@ function AICreationContent() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [showCustomBuilder, setShowCustomBuilder] = useState(false);
+  const [customCombos, setCustomCombos] = useState<ReturnType<typeof getCustomCombos>>([]);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { accountType, preset } = useAccountType();
@@ -86,6 +101,23 @@ function AICreationContent() {
     const t = setTimeout(() => setShowOnboarding(true), 500);
     return () => clearTimeout(t);
   }, [accountType]);
+
+  // 加载自定义方案
+  useEffect(() => {
+    setCustomCombos(getCustomCombos());
+  }, []);
+
+  const handleSaveCustomCombo = (combo: ReturnType<typeof getCustomCombos>[number]) => {
+    setCustomCombos((prev) => [...prev, combo]);
+    setShowCustomBuilder(false);
+    setToast({ message: '自定义方案已保存', type: 'success' });
+  };
+
+  const handleDeleteCustomCombo = (id: string) => {
+    const next = customCombos.filter((c) => c.id !== id);
+    setCustomCombos(next);
+    try { localStorage.setItem('lingji_custom_combos', JSON.stringify(next)); } catch {}
+  };
 
   const closeOnboarding = () => {
     setShowOnboarding(false);
@@ -178,7 +210,7 @@ function AICreationContent() {
         )}
 
         {/* ─── 2. 推荐方案 (主力入口) ─── */}
-        {recommendations.length > 0 && (
+        {(recommendations.length > 0 || customCombos.length > 0 || !accountType) && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
@@ -232,7 +264,70 @@ function AICreationContent() {
                   </div>
                 </GlassCard>
               ))}
+
+              {/* 自定义方案 */}
+              {customCombos.map((combo) => (
+                <GlassCard
+                  key={combo.id}
+                  hover
+                  className="!p-3"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(168,85,247,0.04), rgba(139,92,246,0.04))',
+                    border: '1px solid rgba(168,85,247,0.2)',
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span style={{ fontSize: 24 }}>{combo.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 700 }}>
+                          {combo.title}
+                        </p>
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[9px]"
+                          style={{ background: 'rgba(168,85,247,0.15)', color: '#A78BFA' }}
+                        >
+                          自定义
+                        </span>
+                      </div>
+                      <p style={{ color: '#6B7280', fontSize: 11, marginTop: 1, lineHeight: 1.4 }} className="line-clamp-1">
+                        {combo.desc}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCustomCombo(combo.id); }}
+                      className="p-1 rounded-md"
+                      title="删除"
+                      style={{ background: 'rgba(239,68,68,0.08)' }}
+                    >
+                      <Trash2 size={11} color="#FCA5A5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleStartCombo(combo); }}
+                      disabled={isCreating}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 shrink-0 active:scale-95"
+                      style={{
+                        background: 'linear-gradient(135deg, #A78BFA, #8B5CF6)',
+                        color: '#FFFFFF',
+                        opacity: isCreating ? 0.6 : 1,
+                      }}
+                    >
+                      {isCreating ? '...' : '开始'} <ArrowRight size={11} />
+                    </button>
+                  </div>
+                </GlassCard>
+              ))}
             </div>
+
+            {/* 创建自定义方案入口 */}
+            <button
+              onClick={() => setShowCustomBuilder(true)}
+              className="w-full mt-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-medium border border-dashed transition-colors hover:border-white/20"
+              style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#6B7280' }}
+            >
+              <Wrench size={13} />
+              创建自己的方案（自选工具组合）
+            </button>
           </div>
         )}
 
@@ -240,11 +335,14 @@ function AICreationContent() {
         <div>
           <p style={{ ...sectionLabel, marginBottom: 8 }}>AI 创作工具</p>
           <div className="grid grid-cols-3 gap-2.5">
-            {aiCreationTools.map(({ icon, title, desc, color, page, badge }) => (
+            {aiCreationTools.map(({ icon, title, desc, color, page, path, badge }) => (
               <GlassCard
                 key={title}
                 hover
-                onClick={() => handleNavigate(page)}
+                onClick={() => {
+                  if (path) router.push(path);
+                  else if (page) handleNavigate(page);
+                }}
                 className="!p-3 flex flex-col items-center text-center gap-1.5 relative overflow-hidden"
               >
                 {badge && (
@@ -263,25 +361,17 @@ function AICreationContent() {
           </div>
         </div>
 
-        {/* ─── 4. 分发 & 数据 ─── */}
+        {/* ─── 4. 效果数据 ─── */}
         <div>
-          <p style={{ ...sectionLabel, marginBottom: 8 }}>分发 & 数据</p>
+          <p style={{ ...sectionLabel, marginBottom: 8 }}>效果数据</p>
           <div className="grid grid-cols-2 gap-2.5">
-            {utilityTools.map(({ icon, title, desc, color, path, badge }) => (
+            {utilityTools.map(({ icon, title, desc, color, path }) => (
               <GlassCard
                 key={title}
                 hover
-                onClick={() => router.push(path)}
+                onClick={() => path && router.push(path)}
                 className="!p-3 flex items-center gap-3 relative overflow-hidden"
               >
-                {badge && (
-                  <span
-                    className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold"
-                    style={{ background: '#F59E0B', color: '#000' }}
-                  >
-                    {badge}
-                  </span>
-                )}
                 <span style={{ color, fontSize: 20 }}>{icon}</span>
                 <div className="flex-1 min-w-0">
                   <p style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 600 }}>{title}</p>
@@ -394,6 +484,12 @@ function AICreationContent() {
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <AccountTypeOnboarding open={showOnboarding} onClose={closeOnboarding} />
+      {showCustomBuilder && (
+        <CustomComboBuilder
+          onSave={handleSaveCustomCombo}
+          onClose={() => setShowCustomBuilder(false)}
+        />
+      )}
     </div>
   );
 }

@@ -369,6 +369,18 @@ export const COPYWRITING_INDUSTRIES: IndustryTemplate[] = [
     recLength: '400-800 字',
     recStyle: ['analysis', 'tutorial', 'science'],
   },
+  {
+    id: 'travel',
+    name: '旅游',
+    emoji: '✈️',
+    audience: '旅行爱好者+自由行游客，关心路线、花费、体验感、出片',
+    mustInclude: '目的地、交通路线、住宿推荐、预算参考、打卡机位',
+    avoidList: '模糊行程、虚假种草、过度滤镜、忽略安全提示',
+    opener: '从"一个绝美机位"或"踩坑经历"切入',
+    cta: '"你去过最难忘的地方是？评论区分享"',
+    recLength: '400-1000 字',
+    recStyle: ['story', 'planting', 'healing'],
+  },
 ];
 
 // ─── AI 生图：8 个快捷预设 ─────────────────────────────────
