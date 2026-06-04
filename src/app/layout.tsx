@@ -35,9 +35,9 @@ export default function RootLayout({
         />
         {/* 星空背景 */}
         <StarBackground />
-        {/* 容器: 移动端撑满 448px(iPhone Pro Max 宽), 桌面端自适应扩宽 */}
+        {/* 容器: 始终以手机端宽度展示，桌面端居中，两侧露出星空背景 */}
         <main
-          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] sm:max-w-2xl md:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl"
+          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px]"
           style={{
             minHeight: "100vh",
             // iOS safe area: 顶部给 status bar 留位置, 底部让 BottomNav 加 padding
