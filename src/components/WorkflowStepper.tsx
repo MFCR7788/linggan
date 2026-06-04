@@ -44,19 +44,38 @@ interface WorkflowStepperProps {
   completed?: number[];
   /** 紧凑模式(用于 /ai 顶部一行展示) */
   compact?: boolean;
+  /** 会话步骤标签（传入时使用会话数据，否则用 URL 推断） */
+  sessionSteps?: { label: string }[];
+  /** 会话当前步骤索引 */
+  currentStepIndex?: number;
+  /** 会话已完成步骤索引 */
+  completedSteps?: number[];
 }
 
-export function WorkflowStepper({ completed = [], compact = false }: WorkflowStepperProps) {
+export function WorkflowStepper({ completed = [], compact = false, sessionSteps, currentStepIndex, completedSteps }: WorkflowStepperProps) {
   const pathname = usePathname();
-  const currentIdx = detectStep(pathname);
+  const urlIdx = detectStep(pathname);
+
+  // 会话模式：使用传入的步骤数据
+  const steps = sessionSteps
+    ? sessionSteps.map((s, i) => ({
+        id: `step-${i}` as Step['id'],
+        label: s.label,
+        path: '',
+        icon: () => null,
+      }))
+    : STEPS;
+
+  const currentIdx = sessionSteps ? (currentStepIndex ?? 0) : urlIdx;
+  const doneSet = new Set(completedSteps ?? completed);
 
   if (compact) {
-    // 紧凑模式:单行 6 个圆点 + 标签
+    // 紧凑模式:单行圆点 + 标签
     return (
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const isCurrent = i === currentIdx;
-          const isDone = completed.includes(i) && i !== currentIdx;
+          const isDone = doneSet.has(i) && i !== currentIdx;
           const isNext = i === currentIdx + 1;
           const Icon = step.icon;
           return (
@@ -92,7 +111,7 @@ export function WorkflowStepper({ completed = [], compact = false }: WorkflowSte
                 </span>
                 {isNext && <span style={{ fontSize: 10, color: '#FBBF24' }}>⭐</span>}
               </div>
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <div
                   className="w-3 h-px mx-0.5"
                   style={{ background: isDone ? '#22C55E' : 'rgba(255,255,255,0.1)' }}

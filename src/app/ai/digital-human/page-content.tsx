@@ -17,6 +17,8 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
+import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -95,6 +97,8 @@ function DigitalHumanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { receive, handoff } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 模式 ─────────────────────────────────────────────
   const [dhMode, setDhMode] = useState<DigitalHumanMode>('one-click');
@@ -178,13 +182,33 @@ function DigitalHumanContent() {
     if (params.audioUrl) {
       setAudioUrl(params.audioUrl);
       setAudioTab('upload');
-      // 测预填音频的时长
       measureAudioDuration(params.audioUrl).then(d => setAudioDuration(d)).catch(() => {});
     }
     if (params.text || params.script) {
       setTtsText((params.text || params.script || '').slice(0, 1000));
+      setOcTopic((params.text || params.script || '').slice(0, 100));
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.imageUrl) {
+      setImageUrl(h.imageUrl);
+      setImagePreview(h.imageUrl);
+      setImageTab('url');
+    }
+    if (h.audioUrl) {
+      setAudioUrl(h.audioUrl);
+      setAudioTab('upload');
+      measureAudioDuration(h.audioUrl).then(d => setAudioDuration(d)).catch(() => {});
+    }
+    if (h.text || h.script) {
+      setTtsText((h.text || h.script || '').slice(0, 1000));
+      setOcTopic((h.text || h.script || '').slice(0, 100));
+    }
+  }, [session]);
 
   // ─── AI 写稿 ──────────────────────────────────────────
   const [aiTopic, setAiTopic] = useState('');
@@ -235,11 +259,22 @@ function DigitalHumanContent() {
           title: title || `数字人视频 · ${resolution}`,
           media_urls: [videoUrl],
           tags: ['数字人', 'AI生成', 'video_material'],
+          workflow_session_id: workflowSessionId || undefined,
         }),
       });
       const data = await res.json();
-      if (data.success) setToast({ message: '已自动保存到灵感库', type: 'success' });
-      else setToast({ message: '自动保存失败,可手动重试', type: 'error' });
+      if (data.success) {
+        setToast({ message: '已自动保存到灵感库', type: 'success' });
+        if (isInWorkflow) {
+          completeCurrentStep({
+            text: ttsText,
+            script: ttsText,
+            topic: ocTopic || aiTopic,
+            imageUrl: imageUrl || '',
+            firstFrame: videoUrl,
+          }, data.data?.id);
+        }
+      } else setToast({ message: '自动保存失败,可手动重试', type: 'error' });
     } catch { setToast({ message: '自动保存失败', type: 'error' }); }
   };
 
@@ -2137,6 +2172,10 @@ function DigitalHumanContent() {
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 数字人" showBack onBack={() => router.push('/ai')} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* 模式选择 chip bar */}

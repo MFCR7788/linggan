@@ -10,6 +10,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
+import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
 interface VoiceOption {
   key: string;
@@ -33,6 +35,8 @@ function TTSPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { receive, handoff } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // 文本输入
   const [textMode, setTextMode] = useState<'manual' | 'inspiration'>('manual');
@@ -82,6 +86,15 @@ function TTSPageContent() {
       setText((params.text || params.script || '').slice(0, 1000));
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.text || h.script) {
+      setText((h.text || h.script || '').slice(0, 1000));
+    }
+  }, [session]);
 
   // 完成后跳到数字人
   const handleImportToDigitalHuman = () => {
@@ -182,11 +195,15 @@ function TTSPageContent() {
           title: text.substring(0, 100) || 'AI 配音',
           original_text: text,
           tags: ['AI配音', voice],
+          workflow_session_id: workflowSessionId || undefined,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setToast({ message: '已保存到作品库', type: 'success' });
+        if (isInWorkflow) {
+          completeCurrentStep({ text: text.substring(0, 1000), script: text.substring(0, 1000) }, data.data?.id);
+        }
       } else {
         setToast({ message: data.error || '保存失败', type: 'error' });
       }
@@ -330,6 +347,10 @@ function TTSPageContent() {
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 配音" showBack onBack={() => router.push('/ai')} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* Step 1: 文本输入 */}

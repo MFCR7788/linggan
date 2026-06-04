@@ -12,6 +12,8 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useInspirations } from '@/hooks/use-inspiration';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
+import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 import {
   IMAGE_PRESETS,
   IMAGE_PALETTES,
@@ -46,6 +48,8 @@ function AIImageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { handoff, receive } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 8 个快捷预设（联动 ratio/style/palette）─────────
   const [selectedPresetId, setSelectedPresetId] = useState('xiaohongshu');
@@ -110,6 +114,19 @@ function AIImageContent() {
       setSelectedInspirations(new Set(ids));
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.prompt) setUserInput(h.prompt);
+    else if (h.text) setUserInput(h.text);
+    if (h.style && STYLE_OPTIONS.includes(h.style)) setSelectedStyle(h.style);
+    if (h.industry) {
+      const ind = findImagePreset(h.industry);
+      if (ind) handlePresetChange(h.industry);
+    }
+  }, [session]);
 
   useEffect(() => {
     if (inspirations) {
@@ -259,7 +276,15 @@ function AIImageContent() {
               source_platform: 'ai',
               media_urls: urls,
               tags: ['AI作品', 'AI图片', findImagePreset(selectedPresetId)?.label || ''],
+              workflow_session_id: workflowSessionId || undefined,
             }),
+          }).then(r => r.json()).then(data => {
+            if (isInWorkflow && data.success) {
+              completeCurrentStep(
+                { prompt: finalPrompt, imageUrl: urls[0], topic: selectedPresetId, style: selectedStyle },
+                data.data?.id
+              );
+            }
           }).catch(() => {});
         }
       } else {
@@ -349,6 +374,10 @@ function AIImageContent() {
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
       <TopNav title="AI 图片生成" showBack onBack={handleBack} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
         {/* 8 个快捷预设 */}

@@ -19,6 +19,8 @@ import {
   findIndustry,
 } from "@/lib/preset-templates";
 import { useContentHandoff } from "@/hooks/use-content-handoff";
+import { useWorkflowSession } from "@/hooks/use-workflow-session";
+import { WorkflowSessionBar } from "@/components/WorkflowSessionBar";
 
 const typeEmojis: Record<string, string> = {
   text: "📝",
@@ -90,7 +92,9 @@ const STYLE_CATEGORY_LABELS: Record<string, string> = {
 function AICopywritingContent() {
   const { showToast } = useToast();
   const router = useRouter();
-  const { handoff, receive } = useContentHandoff();
+  const { handoff, receive, searchParams } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 用户偏好持久化 ─────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -313,7 +317,6 @@ function AICopywritingContent() {
     const params = receive(['text', 'topic', 'inspirationId', 'industry', 'style']);
     if (params.text) setUserInput(params.text);
     if (params.topic) {
-      // topic 可能是文案类型 id
       if (COPYWRITING_TYPES.some(t => t.id === params.topic)) {
         setSelectedType(params.topic);
       }
@@ -329,6 +332,23 @@ function AICopywritingContent() {
       setSelectedStyle(params.style);
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.text) setUserInput(h.text);
+    else if (h.prompt) setUserInput(h.prompt);
+    if (h.topic && COPYWRITING_TYPES.some(t => t.id === h.topic)) {
+      setSelectedType(h.topic);
+    }
+    if (h.industry && findIndustry(h.industry)) {
+      setSelectedIndustry(h.industry);
+    }
+    if (h.style && COPYWRITING_STYLES.some(s => s.id === h.style)) {
+      setSelectedStyle(h.style);
+    }
+  }, [session]);
 
   // 应用上次设置
   useEffect(() => {
@@ -486,7 +506,15 @@ function AICopywritingContent() {
             original_text: content,
             source_platform: 'ai',
             tags: ['AI作品', selectedType === 'xiaohongshu' ? '小红书' : selectedType === 'wechat_article' ? '公众号' : '文案'],
+            workflow_session_id: workflowSessionId || undefined,
           }),
+        }).then(r => r.json()).then(data => {
+          if (isInWorkflow && data.success) {
+            completeCurrentStep(
+              { text: content.substring(0, 1000), topic: selectedType, style: selectedStyle, industry: selectedIndustry },
+              data.data?.id
+            );
+          }
         }).catch(() => {});
       }
     } catch (error) {
@@ -625,6 +653,10 @@ function AICopywritingContent() {
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 文案创作" showBack onBack={() => router.back()} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* 快捷设置 */}

@@ -256,3 +256,31 @@ export interface PaginatedResponse<T = any> {
     total_pages: number;
   };
 }
+
+// ─── Workflow Sessions ────────────────────────────────────
+
+export type WorkflowSessionStatus = 'active' | 'paused' | 'completed' | 'abandoned';
+
+export interface StepResult {
+  index: number;
+  completedAt: string;
+  outputContentId?: string;
+}
+
+export interface WorkflowSession {
+  id: string;
+  user_id: string;
+  combo_id: string;
+  account_type?: string;
+  title?: string;
+  current_step_index: number;
+  total_steps: number;
+  status: WorkflowSessionStatus;
+  step_results: StepResult[];
+  accumulated_handoff: Record<string, string>;
+  combo_snapshot: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  paused_at?: string;
+}

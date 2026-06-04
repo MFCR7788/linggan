@@ -16,6 +16,8 @@ import { Toast } from '@/components/Toast';
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from '@/lib/style-constants';
 import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
+import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -90,6 +92,8 @@ function AIVideoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { receive, handoff } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── Step 1: 确定方向 ──────────────────────────────────
 
@@ -172,6 +176,24 @@ function AIVideoContent() {
       setTopic(params.topic);
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.firstFrame) {
+      setFirstFrameUrl(h.firstFrame);
+      setFirstFrameTab('url');
+    } else if (h.imageUrl) {
+      setFirstFrameUrl(h.imageUrl);
+      setFirstFrameTab('url');
+    }
+    if (h.text) setTopic(h.text.slice(0, 300));
+    else if (h.topic) setTopic(h.topic);
+    if (h.style && stylePresets.some(([k]) => k === h.style)) {
+      setStylePreset(h.style);
+    }
+  }, [session]);
 
   useEffect(() => {
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
@@ -593,6 +615,15 @@ function AIVideoContent() {
         setMergedVideoUrl(data.data.videoUrl);
         setMergePhase('done');
         setToast({ message: '合并完成,已自动保存到灵感库', type: 'success' });
+        if (isInWorkflow) {
+          completeCurrentStep({
+            text: topic,
+            topic,
+            imageUrl: firstFrameUrl || '',
+            firstFrame: firstFrameUrl || '',
+            style: stylePreset,
+          }, undefined);
+        }
       } else {
         setMergeError(data.error || '合并失败');
         setMergePhase('error');
@@ -1628,6 +1659,10 @@ function AIVideoContent() {
   return (
     <div className="flex flex-col min-h-screen pb-24">
       <TopNav title="AI 视频生成" showBack onBack={() => router.push('/ai')} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* Step 导航 — 生成期间隐藏 */}

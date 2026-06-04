@@ -144,7 +144,7 @@ export const GET = withAuth(async ({ request, user }) => {
 // 创建灵感
 export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
-  const { type, title, original_text, summary, category_id, tags, source_url, source_platform, media_urls } = body;
+  const { type, title, original_text, summary, category_id, tags, source_url, source_platform, media_urls, workflow_session_id } = body;
 
   if (!type) {
     return createApiError('内容类型不能为空', 400);
@@ -205,6 +205,7 @@ export const POST = withAuth(async ({ request, user }) => {
       source_url: source_url || null,
       source_platform: source_platform || null,
       media_urls: media_urls || null,
+      workflow_session_id: workflow_session_id || null,
       status: 'active',
       analysis_status: 'completed',
     })

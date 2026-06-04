@@ -10,6 +10,8 @@ import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { ProtectedRoute } from '@/components';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
+import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
 interface GridCell {
   imageUrl: string;
@@ -25,6 +27,8 @@ function AdsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { receive } = useContentHandoff();
+  const workflowSessionId = searchParams.get('workflow_session_id') || undefined;
+  const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 表单 state ──────────────────────────────
   const [product, setProduct] = useState('');
@@ -33,15 +37,29 @@ function AdsContent() {
 
   // 接收 handoff（从生图页带过来）
   useEffect(() => {
-    const params = receive(['prompt', 'imageUrl']);
+    const params = receive(['prompt', 'imageUrl', 'topic', 'text']);
     if (params.prompt) {
-      // 自动用 prompt 的前几个字当 product 名
       setProduct(params.prompt.substring(0, 30));
+    }
+    if (params.topic && !params.prompt) {
+      setProduct(params.topic.substring(0, 30));
+    }
+    if (params.text) {
+      setProduct(params.text.substring(0, 30));
     }
     if (params.imageUrl) {
       setReferenceImage(params.imageUrl);
     }
   }, []);
+
+  // 工作流：从 session.accumulated_handoff 预填
+  useEffect(() => {
+    if (!session?.accumulated_handoff) return;
+    const h = session.accumulated_handoff as Record<string, string>;
+    if (h.topic) setProduct(h.topic.substring(0, 30));
+    else if (h.text) setProduct(h.text.substring(0, 30));
+    if (h.imageUrl) setReferenceImage(h.imageUrl);
+  }, [session]);
 
   // ─── 生成 state ──────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -125,6 +143,27 @@ function AdsContent() {
           message: `已生成 ${json.data.successCount}/9 张封面`,
           type: json.data.successCount === 9 ? 'success' : 'error',
         });
+        // 工作流：自动保存到灵感库并推进
+        if (isInWorkflow && json.data.cells?.length > 0) {
+          const firstCell = json.data.cells[0];
+          fetch('/api/inspiration', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'image',
+              title: `${product || 'ads'} 9宫格 ${firstCell.title || ''}`.substring(0, 100),
+              original_text: product,
+              source_platform: 'ai',
+              media_urls: json.data.cells.map((c: GridCell) => c.imageUrl).filter(Boolean),
+              tags: ['AI作品', '9宫格', '广告素材'],
+              workflow_session_id: workflowSessionId || undefined,
+            }),
+          }).then(r => r.json()).then(data => {
+            if (data.success) {
+              completeCurrentStep({ topic: product, text: product, imageUrl: firstCell.imageUrl }, data.data?.id);
+            }
+          }).catch(() => {});
+        }
       } else {
         setError(json.error || '生成失败');
         setProgressText('');
@@ -214,6 +253,10 @@ function AdsContent() {
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
       <TopNav title="朋友圈广告 9 宫格" showBack onBack={() => router.push('/ai')} />
+
+      {isInWorkflow && session && (
+        <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
+      )}
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
         {/* 顶部说明 */}

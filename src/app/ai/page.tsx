@@ -14,7 +14,8 @@ import { CreditsWarningBanner } from "@/components/CreditsWarningBanner";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useAccountType } from "@/hooks/use-account-type";
 import { getRecommendations } from "@/lib/account-presets";
-import { buildHandoffUrl } from "@/hooks/use-content-handoff";
+import { useWorkflowSessions, useWorkflowSession } from "@/hooks/use-workflow-session";
+import { WorkflowSessionCard } from "@/components/WorkflowSessionCard";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
 
 const quickActions = [
@@ -40,6 +41,12 @@ function AICreationContent() {
   const router = useRouter();
   const { accountType, preset } = useAccountType();
   const recommendations = getRecommendations(accountType);
+
+  // 工作流会话
+  const { createSession, isCreating } = useWorkflowSession(null);
+  const { data: activeSessions = [] } = useWorkflowSessions({ status: 'active' });
+  const { data: pausedSessions = [] } = useWorkflowSessions({ status: 'paused' });
+  const inProgressSessions = [...activeSessions, ...pausedSessions];
 
   // 新用户首次进入:弹账号类型引导(localStorage 记录 'lingji_onboarding_done' 避免重复弹)
   useEffect(() => {
@@ -111,6 +118,33 @@ function AICreationContent() {
           </div>
         </div>
 
+        {/* 继续创作 — 进行中的工作流会话 */}
+        {inProgressSessions.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles size={14} color="#FBBF24" />
+              <p style={{ color: '#9CA3AF', fontSize: 12 }}>继续创作</p>
+            </div>
+            <div className="space-y-2 mb-3">
+              {inProgressSessions.slice(0, 3).map((session) => (
+                <WorkflowSessionCard
+                  key={session.id}
+                  session={session}
+                  onResume={() => {
+                    // Active sessions can navigate directly; paused need resume API
+                    if (session.status === 'active') return;
+                    fetch(`/api/workflow/sessions/${session.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'active' }),
+                    }).catch(() => {});
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 推荐组合 — 根据账号类型智能推荐 3-4 套视频组合 + 4 步流水线 */}
         {recommendations.length > 0 && (
           <div>
@@ -181,18 +215,16 @@ function AICreationContent() {
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        const firstStep = combo.steps[0];
-                        const url = buildHandoffUrl(firstStep.entry, combo.prefills || {});
-                        router.push(url);
-                      }}
+                      onClick={() => createSession(combo, { accountType })}
+                      disabled={isCreating}
                       className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95"
                       style={{
                         background: 'linear-gradient(135deg, #F472B6, #8B5CF6)',
                         color: '#FFFFFF',
+                        opacity: isCreating ? 0.6 : 1,
                       }}
                     >
-                      开始 <ArrowRight size={12} />
+                      {isCreating ? '创建中...' : '开始'} <ArrowRight size={12} />
                     </button>
                   </div>
                 </GlassCard>
