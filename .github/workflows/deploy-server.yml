@@ -18,6 +18,8 @@ jobs:
           script: |
             cd /var/www/lingji
             git pull origin main
+            # 同步 env var（运行时敏感配置）
+            sed -i 's/^VOLC_TTS_ACCESS_TOKEN=.*/VOLC_TTS_ACCESS_TOKEN=ark-a8b5cb61-6e6d-4ceb-9293-35e4ee958fba-40263/' .env.local
             npm ci
             npm run build
             pm2 restart lingji --update-env
