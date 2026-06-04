@@ -65,33 +65,55 @@ export const GET = withAuth(async ({ user }) => {
   return createApiResponse(userProfile);
 });
 
+// 允许更新的字段白名单
+const ALLOWED_UPDATE_FIELDS = ['username', 'avatar_url'] as const;
+
 // 更新用户信息
 export const PUT = withAuth(async ({ request, user }) => {
-  // 在开发模式下，直接返回成功
-  if (process.env.NODE_ENV === "development") {
-    const updateData = await request.json();
-    const mockUser = {
-      id: user.id,
-      email: user.email,
-      username: updateData.username || user.user_metadata?.username || user.email?.split('@')[0],
-      phone: user.user_metadata?.phone,
-      avatar_url: updateData.avatar_url || null,
-      plan: 'free',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      ...updateData
-    };
-    return createApiResponse(mockUser, '用户信息更新成功');
+  const body = await request.json();
+
+  // 白名单过滤：只允许更新安全字段
+  const updateData: Record<string, unknown> = {};
+  for (const field of ALLOWED_UPDATE_FIELDS) {
+    if (body[field] !== undefined) {
+      updateData[field] = body[field];
+    }
   }
 
-  const updateData = await request.json();
-  const supabase = createSupabaseServerClient();
+  // 校验 username
+  if (updateData.username !== undefined) {
+    if (typeof updateData.username !== 'string') {
+      return createApiError('username 必须是字符串', 400);
+    }
+    const trimmed = (updateData.username as string).trim();
+    if (trimmed.length === 0 || trimmed.length > 30) {
+      return createApiError('username 长度 1-30 字符', 400);
+    }
+    updateData.username = trimmed;
+  }
 
+  // 校验 avatar_url
+  if (updateData.avatar_url !== undefined) {
+    if (updateData.avatar_url !== null && typeof updateData.avatar_url !== 'string') {
+      return createApiError('avatar_url 必须是字符串或 null', 400);
+    }
+    if (typeof updateData.avatar_url === 'string' && (updateData.avatar_url as string).length > 500) {
+      return createApiError('avatar_url 超过 500 字符', 400);
+    }
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return createApiError('无可更新字段(允许: username, avatar_url)', 400);
+  }
+
+  updateData.updated_at = new Date().toISOString();
+
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('users')
     .update(updateData)
     .eq('id', user.id)
-    .select()
+    .select('id, phone, username, avatar_url, plan, created_at, updated_at')
     .single();
 
   if (error) {

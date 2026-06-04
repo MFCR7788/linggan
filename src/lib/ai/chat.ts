@@ -2,6 +2,17 @@
 
 import type { ChatMessage, ChatOptions } from './types';
 
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ====== DeepSeek API ======
 
 export async function callDeepSeek(
@@ -13,7 +24,7 @@ export async function callDeepSeek(
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -37,7 +48,11 @@ export async function callDeepSeek(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`DeepSeek returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }
 
 // ====== 通义千问 / DashScope API ======
@@ -59,7 +74,7 @@ export async function callQwen(
     modelName = 'qwen-plus';
   }
 
-  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -80,7 +95,11 @@ export async function callQwen(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`DashScope returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }
 
 // ====== Doubao/ARK API ======
@@ -95,7 +114,7 @@ export async function callDoubaoChat(
     throw new Error('DOUBAO_API_KEY is not configured');
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,5 +135,9 @@ export async function callDoubaoChat(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`Doubao returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }

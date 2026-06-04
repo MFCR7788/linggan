@@ -2,6 +2,18 @@
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
 
+// 通用 fetch 超时包装
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ====== Types ======
 
 interface ChatMessage {
@@ -52,7 +64,7 @@ export async function callDeepSeek(
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -67,7 +79,7 @@ export async function callDeepSeek(
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
     }),
-  });
+  }, 90000);
 
   if (!response.ok) {
     const error = await response.text();
@@ -76,7 +88,11 @@ export async function callDeepSeek(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`DeepSeek returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }
 
 // ====== 通义千问 / DashScope API ======
@@ -100,7 +116,7 @@ export async function callQwen(
     modelName = 'qwen-plus';
   }
 
-  const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -112,7 +128,7 @@ export async function callQwen(
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
     }),
-  });
+  }, 90000);
 
   if (!response.ok) {
     const error = await response.text();
@@ -121,7 +137,11 @@ export async function callQwen(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`DashScope returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }
 
 // ====== Doubao/ARK API ======
@@ -136,7 +156,7 @@ export async function callDoubaoChat(
     throw new Error('DOUBAO_API_KEY is not configured');
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -148,7 +168,7 @@ export async function callDoubaoChat(
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
     }),
-  });
+  }, 120000);
 
   if (!response.ok) {
     const error = await response.text();
@@ -157,7 +177,11 @@ export async function callDoubaoChat(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`Doubao returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return content;
 }
 
 // ====== Doubao Vision API ======
@@ -332,12 +356,7 @@ export { type VideoProvider, type VideoModelConfig, type QualityTier, QUALITY_TI
 
 // ====== HappyHorse 视频生成（百炼 DashScope） ======
 
-const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY;
-if (!HAPPYHORSE_API_KEY && process.env.NODE_ENV === 'production') {
-  console.warn('[HappyHorse] HAPPYHORSE_API_KEY 未配置, 视频生成相关接口将不可用');
-}
 const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
-
 const DOUBAO_BASE_URL = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
 
 export async function submitVideoTask(
@@ -354,7 +373,7 @@ export async function submitVideoTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -408,7 +427,7 @@ export async function submitI2VTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -661,7 +680,7 @@ export async function getVideoTaskStatus(
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
     const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
+      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
     });
 
     if (!response.ok) {
@@ -704,7 +723,7 @@ export async function submitDigitalHumanTask(params: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -742,7 +761,7 @@ export async function getDigitalHumanTaskStatus(
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
     const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
+      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
     });
 
     if (!response.ok) {
@@ -901,7 +920,7 @@ async function submitDashScopeVideoTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({ model: config.model, input, parameters }),
@@ -1098,7 +1117,7 @@ export async function generateVideo(prompt: string, duration: number = 5) {
   if (result.taskId) {
     return { videoUrl: null, prompt, duration, taskId: result.taskId, status: 'queued' };
   }
-  return { videoUrl: `https://picsum.photos/seed/${Date.now()}/800/600`, prompt, duration };
+  throw new Error(result.message || '视频生成任务提交失败');
 }
 
 // ====== AI 总结灵感内容 ======
@@ -1223,13 +1242,6 @@ export async function logAiUsage(
     const supabase = createAdminClient();
     const month = new Date().toISOString().substring(0, 7);
 
-    const { data: existing } = await supabase
-      .from('usage_records')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('month', month)
-      .single();
-
     const fieldMap: Record<AiTaskType, string> = {
       ai_summary: 'ai_summary_count',
       copywriting: 'ai_writing_count',
@@ -1241,28 +1253,49 @@ export async function logAiUsage(
       video_merge: 'video_count',
     };
 
-    if (existing) {
-      const field = fieldMap[taskType];
-      await supabase
+    const field = fieldMap[taskType];
+
+    // 尝试原子 RPC 累加
+    const { error: rpcErr } = await supabase.rpc('increment_usage_field', {
+      p_user_id: userId,
+      p_month: month,
+      p_field: field,
+      p_delta: 1,
+    });
+
+    if (rpcErr) {
+      // 降级：两步操作 + CAS 守卫（乐观锁）
+      const { data: existing } = await supabase
         .from('usage_records')
-        .update({
-          [field]: (existing as any)[field] + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase.from('usage_records').insert({
-        user_id: userId,
-        month,
-        ai_summary_count: taskType === 'ai_summary' ? 1 : 0,
-        ai_writing_count: taskType === 'copywriting' ? 1 : 0,
-        image_count: taskType === 'image' ? 1 : 0,
-        video_count: taskType === 'video' ? 1 : 0,
-        link_parse_count: 0,
-        video_minutes: 0,
-        audio_minutes: 0,
-        storage_used_mb: 0,
-      });
+        .select('id')
+        .eq('user_id', userId)
+        .eq('month', month)
+        .maybeSingle();
+
+      if (existing) {
+        const prevValue = (existing as any)[field] || 0;
+        await supabase
+          .from('usage_records')
+          .update({
+            [field]: prevValue + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id)
+          .eq(field, prevValue); // CAS guard
+      } else {
+        await supabase.from('usage_records').insert({
+          user_id: userId,
+          month,
+          ai_summary_count: taskType === 'ai_summary' ? 1 : 0,
+          ai_writing_count: taskType === 'copywriting' ? 1 : 0,
+          image_count: taskType === 'image' ? 1 : 0,
+          video_count: taskType === 'video' ? 1 : 0,
+          link_parse_count: 0,
+          video_minutes: 0,
+          audio_minutes: 0,
+          storage_used_mb: 0,
+        });
+      }
     }
   } catch (e) {
     console.error('Failed to log AI usage:', e);
@@ -1369,62 +1402,104 @@ export async function fetchWeather(city: string): Promise<WeatherData | null> {
     const url = `http://wttr.in/${encodedCity}?format=j1`;
 
     const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY
-      || process.env.http_proxy || process.env.https_proxy
-      || 'http://127.0.0.1:6767'; // 兜底代理
+      || process.env.http_proxy || process.env.https_proxy;
 
-    // 用原生 http 模块 + 代理
+    if (!proxyUrl) {
+      // 无代理时用原生 https 直连
+      const https = require('https');
+      const fetchDirect = (requestUrl: string): Promise<{ ok: boolean; json: () => Promise<any> }> =>
+        new Promise((resolve, reject) => {
+          const req = https.get(requestUrl, {
+            headers: { 'User-Agent': WEATHER_USER_AGENT, 'Accept': 'application/json' },
+            timeout: 15000,
+          }, (res: any) => {
+            let body = '';
+            res.on('data', (chunk: string) => { body += chunk; });
+            res.on('end', () => {
+              try {
+                resolve({
+                  ok: res.statusCode >= 200 && res.statusCode < 400,
+                  json: () => Promise.resolve(JSON.parse(body)),
+                });
+              } catch {
+                resolve({ ok: false, json: () => Promise.resolve(null) });
+              }
+            });
+          });
+          req.on('timeout', () => { req.destroy(); reject(new Error('Weather request timeout')); });
+          req.on('error', reject);
+        });
+
+      const res = await fetchDirect(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return parseWeatherResponse(city.trim(), data);
+    }
+
+    // 有代理时使用代理
     const http = require('http');
     const { HttpsProxyAgent } = require('https-proxy-agent');
     const agent = new HttpsProxyAgent(proxyUrl);
     console.log('[Weather] 使用代理:', proxyUrl);
 
-    // http.get 封装成 Promise
     const fetchWithAgent = (requestUrl: string): Promise<{ ok: boolean; json: () => Promise<any> }> =>
       new Promise((resolve, reject) => {
-        http.get(requestUrl, { agent, headers: { 'User-Agent': WEATHER_USER_AGENT, 'Accept': 'application/json' } }, (res: any) => {
+        const req = http.get(requestUrl, {
+          agent,
+          headers: { 'User-Agent': WEATHER_USER_AGENT, 'Accept': 'application/json' },
+          timeout: 15000,
+        }, (res: any) => {
           let body = '';
           res.on('data', (chunk: string) => { body += chunk; });
           res.on('end', () => {
-            resolve({
-              ok: res.statusCode >= 200 && res.statusCode < 400,
-              json: () => Promise.resolve(JSON.parse(body)),
-            });
+            try {
+              resolve({
+                ok: res.statusCode >= 200 && res.statusCode < 400,
+                json: () => Promise.resolve(JSON.parse(body)),
+              });
+            } catch {
+              resolve({ ok: false, json: () => Promise.resolve(null) });
+            }
           });
-        }).on('error', reject);
+        });
+        req.on('timeout', () => { req.destroy(); reject(new Error('Weather request timeout')); });
+        req.on('error', reject);
       });
 
     const res = await fetchWithAgent(url);
     if (!res.ok) return null;
-
     const data = await res.json();
-    const current = data.current_condition?.[0];
-    const weather = data.weather;
-
-    if (!current) return null;
-
-    return {
-      city: city.trim(),
-      current: {
-        temp: Number(current.temp_C),
-        feelsLike: Number(current.FeelsLikeC),
-        desc: current.weatherDesc?.[0]?.value || '未知',
-        humidity: Number(current.humidity),
-        windSpeed: Number(current.windspeedKmph),
-        cloudCover: Number(current.cloudcover),
-      },
-      forecast: (weather || []).slice(0, 3).map((day: any) => ({
-        date: day.date,
-        maxTemp: Number(day.maxtempC),
-        minTemp: Number(day.mintempC),
-        desc: day.hourly?.[4]?.weatherDesc?.[0]?.value || '',
-        sunrise: day.astronomy?.[0]?.sunrise || '',
-        sunset: day.astronomy?.[0]?.sunset || '',
-      })),
-    };
+    return parseWeatherResponse(city.trim(), data);
   } catch (e) {
     console.error('[Weather] 获取天气失败:', e instanceof Error ? e.message : e);
     return null;
   }
+}
+
+function parseWeatherResponse(city: string, data: any): WeatherData | null {
+  const current = data.current_condition?.[0];
+  const weather = data.weather;
+  if (!current) return null;
+
+  return {
+    city,
+    current: {
+      temp: Number(current.temp_C),
+      feelsLike: Number(current.FeelsLikeC),
+      desc: current.weatherDesc?.[0]?.value || '未知',
+      humidity: Number(current.humidity),
+      windSpeed: Number(current.windspeedKmph),
+      cloudCover: Number(current.cloudcover),
+    },
+    forecast: (weather || []).slice(0, 3).map((day: any) => ({
+      date: day.date,
+      maxTemp: Number(day.maxtempC),
+      minTemp: Number(day.mintempC),
+      desc: day.hourly?.[4]?.weatherDesc?.[0]?.value || '',
+      sunrise: day.astronomy?.[0]?.sunrise || '',
+      sunset: day.astronomy?.[0]?.sunset || '',
+    })),
+  };
 }
 
 // ====== 火山引擎 TTS 声音复刻 (Voice Cloning) ======
@@ -1711,7 +1786,6 @@ function extractTags(text: string): string[] {
 // 计费: 训练免费,生成按 $0.0667/sec (Digital Twin) 或 $0.05/sec (Photo Avatar)
 
 const HEYGEN_BASE = 'https://api.heygen.com';
-const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
 export type AvatarTrainingStatus = 'pending' | 'training' | 'ready' | 'failed';
 
@@ -1736,7 +1810,7 @@ export async function trainAvatar(params: {
   name: string;
   lookalike?: boolean; // true=Digital Twin(视频), false=Photo Avatar(单图)
 }): Promise<AvatarTrainingResult> {
-  if (!HEYGEN_API_KEY) {
+  if (!process.env.HEYGEN_API_KEY) {
     return { ok: false, avatarId: null, status: 'failed', error: 'HEYGEN_API_KEY 未配置,数字分身功能不可用' };
   }
 
@@ -1747,7 +1821,7 @@ export async function trainAvatar(params: {
     const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': HEYGEN_API_KEY,
+        'X-Api-Key': process.env.HEYGEN_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -1782,13 +1856,13 @@ export async function trainAvatar(params: {
 
 /** 查询数字分身训练状态 */
 export async function getAvatarTrainingStatus(avatarId: string): Promise<AvatarTrainingStatusResult> {
-  if (!HEYGEN_API_KEY) {
+  if (!process.env.HEYGEN_API_KEY) {
     return { avatarId, status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
     const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike/${avatarId}`, {
-      headers: { 'X-Api-Key': HEYGEN_API_KEY },
+      headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY },
     });
 
     if (!response.ok) {
@@ -1823,7 +1897,7 @@ export async function generateAvatarVideo(params: {
   voiceId?: string; // 可选 TTS 音色
   backgroundColor?: string;
 }): Promise<{ ok: boolean; videoId?: string; videoUrl?: string; error?: string }> {
-  if (!HEYGEN_API_KEY) {
+  if (!process.env.HEYGEN_API_KEY) {
     return { ok: false, error: 'HEYGEN_API_KEY 未配置' };
   }
 
@@ -1832,7 +1906,7 @@ export async function generateAvatarVideo(params: {
     const response = await fetch(`${HEYGEN_BASE}/v1/video/generate`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': HEYGEN_API_KEY,
+        'X-Api-Key': process.env.HEYGEN_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -1878,13 +1952,13 @@ export async function getAvatarVideoStatus(videoId: string): Promise<{
   videoUrl?: string;
   error?: string;
 }> {
-  if (!HEYGEN_API_KEY) {
+  if (!process.env.HEYGEN_API_KEY) {
     return { status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
     const response = await fetch(`${HEYGEN_BASE}/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
-      headers: { 'X-Api-Key': HEYGEN_API_KEY },
+      headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY },
     });
     if (!response.ok) return { status: 'failed', error: '查询失败' };
 

@@ -11,6 +11,8 @@ const protectedPaths = [
   '/schedule',
   '/notification',
   '/profile',
+  '/publish',
+  '/insights',
 ];
 
 const publicPaths = ['/login', '/api/auth'];
@@ -35,10 +37,32 @@ export async function middleware(request: NextRequest) {
   }
 
   // 用 Supabase Auth 验证 session(兼容 dev cookie 兜底,仅限开发)
+  // TODO(prod): 部署生产前删除整个 dev auth 快捷路径（第 40-63 行），
+  // 仅保留下方的 Supabase Auth 验证。dev cookie 绕过会导致任意用户模拟。
   const isDev = process.env.NODE_ENV !== 'production';
-  const devUserId = request.cookies.get('dev_user_id')?.value;
-  if (isDev && devUserId) {
-    return NextResponse.next();
+  if (isDev) {
+    const devAuthSecret = process.env.DEV_AUTH_SECRET;
+    if (devAuthSecret) {
+      // 配置了 DEV_AUTH_SECRET 时验证 cookie 中的密钥
+      const cookieSecret = request.cookies.get('dev_auth_secret')?.value;
+      if (cookieSecret === devAuthSecret) {
+        const devUserId = request.cookies.get('dev_user_id')?.value;
+        if (devUserId) return NextResponse.next();
+      }
+    } else {
+      // 未配置时仅允许 localhost
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || request.headers.get('x-real-ip')
+        || '';
+      const isLocalhost = !clientIp ||
+        clientIp === '127.0.0.1' ||
+        clientIp === '::1' ||
+        clientIp === 'localhost';
+      if (isLocalhost) {
+        const devUserId = request.cookies.get('dev_user_id')?.value;
+        if (devUserId) return NextResponse.next();
+      }
+    }
   }
 
   const response = NextResponse.next();

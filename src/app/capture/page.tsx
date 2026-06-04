@@ -373,6 +373,7 @@ function CaptureContent() {
   // ====== 发送消息 ======
 
   const sendMessage = async () => {
+    if (isAnalyzing) return; // 防止重复提交
     const text = inputText.trim();
     const files = attachedFiles;
     if (!text && files.length === 0) return;
@@ -554,7 +555,9 @@ function CaptureContent() {
             tags: ['AI对话'],
             source_url: isLink ? (text.startsWith('http') ? text : `https://${text}`) : undefined,
           }),
-        }).catch(() => {});
+        }).catch((e) => {
+          console.error('自动保存灵感失败:', e);
+        });
       }
     } catch {
       const errorMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', content: '抱歉，处理失败，请重试。', timestamp: new Date() };

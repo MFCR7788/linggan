@@ -80,8 +80,8 @@ const menuItems = [
 
 function ProfileContent() {
   const router = useRouter();
-  const { data: user } = useUser();
-  const { data: stats } = useProfileStats();
+  const { data: user, isLoading: userLoading, error: userError } = useUser();
+  const { data: stats, isLoading: statsLoading } = useProfileStats();
   const { data: billing } = useBillingSummary();
 
   const handleNavigate = (page: PageKey, params?: string) => {
@@ -142,6 +142,17 @@ function ProfileContent() {
       />
 
       <div className="flex-1 px-4 pt-4 space-y-4">
+        {userLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        ) : userError ? (
+          <GlassCard className="!p-5 text-center">
+            <p style={{ color: '#FCA5A5', fontSize: 14 }}>加载用户信息失败</p>
+            <p style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{(userError as Error)?.message}</p>
+          </GlassCard>
+        ) : (
+          <>
         {/* 头像 + 名字 + 真实订阅档位 */}
         <GlassCard className="!p-5">
           <div className="flex items-center gap-4">
@@ -259,6 +270,8 @@ function ProfileContent() {
         >
           <LogOut size={16} /> 退出登录
         </button>
+          </>
+        )}
       </div>
 
       <BottomNav activePage="profile" onNavigate={handleNavigate} />

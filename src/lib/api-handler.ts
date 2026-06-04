@@ -78,6 +78,11 @@ export function withAuth(
         return options.onError(error, request);
       }
 
+      // JSON 解析失败返回 400 而非 500
+      if (error instanceof SyntaxError) {
+        return createApiError("请求格式错误，请检查 JSON 数据", 400);
+      }
+
       return createApiError("服务器错误", 500);
     }
   };
@@ -122,6 +127,10 @@ export function withHandler(
 
       if (options?.onError) {
         return options.onError(error, request);
+      }
+
+      if (error instanceof SyntaxError) {
+        return createApiError("请求格式错误，请检查 JSON 数据", 400);
       }
 
       return createApiError("服务器错误", 500);

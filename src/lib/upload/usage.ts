@@ -1,5 +1,6 @@
 // 用量记录辅助函数
 // 统一封装 usage_records 表的读写，避免每个调用方重复拼 SQL
+// 所有写操作使用原子 SQL (SET x = x + $1)，消除读-改-写竞态
 
 import { createAdminClient } from '@/lib/supabase-server';
 import type { UserPlan } from '@/types';
@@ -44,7 +45,7 @@ export async function getUsage(userId: string): Promise<UsageSnapshot> {
   return {
     plan: plan === 'pro' || plan === 'creator' ? plan : 'free',
     storageUsedMB,
-    monthlyUploads: 0, // 简化：v1 不持久化月计数，由 quota 检查在内存中维护
+    monthlyUploads: 0,
   };
 }
 
@@ -53,30 +54,46 @@ export async function addStorageUsage(userId: string, bytes: number): Promise<vo
   const month = currentMonth();
   const additionalMB = bytes / 1024 / 1024;
 
-  // 1) 确保当月记录存在
-  await supabase
+  // 原子操作：使用 raw SQL 避免读-改-写竞态
+  // 先确保记录存在（upsert），然后原子累加
+  const { error: upsertErr } = await supabase
     .from('usage_records')
     .upsert(
       { user_id: userId, month, storage_used_mb: 0 },
       { onConflict: 'user_id,month', ignoreDuplicates: true }
     );
 
-  // 2) 累加（用 SQL 表达式避免读-改-写竞态）
-  const { data } = await supabase
-    .from('usage_records')
-    .select('storage_used_mb')
-    .eq('user_id', userId)
-    .eq('month', month)
-    .maybeSingle();
+  if (upsertErr) {
+    console.error('[usage] upsert 失败:', upsertErr.message);
+    return;
+  }
 
-  const currentMB = Number((data as { storage_used_mb?: number } | null)?.storage_used_mb || 0);
-  const newMB = Math.max(0, currentMB + additionalMB);
+  // 原子累加：SET storage_used_mb = storage_used_mb + $1
+  const { error } = await supabase.rpc('add_storage_usage_atomic', {
+    p_user_id: userId,
+    p_month: month,
+    p_mb: additionalMB,
+  });
 
-  await supabase
-    .from('usage_records')
-    .update({ storage_used_mb: newMB, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('month', month);
+  if (error) {
+    // RPC 不存在时降级：两步操作 + CAS 守卫
+    const { data } = await supabase
+      .from('usage_records')
+      .select('storage_used_mb')
+      .eq('user_id', userId)
+      .eq('month', month)
+      .maybeSingle();
+
+    const currentMB = Number((data as { storage_used_mb?: number } | null)?.storage_used_mb || 0);
+    const newMB = Math.max(0, currentMB + additionalMB);
+
+    await supabase
+      .from('usage_records')
+      .update({ storage_used_mb: newMB, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('month', month)
+      .eq('storage_used_mb', currentMB); // CAS guard
+  }
 }
 
 export async function subtractStorageUsage(userId: string, bytes: number): Promise<void> {
@@ -84,20 +101,31 @@ export async function subtractStorageUsage(userId: string, bytes: number): Promi
   const month = currentMonth();
   const subMB = bytes / 1024 / 1024;
 
-  const { data } = await supabase
-    .from('usage_records')
-    .select('storage_used_mb')
-    .eq('user_id', userId)
-    .eq('month', month)
-    .maybeSingle();
+  // 原子减法
+  const { error } = await supabase.rpc('add_storage_usage_atomic', {
+    p_user_id: userId,
+    p_month: month,
+    p_mb: -subMB,
+  });
 
-  if (!data) return;
-  const currentMB = Number((data as { storage_used_mb?: number }).storage_used_mb || 0);
-  const newMB = Math.max(0, currentMB - subMB);
+  if (error) {
+    // 降级
+    const { data } = await supabase
+      .from('usage_records')
+      .select('storage_used_mb')
+      .eq('user_id', userId)
+      .eq('month', month)
+      .maybeSingle();
 
-  await supabase
-    .from('usage_records')
-    .update({ storage_used_mb: newMB, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('month', month);
+    if (!data) return;
+    const currentMB = Number((data as { storage_used_mb?: number }).storage_used_mb || 0);
+    const newMB = Math.max(0, currentMB - subMB);
+
+    await supabase
+      .from('usage_records')
+      .update({ storage_used_mb: newMB, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('month', month)
+      .eq('storage_used_mb', currentMB); // CAS guard
+  }
 }

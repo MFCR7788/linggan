@@ -149,10 +149,27 @@ export const POST = withAuth(async ({ request, user }) => {
   if (!type) {
     return createApiError('内容类型不能为空', 400);
   }
+  if (title && typeof title === 'string' && title.length > 200) {
+    return createApiError('标题不能超过200个字符', 400);
+  }
+  if (original_text && typeof original_text === 'string' && original_text.length > 50000) {
+    return createApiError('原文内容过长', 400);
+  }
+  // 校验 tags 数组
+  if (tags !== undefined && (!Array.isArray(tags) || tags.some(t => typeof t !== 'string' || t.trim().length === 0 || t.length > 30))) {
+    return createApiError('标签格式无效', 400);
+  }
+  // 校验 media_urls 数组
+  if (media_urls !== undefined && (!Array.isArray(media_urls) || media_urls.some(u => typeof u !== 'string' || u.length > 500))) {
+    return createApiError('媒体链接格式无效', 400);
+  }
 
   // 校验并映射类型：数据库 CHECK 约束只允许 'text','voice','image','video','link'
   const VALID_TYPES = ['text', 'voice', 'image', 'video', 'link'];
-  const normalizedType = VALID_TYPES.includes(type) ? type : 'text';
+  if (!VALID_TYPES.includes(type)) {
+    return createApiError(`无效的内容类型: ${type}，允许: ${VALID_TYPES.join(', ')}`, 400);
+  }
+  const normalizedType = type;
 
   const supabase = createAdminClient();
 

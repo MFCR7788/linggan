@@ -52,7 +52,7 @@ export const GET = withAuth(async ({ user }) => {
         }
       }
       result.push({
-        id: db ? db.id : String(Date.now() + basic.sort_order),
+        id: db ? db.id : crypto.randomUUID(),
         name: basic.name,
         icon: basic.icon,
         color: basic.color,
@@ -110,15 +110,22 @@ export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
   const { name, icon, color, is_default, sort_order } = body;
 
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return createApiError('分类名称不能为空', 400);
+  }
+  if (name.trim().length > 30) {
+    return createApiError('分类名称不能超过30个字符', 400);
+  }
+
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from('categories')
     .insert({
       user_id: user.id,
-      name,
-      icon,
-      color,
+      name: name.trim(),
+      icon: icon || '📁',
+      color: color || '#6B7280',
       is_default: is_default || false,
       sort_order: sort_order || 0
     })

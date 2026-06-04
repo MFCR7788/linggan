@@ -60,12 +60,26 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError('该关键词已存在', 409);
   }
 
+  // 校验 platforms
+  const validPlatforms = ['weibo', 'douyin', 'xiaohongshu', 'bilibili', 'zhihu', 'baidu', 'toutiao'];
+  const safePlatforms = Array.isArray(platforms)
+    ? platforms.filter((p: any) => typeof p === 'string' && validPlatforms.includes(p))
+    : [];
+
+  // 校验 frequency
+  const validFrequencies = ['realtime', 'hourly', 'daily', 'weekly'];
+  const safeFrequency = validFrequencies.includes(frequency) ? frequency : 'daily';
+
+  // 校验 importance_threshold
+  const rawThreshold = Number(importance_threshold);
+  const safeThreshold = isNaN(rawThreshold) ? 50 : Math.min(100, Math.max(0, rawThreshold));
+
   const insertData: Record<string, any> = {
     user_id: user.id,
     keyword: keyword.trim(),
-    platforms: platforms || [],
-    frequency: frequency || 'daily',
-    importance_threshold: importance_threshold || 50,
+    platforms: safePlatforms,
+    frequency: safeFrequency,
+    importance_threshold: safeThreshold,
     is_active: true,
   };
   if (category) insertData.category = category;

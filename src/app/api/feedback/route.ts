@@ -29,10 +29,10 @@ export const POST = withAuth(async ({ request, user }) => {
     });
 
     if (error) {
-      console.error('[Feedback] 写入失败:', error.message);
-      // 即使写入失败，也返回成功（用户体验优先）
-      // 同时输出到日志供后续排查
-      console.log('[Feedback] 降级日志:', JSON.stringify({ user_id: user.id, type: feedbackType, content: content.trim(), contact }));
+      console.error('[Feedback] 写入失败:', error.message, error.code, error.details);
+      // 降级：输出完整日志供后续人工补录
+      console.log('[Feedback] 降级日志(写入DB失败,需人工补录):', JSON.stringify({ user_id: user.id, type: feedbackType, content: content.trim(), contact }));
+      return createApiError('提交失败，请稍后重试', 500);
     }
 
     return createApiResponse(null, '感谢您的反馈！');

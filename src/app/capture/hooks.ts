@@ -70,7 +70,10 @@ export function useSessionManager() {
         setCurrentSessionId(session.id);
       }
       return session;
-    } catch { return null; }
+    } catch (e) {
+      console.error('创建会话失败:', e);
+      return null;
+    }
   };
 
   const saveMessages = async (sessionId: string, msgs: any[]) => {
@@ -81,7 +84,9 @@ export function useSessionManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save_messages', session_id: sessionId, messages: msgs }),
       });
-    } catch {}
+    } catch (e) {
+      console.error('保存消息失败:', e);
+    }
   };
 
   const switchSession = (session: ChatSession, loadFn: (id: string) => void) => {
@@ -104,7 +109,9 @@ export function useSessionManager() {
           setCurrentSessionId(null);
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error('删除会话失败:', e);
+    }
   };
 
   const updateSessionTitle = async (sessionId: string, title: string) => {
@@ -116,7 +123,9 @@ export function useSessionManager() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'update_title', session_id: sessionId, title }),
       });
-    } catch {}
+    } catch (e) {
+      console.error('更新会话标题失败:', e);
+    }
   };
 
   return {

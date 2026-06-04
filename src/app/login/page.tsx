@@ -20,6 +20,7 @@ function LoginContent() {
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [isLocalhost, setIsLocalhost] = useState(false);
   const [captchaOpen, setCaptchaOpen] = useState(false);
   const router = useRouter();
@@ -70,8 +71,9 @@ function LoginContent() {
       }
 
       const msg = data.message || '验证码已发送';
-      setError(data.code ? `${msg}（开发码: ${data.code}）` : msg);
-      setTimeout(() => setError(""), 3000);
+      setSuccessMsg(data.code ? `${msg}（开发码: ${data.code}）` : msg);
+      setError("");
+      setTimeout(() => setSuccessMsg(""), 3000);
       setCountdown(60);
     } catch (err) {
       setError(err instanceof Error ? err.message : "发送验证码失败");
@@ -225,6 +227,11 @@ function LoginContent() {
           ))}
         </div>
 
+        {successMsg && (
+          <div className="mb-4 p-3 rounded-lg" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}>
+            <p style={{ color: "#22C55E", fontSize: 12 }}>{successMsg}</p>
+          </div>
+        )}
         {error && (
           <div className="mb-4 p-3 rounded-lg" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}>
             <p style={{ color: "#EF4444", fontSize: 12 }}>{error}</p>

@@ -59,12 +59,28 @@ export const PUT = withAuth(async ({ request, user, params }) => {
   }
 
   const updateData: Record<string, any> = {};
-  if (title !== undefined) updateData.title = title.trim();
+  if (title !== undefined) {
+    const t = String(title).trim();
+    if (t.length === 0) return createApiError('日程标题不能为空', 400);
+    if (t.length > 100) return createApiError('日程标题不能超过100个字符', 400);
+    updateData.title = t;
+  }
   if (description !== undefined) updateData.description = description;
-  if (scheduled_at !== undefined) updateData.scheduled_at = scheduled_at;
+  if (scheduled_at !== undefined) {
+    if (isNaN(new Date(scheduled_at).getTime())) {
+      return createApiError('日程时间格式无效', 400);
+    }
+    updateData.scheduled_at = scheduled_at;
+  }
   if (location !== undefined) updateData.location = location;
   if (color !== undefined) updateData.color = color;
-  if (status !== undefined) updateData.status = status;
+  if (status !== undefined) {
+    const validStatuses = ['pending', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return createApiError('无效的日程状态', 400);
+    }
+    updateData.status = status;
+  }
   if (remind_before !== undefined) updateData.remind_before = remind_before;
   if (suggestions !== undefined) updateData.suggestions = Array.isArray(suggestions) ? JSON.stringify(suggestions) : null;
 

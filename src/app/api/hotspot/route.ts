@@ -27,7 +27,11 @@ export const GET = withAuth(async ({ request, user }) => {
 
   if (status) query = query.eq('status', status);
   if (platform) query = query.eq('platform', platform);
-  if (keyword) query = query.ilike('title', `%${keyword}%`);
+  if (keyword) {
+    // 转义 LIKE 通配符，防止意外匹配或性能问题
+    const escaped = keyword.replace(/[%_]/g, '\\$&');
+    query = query.ilike('title', `%${escaped}%`);
+  }
   if (importance) query = query.eq('importance_level', importance);
   if (credibility) query = query.eq('credibility_level', credibility);
   const monitorKeywordId = searchParams.get('monitorKeywordId');
@@ -89,6 +93,16 @@ export const POST = withAuth(async ({ request, user }) => {
 
   if (!platform || !title || !original_url) {
     return createApiError('platform, title, original_url 为必填项', 400);
+  }
+
+  // 校验 URL 格式
+  try {
+    const parsed = new URL(original_url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return createApiError('original_url 必须是 http 或 https 链接', 400);
+    }
+  } catch {
+    return createApiError('original_url 格式无效', 400);
   }
 
   const supabase = createAdminClient();

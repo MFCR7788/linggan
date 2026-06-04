@@ -61,8 +61,16 @@ export const POST = withAuth(async ({ request, user }) => {
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     return createApiError('日程标题不能为空', 400);
   }
+  if (title.trim().length > 100) {
+    return createApiError('日程标题不能超过100个字符', 400);
+  }
   if (!scheduled_at) {
     return createApiError('日程时间不能为空', 400);
+  }
+  // 校验 ISO 8601 日期格式
+  const scheduledDate = new Date(scheduled_at);
+  if (isNaN(scheduledDate.getTime())) {
+    return createApiError('日程时间格式无效，需要 ISO 8601 格式', 400);
   }
 
   const supabase = createAdminClient();

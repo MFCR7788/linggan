@@ -47,8 +47,8 @@ export function useUser() {
         }
         return response.data;
       } catch (e) {
-        console.warn("Failed to fetch user, returning null", e);
-        return null;
+        console.warn("Failed to fetch user", e);
+        throw e;
       }
     },
     retry: false,

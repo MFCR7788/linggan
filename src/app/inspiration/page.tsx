@@ -360,10 +360,11 @@ function InspirationLibraryContent() {
   useEffect(() => {
     if (searchParams.get('saved') === 'true') {
       setShowSavedTip(true);
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setShowSavedTip(false);
         router.replace('/inspiration');
       }, 3000);
+      return () => clearTimeout(timer);
     }
   }, [searchParams, router]);
 

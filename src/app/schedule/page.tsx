@@ -53,7 +53,9 @@ function ScheduleContent() {
       });
       setShowCreate(false);
       setNewSchedule({ title: "", description: "", scheduled_at: "", location: "" });
-    } catch {}
+    } catch (e) {
+      console.error('创建日程失败:', e);
+    }
   };
 
   const handleNavigate = (page: PageKey) => {

@@ -42,18 +42,23 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
 
   const handleSave = async () => {
     setSaving(true);
-    const resp = await apiClient.patch<{ user: any }>('/user/profile', {
-      username: username.trim(),
-      avatar_url: avatarUrl.trim() || null,
-    });
-    if (resp.success) {
-      showToast('资料已保存', 'success');
-      setEditing(false);
-      onSaved();
-    } else {
-      showToast(resp.error || '保存失败', 'error');
+    try {
+      const resp = await apiClient.patch<{ user: any }>('/user/profile', {
+        username: username.trim(),
+        avatar_url: avatarUrl.trim() || null,
+      });
+      if (resp && resp.success) {
+        showToast('资料已保存', 'success');
+        setEditing(false);
+        onSaved();
+      } else {
+        showToast(resp?.error || '保存失败', 'error');
+      }
+    } catch {
+      showToast('网络错误，请稍后重试', 'error');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (
@@ -339,17 +344,22 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       return;
     }
     setSaving(true);
-    const resp = await apiClient.post<{ ok: boolean }>(
-      '/user/security?action=change-password',
-      { currentPassword: current, newPassword: next }
-    );
-    if (resp.success) {
-      showToast('密码已修改', 'success');
-      onClose();
-    } else {
-      showToast(resp.error || '修改失败', 'error');
+    try {
+      const resp = await apiClient.post<{ ok: boolean }>(
+        '/user/security?action=change-password',
+        { currentPassword: current, newPassword: next }
+      );
+      if (resp && resp.success) {
+        showToast('密码已修改', 'success');
+        onClose();
+      } else {
+        showToast(resp?.error || '修改失败', 'error');
+      }
+    } catch {
+      showToast('网络错误，请稍后重试', 'error');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (

@@ -67,8 +67,8 @@ export const POST = withAuth(async ({ request, user }) => {
 
   try {
     const supabase = createAdminClient();
-    const fileExt = file.name.split('.').pop() || 'bin';
-    const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const fileExt = file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
+    const fileName = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
     const filePath = `uploads/${fileName}`;
     const safeName = sanitizeFilename(file.name);
 

@@ -212,14 +212,20 @@ export function useUploadQueue(options: UseUploadQueueOptions = {}) {
     [maxRetries, retryDelayMs, updateItem, onSuccess]
   );
 
-  // 串行处理队列：使用 ref 读取最新 items
+  // 串行处理队列：使用 ref 快照 + 循环重读防止漏掉新增项
   const processQueue = useCallback(async () => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
     try {
-      const queued = itemsRef.current.filter((it) => it.status === 'queued');
-      for (const item of queued) {
-        await uploadOne(item);
+      // 使用 while 循环而非一次性快照，避免漏掉处理期间新增的队列项
+      let safety = 0;
+      const MAX_LOOPS = 500;
+      while (safety++ < MAX_LOOPS) {
+        const queued = itemsRef.current.filter((it) => it.status === 'queued');
+        if (queued.length === 0) break;
+        for (const item of queued) {
+          await uploadOne(item);
+        }
       }
       const final = itemsRef.current;
       const succeeded = final.filter((it) => it.status === 'done' || it.status === 'extracting').length;

@@ -611,6 +611,7 @@ export const POST = withAuth(async ({ request, user }) => {
           .from('chat_messages')
           .select('type, content')
           .eq('session_id', session_id)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: true });
         if (prevMessages) {
           historyMessages = prevMessages.map(m => ({
@@ -685,8 +686,19 @@ export const POST = withAuth(async ({ request, user }) => {
       };
       for (const docUrl of documents) {
         try {
-          // 从 Supabase 公网 URL 中提取 bucket 和路径
+          // 校验 URL 格式和来源
+          if (typeof docUrl !== 'string' || docUrl.length > 500) {
+            console.warn(`无效的文档 URL: ${docUrl}`);
+            continue;
+          }
+          // 从 Supabase 公网 URL 中提取 bucket 和路径，并校验所属用户
           const url = new URL(docUrl as string);
+          // 只允许从自身 Supabase storage 域名下载
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          if (supabaseUrl && !url.hostname.includes(new URL(supabaseUrl).hostname)) {
+            console.warn(`拒绝非 Supabase storage 域名: ${url.hostname}`);
+            continue;
+          }
           const parts = url.pathname.split('/').filter(Boolean);
           // pathname 格式: /storage/v1/object/public/<bucket>/<path>
           const publicIdx = parts.indexOf('public');
@@ -696,6 +708,11 @@ export const POST = withAuth(async ({ request, user }) => {
           }
           const bucket = parts[publicIdx + 1];
           const storagePath = parts.slice(publicIdx + 2).join('/');
+          // 校验路径必须属于当前用户
+          if (!storagePath.startsWith(`${user.id}/`)) {
+            console.warn(`拒绝访问其他用户的文件: ${storagePath} (user: ${user.id})`);
+            continue;
+          }
           const ext = storagePath.split('.').pop()?.toLowerCase() || '';
           const mimeType = mimeMap[ext];
           if (!mimeType) continue;
@@ -1194,18 +1211,11 @@ JSON 格式：
 
   } catch (error) {
     console.error('聊天 API 错误:', error);
-    const errMsg = error instanceof Error ? `${error.message}\n${error.stack || ''}` : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({
       success: false,
-      error: errMsg.substring(0, 500),
-      modelErrors: modelErrors.slice(0, 5),
-      title: '未命名灵感',
-      summary: '这是您记录的灵感内容，请查看详细信息。',
-      keyPoints: ['这是您记录的原始内容', '建议保存到灵感库'],
-      tags: ['灵感', '创意'],
-      suggestions: ['保存到灵感库以便后续查看和扩展'],
-      reuseScore: 4,
-      intent: '灵感记录',
+      error: errMsg.length > 500 ? errMsg.substring(0, 500) + '...' : errMsg,
+      modelErrors: modelErrors.length > 0 ? modelErrors.slice(0, 5) : undefined,
     });
   }
 });

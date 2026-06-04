@@ -39,9 +39,10 @@ export function createPgPool(): Pool {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL 未配置,无法直连 Postgres');
   }
+  const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== 'false';
   return new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized },
     max: 1,
   });
 }
@@ -89,32 +90,70 @@ export function createSupabaseServerClient() {
 // 获取当前用户
 export async function getCurrentUser() {
   // 生产环境: 跳过 dev 短路, 只信任真实 Supabase 会话
-  // 开发环境: dev header/cookie 用于无密码本地调试
+  // 开发环境: dev header/cookie 用于无密码本地调试，需密钥校验或 localhost 限制
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {
-    // 开发模式: 先尝试从请求头中获取用户 ID (最可靠)
-    try {
-      const headersList = headers();
-      const headerUserId = headersList.get('x-dev-user-id');
-      if (headerUserId) {
-        await ensureDevUserProfile(headerUserId);
-        return createDevUser(headerUserId);
-      }
-    } catch (e) {
-      // headers() 可能在某些上下文不可用
-    }
+    const devAuthSecret = process.env.DEV_AUTH_SECRET;
 
-    // 开发模式: 再尝试从 cookies 中获取用户 ID
-    try {
-      const cookieStore = cookies();
-      const devUserId = cookieStore.get('dev_user_id');
-      if (devUserId?.value) {
-        await ensureDevUserProfile(devUserId.value);
-        return createDevUser(devUserId.value);
+    // 如果配置了 DEV_AUTH_SECRET，则验证密钥
+    if (devAuthSecret) {
+      try {
+        const headersList = headers();
+        const headerSecret = headersList.get('x-dev-auth-secret');
+        if (headerSecret !== devAuthSecret) {
+          console.warn('[getCurrentUser] DEV_AUTH_SECRET 不匹配，拒绝开发模式认证');
+          // 继续走真实 Supabase 会话
+        } else {
+          const headerUserId = headersList.get('x-dev-user-id');
+          if (headerUserId) {
+            await ensureDevUserProfile(headerUserId);
+            return createDevUser(headerUserId);
+          }
+          try {
+            const cookieStore = cookies();
+            const devUserId = cookieStore.get('dev_user_id');
+            if (devUserId?.value) {
+              await ensureDevUserProfile(devUserId.value);
+              return createDevUser(devUserId.value);
+            }
+          } catch (_) {}
+        }
+      } catch (_) {
+        // headers() 不可用时走真实会话
       }
-    } catch (e) {
-      // cookies() 可能在某些上下文不可用
+    } else {
+      // 未配置 DEV_AUTH_SECRET 时，仅允许 localhost IP（开发安全兜底）
+      try {
+        const headersList = headers();
+        const forwardedFor = headersList.get('x-forwarded-for');
+        const realIp = headersList.get('x-real-ip');
+        const clientIp = (forwardedFor?.split(',')[0]?.trim() || realIp || '').replace(/^::ffff:/, '');
+        const isLocalhost = !clientIp ||
+          clientIp === '127.0.0.1' ||
+          clientIp === '::1' ||
+          clientIp === 'localhost';
+
+        if (!isLocalhost) {
+          console.warn(`[getCurrentUser] 非 localhost 请求(${clientIp})，开发模式认证被拒绝。请配置 DEV_AUTH_SECRET`);
+        } else {
+          const headerUserId = headersList.get('x-dev-user-id');
+          if (headerUserId) {
+            await ensureDevUserProfile(headerUserId);
+            return createDevUser(headerUserId);
+          }
+          try {
+            const cookieStore = cookies();
+            const devUserId = cookieStore.get('dev_user_id');
+            if (devUserId?.value) {
+              await ensureDevUserProfile(devUserId.value);
+              return createDevUser(devUserId.value);
+            }
+          } catch (_) {}
+        }
+      } catch (_) {
+        // headers() 不可用时走真实会话
+      }
     }
   }
 

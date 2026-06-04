@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export const GET = withAuth(async ({ request, user }) => {
   const { searchParams } = new URL(request.url);
-  const txLimit = Math.min(parseInt(searchParams.get('t') || '50'), 200);
+  const rawT = parseInt(searchParams.get('t') || '50', 10);
+  const txLimit = Math.min(isNaN(rawT) ? 50 : rawT, 200);
   const wantPackages = searchParams.get('packages') === '1';
   const wantTiers = searchParams.get('tiers') === '1';
 

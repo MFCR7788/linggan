@@ -710,6 +710,7 @@ function HotspotRadarInner() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
+    if (!confirm(`确定要删除选中的 ${selectedIds.size} 条热点吗？此操作不可撤销。`)) return;
     syncDevAuthCookie();
     try {
       const res = await fetch('/api/hotspot/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ ids: [...selectedIds] }) });
@@ -725,6 +726,7 @@ function HotspotRadarInner() {
   };
 
   const handleFilterDelete = async () => {
+    if (!confirm('确定要删除当前筛选条件下的所有热点吗？此操作不可撤销。')) return;
     syncDevAuthCookie();
     try {
       const res = await fetch('/api/hotspot/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ filters: { platform: source || undefined, importance: importance || undefined, timeRange: timeRange || undefined } }) });

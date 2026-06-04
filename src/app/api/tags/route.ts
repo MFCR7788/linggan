@@ -28,14 +28,21 @@ export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
   const { name, color } = body;
 
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return createApiError('标签名称不能为空', 400);
+  }
+  if (name.trim().length > 20) {
+    return createApiError('标签名称不能超过20个字符', 400);
+  }
+
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from('tags')
     .insert({
       user_id: user.id,
-      name,
-      color
+      name: name.trim(),
+      color: color || '#3B82F6'
     })
     .select()
     .single();

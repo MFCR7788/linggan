@@ -87,7 +87,7 @@ export async function getBalance(userId: string): Promise<{ balance: number; tie
   }
 
   // Lazy init
-  await supabase.from('user_credits').insert({ user_id: userId, balance: 0, tier: 'free' });
+  await supabase.from('user_credits').upsert({ user_id: userId, balance: 0, tier: 'free', lifetime_consumed: 0, lifetime_purchased: 0 }, { onConflict: 'user_id', ignoreDuplicates: true });
   return { balance: 0, tier: 'free', lifetimeConsumed: 0, lifetimePurchased: 0 };
 }
 
@@ -225,6 +225,44 @@ export async function grant(
   if (amount <= 0) throw new Error('amount 必须为正数');
 
   const supabase = createAdminClient();
+
+  // 原子 RPC: 一条 SQL 完成读-改-写，避免 TOCTOU 竞态
+  const { data: updated, error: rpcErr } = await supabase
+    .rpc('grant_credits_atomic', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_is_purchase: true,
+    })
+    .single();
+
+  if (rpcErr) {
+    return await grantCreditsFallback(userId, amount, type, source, description, metadata);
+  }
+
+  const balanceAfter = (updated as { balance_after?: number } | null)?.balance_after ?? amount;
+
+  await supabase.from('credit_transactions').insert({
+    user_id: userId,
+    amount,
+    type,
+    balance_after: balanceAfter,
+    source,
+    description,
+    metadata,
+  });
+
+  return { balanceAfter };
+}
+
+async function grantCreditsFallback(
+  userId: string,
+  amount: number,
+  type: TransactionType,
+  source: string,
+  description: string,
+  metadata: Record<string, unknown>
+): Promise<{ balanceAfter: number }> {
+  const supabase = createAdminClient();
   const before = await getBalance(userId);
 
   const { data, error } = await supabase
@@ -234,30 +272,25 @@ export async function grant(
       lifetime_purchased: before.lifetimePurchased + amount,
     })
     .eq('user_id', userId)
+    .eq('balance', before.balance)
     .select('balance')
     .single();
 
   if (error || !data) {
-    // 用户记录不存在(理论上 trigger 会自动创建)
-    await supabase.from('user_credits').insert({
-      user_id: userId, balance: amount, lifetime_purchased: amount,
-    });
+    await supabase.from('user_credits').upsert(
+      { user_id: userId, balance: amount, lifetime_purchased: amount, tier: 'free' },
+      { onConflict: 'user_id' }
+    );
+    const retry = await getBalance(userId);
     await supabase.from('credit_transactions').insert({
-      user_id: userId, amount, type, balance_after: amount, source, description, metadata,
+      user_id: userId, amount, type, balance_after: retry.balance, source, description, metadata,
     });
-    return { balanceAfter: amount };
+    return { balanceAfter: retry.balance };
   }
 
   await supabase.from('credit_transactions').insert({
-    user_id: userId,
-    amount,
-    type,
-    balance_after: data.balance,
-    source,
-    description,
-    metadata,
+    user_id: userId, amount, type, balance_after: data.balance, source, description, metadata,
   });
-
   return { balanceAfter: data.balance };
 }
 
@@ -283,33 +316,53 @@ export async function refund(
   if (amount > 10000) throw new Error('单次退款超过 10000 credits 上限');
 
   const supabase = createAdminClient();
-  const before = await getBalance(userId);
 
-  const { data, error } = await supabase
-    .from('user_credits')
-    .update({
-      balance: before.balance + amount,
-      updated_at: new Date().toISOString(),
+  // 原子 RPC: 避免读-改-写竞态
+  const { data: updated, error: rpcErr } = await supabase
+    .rpc('grant_credits_atomic', {
+      p_user_id: userId,
+      p_amount: amount,
+      p_is_purchase: false,
     })
-    .eq('user_id', userId)
-    .select('balance')
     .single();
 
-  if (error || !data) {
-    throw new Error('退款失败:用户记录不存在');
+  if (rpcErr) {
+    // 降级：两步操作 + CAS 守卫
+    const before = await getBalance(userId);
+    const { data, error } = await supabase
+      .from('user_credits')
+      .update({
+        balance: before.balance + amount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('balance', before.balance)
+      .select('balance')
+      .single();
+
+    if (error || !data) {
+      throw new Error('退款失败:用户记录不存在或并发冲突');
+    }
+
+    await supabase.from('credit_transactions').insert({
+      user_id: userId, amount, type: 'refund', balance_after: data.balance, source, description, metadata,
+    });
+    return { balanceAfter: data.balance };
   }
+
+  const balanceAfter = (updated as { balance_after?: number } | null)?.balance_after ?? amount;
 
   await supabase.from('credit_transactions').insert({
     user_id: userId,
-    amount,  // 正数表示「加回」
+    amount,
     type: 'refund',
-    balance_after: data.balance,
+    balance_after: balanceAfter,
     source,
     description,
     metadata,
   });
 
-  return { balanceAfter: data.balance };
+  return { balanceAfter };
 }
 
 /**

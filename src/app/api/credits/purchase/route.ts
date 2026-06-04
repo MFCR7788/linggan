@@ -32,9 +32,13 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const totalGranted = pkg.credits + pkg.bonus_credits;
 
-    // ── 模拟支付(V2.0.3 试运行) ──────────────────
+    // 生产环境保护：模拟支付只在开发环境生效
+    if (process.env.NODE_ENV === 'production') {
+      return createApiError('支付功能暂未开放，请等待正式上线', 503);
+    }
+
+    // ── 模拟支付(仅开发/试运行) ──────────────────
     // TODO V2.0.4: 接入微信/支付宝,这里要走预创建订单 → 支付回调 → 再 grant
-    // 当前为单步直接到账,仅供试运行,生产环境绝对不能用
     // ──────────────────────────────────────────────
 
     const result = await grant(

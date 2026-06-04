@@ -47,6 +47,18 @@ export const DELETE = withAuth(async ({ user, params }) => {
   const { id } = params;
   const supabase = createAdminClient();
 
+  // 先验证所有权
+  const { data: existing } = await supabase
+    .from('monitor_keywords')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!existing) {
+    return createApiError('关键词不存在', 404);
+  }
+
   const { count: hotCount } = await supabase
     .from('hot_items')
     .delete({ count: 'exact' })
