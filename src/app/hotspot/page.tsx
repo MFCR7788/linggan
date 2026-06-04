@@ -173,6 +173,7 @@ function RadarTab({
   onViewDetail, onToInspiration, onCheckNow, checking, onMarkAllRead,
   onToggleSelect, onDeleteSingle, onSelectAll, onExitSelection,
   onBatchDelete, onFilterDelete, page, setPage, totalCount, totalPages,
+  activeFilter, setActiveFilter,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
@@ -189,6 +190,29 @@ function RadarTab({
             <p style={{ color, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{value}</p>
             <p style={{ color: '#9CA3AF', fontSize: 10 }}>{label}</p>
           </div>
+        ))}
+      </div>
+
+      {/* 筛选标签: 总计 / 紧急 / 未读 */}
+      <div className="flex gap-1 mb-2">
+        {[
+          { key: 'all', label: '总计', count: stats?.total },
+          { key: 'urgent', label: '紧急', count: stats?.urgent, color: '#EF4444' },
+          { key: 'unread', label: '未读', count: stats?.unread, color: '#F59E0B' },
+        ].map(({ key, label, count, color }) => (
+          <button key={key} onClick={() => { setActiveFilter(key); setPage(1); }}
+            className="flex-1 py-1.5 rounded text-[12px] font-medium transition-all"
+            style={{
+              background: activeFilter === key
+                ? (color ? color + '22' : 'rgba(255,255,255,0.1)')
+                : 'rgba(255,255,255,0.03)',
+              border: activeFilter === key
+                ? `1px solid ${color ? color + '44' : 'rgba(255,255,255,0.2)'}`
+                : '1px solid rgba(255,255,255,0.06)',
+              color: activeFilter === key ? (color || '#E5E7EB') : '#9CA3AF',
+            }}>
+            {label}{count !== undefined ? ` ${count}` : ''}
+          </button>
         ))}
       </div>
 
@@ -520,6 +544,8 @@ function SearchTab({
   searchQuery, setSearchQuery, searchRegion, setSearchRegion, searchResultsPerSource, setSearchResultsPerSource,
   searchResults, searching, handleSearch,
 }: any) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
       {/* 搜索表单 - 紧凑 */}
@@ -564,29 +590,88 @@ function SearchTab({
         <div className="flex-1 overflow-y-auto">
           <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>搜索 &ldquo;{searchQuery}&rdquo; · {searchResults.length} 条</p>
           <div className="space-y-1.5">
-            {searchResults.map((r: any, i: number) => (
-              <div key={i} className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="px-1 rounded text-[10px]" style={{ background: getPlatformColor(r.source) + '22', color: getPlatformColor(r.source) }}>{r.source}</span>
-                  {r.analysis?.relevance && (
-                    <span className="px-1 rounded text-[10px]" style={{ background: r.analysis.relevance > 70 ? 'rgba(34,197,94,0.12)' : 'rgba(251,191,36,0.1)', color: r.analysis.relevance > 70 ? '#86EFAC' : '#FBBF24' }}>
-                      相关{r.analysis.relevance}%</span>
+            {searchResults.map((r: any, i: number) => {
+              const isExpanded = expandedIdx === i;
+              return (
+                <div key={i}
+                  onClick={() => setExpandedIdx(isExpanded ? null : i)}
+                  className="rounded-lg p-3 cursor-pointer transition-all hover:bg-white/[0.06]"
+                  style={{ background: isExpanded ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isExpanded ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}` }}>
+                  {/* 头部：来源 + 标签 */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="px-1 rounded text-[10px]" style={{ background: getPlatformColor(r.source) + '22', color: getPlatformColor(r.source) }}>{r.source}</span>
+                    {r.analysis?.relevance && (
+                      <span className="px-1 rounded text-[10px]" style={{ background: r.analysis.relevance > 70 ? 'rgba(34,197,94,0.12)' : 'rgba(251,191,36,0.1)', color: r.analysis.relevance > 70 ? '#86EFAC' : '#FBBF24' }}>
+                        相关{r.analysis.relevance}%</span>
+                    )}
+                    {r.analysis?.importance && (
+                      <span className="px-1 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg || 'rgba(156,163,175,0.1)', color: IMPORTANCE_CONFIG[r.analysis.importance]?.color || '#9CA3AF' }}>
+                        {IMPORTANCE_CONFIG[r.analysis.importance]?.label || r.analysis.importance}</span>
+                    )}
+                    <span className="ml-auto text-[10px]" style={{ color: '#6B7280' }}>
+                      {isExpanded ? '收起 ▲' : '展开 ▼'}
+                    </span>
+                  </div>
+
+                  {/* 标题 */}
+                  <a href={r.url || '#'} target="_blank" rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="block mb-1 hover:underline"
+                    style={{ color: '#93C5FD', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
+                    {r.title} <ExternalLink size={10} className="inline" />
+                  </a>
+
+                  {/* 摘要 / 内容 */}
+                  {(r.analysis?.summary || r.content) && (
+                    <p style={{ color: isExpanded ? '#D1D5DB' : '#9CA3AF', fontSize: 11, lineHeight: 1.5 }}
+                      className={isExpanded ? '' : 'line-clamp-2'}>
+                      {r.analysis?.summary || r.content}
+                    </p>
                   )}
-                  {r.analysis?.importance && (
-                    <span className="px-1 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg || 'rgba(156,163,175,0.1)', color: IMPORTANCE_CONFIG[r.analysis.importance]?.color || '#9CA3AF' }}>
-                      {IMPORTANCE_CONFIG[r.analysis.importance]?.label || r.analysis.importance}</span>
+
+                  {/* 展开详情 */}
+                  {isExpanded && (
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      {/* 完整原文 */}
+                      {r.content && r.analysis?.summary && r.content !== r.analysis.summary && (
+                        <div className="mb-2">
+                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 2 }}>原文内容</p>
+                          <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                        </div>
+                      )}
+
+                      {/* AI 分析详情 */}
+                      {r.analysis && (
+                        <div className="mb-2">
+                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {r.analysis.relevance && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {r.analysis.relevance}%</span>
+                            )}
+                            {r.analysis.importance && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg, color: IMPORTANCE_CONFIG[r.analysis.importance]?.color }}>{IMPORTANCE_CONFIG[r.analysis.importance]?.label}</span>
+                            )}
+                            {r.analysis.keyPoints?.length > 0 && r.analysis.keyPoints.map((kp: string, ki: number) => (
+                              <span key={ki} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 操作按钮 */}
+                      <div className="flex gap-1.5">
+                        <a href={r.url || '#'} target="_blank" rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                          style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
+                          <ExternalLink size={11} /> 打开原文
+                        </a>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <a href={r.url || '#'} target="_blank" rel="noreferrer" className="block mb-1">
-                  <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }} className="line-clamp-1">{r.title}</p>
-                </a>
-                {(r.analysis?.summary || r.content) && (
-                  <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.4 }} className="line-clamp-2">
-                    {r.analysis?.summary || r.content}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -647,6 +732,7 @@ function HotspotRadarInner() {
   const [searching, setSearching] = useState(false);
 
   const [showAddKeyword, setShowAddKeyword] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'unread'>('all');
 
   const authHeaders = getDevUserIdHeader();
 
@@ -657,7 +743,7 @@ function HotspotRadarInner() {
     try {
       const [statsRes, hotspotRes, kwRes] = await Promise.all([
         fetch('/api/hotspot/stats', { headers: { ...authHeaders } }),
-        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&monitorKeywordId=${monitorKeywordId}&importance=${importance}&timeRange=${timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}`, { headers: { ...authHeaders } }),
+        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&monitorKeywordId=${monitorKeywordId}&importance=${importance}${activeFilter === 'urgent' ? (importance ? '' : 'urgent,high') : ''}&timeRange=${timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}${activeFilter === 'unread' ? '&isRead=false' : ''}`, { headers: { ...authHeaders } }),
         fetch('/api/keywords?limit=50', { headers: { ...authHeaders } }),
       ]);
       const statsData = await statsRes.json();
@@ -678,7 +764,7 @@ function HotspotRadarInner() {
       setInitialLoading(false);
       setRefreshing(false);
     }
-  }, [page, source, monitorKeywordId, importance, timeRange, sortBy, sortOrder]);
+  }, [page, source, monitorKeywordId, importance, timeRange, sortBy, sortOrder, activeFilter]);
 
   // ─── 选择/删除操作 ─────────────────────────────
 
@@ -927,6 +1013,7 @@ function HotspotRadarInner() {
               onSelectAll={selectAll} onExitSelection={exitSelectionMode}
               onBatchDelete={handleBatchDelete} onFilterDelete={handleFilterDelete}
               page={page} setPage={setPage} totalCount={totalCount} totalPages={totalPages}
+              activeFilter={activeFilter} setActiveFilter={setActiveFilter}
             />
           )}
           {activeTab === 'keywords' && (

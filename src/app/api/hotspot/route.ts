@@ -32,8 +32,18 @@ export const GET = withAuth(async ({ request, user }) => {
     const escaped = keyword.replace(/[%_]/g, '\\$&');
     query = query.ilike('title', `%${escaped}%`);
   }
-  if (importance) query = query.eq('importance_level', importance);
+  if (importance) {
+    const importanceValues = importance.split(',').filter(Boolean);
+    if (importanceValues.length === 1) {
+      query = query.eq('importance_level', importanceValues[0]);
+    } else {
+      query = query.in('importance_level', importanceValues);
+    }
+  }
   if (credibility) query = query.eq('credibility_level', credibility);
+  const isRead = searchParams.get('isRead');
+  if (isRead === 'false') query = query.eq('is_read', false);
+  if (isRead === 'true') query = query.eq('is_read', true);
   const monitorKeywordId = searchParams.get('monitorKeywordId');
   if (monitorKeywordId) query = query.eq('monitor_keyword_id', monitorKeywordId);
 
