@@ -38,24 +38,39 @@ export const GET = withAuth(async ({ request, user }) => {
   return createPaginatedResponse(data || [], page, limit, count || 0);
 });
 
+interface ComboSnapshot {
+  id: string;
+  title: string;
+  emoji: string;
+  desc: string;
+  steps: { label: string; entry: string; paramKey?: string }[];
+  prefills?: Record<string, string>;
+}
+
 // POST - 创建新的工作流会话
 export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
-  const { combo_id, account_type, title: customTitle } = body;
+  const { combo_id, account_type, title: customTitle, combo_snapshot } = body;
 
   if (!combo_id) {
     return createApiError('combo_id 必填', 400);
   }
 
-  // 从预设中查找 combo 定义
-  let combo: (typeof ACCOUNT_TYPE_PRESETS)[number]['combos'][number] | undefined;
+  // 优先使用客户端传来的 combo_snapshot（支持自定义方案），否则从预设查找
+  let combo: ComboSnapshot | undefined;
   let foundAccountType: string | undefined;
-  for (const preset of ACCOUNT_TYPE_PRESETS) {
-    const found = preset.combos.find((c) => c.id === combo_id);
-    if (found) {
-      combo = found;
-      foundAccountType = preset.id;
-      break;
+
+  if (combo_snapshot && combo_snapshot.steps?.length > 0) {
+    combo = combo_snapshot;
+  } else {
+    // 从预设中查找 combo 定义
+    for (const preset of ACCOUNT_TYPE_PRESETS) {
+      const found = preset.combos.find((c) => c.id === combo_id);
+      if (found) {
+        combo = found;
+        foundAccountType = preset.id;
+        break;
+      }
     }
   }
 

@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic';
 const VALID_ACCOUNT_TYPES: AccountTypeId[] = [
   'startup', 'knowledge', 'ecommerce', 'b2b',
   'personal', 'training', 'restaurant', 'medical',
+  'real_estate', 'travel', 'parenting', 'fitness',
+  'pet', 'home_decor',
 ];
 
 export const GET = withAuth(async ({ user }) => {

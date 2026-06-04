@@ -40,6 +40,7 @@ export function useWorkflowSession(sessionId?: string | null) {
           combo_id: params.combo.id,
           account_type: params.accountType,
           title: params.title,
+          combo_snapshot: params.combo,
         }
       );
       if (!res.success) throw new Error(res.error);
