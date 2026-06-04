@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { syncDevAuthCookie, getDevUserIdHeader } from '@/lib/dev-auth';
 import {
-  Plus, Search, RefreshCw, TrendingUp, ChevronRight, X, Loader2, Activity,
+  Plus, Search, TrendingUp, ChevronRight, X, Loader2, Activity,
   Flame, ExternalLink,
   Globe, MapPin, Settings, Zap,
-  BarChart3, Trash2, Play, CheckCircle2,
+  BarChart3, Trash2, CheckCircle2,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -25,6 +25,7 @@ interface HotspotItem {
   captured_at: string; published_at?: string; status: string;
   view_count?: number; like_count?: number; comment_count?: number; share_count?: number;
   author?: string; monitor_keyword_id?: string;
+  credibility_score?: number;
   key_points?: string[]; creation_suggestions?: string[]; tags?: string[];
   heatScore?: number; keyword?: string;
 }
@@ -92,9 +93,9 @@ function formatCount(n: number | undefined): string {
 // ─── 紧凑热点卡片 ────────────────────────────────────
 
 function HotspotCard({
-  item, onViewDetail, onToInspiration, showKeyword,
+  item, onToInspiration, showKeyword,
 }: {
-  item: HotspotItem; onViewDetail: (id: string) => void; onToInspiration: (item: HotspotItem) => void;
+  item: HotspotItem; onToInspiration: (item: HotspotItem) => void;
   showKeyword?: boolean;
 }) {
   const heat = getHeatLevel(item.heatScore || item.relevance_score || 0);
@@ -152,11 +153,6 @@ function HotspotCard({
             style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
             转灵感
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onViewDetail(item.id); }}
-            className="px-2 py-0.5 rounded text-[10px]"
-            style={{ background: 'rgba(255,255,255,0.05)', color: '#D1D5DB' }}>
-            详情
-          </button>
         </div>
       </div>
     </div>
@@ -170,48 +166,34 @@ function RadarTab({
   source, setSource, monitorKeywordId, setMonitorKeywordId, keywords,
   importance, setImportance, timeRange, setTimeRange,
   sortBy, setSortBy, sortOrder, setSortOrder,
-  onViewDetail, onToInspiration, onCheckNow, checking, onMarkAllRead,
+  onToInspiration, onMarkAllRead,
   onToggleSelect, onDeleteSingle, onSelectAll, onExitSelection,
   onBatchDelete, onFilterDelete, page, setPage, totalCount, totalPages,
   activeFilter, setActiveFilter,
+  expandedId, setExpandedId,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
-      {/* 统计卡片 */}
+      {/* 筛选标签（含统计数） */}
       <div className="grid grid-cols-4 gap-2 mb-3">
         {[
-          { label: '新增', value: stats?.today ?? 0, color: '#3B82F6' },
-          { label: '总计', value: stats?.total ?? 0, color: '#FFFFFF' },
-          { label: '紧急', value: stats?.urgent ?? 0, color: '#EF4444' },
-          { label: '未读', value: stats?.unread ?? 0, color: '#F59E0B' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-lg p-3 text-center"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ color, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{value}</p>
-            <p style={{ color: '#9CA3AF', fontSize: 10 }}>{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* 筛选标签: 总计 / 紧急 / 未读 */}
-      <div className="flex gap-1 mb-2">
-        {[
-          { key: 'all', label: '总计', count: stats?.total },
-          { key: 'urgent', label: '紧急', count: stats?.urgent, color: '#EF4444' },
-          { key: 'unread', label: '未读', count: stats?.unread, color: '#F59E0B' },
+          { key: 'today', label: '新增', count: stats?.today ?? 0, color: '#3B82F6' },
+          { key: 'all', label: '总计', count: stats?.total ?? 0, color: '#FFFFFF' },
+          { key: 'urgent', label: '紧急', count: stats?.urgent ?? 0, color: '#EF4444' },
+          { key: 'unread', label: '未读', count: stats?.unread ?? 0, color: '#F59E0B' },
         ].map(({ key, label, count, color }) => (
-          <button key={key} onClick={() => { setActiveFilter(key); setPage(1); }}
-            className="flex-1 py-1.5 rounded text-[12px] font-medium transition-all"
+          <button key={key} onClick={() => { setActiveFilter(key); setPage(1); if (key === 'today') setTimeRange('today'); }}
+            className="rounded-lg p-3 text-center transition-all"
             style={{
               background: activeFilter === key
-                ? (color ? color + '22' : 'rgba(255,255,255,0.1)')
-                : 'rgba(255,255,255,0.03)',
+                ? (color + '18')
+                : 'rgba(255,255,255,0.04)',
               border: activeFilter === key
-                ? `1px solid ${color ? color + '44' : 'rgba(255,255,255,0.2)'}`
+                ? `1px solid ${color}44`
                 : '1px solid rgba(255,255,255,0.06)',
-              color: activeFilter === key ? (color || '#E5E7EB') : '#9CA3AF',
             }}>
-            {label}{count !== undefined ? ` ${count}` : ''}
+            <p style={{ color, fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{count}</p>
+            <p style={{ color: activeFilter === key ? color : '#9CA3AF', fontSize: 10 }}>{label}</p>
           </button>
         ))}
       </div>
@@ -317,20 +299,17 @@ function RadarTab({
       {hotspots.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 12 }}>暂无热点数据</p>
-            <button onClick={onCheckNow} disabled={checking}
-              className="px-4 py-2 rounded-lg text-xs flex items-center gap-2 mx-auto"
-              style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.3)' }}>
-              {checking ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-              {checking ? '扫描中...' : '立即扫描'}
-            </button>
+            <p style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 8 }}>暂无热点数据</p>
+            <p style={{ color: '#6B7280', fontSize: 11 }}>添加关键词后，后台会定时扫描</p>
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto rounded-lg" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-          {hotspots.map((item: HotspotItem) => (
+          {hotspots.map((item: HotspotItem) => {
+            const isExpanded = expandedId === item.id;
+            return (
             <div key={item.id}
-              onClick={() => { if (!selectionMode) onViewDetail(item.id); }}
+              onClick={() => { if (!selectionMode) setExpandedId(isExpanded ? null : item.id); }}
               className={selectionMode ? '' : 'cursor-pointer'}>
               <div className="flex items-start">
                 {selectionMode && (
@@ -344,11 +323,79 @@ function RadarTab({
                   </button>
                 )}
                 <div className="flex-1 min-w-0">
-                  <HotspotCard item={item} onViewDetail={onViewDetail} onToInspiration={onToInspiration} showKeyword />
+                  <div className="flex items-center justify-between" style={{ paddingRight: 8 }}>
+                    <HotspotCard item={item} onToInspiration={onToInspiration} showKeyword />
+                    <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 10 }}>
+                      {isExpanded ? '收起 ▲' : '展开 ▼'}
+                    </span>
+                  </div>
+
+                  {/* 展开详情 */}
+                  {isExpanded && (
+                    <div className="px-3 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      {/* 完整原文 */}
+                      {item.original_content && (
+                        <div className="mt-2 mb-2">
+                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>原文内容</p>
+                          <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                        </div>
+                      )}
+
+                      {/* AI 分析 */}
+                      <div className="mt-2 mb-2">
+                        <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                        {item.ai_summary && (
+                          <p style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
+                        )}
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          {(item.relevance_score || 0) > 0 && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
+                          )}
+                          {item.importance_level && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
+                          )}
+                          {item.credibility_level && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: item.credibility_level === 'green' ? 'rgba(34,197,94,0.1)' : item.credibility_level === 'red' ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)', color: item.credibility_level === 'green' ? '#86EFAC' : item.credibility_level === 'red' ? '#FCA5A5' : '#FBBF24' }}>可信度 {item.credibility_score || '-'}</span>
+                          )}
+                          {(item.key_points?.length ?? 0) > 0 && item.key_points!.map((kp: string, ki: number) => (
+                            <span key={ki} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
+                          ))}
+                        </div>
+                        {item.relevance_reason && (
+                          <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.4 }}>{item.relevance_reason}</p>
+                        )}
+                        {(item.creation_suggestions?.length ?? 0) > 0 && (
+                          <div className="mt-2">
+                            <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 2 }}>创作建议</p>
+                            {item.creation_suggestions!.map((s: string, si: number) => (
+                              <p key={si} style={{ color: '#C4B5FD', fontSize: 10, lineHeight: 1.4 }}>{si + 1}. {s}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 操作按钮 */}
+                      <div className="flex gap-1.5">
+                        {item.original_url && (
+                          <a href={item.original_url} target="_blank" rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                            style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
+                            <ExternalLink size={11} /> 打开原文
+                          </a>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); onToInspiration(item); }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                          style={{ background: 'rgba(139,92,246,0.12)', color: '#C4B5FD' }}>
+                          转灵感
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -379,23 +426,17 @@ function RadarTab({
 function KeywordsTab({
   keywords, selectedKeywordId, setSelectedKeywordId, keywordHotspots, loadingKeywordHotspots,
   showAddKeyword, setShowAddKeyword, newKeyword, setNewKeyword, addingKeyword,
-  handleAddKeyword, handleToggleKeyword, handleDeleteKeyword, handleCheckNow, checking,
-  onViewDetail, onToInspiration,
+  handleAddKeyword, handleToggleKeyword, handleDeleteKeyword,
+  onToInspiration, expandedId, setExpandedId,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
       {/* 操作栏 */}
       <div className="flex gap-1.5 mb-2">
         <button onClick={() => setShowAddKeyword(!showAddKeyword)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs"
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs"
           style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.3)' }}>
           <Plus size={14} /> 添加关键词
-        </button>
-        <button onClick={handleCheckNow} disabled={checking}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs"
-          style={{ background: checking ? 'rgba(251,191,36,0.12)' : 'rgba(34,197,94,0.12)', border: checking ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(34,197,94,0.25)', color: checking ? '#FBBF24' : '#86EFAC' }}>
-          {checking ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          {checking ? '扫描中' : '立即扫描'}
         </button>
       </div>
 
@@ -524,11 +565,61 @@ function KeywordsTab({
               <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 16 }}>暂无该关键词的热点</p>
             ) : (
               <div className="flex-1 overflow-y-auto rounded-lg" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                {keywordHotspots.map((item: HotspotItem) => (
-                  <div key={item.id} onClick={() => onViewDetail(item.id)} className="cursor-pointer">
-                    <HotspotCard item={item} onViewDetail={onViewDetail} onToInspiration={onToInspiration} showKeyword />
+                {keywordHotspots.map((item: HotspotItem) => {
+                  const isExpanded = expandedId === item.id;
+                  return (
+                  <div key={item.id} onClick={() => setExpandedId(isExpanded ? null : item.id)} className="cursor-pointer">
+                    <div className="flex items-center justify-between" style={{ paddingRight: 8 }}>
+                      <HotspotCard item={item} onToInspiration={onToInspiration} showKeyword />
+                      <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 10 }}>
+                        {isExpanded ? '收起 ▲' : '展开 ▼'}
+                      </span>
+                    </div>
+                    {/* 展开详情 */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        {item.original_content && (
+                          <div className="mt-2 mb-2">
+                            <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>原文内容</p>
+                            <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                          </div>
+                        )}
+                        <div className="mt-2 mb-2">
+                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                          {item.ai_summary && (
+                            <p style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
+                          )}
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {(item.relevance_score || 0) > 0 && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
+                            )}
+                            {item.importance_level && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
+                            )}
+                          </div>
+                          {item.relevance_reason && (
+                            <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.4 }}>{item.relevance_reason}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1.5">
+                          {item.original_url && (
+                            <a href={item.original_url} target="_blank" rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                              style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
+                              <ExternalLink size={11} /> 打开原文
+                            </a>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); onToInspiration(item); }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                            style={{ background: 'rgba(139,92,246,0.12)', color: '#C4B5FD' }}>
+                            转灵感
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -702,7 +793,6 @@ function HotspotRadarInner() {
   const [keywords, setKeywords] = useState<KeywordData[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -719,6 +809,8 @@ function HotspotRadarInner() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
   const [keywordHotspots, setKeywordHotspots] = useState<HotspotItem[]>([]);
   const [loadingKeywordHotspots, setLoadingKeywordHotspots] = useState(false);
@@ -732,7 +824,7 @@ function HotspotRadarInner() {
   const [searching, setSearching] = useState(false);
 
   const [showAddKeyword, setShowAddKeyword] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'unread'>('all');
+  const [activeFilter, setActiveFilter] = useState<'today' | 'all' | 'urgent' | 'unread'>('all');
 
   const authHeaders = getDevUserIdHeader();
 
@@ -743,7 +835,7 @@ function HotspotRadarInner() {
     try {
       const [statsRes, hotspotRes, kwRes] = await Promise.all([
         fetch('/api/hotspot/stats', { headers: { ...authHeaders } }),
-        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&monitorKeywordId=${monitorKeywordId}&importance=${importance}${activeFilter === 'urgent' ? (importance ? '' : 'urgent,high') : ''}&timeRange=${timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}${activeFilter === 'unread' ? '&isRead=false' : ''}`, { headers: { ...authHeaders } }),
+        fetch(`/api/hotspot?limit=20&page=${page}&source=${source}&monitorKeywordId=${monitorKeywordId}&importance=${importance}${activeFilter === 'urgent' ? (importance ? '' : 'urgent,high') : ''}&timeRange=${activeFilter === 'today' ? 'today' : timeRange}&sortBy=${sortBy}&sortOrder=${sortOrder}${activeFilter === 'unread' ? '&isRead=false' : ''}`, { headers: { ...authHeaders } }),
         fetch('/api/keywords?limit=50', { headers: { ...authHeaders } }),
       ]);
       const statsData = await statsRes.json();
@@ -851,18 +943,6 @@ function HotspotRadarInner() {
     try { await fetch('/api/hotspot/mark-read', { method: 'POST', headers: { ...authHeaders } }); fetchData(); } catch { console.error('全部标为已读失败'); }
   };
 
-  const handleCheckNow = async () => {
-    setChecking(true); setCheckResult(null);
-    syncDevAuthCookie();
-    try {
-      const res = await fetch('/api/keywords/check', { method: 'POST', headers: { ...authHeaders } });
-      const data = await res.json();
-      if (data.success) { setCheckResult(`发现 ${data.data.newHotspots} 条新热点`); await fetchData(); }
-      else setCheckResult('检查失败');
-    } catch { setCheckResult('网络错误'); }
-    finally { setChecking(false); setTimeout(() => setCheckResult(null), 3000); }
-  };
-
   const handleAddKeyword = async (keywordText?: string) => {
     const kw = (keywordText || newKeyword).trim();
     if (!kw) return;
@@ -889,7 +969,9 @@ function HotspotRadarInner() {
         setNewKeyword(''); setShowAddKeyword(false);
         // 后台同步完整数据
         fetchData();
-        const msg = data.message || '关键词添加成功';
+        const msg = inheritedCount > 0
+          ? `关键词添加成功，继承 ${inheritedCount} 条已有热点，后台会定时扫描`
+          : '关键词添加成功，后台会定时扫描';
         setCheckResult(msg);
         setTimeout(() => setCheckResult(null), 3000);
       }
@@ -929,8 +1011,6 @@ function HotspotRadarInner() {
     } catch { setToast({ type: 'error', message: '保存失败，请重试' }); }
   };
 
-  const handleViewDetail = (id: string) => { router.push(`/hotspot/detail?id=${id}`); };
-
   // ─── 渲染 ────────────────────────────────────────
 
   if (initialLoading) {
@@ -943,14 +1023,7 @@ function HotspotRadarInner() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <TopNav
-        title="热点雷达"
-        right={
-          <button className="p-1" onClick={handleCheckNow} disabled={checking} title="立即扫描">
-            {checking ? <Loader2 size={18} color="#FBBF24" className="animate-spin" /> : <RefreshCw size={18} color="#E5E7EB" />}
-          </button>
-        }
-      />
+      <TopNav title="热点雷达" />
 
       <div className="flex-1 flex flex-col overflow-hidden px-4 pt-4">
         {/* 监控状态条 */}
@@ -1007,13 +1080,14 @@ function HotspotRadarInner() {
               importance={importance} setImportance={setImportance}
               timeRange={timeRange} setTimeRange={setTimeRange}
               sortBy={sortBy} setSortBy={setSortBy} sortOrder={sortOrder} setSortOrder={setSortOrder}
-              onViewDetail={handleViewDetail} onToInspiration={handleToInspiration}
-              onCheckNow={handleCheckNow} checking={checking} onMarkAllRead={handleMarkAllRead}
+              onToInspiration={handleToInspiration}
+              onMarkAllRead={handleMarkAllRead}
               onToggleSelect={toggleSelect} onDeleteSingle={handleDeleteSingle}
               onSelectAll={selectAll} onExitSelection={exitSelectionMode}
               onBatchDelete={handleBatchDelete} onFilterDelete={handleFilterDelete}
               page={page} setPage={setPage} totalCount={totalCount} totalPages={totalPages}
               activeFilter={activeFilter} setActiveFilter={setActiveFilter}
+              expandedId={expandedId} setExpandedId={setExpandedId}
             />
           )}
           {activeTab === 'keywords' && (
@@ -1023,8 +1097,9 @@ function HotspotRadarInner() {
               showAddKeyword={showAddKeyword} setShowAddKeyword={setShowAddKeyword}
               newKeyword={newKeyword} setNewKeyword={setNewKeyword} addingKeyword={addingKeyword}
               handleAddKeyword={handleAddKeyword} handleToggleKeyword={handleToggleKeyword}
-              handleDeleteKeyword={handleDeleteKeyword} handleCheckNow={handleCheckNow} checking={checking}
-              onViewDetail={handleViewDetail} onToInspiration={handleToInspiration}
+              handleDeleteKeyword={handleDeleteKeyword}
+              onToInspiration={handleToInspiration}
+              expandedId={expandedId} setExpandedId={setExpandedId}
             />
           )}
           {activeTab === 'search' && (
