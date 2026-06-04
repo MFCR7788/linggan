@@ -137,6 +137,7 @@ export function ThumbnailPreview({
     link: 'linear-gradient(135deg, rgba(245,158,11,0.3), rgba(239,68,68,0.3))',
     image: 'linear-gradient(135deg, rgba(168,85,247,0.3), rgba(236,72,153,0.3))',
     video: 'linear-gradient(135deg, rgba(239,68,68,0.3), rgba(236,72,153,0.3))',
+    audio: 'linear-gradient(135deg, rgba(34,197,94,0.3), rgba(6,182,212,0.3))',
     schedule: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(59,130,246,0.3))',
   }[type] || 'linear-gradient(135deg, rgba(107,114,128,0.3), rgba(75,85,99,0.3))';
 
@@ -146,6 +147,7 @@ export function ThumbnailPreview({
     link: <Link2 size={sz.icon} color="#FFFFFF" />,
     image: <span style={{ fontSize: sz.emoji }}>🖼️</span>,
     video: <span style={{ fontSize: sz.emoji }}>🎬</span>,
+    audio: <span style={{ fontSize: sz.emoji }}>🎵</span>,
     schedule: <Calendar size={sz.icon} color="#FFFFFF" />,
   };
 

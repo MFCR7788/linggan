@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE TABLE IF NOT EXISTS content_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('text', 'voice', 'image', 'video', 'link')),
+  type TEXT NOT NULL CHECK (type IN ('text', 'voice', 'image', 'video', 'link', 'audio')),
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
   title TEXT,
   original_text TEXT,

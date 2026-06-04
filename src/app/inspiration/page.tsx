@@ -16,13 +16,14 @@ import { useQueryClient } from "@tanstack/react-query";
 
 // ====== 常量 ======
 
-const typeFilters = ["全部", "灵感", "图片", "视频", "AI作品"];
+const typeFilters = ["全部", "灵感", "图片", "视频", "音频", "AI作品"];
 
 const typeMap: Record<string, string | undefined> = {
   "全部": undefined,
   "灵感": "text",
   "图片": "image",
   "视频": "video",
+  "音频": "audio",
   "AI作品": "ai",
 };
 

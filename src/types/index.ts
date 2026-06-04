@@ -1,5 +1,5 @@
 // 数据库类型定义
-export type ContentType = 'text' | 'voice' | 'image' | 'video' | 'link';
+export type ContentType = 'text' | 'voice' | 'image' | 'video' | 'link' | 'audio';
 
 export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed';
 

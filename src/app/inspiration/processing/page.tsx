@@ -3,15 +3,16 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  CheckCircle, 
-  Brain, 
-  Sparkles, 
-  Image as ImageIcon, 
-  Video, 
-  Link as LinkIcon, 
-  Mic, 
-  FileText, 
+import {
+  CheckCircle,
+  Brain,
+  Sparkles,
+  Image as ImageIcon,
+  Video,
+  Link as LinkIcon,
+  Mic,
+  Music,
+  FileText,
   ChevronRight,
   Clock
 } from "lucide-react";
@@ -23,7 +24,7 @@ import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from "@/components";
 import { useCreateInspiration } from "@/hooks/use-inspiration";
 
-type ContentType = "text" | "image" | "video" | "link" | "voice";
+type ContentType = "text" | "image" | "video" | "link" | "voice" | "audio";
 
 interface AnalysisStep {
   id: string;
@@ -212,6 +213,7 @@ function InspirationProcessingContent() {
       case "video": return <Video size={20} color="#8B5CF6" />;
       case "link": return <LinkIcon size={20} color="#10B981" />;
       case "voice": return <Mic size={20} color="#F59E0B" />;
+      case "audio": return <Music size={20} color="#22C55E" />;
       default: return <FileText size={20} color="#3B82F6" />;
     }
   };
@@ -222,15 +224,17 @@ function InspirationProcessingContent() {
       case "video": return "视频";
       case "link": return "链接";
       case "voice": return "语音";
+      case "audio": return "音频";
       default: return "文字";
     }
   };
   
   const handleSave = async () => {
     try {
-      const appContentType = contentType === "image" ? "image" : 
-                           contentType === "video" ? "video" : 
-                           contentType === "link" ? "link" : 
+      const appContentType = contentType === "image" ? "image" :
+                           contentType === "video" ? "video" :
+                           contentType === "link" ? "link" :
+                           contentType === "audio" ? "audio" :
                            "text";
       
       await createInspiration.mutateAsync({

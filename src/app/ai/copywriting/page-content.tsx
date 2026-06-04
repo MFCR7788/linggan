@@ -22,7 +22,7 @@ import { useWorkflowSession } from "@/hooks/use-workflow-session";
 import { WorkflowSessionBar } from "@/components/WorkflowSessionBar";
 
 const typeEmojis: Record<string, string> = {
-  text: "📝", link: "🔗", image: "🖼️", video: "🎬", voice: "🎵", schedule: "📅",
+  text: "📝", link: "🔗", image: "🖼️", video: "🎬", voice: "🎵", audio: "🎵", schedule: "📅",
 };
 
 const generateStandardContent = () => `✨ 你知道吗？15秒视频的完播率是60秒的4.3倍！
@@ -109,7 +109,7 @@ function AICopywritingContent() {
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('all');
   const [hideAiWorks, setHideAiWorks] = useState(false);
   const [sortMode, setSortMode] = useState<'smart' | 'recent'>('smart');
   const [refineModalOpen, setRefineModalOpen] = useState(false);
@@ -654,6 +654,7 @@ function AICopywritingContent() {
                 { key: 'text', label: '📝 灵感' },
                 { key: 'image', label: '🖼️ 图片' },
                 { key: 'video', label: '🎬 视频' },
+                { key: 'audio', label: '🎵 音频' },
               ] as const).map(({ key, label }) => (
                 <button key={key} onClick={() => setTypeFilter(key)} style={S.chip(typeFilter === key)}>
                   {label}

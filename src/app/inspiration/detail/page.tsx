@@ -20,6 +20,7 @@ const typeEmojis: Record<string, string> = {
   image: "🖼️",
   video: "🎬",
   voice: "✍️",
+  audio: "🎵",
   schedule: "📅",
 };
 
@@ -29,6 +30,7 @@ const typeLabels: Record<string, string> = {
   image: "图片",
   video: "视频",
   voice: "文案",
+  audio: "音频",
   schedule: "日程",
 };
 

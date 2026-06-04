@@ -28,7 +28,7 @@ interface InspirationItem {
 }
 
 const typeEmojis: Record<string, string> = {
-  text: '📝', link: '🔗', image: '🖼️', video: '🎬', voice: '🎵', schedule: '📅',
+  text: '📝', link: '🔗', image: '🖼️', video: '🎬', voice: '🎵', audio: '🎵', schedule: '📅',
 };
 
 function TTSPageContent() {
