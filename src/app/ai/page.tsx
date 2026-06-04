@@ -215,7 +215,13 @@ function AICreationContent() {
                       </div>
                     </div>
                     <button
-                      onClick={() => createSession(combo, { accountType })}
+                      onClick={async () => {
+                        try {
+                          await createSession(combo, { accountType });
+                        } catch (e: any) {
+                          setToast({ message: e.message || '创建失败', type: 'error' });
+                        }
+                      }}
                       disabled={isCreating}
                       className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 active:scale-95"
                       style={{
