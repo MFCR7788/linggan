@@ -20,5 +20,5 @@ jobs:
             git pull origin main
             npm ci
             npm run build
-            pm2 restart lingji
+            pm2 restart lingji --update-env
             pm2 save
