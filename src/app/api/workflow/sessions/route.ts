@@ -94,8 +94,8 @@ export const POST = withAuth(async ({ request, user }) => {
 
   // 构建第一步 URL
   const firstStep = combo.steps[0];
-  const firstStepUrl = buildHandoffUrl(firstStep.entry, accumulated_handoff) +
-    '&workflow_session_id=' + data.id;
+  const baseUrl = buildHandoffUrl(firstStep.entry, accumulated_handoff);
+  const firstStepUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}workflow_session_id=${data.id}`;
 
   return createApiResponse(
     { session: data, firstStepUrl },
