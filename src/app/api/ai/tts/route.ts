@@ -124,6 +124,7 @@ export const POST = withAuth(async ({ request, user }) => {
     const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
 
     // ─── 优先 CosyVoice(听感 SOTA) ──────────────────────
+    console.log('[TTS] 尝试 CosyVoice, voice:', voiceConfig.id);
     const cosyAudio = await synthesizeWithCosyVoice({
       text,
       options: {

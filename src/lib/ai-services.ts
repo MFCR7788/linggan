@@ -1704,9 +1704,10 @@ export async function synthesizeWithCosyVoice(params: {
 }): Promise<Buffer | null> {
   const apiKey = getDashScopeApiKey();
   if (!apiKey) {
-    console.warn('[CosyVoice] DASHSCOPE_API_KEY 未配置');
+    console.warn('[CosyVoice] DASHSCOPE_API_KEY 未配置(getDashScopeApiKey 返回空)');
     return null;
   }
+  console.log('[CosyVoice] API key 已加载, 前8位:', apiKey.slice(0, 8));
 
   const {
     voice = 'longxiaochun_v2',
