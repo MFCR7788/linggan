@@ -41,12 +41,32 @@ export interface RecommendationCombo {
   title: string;
   emoji: string;
   desc: string;            // 一句话说明(显示在卡片上)
-  steps: { label: string; entry: LingjiEntry; paramKey?: string }[];
+  steps: { label: string; entry: LingjiEntry; paramKey?: string; role?: string }[];
   // 预填参数(用于"开始这套"按钮的 handoff URL)
   prefills?: Partial<Record<
     'topic' | 'industry' | 'style' | 'preset' | 'language' | 'palette' | 'ratio' | 'script',
     string
   >>;
+}
+
+// ─── 节点默认角色（按入口类型） ────────────────────────────
+export const DEFAULT_STEP_ROLES: Record<LingjiEntry, string> = {
+  '/ai/copywriting': '你是一个专业的内容创作者，擅长根据素材和话题生成高质量文案，能够适配不同平台和风格的创作需求。',
+  '/ai/image': '你是一个专业的AI视觉设计师，擅长将文字描述转化为高质量的视觉画面，注重构图、光影和色彩搭配。',
+  '/ai/video': '你是一个专业的短视频导演，擅长将文案脚本转化为视觉分镜方案，注重节奏感和画面冲击力。',
+  '/ai/digital-human': '你是一个专业的数字人口播主播，擅长用自然生动的表达传递信息，让观众有面对面交流的亲切感。',
+  '/ai/tts': '你是一个专业的配音师，擅长根据文案内容选择最合适的语音语调，让声音表达富有感染力。',
+  '/ai/ads': '你是一个社交媒体营销视觉设计师，擅长制作吸引眼球、高转化率的多图广告和9宫格内容。',
+  '/ai/image-editor': '你是一个专业的图片后期专家，擅长图片优化、调色和视觉增强。',
+  '/inspiration': '',
+  '/hotspot': '',
+  '/publish': '',
+};
+
+/** 获取节点的角色描述（先取步骤自定义，再取入口默认，没有则返回空字符串） */
+export function getStepRole(entry: string, stepRole?: string): string {
+  if (stepRole) return stepRole;
+  return (DEFAULT_STEP_ROLES as Record<string, string>)[entry] || '';
 }
 
 export interface AccountTypePreset {

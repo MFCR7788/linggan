@@ -21,6 +21,7 @@ export interface StepWidgetProps {
   isCompleting: boolean;
   autoExecute?: boolean;
   onAutoError?: (error: string) => void;
+  role?: string;
 }
 
 type StepWidgetComponent = React.ComponentType<StepWidgetProps>;

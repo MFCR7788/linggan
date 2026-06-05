@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Copy, Check } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const CONTENT_TYPES: { id: string; label: string; platform: string; promptHint: string }[] = [
@@ -12,13 +13,14 @@ const CONTENT_TYPES: { id: string; label: string; platform: string; promptHint: 
   { id: 'script', label: '口播稿', platform: 'script', promptHint: '口播文案，口语化' },
 ];
 
-export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
+export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [topic, setTopic] = useState(handoff.topic || handoff.text || '');
   const [contentType, setContentType] = useState(handoff.style || 'xiaohongshu');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoTriggeredRef = useRef(false);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
   useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
 
@@ -35,7 +37,7 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
           type: contentType,
           style: ct?.promptHint || handoff.style || '',
           industry: handoff.industry || '',
-          userInstruction: ct?.promptHint || '',
+          userInstruction: role ? `${role}\n${ct?.promptHint || ''}` : (ct?.promptHint || ''),
         });
         if (!res.success) throw new Error(res.error);
         const text = res.data!.content;
@@ -63,7 +65,7 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
         type: contentType,
         style: ct?.label || handoff.style || '',
         industry: handoff.industry || '',
-        userInstruction: ct?.promptHint || '',
+        userInstruction: role ? `${role}\n${ct?.promptHint || ''}` : (ct?.promptHint || ''),
       });
       if (!res.success) throw new Error(res.error);
       setResult(res.data!.content);
@@ -157,6 +159,26 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
       )}
 
       {error && <p style={{ color: '#FCA5A5', fontSize: 11 }}>{error}</p>}
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>历史生成</p>
+          <div className="space-y-1.5">
+            {historyItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { setTopic(item.title); setResult(item.content || ''); }}
+                className="w-full text-left px-2.5 py-2 rounded-lg transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+              >
+                <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title || 'AI 生成文案'}</p>
+                <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

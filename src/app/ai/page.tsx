@@ -19,6 +19,7 @@ import { WorkflowSessionCard } from "@/components/WorkflowSessionCard";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
 import { apiClient } from "@/lib/api-client";
 import { CustomComboBuilder, getCustomCombos } from "@/components/CustomComboBuilder";
+import { JargonTooltip } from "@/components/JargonTooltip";
 
 // ─── AI 创作工具 ──────────────────────────────
 interface AITool {
@@ -32,15 +33,15 @@ interface AITool {
 }
 
 const aiCreationTools: AITool[] = [
-  { icon: <FileText size={28} />, title: "AI 文案", desc: "小红书/公众号/短视频脚本/多平台改写", color: "#3B82F6", page: "ai-copywriting" as PageKey },
-  { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "封面图/配图/海报生成", color: "#8B5CF6", page: "ai-image" as PageKey },
-  { icon: <Scissors size={28} />, title: "AI 图片编辑", desc: "背景移除 · 画质增强 · 智能扩图", color: "#A78BFA", path: "/ai/image-editor", badge: "新" },
-  { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "短视频自动合成 · 分镜/字幕/BGM", color: "#F43F5E", page: "ai-video" as PageKey },
-  { icon: <Mic size={28} />, title: "AI 数字人", desc: "AI写稿 · 一键成片 · 批量口播", color: "#06B6D4", page: "ai-digital-human" as PageKey },
-  { icon: <Music size={28} />, title: "AI 配音", desc: "多音色文本转语音 · 男女声可选", color: "#22C55E", page: "ai-tts" as PageKey },
-  { icon: <TrendingUp size={28} />, title: "AI 热点选题", desc: "关键词追踪 · 热搜趋势 · 爆款参考", color: "#EF4444", path: "/hotspot" },
-  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "产品+卖点 → 9 张封面 + ZIP", color: "#F59E0B", page: "ai-ads" as PageKey },
-  { icon: <Send size={28} />, title: "多平台分发", desc: "公众号/微博自动发 + 复制引导", color: "#F43F5E", path: "/publish" },
+  { icon: <FileText size={28} />, title: "AI 文案", desc: "输入主题，自动写出小红书、公众号、短视频等各种文案", color: "#3B82F6", page: "ai-copywriting" as PageKey },
+  { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "输入描述，AI 自动生成封面图、配图、海报", color: "#8B5CF6", page: "ai-image" as PageKey },
+  { icon: <Scissors size={28} />, title: "AI 图片编辑", desc: "给图片去背景、变清晰、智能扩展", color: "#A78BFA", path: "/ai/image-editor", badge: "新" },
+  { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "输入文案，自动合成带字幕和配乐的短视频", color: "#F43F5E", page: "ai-video" as PageKey },
+  { icon: <Mic size={28} />, title: "AI 数字人", desc: "用虚拟主播替你出镜讲解，无需真人拍摄", color: "#06B6D4", page: "ai-digital-human" as PageKey },
+  { icon: <Music size={28} />, title: "AI 配音", desc: "把文字转成自然语音，多种音色可选", color: "#22C55E", page: "ai-tts" as PageKey },
+  { icon: <TrendingUp size={28} />, title: "AI 热点选题", desc: "发现当下热门话题，帮你找到创作灵感", color: "#EF4444", path: "/hotspot" },
+  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "上传产品图，自动生成9张营销卡片", color: "#F59E0B", page: "ai-ads" as PageKey },
+  { icon: <Send size={28} />, title: "多平台分发", desc: "一键把内容发布到小红书、公众号等多个平台", color: "#F43F5E", path: "/publish" },
 ];
 
 // ─── 数据 ──────────────────────────────
@@ -57,6 +58,7 @@ function AICreationContent() {
   const [customCombos, setCustomCombos] = useState<ReturnType<typeof getCustomCombos>>([]);
   const [manageMode, setManageMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [highlightFirstCombo, setHighlightFirstCombo] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
   const { accountType, preset } = useAccountType();
@@ -157,6 +159,15 @@ function AICreationContent() {
     const t = setTimeout(() => setShowOnboarding(true), 500);
     return () => clearTimeout(t);
   }, [accountType]);
+
+  // 首次引导：有推荐方案时高亮第一个
+  useEffect(() => {
+    if (!accountType || recommendations.length === 0) return;
+    const key = 'lingji_first_combo_highlight';
+    if (localStorage.getItem(key) !== 'done') {
+      setHighlightFirstCombo(true);
+    }
+  }, [accountType, recommendations.length]);
 
   // 加载自定义方案
   useEffect(() => {
@@ -338,38 +349,97 @@ function AICreationContent() {
             </div>
 
             <div className="space-y-2">
-              {recommendations.map((combo) => (
+              {recommendations.map((combo, ci) => (
                 <GlassCard
                   key={combo.id}
                   hover
                   className="!p-3"
                   style={{
                     background: 'linear-gradient(135deg, rgba(244,114,182,0.04), rgba(139,92,246,0.04))',
-                    border: '1px solid rgba(244,114,182,0.12)',
+                    border: ci === 0 && highlightFirstCombo
+                      ? '1.5px solid rgba(244,114,182,0.5)' : '1px solid rgba(244,114,182,0.12)',
+                    animation: ci === 0 && highlightFirstCombo
+                      ? 'pulse-glow 2s ease-in-out infinite' : 'none',
                   }}
                 >
-                  <div className="flex items-center gap-3">
-                    <span style={{ fontSize: 24 }}>{combo.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 700 }}>
-                        {combo.title}
-                      </p>
-                      <p style={{ color: '#6B7280', fontSize: 11, marginTop: 1, lineHeight: 1.4 }} className="line-clamp-1">
-                        {combo.desc}
-                      </p>
+                  {ci === 0 && (
+                    <style>{`@keyframes pulse-glow { 0%,100% { box-shadow: 0 0 8px rgba(244,114,182,0.2); } 50% { box-shadow: 0 0 20px rgba(244,114,182,0.5); } }`}</style>
+                  )}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <span style={{ fontSize: 24 }}>{combo.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 700 }}>
+                          {combo.title}
+                          {ci === 0 && highlightFirstCombo && (
+                            <span style={{ color: '#F472B6', fontSize: 10, marginLeft: 6, fontWeight: 400 }}>👈 试试这个</span>
+                          )}
+                        </p>
+                        <p style={{ color: '#6B7280', fontSize: 11, marginTop: 1, lineHeight: 1.4 }} className="line-clamp-1">
+                          {combo.desc}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (highlightFirstCombo) {
+                            localStorage.setItem('lingji_first_combo_highlight', 'done');
+                            setHighlightFirstCombo(false);
+                          }
+                          handleStartCombo(combo);
+                        }}
+                        disabled={isCreating}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 shrink-0 active:scale-95"
+                        style={{
+                          background: 'linear-gradient(135deg, #F472B6, #8B5CF6)',
+                          color: '#FFFFFF',
+                          opacity: isCreating ? 0.6 : 1,
+                        }}
+                      >
+                        {isCreating ? '...' : '开始'} <ArrowRight size={11} />
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleStartCombo(combo); }}
-                      disabled={isCreating}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 shrink-0 active:scale-95"
-                      style={{
-                        background: 'linear-gradient(135deg, #F472B6, #8B5CF6)',
-                        color: '#FFFFFF',
-                        opacity: isCreating ? 0.6 : 1,
-                      }}
-                    >
-                      {isCreating ? '...' : '开始'} <ArrowRight size={11} />
-                    </button>
+                    {/* Step flow preview */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {combo.steps.map((step, si) => (
+                        <span key={si} className="inline-flex items-center gap-1">
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                            style={{
+                              background: 'rgba(139,92,246,0.1)',
+                              color: '#A78BFA',
+                              border: '1px solid rgba(139,92,246,0.15)',
+                            }}
+                          >
+                            {step.label}
+                          </span>
+                          {si < combo.steps.length - 1 && (
+                            <span style={{ color: '#4B5563', fontSize: 9 }}>→</span>
+                          )}
+                        </span>
+                      ))}
+                      {/* Output type badge */}
+                      {(() => {
+                        const last = combo.steps[combo.steps.length - 1];
+                        const typeMap: Record<string, { label: string; color: string }> = {
+                          '/publish': { label: '多平台发布', color: '#F43F5E' },
+                          '/ai/video': { label: '生成视频', color: '#06B6D4' },
+                          '/ai/ads': { label: '生成9图', color: '#F59E0B' },
+                          '/ai/image': { label: '生成图片', color: '#8B5CF6' },
+                          '/ai/digital-human': { label: '生成视频', color: '#06B6D4' },
+                          '/ai/copywriting': { label: '生成文案', color: '#3B82F6' },
+                        };
+                        const t = typeMap[last?.entry] || { label: '完成', color: '#6B7280' };
+                        return (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-medium ml-1"
+                            style={{ background: 'rgba(34,197,94,0.1)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.15)' }}
+                          >
+                            产出：{t.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </GlassCard>
               ))}
@@ -440,6 +510,20 @@ function AICreationContent() {
           </div>
         )}
 
+        {/* ─── 方案 vs 工具 说明 ─── */}
+        {(recommendations.length > 0 || customCombos.length > 0) && (
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.12)' }}
+          >
+            <span style={{ fontSize: 13 }}>💡</span>
+            <p style={{ color: '#A78BFA', fontSize: 11, lineHeight: 1.5 }}>
+              上方<strong>方案</strong>会<strong>自动串联多步</strong>，一键生成完整内容；
+              下方<strong>工具</strong>适合<strong>手动单步创作</strong>，自由控制每个环节
+            </p>
+          </div>
+        )}
+
         {/* ─── 3. AI 创作工具 ─── */}
         <div>
           <p style={{ ...sectionLabel, marginBottom: 8 }}>AI 创作工具</p>
@@ -463,7 +547,9 @@ function AICreationContent() {
                   </span>
                 )}
                 <span style={{ color, fontSize: 28 }}>{icon}</span>
-                <p style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 600 }}>{title}</p>
+                <p style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 600 }}>
+                  <JargonTooltip text={title} />
+                </p>
                 <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.3 }}>{desc}</p>
               </GlassCard>
             ))}

@@ -3,15 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Upload, Sparkles, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
+export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [productName, setProductName] = useState(handoff.topic || '');
   const [imageUrl, setImageUrl] = useState(handoff.imageUrl || '');
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoTriggeredRef = useRef(false);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('图片');
 
   useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
 
@@ -28,6 +30,7 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
           product: product || '热门推荐',
           sellingPoints,
           referenceImage: refImage || undefined,
+          context: role || '',
         });
         if (!res.success) throw new Error(res.error);
         const urls = (res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean);
@@ -62,6 +65,7 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
         product: productName.trim(),
         sellingPoints,
         referenceImage: imageUrl || undefined,
+        context: role || '',
       });
       if (!res.success) throw new Error(res.error);
       setResults((res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean));
@@ -155,6 +159,31 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       )}
 
       {error && <p style={{ color: '#FCA5A5', fontSize: 11 }}>{error}</p>}
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>历史生成</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {historyItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { if (item.imageUrl) setImageUrl(item.imageUrl); }}
+                className="rounded-lg overflow-hidden transition-all hover:opacity-80"
+                style={{ aspectRatio: '1', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Sparkles size={16} color="#6B7280" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

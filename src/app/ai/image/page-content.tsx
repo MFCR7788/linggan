@@ -54,6 +54,7 @@ function AIImageContent() {
   // ─── 8 个快捷预设（联动 ratio/style/palette）─────────
   const [selectedPresetId, setSelectedPresetId] = useState('xiaohongshu');
   const [presetsOpen, setPresetsOpen] = useState(true);
+  const [quickMode, setQuickMode] = useState(true);
 
   // ─── 1. 选材 + 输入 + 智能提示 ─────────────────────
   const [userInput, setUserInput] = useState('');
@@ -382,7 +383,52 @@ function AIImageContent() {
       )}
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
+        {/* 快速/完整模式切换 */}
+        <div className="flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => { setQuickMode(true); setPresetsOpen(false); }}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1"
+            style={{
+              background: quickMode ? 'linear-gradient(135deg, #8B5CF6, #A78BFA)' : 'transparent',
+              color: quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            <Zap size={12} /> 快速模式
+          </button>
+          <button
+            onClick={() => { setQuickMode(false); setPresetsOpen(true); }}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: !quickMode ? 'rgba(255,255,255,0.1)' : 'transparent',
+              color: !quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            完整模式
+          </button>
+        </div>
+
+        {/* 快速模式：简洁输入+生成 */}
+        <div style={{ display: quickMode ? undefined : 'none' }}>
+          <GlassCard className="!p-3 space-y-3">
+            <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }}>
+              AI 自动选择最佳预设，输入描述即可生成图片
+            </p>
+            <textarea
+              value={refinedPrompt || userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              placeholder="描述你想生成的图片，例如：一只橘猫坐在窗台上，阳光洒落..."
+              rows={3}
+              className="w-full p-3 rounded-lg text-sm resize-none"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
+            />
+            <PrimaryButton fullWidth size="md" onClick={handleGenerate} disabled={isLoading || (!userInput.trim() && !refinedPrompt)}>
+              <Sparkles size={14} /> {isLoading ? '生成中...' : '一键生成图片'}
+            </PrimaryButton>
+          </GlassCard>
+        </div>
+
         {/* 8 个快捷预设 */}
+        <div style={{ display: quickMode ? 'none' : undefined }}>
         <GlassCard className="!p-3">
           <div className="flex items-center justify-between mb-3">
             <button
@@ -426,7 +472,10 @@ function AIImageContent() {
             </div>
           )}
         </GlassCard>
+        </div>
 
+        {/* Step 1+2+3: 完整模式高级设置 */}
+        <div style={{ display: quickMode ? 'none' : undefined }}>
         {/* Step 1: 选材 + 输入 + 智能提示 */}
         <GlassCard>
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
@@ -742,6 +791,7 @@ function AIImageContent() {
         <PrimaryButton fullWidth size="lg" onClick={handleGenerate} disabled={isLoading}>
           <Zap size={18} /> {isLoading ? '生成中...' : batchMode ? `生成 4 张变体` : '立即生成'}
         </PrimaryButton>
+        </div>
 
         {/* 结果区 */}
         {(isLoading || isGenerated || error) && (

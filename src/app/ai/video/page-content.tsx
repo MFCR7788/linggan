@@ -103,6 +103,7 @@ function AIVideoContent() {
   const [stylePreset, setStylePreset] = useState('douyin_hot');
   const [duration, setDuration] = useState(10);
   const [qualityTier, setQualityTier] = useState('fast');
+  const [quickMode, setQuickMode] = useState(true);
   const [language, setLanguage] = useState('zh');
 
   // ─── 首帧图片（关键：图生视频入口） ──────────────────────
@@ -1665,8 +1666,60 @@ function AIVideoContent() {
       )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
-        {/* Step 导航 — 生成期间隐藏 */}
-        {!isGenActive && genPhase !== 'done' && (
+        {/* 快速/完整模式切换 */}
+        <div className="flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => setQuickMode(true)}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1"
+            style={{
+              background: quickMode ? 'linear-gradient(135deg, #F43F5E, #E11D48)' : 'transparent',
+              color: quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            <Zap size={12} /> 快速模式
+          </button>
+          <button
+            onClick={() => setQuickMode(false)}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: !quickMode ? 'rgba(255,255,255,0.1)' : 'transparent',
+              color: !quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            完整模式
+          </button>
+        </div>
+
+        {/* 快速模式：简洁输入 */}
+        <div style={{ display: quickMode ? undefined : 'none' }}>
+          <GlassCard className="!p-3 space-y-3">
+            <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }}>
+              AI 自动选择最佳风格和参数，输入脚本即可生成视频
+            </p>
+            <textarea
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="输入你的视频脚本或话题..."
+              rows={4}
+              className="w-full p-3 rounded-lg text-sm resize-none"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
+            />
+            <button
+              onClick={handleGenerateStoryboardV2}
+              disabled={isGenerating || !topic.trim()}
+              className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"
+              style={{
+                background: topic.trim() ? 'linear-gradient(135deg, #F43F5E, #E11D48)' : 'rgba(255,255,255,0.06)',
+                color: topic.trim() ? '#FFFFFF' : '#4B5563',
+              }}
+            >
+              {isGenerating ? <><Loader2 size={16} className="animate-spin" /> 生成中...</> : <><Sparkles size={16} /> 一键生成视频</>}
+            </button>
+          </GlassCard>
+        </div>
+
+        {/* 完整模式：详细设置 */}
+        <div style={{ display: quickMode ? 'none' : undefined }}>
           <>
             <div className="overflow-x-auto">
               <div className="flex gap-0 min-w-max justify-center">
@@ -1699,7 +1752,7 @@ function AIVideoContent() {
             {currentStep === 2 && renderStep2()}
             {currentStep === 3 && genPhase === 'idle' && renderStep3()}
           </>
-        )}
+        </div>
 
         {/* 生成中 / 生成完成 — 全屏占据 */}
         {(isGenActive || genPhase === 'done') && (

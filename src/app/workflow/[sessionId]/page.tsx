@@ -10,11 +10,13 @@ import { getStepWidget } from '@/components/workflow/StepWidgetRegistry';
 import { TopNav } from '@/components/TopNav';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import type { LingjiEntry } from '@/lib/account-presets';
+import { getStepRole } from '@/lib/account-presets';
 
 interface StepDef {
   label: string;
   entry: string;
   paramKey?: string;
+  role?: string;
 }
 
 export default function WorkflowPage() {
@@ -181,6 +183,7 @@ export default function WorkflowPage() {
                     isCompleting={isCompleting}
                     autoExecute={autoMode && !autoPaused}
                     onAutoError={handleAutoError}
+                    role={getStepRole(step.entry, step.role)}
                   />
                 ) : (
                   <p style={{ color: '#6B7280', fontSize: 11 }}>

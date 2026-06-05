@@ -3,15 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Play, Pause, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
+export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
   const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const autoTriggeredRef = useRef(false);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频');
 
   useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
 
@@ -23,7 +25,7 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
       if (!input) { onAutoError?.('缺少视频脚本，无法自动生成视频'); return; }
       try {
         const res = await apiClient.post<{ taskId: string }>('/ai/video', {
-          prompt: input,
+          prompt: role ? `${role}\n${input}` : input,
           imageUrl: handoff.imageUrl || handoff.firstFrame || '',
           style: handoff.style || '',
         });
@@ -157,6 +159,26 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
       )}
 
       {error && <p style={{ color: '#FCA5A5', fontSize: 11 }}>{error}</p>}
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>历史生成</p>
+          <div className="space-y-1.5">
+            {historyItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { if (item.videoUrl) setVideoUrl(item.videoUrl); }}
+                className="w-full text-left px-2.5 py-2 rounded-lg transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+              >
+                <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title || 'AI 生成视频'}</p>
+                <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

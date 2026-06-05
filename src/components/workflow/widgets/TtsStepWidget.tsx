@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Play, Pause, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const VOICES: { id: string; label: string; gender: string }[] = [
@@ -13,7 +14,7 @@ const VOICES: { id: string; label: string; gender: string }[] = [
   { id: 'male_warm', label: '暖声男声', gender: 'male' },
 ];
 
-export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
+export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.script || handoff.text || '');
   const [voice, setVoice] = useState('female_natural');
   const [generating, setGenerating] = useState(false);
@@ -22,6 +23,7 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
   const [audio] = useState(() => typeof Audio !== 'undefined' ? new (window.Audio)() : null);
   const [error, setError] = useState<string | null>(null);
   const autoTriggeredRef = useRef(false);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
   useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
 
@@ -32,7 +34,7 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       const input = (handoff.script || handoff.text || '').trim();
       if (!input) { onAutoError?.('缺少文本，无法自动生成配音'); return; }
       try {
-        const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: input, voice });
+        const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: role ? `${role}\n${input}` : input, voice });
         if (!res.success) throw new Error(res.error);
         const dataUri = `data:${res.data!.mimeType || 'audio/mpeg'};base64,${res.data!.audioBase64}`;
         await onComplete({ handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), audioUrl: dataUri } });
@@ -152,6 +154,26 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       )}
 
       {error && <p style={{ color: '#FCA5A5', fontSize: 11 }}>{error}</p>}
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>历史生成</p>
+          <div className="space-y-1.5">
+            {historyItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { setText(item.title); }}
+                className="w-full text-left px-2.5 py-2 rounded-lg transition-all hover:opacity-80"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+              >
+                <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title || 'AI 生成配音'}</p>
+                <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

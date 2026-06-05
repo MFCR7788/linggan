@@ -102,6 +102,7 @@ function AICopywritingContent() {
   const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickMode, setQuickMode] = useState(true);
 
   // ─── Step 1 state ──────────────────────────────
   const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
@@ -502,7 +503,54 @@ function AICopywritingContent() {
 
       <div className="flex-1 px-4 pt-4 space-y-4">
 
+        {/* 快速/完整模式切换 */}
+        <div className="flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => { setQuickMode(true); setSettingsOpen(false); }}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1"
+            style={{
+              background: quickMode ? 'linear-gradient(135deg, #3B82F6, #8B5CF6)' : 'transparent',
+              color: quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            <Zap size={12} /> 快速模式
+          </button>
+          <button
+            onClick={() => { setQuickMode(false); }}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: !quickMode ? 'rgba(255,255,255,0.1)' : 'transparent',
+              color: !quickMode ? '#FFFFFF' : '#6B7280',
+            }}
+          >
+            完整模式
+          </button>
+        </div>
+        {quickMode && (
+          <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center', marginTop: -8 }}>
+            AI 自动选择最佳平台、风格和行业，输入主题即可生成
+          </p>
+        )}
+
+        {/* 快速模式：简洁输入框 */}
+        {quickMode && (
+          <GlassCard className="!p-3 space-y-3">
+            <textarea
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              placeholder="输入你想写的话题，例如：推荐一款适合干皮的粉底液..."
+              rows={3}
+              className="w-full p-3 rounded-lg text-sm resize-none"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
+            />
+            <PrimaryButton size="md" onClick={handleGenerate} disabled={isLoading || !userInput.trim()} className="!w-full !justify-center">
+              <Zap size={14} /> {isLoading ? '生成中...' : '一键生成文案'}
+            </PrimaryButton>
+          </GlassCard>
+        )}
+
         {/* ──── 配置区（折叠） ──── */}
+        {!quickMode && (
         <GlassCard className="!p-0">
           <button
             className="flex items-center justify-between w-full px-3 py-2.5"
@@ -620,8 +668,10 @@ function AICopywritingContent() {
             </div>
           )}
         </GlassCard>
+        )}
 
         {/* ──── Step 1: 选材与意图 ──── */}
+        {!quickMode && (
         <GlassCard>
           <p style={S.sectionTitle}>
             <span style={S.stepBadge('#3B82F6')}>Step 1</span> · 选材与意图
@@ -809,6 +859,7 @@ function AICopywritingContent() {
             </div>
           )}
         </GlassCard>
+        )}
 
         {/* ──── 生成结果 ──── */}
         {(isLoading || isGenerated) && (
