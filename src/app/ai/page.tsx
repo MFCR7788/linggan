@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2, TrendingUp, Scissors, Plus, Wrench } from "lucide-react";
+import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2, TrendingUp, Scissors, Plus, Wrench, CheckSquare, X } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -52,8 +52,11 @@ function AICreationContent() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
   const [customCombos, setCustomCombos] = useState<ReturnType<typeof getCustomCombos>>([]);
+  const [manageMode, setManageMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const router = useRouter();
   const queryClient = useQueryClient();
   const { accountType, preset } = useAccountType();
@@ -92,6 +95,59 @@ function AICreationContent() {
       setCleaning(false);
     }
   }, [allRaw, inProgressSessions, queryClient]);
+
+  // 切换管理模式时清空选中
+  const toggleManageMode = useCallback(() => {
+    setManageMode((prev) => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === inProgressSessions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(inProgressSessions.map((s) => s.id)));
+    }
+  }, [inProgressSessions, selectedIds.size]);
+
+  const handleDeleteOne = useCallback(async (id: string) => {
+    try {
+      await apiClient.delete(`/workflow/sessions/${id}`);
+      queryClient.invalidateQueries({ queryKey: ['workflow-sessions'] });
+      setToast({ message: '已删除', type: 'success' });
+    } catch {
+      setToast({ message: '删除失败', type: 'error' });
+    }
+  }, [queryClient]);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) => apiClient.delete(`/workflow/sessions/${id}`))
+      );
+      queryClient.invalidateQueries({ queryKey: ['workflow-sessions'] });
+      setSelectedIds(new Set());
+      setManageMode(false);
+      setToast({ message: `已删除 ${selectedIds.size} 条会话`, type: 'success' });
+    } catch {
+      setToast({ message: '批量删除失败，请重试', type: 'error' });
+    } finally {
+      setDeleting(false);
+    }
+  }, [selectedIds, queryClient]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -173,11 +229,11 @@ function AICreationContent() {
               >
                 {inProgressSessions.length}
               </span>
-              {duplicateCount > 0 && (
+              {!manageMode && duplicateCount > 0 && (
                 <button
                   onClick={handleCleanDuplicates}
                   disabled={cleaning}
-                  className="ml-auto px-2 py-1 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-all hover:opacity-80"
+                  className="px-2 py-1 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-all hover:opacity-80"
                   style={{
                     background: 'rgba(239,68,68,0.12)',
                     border: '1px solid rgba(239,68,68,0.25)',
@@ -189,9 +245,40 @@ function AICreationContent() {
                   {cleaning ? '清理中...' : `清理 ${duplicateCount} 条重复`}
                 </button>
               )}
+              <button
+                onClick={toggleManageMode}
+                className={`ml-auto px-2.5 py-1 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-all ${manageMode ? '' : 'hover:opacity-80'}`}
+                style={{
+                  background: manageMode ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.06)',
+                  border: manageMode ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  color: manageMode ? '#A78BFA' : '#9CA3AF',
+                }}
+              >
+                {manageMode ? (
+                  <><X size={11} /> 取消</>
+                ) : (
+                  <><CheckSquare size={11} /> 管理</>
+                )}
+              </button>
             </div>
+
+            {/* 管理模式：全选栏 */}
+            {manageMode && (
+              <button
+                onClick={handleSelectAll}
+                className="w-full mb-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[11px] font-medium transition-colors"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#9CA3AF',
+                }}
+              >
+                {selectedIds.size === inProgressSessions.length ? '取消全选' : `全选 (${inProgressSessions.length})`}
+              </button>
+            )}
+
             <div className="space-y-2">
-              {inProgressSessions.slice(0, 6).map((session) => (
+              {inProgressSessions.slice(0, manageMode ? undefined : 6).map((session) => (
                 <WorkflowSessionCard
                   key={session.id}
                   session={session}
@@ -203,9 +290,31 @@ function AICreationContent() {
                       body: JSON.stringify({ status: 'active' }),
                     }).catch(() => {});
                   }}
+                  onDelete={handleDeleteOne}
+                  manageMode={manageMode}
+                  checked={selectedIds.has(session.id)}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </div>
+
+            {/* 管理模式：底部批量删除 */}
+            {manageMode && selectedIds.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                disabled={deleting}
+                className="w-full mt-2 py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all active:scale-95"
+                style={{
+                  background: 'rgba(239,68,68,0.15)',
+                  border: '1px solid rgba(239,68,68,0.3)',
+                  color: '#FCA5A5',
+                  opacity: deleting ? 0.5 : 1,
+                }}
+              >
+                <Trash2 size={14} />
+                {deleting ? '删除中...' : `删除选中 (${selectedIds.size})`}
+              </button>
+            )}
           </div>
         )}
 

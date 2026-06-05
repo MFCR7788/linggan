@@ -1,13 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Check } from 'lucide-react';
+import { ChevronRight, Check, X } from 'lucide-react';
 import { buildHandoffUrl } from '@/hooks/use-content-handoff';
 import type { WorkflowSession } from '@/types';
 
 interface Props {
   session: WorkflowSession;
   onResume: () => void;
+  onDelete?: (id: string) => void;
+  manageMode?: boolean;
+  checked?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -21,7 +25,7 @@ function formatRelativeTime(iso: string): string {
   return `${days} 天前`;
 }
 
-export function WorkflowSessionCard({ session, onResume }: Props) {
+export function WorkflowSessionCard({ session, onResume, onDelete, manageMode, checked, onToggleSelect }: Props) {
   const router = useRouter();
   const total = session.total_steps || 4;
   const completed = (session.step_results || []).length;
@@ -33,7 +37,11 @@ export function WorkflowSessionCard({ session, onResume }: Props) {
   const steps = (combo?.steps as Array<{ label: string; entry: string }>) || [];
   const isPaused = session.status === 'paused';
 
-  const handleResume = () => {
+  const handleCardClick = () => {
+    if (manageMode && onToggleSelect) {
+      onToggleSelect(session.id);
+      return;
+    }
     onResume();
     const currentStep = steps[currentIdx];
     if (currentStep?.entry) {
@@ -45,12 +53,27 @@ export function WorkflowSessionCard({ session, onResume }: Props) {
 
   return (
     <div
-      onClick={handleResume}
-      className="rounded-lg p-3 cursor-pointer transition-all hover:bg-white/[0.06]"
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+      onClick={handleCardClick}
+      className="rounded-lg p-3 transition-all hover:bg-white/[0.06] relative group"
+      style={{
+        background: checked ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.03)',
+        border: checked ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(255,255,255,0.08)',
+        cursor: manageMode ? 'default' : 'pointer',
+      }}
     >
       {/* 标题行 */}
       <div className="flex items-center gap-2 mb-2">
+        {manageMode && (
+          <div
+            className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+            style={{
+              background: checked ? '#8B5CF6' : 'rgba(255,255,255,0.08)',
+              border: checked ? 'none' : '1px solid rgba(255,255,255,0.15)',
+            }}
+          >
+            {checked && <Check size={12} color="#FFFFFF" />}
+          </div>
+        )}
         <span style={{ fontSize: 18 }}>{emoji}</span>
         <p
           className="flex-1 min-w-0"
@@ -69,7 +92,17 @@ export function WorkflowSessionCard({ session, onResume }: Props) {
             已暂停
           </span>
         )}
-        <ChevronRight size={14} color="#6B7280" />
+        {!manageMode && onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+            className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ background: 'rgba(239,68,68,0.08)' }}
+            title="删除"
+          >
+            <X size={12} color="#FCA5A5" />
+          </button>
+        )}
+        {!manageMode && <ChevronRight size={14} color="#6B7280" />}
       </div>
 
       {/* 步骤时间线 */}
