@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Check, X } from 'lucide-react';
-import { buildHandoffUrl } from '@/lib/handoff-url';
 import type { WorkflowSession } from '@/types';
 
 interface Props {
@@ -43,12 +42,7 @@ export function WorkflowSessionCard({ session, onResume, onDelete, manageMode, c
       return;
     }
     onResume();
-    const currentStep = steps[currentIdx];
-    if (currentStep?.entry) {
-      const base = buildHandoffUrl(currentStep.entry, session.accumulated_handoff);
-      const url = `${base}${base.includes('?') ? '&' : '?'}workflow_session_id=${session.id}`;
-      router.push(url);
-    }
+    router.push(`/workflow/${session.id}`);
   };
 
   return (

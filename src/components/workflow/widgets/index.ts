@@ -1,0 +1,10 @@
+export { InspirationStepWidget } from './InspirationStepWidget';
+export { CopywritingStepWidget } from './CopywritingStepWidget';
+export { ImageStepWidget } from './ImageStepWidget';
+export { ImageEditorStepWidget } from './ImageEditorStepWidget';
+export { TtsStepWidget } from './TtsStepWidget';
+export { VideoStepWidget } from './VideoStepWidget';
+export { DigitalHumanStepWidget } from './DigitalHumanStepWidget';
+export { AdsStepWidget } from './AdsStepWidget';
+export { HotspotStepWidget } from './HotspotStepWidget';
+export { PublishStepWidget } from './PublishStepWidget';

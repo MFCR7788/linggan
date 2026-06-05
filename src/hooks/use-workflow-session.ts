@@ -48,7 +48,7 @@ export function useWorkflowSession(sessionId?: string | null) {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['workflow-sessions'] });
-      router.push(data!.firstStepUrl);
+      router.push(`/workflow/${data!.session.id}`);
     },
   });
 
@@ -56,6 +56,7 @@ export function useWorkflowSession(sessionId?: string | null) {
     mutationFn: async (params: {
       handoffData?: Record<string, string>;
       outputContentId?: string;
+      redirectOnComplete?: boolean;
     }) => {
       if (!sessionId) throw new Error('No session');
       const res = await apiClient.patch<{
@@ -67,12 +68,12 @@ export function useWorkflowSession(sessionId?: string | null) {
         outputContentId: params.outputContentId,
       });
       if (!res.success) throw new Error(res.error);
-      return res.data;
+      return { ...res.data, redirectOnComplete: params.redirectOnComplete };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['workflow-session', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['workflow-sessions'] });
-      if (data!.nextStepUrl) {
+      if (data!.redirectOnComplete !== false && data!.nextStepUrl) {
         router.push(data!.nextStepUrl);
       }
     },
@@ -107,8 +108,16 @@ export function useWorkflowSession(sessionId?: string | null) {
   );
 
   const completeCurrentStep = useCallback(
-    async (handoffData?: Record<string, string>, outputContentId?: string) => {
-      return completeStepMutation.mutateAsync({ handoffData, outputContentId });
+    async (
+      handoffData?: Record<string, string>,
+      outputContentId?: string,
+      options?: { redirectOnComplete?: boolean }
+    ) => {
+      return completeStepMutation.mutateAsync({
+        handoffData,
+        outputContentId,
+        redirectOnComplete: options?.redirectOnComplete,
+      });
     },
     [completeStepMutation]
   );

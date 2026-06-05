@@ -13,6 +13,7 @@ const protectedPaths = [
   '/profile',
   '/publish',
   '/insights',
+  '/workflow',
 ];
 
 const publicPaths = ['/login', '/api/auth'];
