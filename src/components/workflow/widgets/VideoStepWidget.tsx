@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Sparkles, Play, Pause, Download } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { Loader2, Sparkles, Download } from 'lucide-react';
+import { useVideoGeneration } from '@/hooks/ai/use-video-generation';
 import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
-  const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const { simpleGenerate, simpleGenerating: generating, simpleProgress: progress, error, setError } = useVideoGeneration();
   const autoTriggeredRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频');
 
@@ -24,24 +22,12 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
       const input = (handoff.text || handoff.script || '').trim();
       if (!input) { onAutoError?.('缺少视频脚本，无法自动生成视频'); return; }
       try {
-        const res = await apiClient.post<{ taskId: string }>('/ai/video', {
+        const { videoUrl: url } = await simpleGenerate({
           prompt: role ? `${role}\n${input}` : input,
           imageUrl: handoff.imageUrl || handoff.firstFrame || '',
           style: handoff.style || '',
         });
-        if (!res.success) throw new Error(res.error);
-        const taskId = res.data!.taskId;
-        for (let i = 0; i < 90; i++) {
-          await new Promise((r) => setTimeout(r, 4000));
-          const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/video?taskId=${taskId}`);
-          if (!pollRes.success) continue;
-          if (pollRes.data!.status === 'succeeded' && pollRes.data!.videoUrl) {
-            await onComplete({ handoffData: { text: input.substring(0, 1000), firstFrame: handoff.imageUrl || '', videoUrl: pollRes.data!.videoUrl } });
-            return;
-          }
-          if (pollRes.data!.status === 'failed') throw new Error('视频合成失败');
-        }
-        throw new Error('视频生成超时');
+        await onComplete({ handoffData: { text: input.substring(0, 1000), firstFrame: handoff.imageUrl || '', videoUrl: url } });
       } catch (e: any) {
         onAutoError?.(e.message || '视频生成失败');
       }
@@ -51,41 +37,14 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
-    setGenerating(true);
-    setError(null);
     try {
-      const res = await apiClient.post<{ taskId: string }>('/ai/video', {
+      const { videoUrl: url } = await simpleGenerate({
         prompt: text.trim(),
         imageUrl: handoff.imageUrl || handoff.firstFrame || '',
         style: handoff.style || '',
       });
-      if (!res.success) throw new Error(res.error);
-
-      const taskId = res.data!.taskId;
-      // Poll for completion
-      let attempts = 0;
-      while (attempts < 60) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/video?taskId=${taskId}`);
-        if (pollRes.success && pollRes.data) {
-          if (pollRes.data.status === 'succeeded' && pollRes.data.videoUrl) {
-            setVideoUrl(pollRes.data.videoUrl);
-            break;
-          }
-          if (pollRes.data.status === 'failed') {
-            throw new Error('视频合成失败');
-          }
-        }
-        attempts++;
-        setProgress(`生成中... ${Math.round((attempts / 60) * 100)}%`);
-      }
-      if (!videoUrl && attempts >= 60) throw new Error('生成超时，请稍后重试');
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-      setProgress('');
-    }
+      if (url) setVideoUrl(url);
+    } catch {}
   };
 
   const handleComplete = async () => {

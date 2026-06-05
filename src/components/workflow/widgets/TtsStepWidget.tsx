@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Play, Pause, Sparkles } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
 import { useWorkHistory } from '@/hooks/use-work-history';
+import { useTts } from '@/hooks/ai/use-tts';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-const VOICES: { id: string; label: string; gender: string }[] = [
+const FALLBACK_VOICES = [
   { id: 'female_natural', label: '温柔女声', gender: 'female' },
   { id: 'female_emotional', label: '活泼女声', gender: 'female' },
   { id: 'female_professional', label: '知性女声', gender: 'female' },
@@ -17,11 +17,11 @@ const VOICES: { id: string; label: string; gender: string }[] = [
 export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.script || handoff.text || '');
   const [voice, setVoice] = useState('female_natural');
-  const [generating, setGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [audio] = useState(() => typeof Audio !== 'undefined' ? new (window.Audio)() : null);
-  const [error, setError] = useState<string | null>(null);
+  const { voices: apiVoices, generate: generateTts, generating, error, setError } = useTts();
+  const voices = apiVoices.length > 0 ? apiVoices : FALLBACK_VOICES;
   const autoTriggeredRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
@@ -34,9 +34,8 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       const input = (handoff.script || handoff.text || '').trim();
       if (!input) { onAutoError?.('缺少文本，无法自动生成配音'); return; }
       try {
-        const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: role ? `${role}\n${input}` : input, voice });
-        if (!res.success) throw new Error(res.error);
-        const dataUri = `data:${res.data!.mimeType || 'audio/mpeg'};base64,${res.data!.audioBase64}`;
+        const result = await generateTts({ text: role ? `${role}\n${input}` : input, voice });
+        const dataUri = `data:${result.mimeType};base64,${result.audioBase64}`;
         await onComplete({ handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), audioUrl: dataUri } });
       } catch (e: any) {
         onAutoError?.(e.message || '配音生成失败');
@@ -55,18 +54,11 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
-    setGenerating(true);
-    setError(null);
     try {
-      const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: text.trim(), voice });
-      if (!res.success) throw new Error(res.error);
-      const dataUri = `data:${res.data!.mimeType || 'audio/mpeg'};base64,${res.data!.audioBase64}`;
+      const result = await generateTts({ text: text.trim(), voice });
+      const dataUri = `data:${result.mimeType};base64,${result.audioBase64}`;
       setAudioUrl(dataUri);
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-    }
+    } catch {}
   };
 
   const togglePlay = () => {
@@ -92,10 +84,10 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       />
 
       <div className="flex gap-2 flex-wrap">
-        {VOICES.map((v) => (
+        {voices.map((v) => (
           <button
-            key={v.id}
-            onClick={() => setVoice(v.id)}
+            key={v.id || v.label}
+            onClick={() => setVoice(v.id || '')}
             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
             style={{
               background: voice === v.id ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.04)',

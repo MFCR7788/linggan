@@ -11,6 +11,7 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { useTts } from '@/hooks/ai/use-tts';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
 interface VoiceOption {
@@ -45,14 +46,15 @@ function TTSPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
 
   // 声音设置
+  const { voices: apiVoices, generate: generateTts, generating } = useTts();
   const [voices, setVoices] = useState<VoiceOption[]>([]);
+  useEffect(() => { if (apiVoices.length > 0) setVoices(apiVoices as VoiceOption[]); }, [apiVoices]);
   const [voice, setVoice] = useState('female_natural');
   const [speed, setSpeed] = useState(1.15);
   const [pitch, setPitch] = useState(1.0);
 
   // 生成
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -115,13 +117,6 @@ function TTSPageContent() {
       .catch(() => {});
   }, []);
 
-  // 加载音色
-  useEffect(() => {
-    fetch('/api/ai/tts')
-      .then((r) => r.json())
-      .then((d) => { if (d.success) setVoices(d.data.voices || []); })
-      .catch(() => {});
-  }, []);
 
   const toggleInspiration = (id: string | number) => {
     const next = new Set(selectedIds);
@@ -144,30 +139,19 @@ function TTSPageContent() {
       setToast({ message: '请输入文本或选择素材', type: 'error' });
       return;
     }
-    setIsGenerating(true);
     setAudioBase64(null);
     try {
-      const res = await fetch('/api/ai/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: finalText,
-          voice,
-          speed,
-          pitch,
-          cloned_voice_id: voice === 'cloned_voice' ? clonedVoiceId : undefined,
-        }),
+      const result = await generateTts({
+        text: finalText,
+        voice,
+        speed,
+        pitch,
+        clonedVoiceId: voice === 'cloned_voice' && clonedVoiceId ? clonedVoiceId : undefined,
       });
-      const data = await res.json();
-      if (data.success) {
-        setAudioBase64(data.audioBase64);
-      } else {
-        setToast({ message: data.error || '生成失败', type: 'error' });
-      }
-    } catch {
-      setToast({ message: '网络错误，请重试', type: 'error' });
+      setAudioBase64(result.audioBase64);
+    } catch (e: any) {
+      setToast({ message: e.message || '生成失败', type: 'error' });
     }
-    setIsGenerating(false);
   };
 
   const handleDownload = () => {
@@ -715,8 +699,8 @@ function TTSPageContent() {
           </p>
 
           {!audioBase64 && (
-            <PrimaryButton fullWidth size="lg" onClick={handleGenerate} loading={isGenerating}>
-              <Music size={16} /> {isGenerating ? '生成中...' : '生成语音'}
+            <PrimaryButton fullWidth size="lg" onClick={handleGenerate} loading={generating}>
+              <Music size={16} /> {generating ? '生成中...' : '生成语音'}
             </PrimaryButton>
           )}
 

@@ -1,21 +1,37 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Sparkles, Play } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { Loader2, Sparkles } from 'lucide-react';
+import { useDigitalHuman } from '@/hooks/ai/use-digital-human';
 import { useWorkHistory } from '@/hooks/use-work-history';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
-  const [generating, setGenerating] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+  const { submit: submitDH, generating, phase: hookPhase, videoUrl: hookVideoUrl, error, setError } = useDigitalHuman();
   const autoTriggeredRef = useRef(false);
+  const completedRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频');
 
-  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+  const videoUrl = localVideoUrl || hookVideoUrl;
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; completedRef.current = false; } }, [autoExecute]);
+
+  // Watch for hook completion
+  useEffect(() => {
+    if (hookVideoUrl) setLocalVideoUrl(hookVideoUrl);
+  }, [hookVideoUrl]);
+
+  useEffect(() => {
+    if (hookPhase === 'done' && hookVideoUrl && autoExecute && !completedRef.current) {
+      completedRef.current = true;
+      const input = (handoff.text || handoff.script || '').trim();
+      onComplete({
+        handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), videoUrl: hookVideoUrl, firstFrame: handoff.imageUrl || '' },
+      });
+    }
+  }, [hookPhase, hookVideoUrl, autoExecute]);
 
   useEffect(() => {
     if (!autoExecute || autoTriggeredRef.current) return;
@@ -24,24 +40,11 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
       const input = (handoff.text || handoff.script || '').trim();
       if (!input) { onAutoError?.('缺少口播文本，无法自动生成数字人视频'); return; }
       try {
-        const res = await apiClient.post<{ taskId: string }>('/ai/digital-human', {
+        await submitDH({
           text: role ? `${role}\n${input}` : input,
           imageUrl: handoff.imageUrl || '',
           audioUrl: handoff.audioUrl || '',
         });
-        if (!res.success) throw new Error(res.error);
-        const taskId = res.data!.taskId;
-        for (let i = 0; i < 90; i++) {
-          await new Promise((r) => setTimeout(r, 5000));
-          const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/digital-human?taskId=${taskId}`);
-          if (!pollRes.success) continue;
-          if (pollRes.data!.status === 'succeeded' && pollRes.data!.videoUrl) {
-            await onComplete({ handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), videoUrl: pollRes.data!.videoUrl, firstFrame: handoff.imageUrl || '' } });
-            return;
-          }
-          if (pollRes.data!.status === 'failed') throw new Error('数字人生成失败');
-        }
-        throw new Error('数字人视频生成超时');
       } catch (e: any) {
         onAutoError?.(e.message || '数字人视频生成失败');
       }
@@ -51,41 +54,13 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
-    setGenerating(true);
-    setError(null);
     try {
-      const res = await apiClient.post<{ taskId: string }>('/ai/digital-human', {
+      await submitDH({
         text: text.trim(),
         imageUrl: handoff.imageUrl || '',
         audioUrl: handoff.audioUrl || '',
       });
-      if (!res.success) throw new Error(res.error);
-
-      const taskId = res.data!.taskId;
-      let attempts = 0;
-      while (attempts < 90) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(
-          `/ai/digital-human?taskId=${taskId}`
-        );
-        if (pollRes.success && pollRes.data) {
-          const url = pollRes.data.videoUrl;
-          if (pollRes.data.status === 'succeeded' && url) {
-            setVideoUrl(url);
-            break;
-          }
-          if (pollRes.data.status === 'failed') throw new Error('数字人生成失败');
-        }
-        attempts++;
-        setProgress(`生成中... ${Math.round((attempts / 90) * 100)}%`);
-      }
-      if (!videoUrl && attempts >= 90) throw new Error('生成超时');
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-      setProgress('');
-    }
+    } catch {}
   };
 
   const handleComplete = async () => {
@@ -120,25 +95,18 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
       )}
 
       {!videoUrl ? (
-        <>
-          <button
-            onClick={handleGenerate}
-            disabled={!text.trim() || generating || isCompleting}
-            className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"
-            style={{
-              background: text.trim() ? 'linear-gradient(135deg, #06B6D4, #0891B2)' : 'rgba(255,255,255,0.06)',
-              color: text.trim() ? '#FFFFFF' : '#4B5563',
-            }}
-          >
-            {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generating ? (progress || '生成中...') : '生成数字人视频'}
-          </button>
-          {progress && (
-            <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div className="h-full rounded-full" style={{ width: '30%', background: 'linear-gradient(90deg, #06B6D4, #0891B2)' }} />
-            </div>
-          )}
-        </>
+        <button
+          onClick={handleGenerate}
+          disabled={!text.trim() || generating || isCompleting}
+          className="w-full py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"
+          style={{
+            background: text.trim() ? 'linear-gradient(135deg, #06B6D4, #0891B2)' : 'rgba(255,255,255,0.06)',
+            color: text.trim() ? '#FFFFFF' : '#4B5563',
+          }}
+        >
+          {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+          {generating ? '生成中...' : '生成数字人视频'}
+        </button>
       ) : (
         <div className="space-y-2">
           <video src={videoUrl} controls className="w-full rounded-lg" style={{ maxHeight: 200, background: '#000' }} />
@@ -156,7 +124,6 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
 
       {error && <p style={{ color: '#FCA5A5', fontSize: 11 }}>{error}</p>}
 
-      {/* 历史生成 */}
       {!historyLoading && historyItems.length > 0 && (
         <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>历史生成</p>
@@ -164,7 +131,7 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
             {historyItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => { if (item.videoUrl) setVideoUrl(item.videoUrl); }}
+                onClick={() => { if (item.videoUrl) setLocalVideoUrl(item.videoUrl); }}
                 className="w-full text-left px-2.5 py-2 rounded-lg transition-all hover:opacity-80"
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
               >

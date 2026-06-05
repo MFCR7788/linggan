@@ -12,14 +12,7 @@ import { ProtectedRoute } from '@/components';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
-
-interface GridCell {
-  imageUrl: string;
-  title: string;
-  prompt: string;
-  visualAngle: string;
-  sellingPointIndex: number;
-}
+import { useAdsGrid, type GridCell } from '@/hooks/ai/use-ads-grid';
 
 const DEMO_SELLING_POINTS = ['轻便折叠', '避震舒适', '时尚颜值'];
 
@@ -62,7 +55,7 @@ function AdsContent() {
   }, [session]);
 
   // ─── 生成 state ──────────────────────────────
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { generate: generateAds, generating: isGenerating, cells: adsCells, error: adsError } = useAdsGrid();
   const [cells, setCells] = useState<GridCell[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -120,59 +113,44 @@ function AdsContent() {
       return;
     }
 
-    setIsGenerating(true);
-    setError(null);
-    setCells(null);
     setProgressText('AI 设计 9 个视觉角度...');
 
     try {
-      const res = await fetch('/api/ai/ads/grid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: product.trim(),
-          sellingPoints: validPoints,
-          referenceImage: referenceImage || undefined,
-        }),
+      const result = await generateAds({
+        product: product.trim(),
+        sellingPoints: validPoints,
+        referenceImage: referenceImage || undefined,
       });
-      const json = await res.json();
-      if (json.success) {
-        setCells(json.data.cells);
-        setProgressText('');
-        setToast({
-          message: `已生成 ${json.data.successCount}/9 张封面`,
-          type: json.data.successCount === 9 ? 'success' : 'error',
-        });
-        // 工作流：自动保存到灵感库并推进
-        if (isInWorkflow && json.data.cells?.length > 0) {
-          const firstCell = json.data.cells[0];
-          fetch('/api/inspiration', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'image',
-              title: `${product || 'ads'} 9宫格 ${firstCell.title || ''}`.substring(0, 100),
-              original_text: product,
-              source_platform: 'ai',
-              media_urls: json.data.cells.map((c: GridCell) => c.imageUrl).filter(Boolean),
-              tags: ['AI作品', '9宫格', '广告素材'],
-              workflow_session_id: workflowSessionId || undefined,
-            }),
-          }).then(r => r.json()).then(data => {
-            if (data.success) {
-              completeCurrentStep({ topic: product, text: product, imageUrl: firstCell.imageUrl }, data.data?.id);
-            }
-          }).catch(() => {});
-        }
-      } else {
-        setError(json.error || '生成失败');
-        setProgressText('');
+      setCells(result.cells);
+      setProgressText('');
+      setToast({
+        message: `已生成 ${result.successCount}/9 张封面`,
+        type: result.successCount === 9 ? 'success' : 'error',
+      });
+      // 工作流：自动保存到灵感库并推进
+      if (isInWorkflow && result.cells.length > 0) {
+        const firstCell = result.cells[0];
+        fetch('/api/inspiration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'image',
+            title: `${product || 'ads'} 9宫格 ${firstCell.title || ''}`.substring(0, 100),
+            original_text: product,
+            source_platform: 'ai',
+            media_urls: result.cells.map((c) => c.imageUrl).filter(Boolean),
+            tags: ['AI作品', '9宫格', '广告素材'],
+            workflow_session_id: workflowSessionId || undefined,
+          }),
+        }).then(r => r.json()).then(data => {
+          if (data.success) {
+            completeCurrentStep({ topic: product, text: product, imageUrl: firstCell.imageUrl || '' }, data.data?.id);
+          }
+        }).catch(() => {});
       }
     } catch (e: any) {
       setError(e.message || '网络错误');
       setProgressText('');
-    } finally {
-      setIsGenerating(false);
     }
   };
 

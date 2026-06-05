@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Copy, Check } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
 import { useWorkHistory } from '@/hooks/use-work-history';
+import { useCopywriting } from '@/hooks/ai/use-copywriting';
+import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const CONTENT_TYPES: { id: string; label: string; platform: string; promptHint: string }[] = [
@@ -16,9 +17,8 @@ const CONTENT_TYPES: { id: string; label: string; platform: string; promptHint: 
 export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [topic, setTopic] = useState(handoff.topic || handoff.text || '');
   const [contentType, setContentType] = useState(handoff.style || 'xiaohongshu');
-  const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { generate, generating, error, setError } = useCopywriting();
   const autoTriggeredRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
@@ -32,20 +32,15 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
       if (!input) { onAutoError?.('缺少话题/文本，无法自动生成文案'); return; }
       try {
         const ct = CONTENT_TYPES.find((c) => c.id === contentType);
-        const res = await apiClient.post<{ content: string }>('/ai/copywriting', {
+        const { content } = await generate({
           inspirations: [{ title: input, originalText: input }],
           type: contentType,
           style: ct?.promptHint || handoff.style || '',
           industry: handoff.industry || '',
           userInstruction: role ? `${role}\n${ct?.promptHint || ''}` : (ct?.promptHint || ''),
         });
-        if (!res.success) throw new Error(res.error);
-        const text = res.data!.content;
-        await fetch('/api/inspiration', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'text', title: input, content: text }),
-        });
+        const text = Array.isArray(content) ? content[0] : content;
+        await apiClient.post('/inspiration', { type: 'text', title: input, content: text });
         await onComplete({ handoffData: { text: text.substring(0, 1000), topic: input, style: contentType, industry: handoff.industry || '' } });
       } catch (e: any) {
         onAutoError?.(e.message || '文案生成失败');
@@ -56,34 +51,23 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
-    setGenerating(true);
-    setError(null);
     try {
       const ct = CONTENT_TYPES.find((c) => c.id === contentType);
-      const res = await apiClient.post<{ content: string }>('/ai/copywriting', {
+      const { content } = await generate({
         inspirations: [{ title: topic.trim(), originalText: topic.trim() }],
         type: contentType,
         style: ct?.label || handoff.style || '',
         industry: handoff.industry || '',
         userInstruction: role ? `${role}\n${ct?.promptHint || ''}` : (ct?.promptHint || ''),
       });
-      if (!res.success) throw new Error(res.error);
-      setResult(res.data!.content);
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-    }
+      setResult(Array.isArray(content) ? content[0] : content);
+    } catch {}
   };
 
   const handleConfirm = async () => {
     if (!result) return;
     // Save to inspiration
-    await fetch('/api/inspiration', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'text', title: topic, content: result }),
-    });
+    await apiClient.post('/inspiration', { type: 'text', title: topic, content: result });
     await onComplete({
       handoffData: { text: result.substring(0, 1000), topic, style: contentType, industry: handoff.industry || '' },
     });

@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Loader2, Upload, Sparkles, Download } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
 import { useWorkHistory } from '@/hooks/use-work-history';
+import { useAdsGrid } from '@/hooks/ai/use-ads-grid';
+import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [productName, setProductName] = useState(handoff.topic || '');
   const [imageUrl, setImageUrl] = useState(handoff.imageUrl || '');
-  const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<string[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { generate: generateAds, generating, error, setError } = useAdsGrid();
   const autoTriggeredRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('图片');
 
@@ -26,14 +26,13 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       if (!product && !refImage) { onAutoError?.('缺少产品名或图片，无法自动生成广告图'); return; }
       try {
         const sellingPoints = [product || '热门推荐', '限时特惠', '品质保证', '点击了解', '好评如潮'];
-        const res = await apiClient.post<{ cells?: Array<{ imageUrl: string }> }>('/ai/ads/grid', {
+        const result = await generateAds({
           product: product || '热门推荐',
           sellingPoints,
           referenceImage: refImage || undefined,
           context: role || '',
         });
-        if (!res.success) throw new Error(res.error);
-        const urls = (res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean);
+        const urls = result.cells.map((c) => c.imageUrl).filter(Boolean);
         await onComplete({ handoffData: { topic: product, text: handoff.text || '', imageUrl: urls[0] || '' } });
       } catch (e: any) {
         onAutoError?.(e.message || '广告图生成失败');
@@ -47,33 +46,28 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('/api/upload/inspiration', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.success) {
-      const url = data.data?.media_urls?.[0] || data.data?.thumbnail_url;
-      if (url) setImageUrl(url);
-    }
+    try {
+      const res = await fetch('/api/upload/inspiration', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        const url = data.data?.media_urls?.[0] || data.data?.thumbnail_url;
+        if (url) setImageUrl(url);
+      }
+    } catch {}
   };
 
   const handleGenerate = async () => {
     if (!productName.trim() && !imageUrl) return;
-    setGenerating(true);
-    setError(null);
     try {
       const sellingPoints = [productName.trim(), '限时特惠', '品质保证', '点击了解', '好评如潮'];
-      const res = await apiClient.post<{ cells?: Array<{ imageUrl: string }> }>('/ai/ads/grid', {
+      const result = await generateAds({
         product: productName.trim(),
         sellingPoints,
         referenceImage: imageUrl || undefined,
         context: role || '',
       });
-      if (!res.success) throw new Error(res.error);
-      setResults((res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean));
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-    }
+      setResults(result.cells.map((c) => c.imageUrl).filter(Boolean));
+    } catch {}
   };
 
   const handleComplete = async () => {

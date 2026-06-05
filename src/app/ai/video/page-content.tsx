@@ -17,7 +17,9 @@ import { STYLE_PRESETS, LANGUAGE_OPTIONS } from '@/lib/style-constants';
 import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { useVideoGeneration } from '@/hooks/ai/use-video-generation';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
+import { apiClient } from '@/lib/api-client';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -141,11 +143,10 @@ function AIVideoContent() {
   const [segments, setSegments] = useState<SegmentState[]>([]);
   const [genPhase, setGenPhase] = useState<'idle' | 'submitting' | 'generating' | 'done' | 'error'>('idle');
   const [genError, setGenError] = useState<string | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const segmentsRef = useRef<SegmentState[]>([]);
   const [oneClickMode, setOneClickMode] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { generateStoryboard: genStoryboard, submitSegments: submitSegs, oneClick: oneClickGen, mergeVideo: mergeVid, cancelPolling, phase: hookPhase, segments: hookSegs, storyboard: hookStoryboard, mergedVideoUrl: hookMergedVideoUrl, error: hookError } = useVideoGeneration();
 
   // ─── 合并状态(Step 3 完成后用户点"合并") ───────────
   const [mergePhase, setMergePhase] = useState<'idle' | 'merging' | 'done' | 'error'>('idle');
@@ -155,9 +156,8 @@ function AIVideoContent() {
   // ─── 加载灵感数据 ────────────────────────────────────
 
   useEffect(() => {
-    fetch('/api/inspiration?type=video&limit=20')
-      .then((r) => r.json())
-      .then((d) => { if (d.success) setInspirations(d.data || []); })
+    apiClient.get<InspirationItem[]>('/inspiration?type=video&limit=20')
+      .then((res) => { if (res.success) setInspirations(res.data || []); })
       .catch(() => {});
   }, []);
 
@@ -177,6 +177,17 @@ function AIVideoContent() {
       setTopic(params.topic);
     }
   }, []);
+  // Sync hook-managed state to page state
+  useEffect(() => {
+    if (hookPhase !== 'idle') setGenPhase(hookPhase);
+  }, [hookPhase]);
+  useEffect(() => {
+    if (hookSegs.length > 0) setSegments(hookSegs);
+  }, [hookSegs]);
+  useEffect(() => {
+    if (hookError) setGenError(hookError);
+  }, [hookError]);
+
 
   // 工作流：从 session.accumulated_handoff 预填
   useEffect(() => {
@@ -195,10 +206,6 @@ function AIVideoContent() {
       setStylePreset(h.style);
     }
   }, [session]);
-
-  useEffect(() => {
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, []);
 
   // ─── 风格预设变化时更新默认 BGM/字幕 ─────────────
 
@@ -234,36 +241,21 @@ function AIVideoContent() {
     setIsGenerating(true);
     const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
     try {
-      const res = await fetch('/api/ai/video/storyboard-v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inspirations: selectedData,
-          stylePreset,
-          duration,
-          topic: topic.trim() || undefined,
-          language,
-          firstFrameUrl: firstFrameUrl || undefined,
-        }),
+      const { storyboard: sb, styleDefaults } = await genStoryboard({
+        inspirations: selectedData,
+        stylePreset,
+        duration,
+        topic: topic.trim() || undefined,
+        language,
+        firstFrameUrl: firstFrameUrl || undefined,
       });
-      const data = await res.json();
-      if (data.success && data.data.storyboard) {
-        // 兜底: LLM 未生成 subtitle 时, 用 visualPrompt 截短作字幕
-        const sb = (data.data.storyboard as any[]).map((s, i) => ({
-          ...s,
-          subtitle: s.subtitle?.trim() || s.visualPrompt?.split(/[，。,.\n]/)[0]?.trim()?.slice(0, 30) || `第${i + 1}段`,
-        }));
-        setStoryboard(sb);
-        // 应用服务端返回的 styleDefaults
-        if (data.data.styleDefaults) {
-          setBgmStyle(data.data.styleDefaults.bgm);
-          setSubtitleStyle(data.data.styleDefaults.subtitle);
-          setSubtitlePos(data.data.styleDefaults.subtitlePos);
-        }
-        setCurrentStep(2);
-      } else {
-        setToast({ message: data.error || '分镜生成失败', type: 'error' });
+      setStoryboard(sb);
+      if (styleDefaults) {
+        setBgmStyle(styleDefaults.bgm);
+        setSubtitleStyle(styleDefaults.subtitle);
+        setSubtitlePos(styleDefaults.subtitlePos);
       }
+      setCurrentStep(2);
     } catch {
       setToast({ message: '网络错误，请重试', type: 'error' });
     }
@@ -293,95 +285,24 @@ function AIVideoContent() {
     const lastFrame = multiFrameMode && lastFrameUrl.trim() ? lastFrameUrl.trim() : undefined;
 
     try {
-      const res = await fetch('/api/ai/video/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyboard,
-          inspirations: selectedData,
-          qualityTier,
-          firstFrameUrl: firstFrameUrl || undefined,
-          lastFrameUrl: lastFrame,
-          extraFrameUrls,
-          mode: multiFrameMode ? 'multi' : 'i2v',
-          bgmStyle,
-          subtitleStyle,
-          subtitlePosition: subtitlePos,
-        }),
+      // submitSegs handles POST + polling internally via the hook
+      await submitSegs({
+        storyboard,
+        inspirations: selectedData,
+        qualityTier,
+        firstFrameUrl: firstFrameUrl || undefined,
+        lastFrameUrl: lastFrame,
+        extraFrameUrls,
+        multiFrameMode,
+        bgmStyle,
+        subtitleStyle,
+        subtitlePosition: subtitlePos,
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || '提交失败');
-
-      const segs: SegmentState[] = data.data.segments.map((s: any) => ({
-        ...s,
-        status: s.taskId ? 'queued' : (s.status === 'error' ? 'failed' : 'skipped'),
-      }));
-      console.log('[Generate] 提交结果:', segs.map(s => ({ idx: s.index, taskId: s.taskId, status: s.status })));
-      setSegments(segs);
-      segmentsRef.current = segs;
-
-      // 检查：全部 segment 都没有 taskId（提交到 AI 全部失败）
-      const validSegs = segs.filter((s) => s.taskId);
-      const validTaskIds = validSegs.map((s) => s.taskId).join(',');
-      const validProviders = validSegs.map((s) => s.provider || 'dashscope').join(',');
-      if (!validTaskIds) {
-        const errMsg = segs[0]?.status === 'skipped' ? '所有片段提交 AI 生成失败，请检查 API Key 或稍后重试' : '未获取到生成任务';
-        setGenError(errMsg);
-        setGenPhase('error');
-        return;
-      }
-
-      // 开始轮询
-      setGenPhase('generating');
-      let attempts = 0;
-      pollingRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts > 120) {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setGenError('生成超时，请重试');
-          setGenPhase('error');
-          return;
-        }
-        try {
-          const pollRes = await fetch(`/api/ai/video/generate?taskIds=${validTaskIds}&providers=${validProviders}`);
-          const pollData = await pollRes.json();
-          if (pollData.success) {
-            const { results, progress } = pollData.data;
-
-            // 直接用 ref 拿到最新 segments，避免 setState 异步导致拿不到更新后的值
-            const updatedSegs = segmentsRef.current.map((seg) => {
-              const r = seg.taskId ? results?.[seg.taskId] : undefined;
-              if (r) {
-                return {
-                  ...seg,
-                  status: r.status === 'succeeded' ? 'succeeded' as const
-                    : r.status === 'failed' ? 'failed' as const
-                    : seg.status === 'queued' ? 'running' as const
-                    : seg.status,
-                  videoUrl: r.videoUrl || seg.videoUrl,
-                };
-              }
-              return seg;
-            });
-            segmentsRef.current = updatedSegs;
-            setSegments(updatedSegs);
-
-            if (progress?.allDone) {
-              if (pollingRef.current) clearInterval(pollingRef.current);
-              setGenPhase('done');
-            }
-          } else {
-            console.warn('[Poll] API 返回非成功:', pollData.error || pollData);
-          }
-        } catch (pollErr) {
-          console.warn('[Poll] 轮询请求失败:', pollErr);
-        }
-      }, 5000);
     } catch (e: any) {
       setGenError(e.message || '提交失败');
       setGenPhase('error');
     }
-  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier]);
+  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier, multiFrameMode, extraFramesText, lastFrameUrl, firstFrameUrl, submitSegs]);
 
   const handleOneClickGenerate = async () => {
     if (selectedInspirations.size === 0) {
@@ -396,87 +317,14 @@ function AIVideoContent() {
     const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
 
     try {
-      const res = await fetch('/api/ai/video/one-click', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inspirations: selectedData,
-          topic: topic.trim() || undefined,
-          stylePreset,
-          qualityTier,
-          language,
-        }),
+      const { storyboard: sb, segments: segs } = await oneClickGen({
+        inspirations: selectedData,
+        topic: topic.trim() || undefined,
+        stylePreset,
+        qualityTier,
+        language,
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || '一键成片失败');
-
-      // 设置分镜
-      if (data.data.storyboard) {
-        const sb = (data.data.storyboard as any[]).map((s, i) => ({
-          ...s,
-          subtitle: s.subtitle?.trim() || s.visualPrompt?.split(/[，。,.\n]/)[0]?.trim()?.slice(0, 30) || `第${i + 1}段`,
-        }));
-        setStoryboard(sb);
-      }
-
-      const segs: SegmentState[] = data.data.segments.map((s: any) => ({
-        ...s,
-        status: s.taskId ? 'queued' : 'failed',
-      }));
-      setSegments(segs);
-      segmentsRef.current = segs;
-
-      const validSegs = segs.filter((s) => s.taskId);
-      if (validSegs.length === 0) {
-        setGenError('所有片段提交失败');
-        setGenPhase('error');
-        return;
-      }
-
-      // 开始轮询
-      setGenPhase('generating');
-      const validTaskIds = validSegs.map((s) => s.taskId).join(',');
-      const validProviders = validSegs.map((s) => s.provider || 'dashscope').join(',');
-      let attempts = 0;
-      pollingRef.current = setInterval(async () => {
-        attempts++;
-        if (attempts > 120) {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setGenError('生成超时，请重试');
-          setGenPhase('error');
-          return;
-        }
-        try {
-          const pollRes = await fetch(`/api/ai/video/generate?taskIds=${validTaskIds}&providers=${validProviders}`);
-          const pollData = await pollRes.json();
-          if (pollData.success) {
-            const { results, progress } = pollData.data;
-            const updatedSegs = segmentsRef.current.map((seg) => {
-              const r = seg.taskId ? results?.[seg.taskId] : undefined;
-              if (r) {
-                return {
-                  ...seg,
-                  status: r.status === 'succeeded' ? 'succeeded' as const
-                    : r.status === 'failed' ? 'failed' as const
-                    : seg.status === 'queued' ? 'running' as const
-                    : seg.status,
-                  videoUrl: r.videoUrl || seg.videoUrl,
-                };
-              }
-              return seg;
-            });
-            segmentsRef.current = updatedSegs;
-            setSegments(updatedSegs);
-
-            if (progress?.allDone) {
-              if (pollingRef.current) clearInterval(pollingRef.current);
-              setGenPhase('done');
-            }
-          }
-        } catch (pollErr) {
-          console.warn('[OneClick Poll] 轮询失败:', pollErr);
-        }
-      }, 5000);
+      if (sb) setStoryboard(sb);
     } catch (e: any) {
       console.error('[OneClick] 一键成片失败:', e);
       setGenError(e.message || '一键成片失败');
@@ -485,7 +333,7 @@ function AIVideoContent() {
   };
 
   const handleCancel = () => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
+    cancelPolling();
     setGenPhase('idle');
     setSegments([]);
   };
@@ -496,23 +344,18 @@ function AIVideoContent() {
     try {
       const sb = storyboard.find((s) => s.index === seg.index);
       const title = sb?.subtitle || `视频片段 ${seg.index + 1}`;
-      const res = await fetch('/api/inspiration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'video',
-          title: title.substring(0, 100),
-          original_text: sb?.visualPrompt || '',
-          media_urls: [seg.videoUrl],
-          source_platform: 'ai_video',
-          tags: ['AI生成', '视频片段'],
-        }),
+      const res = await apiClient.post('/inspiration', {
+        type: 'video',
+        title: title.substring(0, 100),
+        original_text: sb?.visualPrompt || '',
+        media_urls: [seg.videoUrl],
+        source_platform: 'ai_video',
+        tags: ['AI生成', '视频片段'],
       });
-      const data = await res.json();
-      if (data.success) {
+      if (res.success) {
         setToast({ message: `"${title}" 已保存到作品`, type: 'success' });
       } else {
-        setToast({ message: data.error || '保存失败', type: 'error' });
+        setToast({ message: res.error || '保存失败', type: 'error' });
       }
     } catch {
       setToast({ message: '保存失败，请重试', type: 'error' });
@@ -549,29 +392,24 @@ function AIVideoContent() {
     if (isAutoSubtitling || storyboard.length === 0) return;
     setIsAutoSubtitling(true);
     try {
-      const res = await fetch('/api/ai/auto-subtitle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyboard: storyboard.map((s) => ({
-            index: s.index,
-            visualPrompt: s.visualPrompt,
-            subtitle: s.subtitle,
-            duration: s.duration || s.timeEnd - s.timeStart,
-          })),
-        }),
+      const res = await apiClient.post<{ storyboard: any[]; fallback?: boolean }>('/ai/auto-subtitle', {
+        storyboard: storyboard.map((s) => ({
+          index: s.index,
+          visualPrompt: s.visualPrompt,
+          subtitle: s.subtitle,
+          duration: s.duration || s.timeEnd - s.timeStart,
+        })),
       });
-      const data = await res.json();
-      if (data.success && data.data?.storyboard) {
+      if (res.success && res.data?.storyboard) {
         setStoryboard((prev) =>
           prev.map((orig) => {
-            const updated = (data.data.storyboard as any[]).find((u) => u.index === orig.index);
+            const updated = (res.data!.storyboard as any[]).find((u) => u.index === orig.index);
             return updated ? { ...orig, subtitle: updated.subtitle } : orig;
           })
         );
-        setToast({ message: data.data.fallback ? 'LLM 不可用,已保留原字幕' : '✨ 字幕已优化', type: 'success' });
+        setToast({ message: res.data!.fallback ? 'LLM 不可用,已保留原字幕' : '✨ 字幕已优化', type: 'success' });
       } else {
-        setToast({ message: data.error || '优化失败', type: 'error' });
+        setToast({ message: res.error || '优化失败', type: 'error' });
       }
     } catch {
       setToast({ message: '网络错误', type: 'error' });
@@ -591,44 +429,33 @@ function AIVideoContent() {
     setMergeError(null);
     try {
       const videoUrls = succeededSegments.map((s) => s.videoUrl!);
-      const res = await fetch('/api/ai/video/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrls,
-          bgmStyle,
-          subtitleStyle,
-          subtitlePosition: subtitlePos,
-          storyboard: storyboard.map((s) => ({
-            index: s.index,
-            timeStart: s.timeStart,
-            timeEnd: s.timeEnd,
-            duration: s.duration,
-            subtitle: s.subtitle,
-          })),
-          stylePreset: stylePreset,
-          language: language,
-          topic: topic,
-        }),
+      const { videoUrl } = await mergeVid({
+        videoUrls,
+        bgmStyle,
+        subtitleStyle,
+        subtitlePosition: subtitlePos,
+        storyboard: storyboard.map((s) => ({
+          index: s.index,
+          timeStart: s.timeStart,
+          timeEnd: s.timeEnd,
+          duration: s.duration,
+          subtitle: s.subtitle,
+        })),
+        stylePreset: stylePreset,
+        language: language,
+        topic: topic,
       });
-      const data = await res.json();
-      if (data.success) {
-        setMergedVideoUrl(data.data.videoUrl);
-        setMergePhase('done');
-        setToast({ message: '合并完成,已自动保存到灵感库', type: 'success' });
-        if (isInWorkflow) {
-          completeCurrentStep({
-            text: topic,
-            topic,
-            imageUrl: firstFrameUrl || '',
-            firstFrame: firstFrameUrl || '',
-            style: stylePreset,
-          }, undefined);
-        }
-      } else {
-        setMergeError(data.error || '合并失败');
-        setMergePhase('error');
-        setToast({ message: data.error || '合并失败', type: 'error' });
+      setMergedVideoUrl(videoUrl);
+      setMergePhase('done');
+      setToast({ message: '合并完成,已自动保存到灵感库', type: 'success' });
+      if (isInWorkflow) {
+        completeCurrentStep({
+          text: topic,
+          topic,
+          imageUrl: firstFrameUrl || '',
+          firstFrame: firstFrameUrl || '',
+          style: stylePreset,
+        }, undefined);
       }
     } catch (e: any) {
       setMergeError(e?.message || '网络错误');

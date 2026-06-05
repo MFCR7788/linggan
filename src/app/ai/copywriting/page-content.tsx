@@ -18,6 +18,7 @@ import {
   findIndustry,
 } from "@/lib/preset-templates";
 import { useContentHandoff } from "@/hooks/use-content-handoff";
+import { useCopywriting } from "@/hooks/ai/use-copywriting";
 import { useWorkflowSession } from "@/hooks/use-workflow-session";
 import { WorkflowSessionBar } from "@/components/WorkflowSessionBar";
 
@@ -109,6 +110,7 @@ function AICopywritingContent() {
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
+  const { generate: generateCopywriting, refine: refineCopywriting, rewriteMulti: rewriteMultiCopy } = useCopywriting();
   const [isRefining, setIsRefining] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('text');
   const [hideAiWorks, setHideAiWorks] = useState(false);
@@ -319,20 +321,12 @@ function AICopywritingContent() {
       const inspData = selectedItems.map(i => ({
         title: i.title, originalText: i.original_text, aiSummary: i.ai_summary,
       }));
-      const res = await fetch('/api/ai/copywriting/refine', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inspirations: inspData, userInput }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setRefineModalInput({ userInput, inspirations: selectedItems, result: data.data.refined });
-        setRefineModalResult(data.data.refined);
-        setRefineModalOpen(true);
-      } else {
-        showToast('提炼失败：' + (data.error || '未知错误'), 'error');
-      }
-    } catch (e) {
-      showToast('提炼失败，请稍后重试', 'error');
+      const refined = await refineCopywriting({ inspirations: inspData, userInput });
+      setRefineModalInput({ userInput, inspirations: selectedItems, result: refined });
+      setRefineModalResult(refined);
+      setRefineModalOpen(true);
+    } catch (e: any) {
+      showToast('提炼失败：' + (e.message || '未知错误'), 'error');
     } finally { setIsRefining(false); }
   };
 
@@ -367,45 +361,38 @@ function AICopywritingContent() {
 
       const finalInstruction = refinedMessage || userInput.trim() || undefined;
       const batchN = batchMode ? 3 : 1;
+      const styleLabel = COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle;
 
-      const [standardRes, noAiRes] = await Promise.all([
-        fetch('/api/ai/copywriting', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            inspirations: selectedData, type: selectedType,
-            style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle,
-            noAiTaste: false, n: batchN, industry: selectedIndustry, userInstruction: finalInstruction,
-          }),
-        }),
+      const [standardResult, noAiResult] = await Promise.all([
+        generateCopywriting({
+          inspirations: selectedData, type: selectedType,
+          style: styleLabel, noAiTaste: false, n: batchN,
+          industry: selectedIndustry, userInstruction: finalInstruction,
+        }).then(r => r.content).catch(() => generateStandardContent()),
         noAiMode
-          ? fetch('/api/ai/copywriting', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                inspirations: selectedData, type: selectedType,
-                style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle,
-                noAiTaste: true, n: batchN, industry: selectedIndustry, userInstruction: finalInstruction,
-              }),
-            })
-          : null,
+          ? generateCopywriting({
+              inspirations: selectedData, type: selectedType,
+              style: styleLabel, noAiTaste: true, n: batchN,
+              industry: selectedIndustry, userInstruction: finalInstruction,
+            }).then(r => r.content).catch(() => null as string | string[] | null)
+          : Promise.resolve(null),
       ]);
 
-      const standardData = await standardRes.json();
-      const standardResult = standardData.success ? standardData.data.content : generateStandardContent();
-      setStandardContents(Array.isArray(standardResult) ? standardResult : [standardResult]);
+      const standardContent = typeof standardResult === 'string' ? [standardResult] : standardResult;
+      setStandardContents(Array.isArray(standardContent) ? standardContent : [standardContent]);
       setCurrentBatchIndex(0);
 
-      if (noAiRes) {
-        const noAiData = await noAiRes.json();
-        const noAiResult = noAiData.success ? noAiData.data.content : (Array.isArray(standardResult) ? standardResult[0] : standardResult);
-        setNoAiContents(Array.isArray(noAiResult) ? noAiResult : [noAiResult]);
+      if (noAiResult) {
+        const resolved = typeof noAiResult === 'string' ? [noAiResult] : noAiResult;
+        setNoAiContents(Array.isArray(resolved) ? resolved : [resolved]);
       } else {
-        setNoAiContents(Array.isArray(standardResult) ? standardResult : [standardResult]);
+        setNoAiContents(Array.isArray(standardContent) ? standardContent : [standardContent]);
       }
 
       setRewriteContents({});
 
       // 自动保存到灵感库
-      const content = Array.isArray(standardResult) ? standardResult[0] : standardResult;
+      const content = Array.isArray(standardContent) ? standardContent[0] : standardContent;
       if (content) {
         fetch('/api/inspiration', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -437,12 +424,8 @@ function AICopywritingContent() {
   const handleRewriteMulti = async () => {
     setIsRewriting(true);
     try {
-      const res = await fetch('/api/ai/copywriting/rewrite-multi', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: currentContent }),
-      });
-      const data = await res.json();
-      if (data.success) setRewriteContents(data.data.versions || {});
+      const versions = await rewriteMultiCopy(currentContent);
+      setRewriteContents(versions || {});
     } catch (e) { console.error('Multi-platform rewrite failed:', e); }
     setIsRewriting(false);
   };

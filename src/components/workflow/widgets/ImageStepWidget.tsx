@@ -5,6 +5,7 @@ import { Loader2, Sparkles, Download, RefreshCw, Upload, FolderOpen, Wand2, Imag
 import { apiClient } from '@/lib/api-client';
 import { findImagePreset } from '@/lib/preset-templates';
 import { useWorkHistory } from '@/hooks/use-work-history';
+import { useImageGeneration } from '@/hooks/ai/use-image-generation';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const PRESETS: { id: string; label: string; prompt: string }[] = [
@@ -29,11 +30,9 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute
   const [mode, setMode] = useState<SourceMode>('ai');
   const [prompt, setPrompt] = useState(handoff.prompt || handoff.text || '');
   const [preset, setPreset] = useState(handoff.preset || 'product');
-  const [refining, setRefining] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultSource, setResultSource] = useState<string>(''); // label describing source
-  const [error, setError] = useState<string | null>(null);
+  const { refinePrompt, generate: generateImage, refining, generating, error, setError } = useImageGeneration();
 
   // Upload state
   const [uploading, setUploading] = useState(false);
@@ -65,24 +64,16 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute
   const handleRefine = async () => {
     const sourceText = prompt || handoff.text || handoff.prompt || '';
     if (!sourceText.trim()) return;
-    setRefining(true);
-    setError(null);
     try {
       const imgPreset = findImagePreset(preset);
-      const res = await apiClient.post<{ prompt: string }>('/ai/image/smart-prompt', {
+      const refined = await refinePrompt({
         userInput: role ? `${role}\n${sourceText.trim()}` : sourceText.trim(),
         presetId: preset,
         style: handoff.style || '',
         ratio: imgPreset?.ratio,
       });
-      if (res.success && res.data?.prompt) {
-        setPrompt(res.data.prompt);
-      }
-    } catch (e: any) {
-      // Silently fail, keep original prompt
-    } finally {
-      setRefining(false);
-    }
+      if (refined) setPrompt(refined);
+    } catch {}
   };
 
   // ─── AI Generate ────────────────────────────────
@@ -91,25 +82,20 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute
   const handleGenerate = async () => {
     const finalPrompt = prompt || generatePrompt;
     if (!finalPrompt.trim()) return;
-    setGenerating(true);
-    setError(null);
     try {
       const imgPreset = findImagePreset(preset);
-      const res = await apiClient.post<{ imageUrl: string }>('/ai/image', {
+      const { imageUrl } = await generateImage({
         prompt: role ? `${role}\n请根据以下描述生成图片：${finalPrompt.trim()}` : finalPrompt.trim(),
         presetId: preset,
         style: handoff.style || '',
         ratio: imgPreset?.ratio || '1:1',
         n: 1,
       });
-      if (!res.success) throw new Error(res.error);
-      setResultUrl(res.data!.imageUrl);
-      setResultSource('AI 生成');
-    } catch (e: any) {
-      setError(e.message || '生成失败');
-    } finally {
-      setGenerating(false);
-    }
+      if (imageUrl) {
+        setResultUrl(imageUrl);
+        setResultSource('AI 生成');
+      }
+    } catch {}
   };
 
   // ─── Upload ─────────────────────────────────────
@@ -184,28 +170,25 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute
         const imgPreset = findImagePreset(preset);
         let finalPrompt = input;
         try {
-          const refineRes = await apiClient.post<{ prompt: string }>('/ai/image/smart-prompt', {
+          const refined = await refinePrompt({
             userInput: role ? `${role}\n${input}` : input,
             presetId: preset,
             style: handoff.style || '',
             ratio: imgPreset?.ratio,
           });
-          if (refineRes.success && refineRes.data?.prompt) {
-            finalPrompt = refineRes.data.prompt;
-          }
+          if (refined) finalPrompt = refined;
         } catch { /* use raw input as fallback */ }
 
         // Step 2: Generate image
-        const res = await apiClient.post<{ imageUrl: string }>('/ai/image', {
+        const { imageUrl } = await generateImage({
           prompt: role ? `${role}\n请根据以下描述生成图片：${finalPrompt}` : finalPrompt,
           presetId: preset,
           style: handoff.style || '',
           ratio: imgPreset?.ratio || '1:1',
           n: 1,
         });
-        if (!res.success) throw new Error(res.error);
         await onComplete({
-          handoffData: { prompt: finalPrompt, imageUrl: res.data!.imageUrl, topic: handoff.topic || '', style: handoff.style || '' },
+          handoffData: { prompt: finalPrompt, imageUrl: imageUrl || '', topic: handoff.topic || '', style: handoff.style || '' },
         });
       } catch (e: any) {
         onAutoError?.(e.message || '图片生成失败');

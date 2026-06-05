@@ -19,6 +19,7 @@ import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
+import { apiClient } from '@/lib/api-client';
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -460,20 +461,15 @@ function DigitalHumanContent() {
     audDuration?: number | null,
   ) => {
     try {
-      const res = await fetch('/api/ai/digital-human', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: imgUrl,
-          audioUrl: audUrl,
-          resolution: reso,
-          audioDuration: typeof audDuration === 'number' ? audDuration : undefined,
-        }),
+      const res = await apiClient.post<{ taskId: string }>('/ai/digital-human', {
+        imageUrl: imgUrl,
+        audioUrl: audUrl,
+        resolution: reso,
+        audioDuration: typeof audDuration === 'number' ? audDuration : undefined,
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || '提交失败');
+      if (!res.success) throw new Error(res.error || '提交失败');
 
-      const tid = data.data.taskId;
+      const tid = res.data!.taskId;
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
@@ -483,10 +479,9 @@ function DigitalHumanContent() {
           return;
         }
         try {
-          const pr = await fetch(`/api/ai/digital-human?taskId=${tid}`);
-          const pd = await pr.json();
-          if (pd.success) {
-            const { status, videoUrl, message } = pd.data;
+          const pr = await apiClient.get<{ status: string; videoUrl?: string; message?: string }>(`/ai/digital-human?taskId=${tid}`);
+          if (pr.success && pr.data) {
+            const { status, videoUrl, message } = pr.data;
             if (status === 'succeeded' && videoUrl) {
               clearInterval(poll);
               onDone(videoUrl);
@@ -776,21 +771,17 @@ function DigitalHumanContent() {
     setIsGeneratingScript(true);
     setGeneratedScripts([]);
     try {
-      const res = await fetch('/api/ai/digital-human/script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: aiTopic, style: aiStyle, targetLength: aiLength,
-          variantCount: 3, language: dhMode === 'multi-lang' ? targetLang : 'zh',
-        }),
+      const res = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', {
+        topic: aiTopic, style: aiStyle, targetLength: aiLength,
+        variantCount: 3, language: dhMode === 'multi-lang' ? targetLang : 'zh',
       });
-      const data = await res.json();
-      if (data.success && data.data?.scripts?.length > 0) {
-        setGeneratedScripts(data.data.scripts);
+      const scripts = res.data?.scripts;
+      if (res.success && scripts && scripts.length > 0) {
+        setGeneratedScripts(scripts);
         setSelectedVariant(0);
-        setTtsText(data.data.scripts[0]);
+        setTtsText(scripts[0]);
       } else {
-        setToast({ message: data.error || '脚本生成失败', type: 'error' });
+        setToast({ message: res.error || '脚本生成失败', type: 'error' });
       }
     } catch {
       setToast({ message: '脚本生成请求失败', type: 'error' });
@@ -809,14 +800,9 @@ function DigitalHumanContent() {
     // Step 1: 写稿
     setOcPhase('scripting');
     try {
-      const sRes = await fetch('/api/ai/digital-human/script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: ocTopic, style: ocStyle, targetLength: 100, variantCount: 1 }),
-      });
-      const sData = await sRes.json();
-      if (!sData.success) throw new Error(sData.error || '写稿失败');
-      const script = sData.data.scripts[0];
+      const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: ocTopic, style: ocStyle, targetLength: 100, variantCount: 1 });
+      if (!sRes.success) throw new Error(sRes.error || '写稿失败');
+      const script = sRes.data!.scripts[0];
       if (ocAbortRef.current) return;
 
       // Step 2: TTS
@@ -904,14 +890,9 @@ function DigitalHumanContent() {
       try {
         // AI 写稿
         updateItem({ status: 'scripting' });
-        const sRes = await fetch('/api/ai/digital-human/script', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic: item.topic, style: 'oral', targetLength: 100, variantCount: 1 }),
-        });
-        const sData = await sRes.json();
-        if (!sData.success) throw new Error('写稿失败');
-        const script = sData.data.scripts[0];
+        const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: item.topic, style: 'oral', targetLength: 100, variantCount: 1 });
+        if (!sRes.success) throw new Error('写稿失败');
+        const script = sRes.data!.scripts[0];
         updateItem({ script });
 
         // TTS

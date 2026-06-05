@@ -14,6 +14,7 @@ import { useInspirations } from '@/hooks/use-inspiration';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
+import { useImageGeneration } from '@/hooks/ai/use-image-generation';
 import {
   IMAGE_PRESETS,
   IMAGE_PALETTES,
@@ -59,7 +60,6 @@ function AIImageContent() {
   // ─── 1. 选材 + 输入 + 智能提示 ─────────────────────
   const [userInput, setUserInput] = useState('');
   const [refinedPrompt, setRefinedPrompt] = useState('');
-  const [isRefining, setIsRefining] = useState(false);
   const userInputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (userInputRef.current) {
@@ -87,6 +87,7 @@ function AIImageContent() {
   const [lastUsedSeed, setLastUsedSeed] = useState<number | null>(null);
 
   // ─── 生成结果 ────────────────────────────────────────
+  const { refinePrompt: refineImagePrompt, generate: generateImage, refining: isRefining, generating } = useImageGeneration();
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +185,6 @@ function AIImageContent() {
       setToast({ message: '请先输入描述或选择素材', type: 'error' });
       return;
     }
-    setIsRefining(true);
     try {
       const inspData = (Array.isArray(inspirations) ? inspirations : [])
         .filter((item: any) => selectedInspirations.has(item.id))
@@ -197,29 +197,22 @@ function AIImageContent() {
       const preset = findImagePreset(selectedPresetId);
       const palette = selectedPaletteId ? findImagePalette(selectedPaletteId) : null;
 
-      const res = await fetch('/api/ai/image/smart-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inspirations: inspData,
-          userInput,
-          presetId: selectedPresetId,
-          style: selectedStyle !== preset?.style ? selectedStyle : undefined,
-          ratio: selectedRatio !== preset?.ratio ? selectedRatio : undefined,
-          paletteName: palette?.name,
-        }),
+      const refined = await refineImagePrompt({
+        inspirations: inspData,
+        userInput,
+        presetId: selectedPresetId,
+        style: selectedStyle !== preset?.style ? selectedStyle : undefined,
+        ratio: selectedRatio !== preset?.ratio ? selectedRatio : undefined,
+        paletteName: palette?.name,
       });
-      const data = await res.json();
-      if (data.success) {
-        setRefinedPrompt(data.data.prompt);
+      if (refined) {
+        setRefinedPrompt(refined);
         setToast({ message: '已生成智能提示词', type: 'success' });
       } else {
-        setToast({ message: data.error || '生成失败', type: 'error' });
+        setToast({ message: '生成失败', type: 'error' });
       }
     } catch {
       setToast({ message: '请求失败', type: 'error' });
-    } finally {
-      setIsRefining(false);
     }
   };
 
@@ -238,36 +231,31 @@ function AIImageContent() {
 
     try {
       const n = batchMode ? 4 : 1;
-      const res = await fetch('/api/ai/image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: finalPrompt,
-          ratio: selectedRatio,
-          n,
-          presetId: selectedPresetId,
-          style: selectedStyle,
-          paletteId: selectedPaletteId,
-          seed: seed === '' ? undefined : seed,
-          negativePrompt: negativePrompt.trim() || undefined,
-        }),
+      const { imageUrl: genImageUrl, batchImages: genBatchImages } = await generateImage({
+        prompt: finalPrompt,
+        ratio: selectedRatio,
+        n,
+        presetId: selectedPresetId,
+        style: selectedStyle,
+        paletteId: selectedPaletteId || undefined,
+        seed: seed === '' ? undefined : String(seed),
+        negativePrompt: negativePrompt.trim() || undefined,
       });
-      const data = await res.json();
-      if (data.success) {
-        if (Array.isArray(data.data)) {
-          setBatchImages(data.data.map((r: any) => r.imageUrl).filter(Boolean));
-          setImageUrl(data.data[0]?.imageUrl || null);
+      if (genImageUrl) {
+        if (genBatchImages && genBatchImages.length > 0) {
+          setBatchImages(genBatchImages);
+          setImageUrl(genBatchImages[0] || null);
           setSelectedIndex(0);
         } else {
-          setImageUrl(data.data.imageUrl || data.data.url);
+          setImageUrl(genImageUrl);
           setBatchImages([]);
         }
         setIsGenerated(true);
 
         // 自动保存到灵感库
-        const urls: string[] = Array.isArray(data.data)
-          ? data.data.map((r: any) => r.imageUrl).filter(Boolean)
-          : [data.data.imageUrl || data.data.url].filter(Boolean);
+        const urls: string[] = genBatchImages && genBatchImages.length > 0
+          ? genBatchImages
+          : [genImageUrl].filter(Boolean);
         if (urls.length > 0) {
           fetch('/api/inspiration', {
             method: 'POST',
@@ -291,7 +279,7 @@ function AIImageContent() {
           }).catch(() => {});
         }
       } else {
-        setError(data.error || '生成失败');
+        setError('生成失败，请重试');
       }
     } catch (e) {
       setError('网络请求失败，请重试');
