@@ -202,7 +202,10 @@ function TTSPageContent() {
       if (data.success) {
         setToast({ message: '已保存到作品库', type: 'success' });
         if (isInWorkflow) {
-          completeCurrentStep({ text: text.substring(0, 1000), script: text.substring(0, 1000) }, data.data?.id);
+          completeCurrentStep(
+            { text: text.substring(0, 1000), script: text.substring(0, 1000), audioUrl: `data:audio/mpeg;base64,${audioBase64}` },
+            data.data?.id
+          );
         }
       } else {
         setToast({ message: data.error || '保存失败', type: 'error' });

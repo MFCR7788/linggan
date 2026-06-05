@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
@@ -14,13 +14,43 @@ const PLATFORM_LIST = [
   { id: 'bilibili' as const, name: 'B站', emoji: '📺', color: '#00A1D6', autoPublish: false },
 ];
 
-export function PublishStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function PublishStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const title = handoff.topic || handoff.prompt || '';
   const content = handoff.text || handoff.script || '';
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set());
   const [publishing, setPublishing] = useState(false);
   const [results, setResults] = useState<Array<{ platform: string; success: boolean; msg: string }> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const t = (handoff.topic || handoff.prompt || '').trim();
+      const c = (handoff.text || handoff.script || '').trim();
+      if (!c && !t) {
+        // No content to publish, just complete
+        await onComplete({ handoffData: {} });
+        return;
+      }
+      try {
+        for (const p of PLATFORM_LIST) {
+          if (p.autoPublish) {
+            await apiClient.post('/platforms/publish', { platform: p.id, title: t || '未命名内容', content: c });
+          } else {
+            await apiClient.post('/platforms/publish-manual', { platform: p.id, title: t || '未命名内容', content: c });
+          }
+        }
+        await onComplete({ handoffData: {} });
+      } catch (e: any) {
+        onAutoError?.(e.message || '发布失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.topic, handoff.prompt, handoff.text, handoff.script, onComplete, onAutoError]);
 
   const togglePlatform = (id: string) => {
     setSelectedPlatforms((prev) => {

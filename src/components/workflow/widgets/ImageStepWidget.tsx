@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Download, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { findImagePreset } from '@/lib/preset-templates';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const PRESETS: { id: string; label: string; prompt: string }[] = [
@@ -12,12 +13,39 @@ const PRESETS: { id: string; label: string; prompt: string }[] = [
   { id: 'logo', label: 'Logo', prompt: '极简Logo设计' },
 ];
 
-export function ImageStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [prompt, setPrompt] = useState(handoff.prompt || handoff.text || '');
   const [preset, setPreset] = useState(handoff.preset || 'product');
   const [generating, setGenerating] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const input = (handoff.prompt || handoff.text || '').trim();
+      if (!input) { onAutoError?.('缺少图片描述，无法自动生成图片'); return; }
+      try {
+        const imgPreset = findImagePreset(preset);
+        const res = await apiClient.post<{ imageUrl: string }>('/ai/image', {
+          prompt: input,
+          presetId: preset,
+          style: handoff.style || '',
+          ratio: imgPreset?.ratio || '1:1',
+          n: 1,
+        });
+        if (!res.success) throw new Error(res.error);
+        await onComplete({ handoffData: { prompt: input, imageUrl: res.data!.imageUrl, topic: handoff.topic || '', style: handoff.style || '' } });
+      } catch (e: any) {
+        onAutoError?.(e.message || '图片生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.prompt, handoff.text, handoff.style, handoff.topic, preset, onComplete, onAutoError]);
 
   const generatePrompt = preset ? PRESETS.find((p) => p.id === preset)?.prompt || prompt : prompt;
 

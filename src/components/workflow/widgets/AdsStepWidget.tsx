@@ -1,16 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Upload, Sparkles, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function AdsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [productName, setProductName] = useState(handoff.topic || '');
   const [imageUrl, setImageUrl] = useState(handoff.imageUrl || '');
   const [generating, setGenerating] = useState(false);
   const [results, setResults] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const product = (handoff.topic || handoff.text || '').trim();
+      const refImage = handoff.imageUrl || '';
+      if (!product && !refImage) { onAutoError?.('缺少产品名或图片，无法自动生成广告图'); return; }
+      try {
+        const sellingPoints = [product || '热门推荐', '限时特惠', '品质保证', '点击了解', '好评如潮'];
+        const res = await apiClient.post<{ cells?: Array<{ imageUrl: string }> }>('/ai/ads/grid', {
+          product: product || '热门推荐',
+          sellingPoints,
+          referenceImage: refImage || undefined,
+        });
+        if (!res.success) throw new Error(res.error);
+        const urls = (res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean);
+        await onComplete({ handoffData: { topic: product, text: handoff.text || '', imageUrl: urls[0] || '' } });
+      } catch (e: any) {
+        onAutoError?.(e.message || '广告图生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.topic, handoff.text, handoff.imageUrl, onComplete, onAutoError]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

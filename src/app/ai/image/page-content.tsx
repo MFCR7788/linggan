@@ -122,9 +122,11 @@ function AIImageContent() {
     if (h.prompt) setUserInput(h.prompt);
     else if (h.text) setUserInput(h.text);
     if (h.style && STYLE_OPTIONS.includes(h.style)) setSelectedStyle(h.style);
-    if (h.industry) {
-      const ind = findImagePreset(h.industry);
-      if (ind) handlePresetChange(h.industry);
+    if (h.preset && findImagePreset(h.preset)) {
+      handlePresetChange(h.preset);
+    } else if (h.style && findImagePreset(h.style)) {
+      // 从文案步骤传来的 style 是 contentType（如 xiaohongshu），恰好匹配图片预设
+      handlePresetChange(h.style);
     }
   }, [session]);
 

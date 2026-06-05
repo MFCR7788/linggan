@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Zap } from 'lucide-react';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowStepCard } from '@/components/workflow/WorkflowStepCard';
 import { WorkflowCompletion } from '@/components/workflow/WorkflowCompletion';
@@ -20,6 +21,28 @@ export default function WorkflowPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { session, isLoading, error, completeCurrentStep, isCompleting } =
     useWorkflowSession(sessionId);
+  const [autoMode, setAutoMode] = useState(false);
+  const [autoPaused, setAutoPaused] = useState(false);
+  const autoErrorRef = useRef<string | null>(null);
+
+  const handleComplete = useCallback(async (data: {
+    handoffData: Record<string, string>;
+    outputContentId?: string;
+  }) => {
+    await completeCurrentStep(data.handoffData, data.outputContentId, {
+      redirectOnComplete: false,
+    });
+  }, [completeCurrentStep]);
+
+  const handleAutoError = useCallback((error: string) => {
+    autoErrorRef.current = error;
+    setAutoPaused(true);
+  }, []);
+
+  const resumeAuto = useCallback(() => {
+    autoErrorRef.current = null;
+    setAutoPaused(false);
+  }, []);
 
   if (isLoading) {
     return (
@@ -56,34 +79,82 @@ export default function WorkflowPage() {
     );
   }
 
-  const handleComplete = async (data: {
-    handoffData: Record<string, string>;
-    outputContentId?: string;
-  }) => {
-    await completeCurrentStep(data.handoffData, data.outputContentId, {
-      redirectOnComplete: false,
-    });
-  };
-
   return (
     <div className="min-h-screen pb-20" style={{ background: '#0A0A0A' }}>
       <TopNav title={session.title || '工作流'} showBack onBack={() => window.history.back()} />
 
       <div className="px-4 pt-4">
-        {/* Progress indicator */}
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-            <div
-              className="h-full rounded-full transition-all"
+        {/* Mode toggle + Progress */}
+        <div className="mb-4 space-y-3">
+          {/* Segmented control */}
+          <div className="flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <button
+              onClick={() => { setAutoMode(false); setAutoPaused(false); }}
+              className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
               style={{
-                width: `${steps.length > 0 ? (session.current_step_index / steps.length) * 100 : 0}%`,
-                background: 'linear-gradient(90deg, #8B5CF6, #6D28D9)',
+                background: !autoMode ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: !autoMode ? '#FFFFFF' : '#6B7280',
               }}
-            />
+            >
+              手动一步步
+            </button>
+            <button
+              onClick={() => { setAutoMode(true); setAutoPaused(false); }}
+              className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1"
+              style={{
+                background: autoMode ? 'linear-gradient(135deg, #8B5CF6, #6D28D9)' : 'transparent',
+                color: autoMode ? '#FFFFFF' : '#6B7280',
+              }}
+            >
+              <Zap size={12} /> 一键自动
+            </button>
           </div>
-          <span style={{ color: '#6B7280', fontSize: 10 }}>
-            {session.current_step_index}/{steps.length}
-          </span>
+
+          {/* Progress bar */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${steps.length > 0 ? (session.current_step_index / steps.length) * 100 : 0}%`,
+                  background: autoMode ? 'linear-gradient(90deg, #8B5CF6, #A78BFA)' : 'linear-gradient(90deg, #8B5CF6, #6D28D9)',
+                }}
+              />
+            </div>
+            <span style={{ color: '#6B7280', fontSize: 10 }}>
+              {session.current_step_index}/{steps.length}
+            </span>
+          </div>
+
+          {/* Auto-execution paused banner */}
+          {autoMode && autoPaused && (
+            <div
+              className="p-3 rounded-lg flex items-center justify-between"
+              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}
+            >
+              <div>
+                <p style={{ color: '#FCA5A5', fontSize: 12, fontWeight: 600 }}>自动执行暂停</p>
+                <p style={{ color: '#F87171', fontSize: 11 }}>
+                  {autoErrorRef.current || '步骤执行失败，请手动继续'}
+                </p>
+              </div>
+              <button
+                onClick={resumeAuto}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }}
+              >
+                重试
+              </button>
+            </div>
+          )}
+
+          {/* Auto mode active indicator */}
+          {autoMode && !autoPaused && (
+            <div className="flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin" color="#A78BFA" />
+              <span style={{ color: '#A78BFA', fontSize: 11 }}>自动执行中，请勿离开页面...</span>
+            </div>
+          )}
         </div>
 
         {/* Step cards */}
@@ -108,6 +179,8 @@ export default function WorkflowPage() {
                     handoff={session.accumulated_handoff || {}}
                     onComplete={handleComplete}
                     isCompleting={isCompleting}
+                    autoExecute={autoMode && !autoPaused}
+                    onAutoError={handleAutoError}
                   />
                 ) : (
                   <p style={{ color: '#6B7280', fontSize: 11 }}>

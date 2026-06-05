@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Copy, Check } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
@@ -12,12 +12,45 @@ const CONTENT_TYPES: { id: string; label: string; platform: string; promptHint: 
   { id: 'script', label: '口播稿', platform: 'script', promptHint: '口播文案，口语化' },
 ];
 
-export function CopywritingStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [topic, setTopic] = useState(handoff.topic || handoff.text || '');
   const [contentType, setContentType] = useState(handoff.style || 'xiaohongshu');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const input = (handoff.topic || handoff.text || '').trim();
+      if (!input) { onAutoError?.('缺少话题/文本，无法自动生成文案'); return; }
+      try {
+        const ct = CONTENT_TYPES.find((c) => c.id === contentType);
+        const res = await apiClient.post<{ content: string }>('/ai/copywriting', {
+          inspirations: [{ title: input, originalText: input }],
+          type: contentType,
+          style: ct?.promptHint || handoff.style || '',
+          industry: handoff.industry || '',
+          userInstruction: ct?.promptHint || '',
+        });
+        if (!res.success) throw new Error(res.error);
+        const text = res.data!.content;
+        await fetch('/api/inspiration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'text', title: input, content: text }),
+        });
+        await onComplete({ handoffData: { text: text.substring(0, 1000), topic: input, style: contentType, industry: handoff.industry || '' } });
+      } catch (e: any) {
+        onAutoError?.(e.message || '文案生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.topic, handoff.text, handoff.style, handoff.industry, contentType, onComplete, onAutoError]);
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
@@ -28,7 +61,7 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting }: Ste
       const res = await apiClient.post<{ content: string }>('/ai/copywriting', {
         inspirations: [{ title: topic.trim(), originalText: topic.trim() }],
         type: contentType,
-        style: ct?.promptHint || handoff.style || '',
+        style: ct?.label || handoff.style || '',
         industry: handoff.industry || '',
         userInstruction: ct?.promptHint || '',
       });

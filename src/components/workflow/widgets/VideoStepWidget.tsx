@@ -1,16 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Play, Pause, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function VideoStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
   const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const input = (handoff.text || handoff.script || '').trim();
+      if (!input) { onAutoError?.('缺少视频脚本，无法自动生成视频'); return; }
+      try {
+        const res = await apiClient.post<{ taskId: string }>('/ai/video', {
+          prompt: input,
+          imageUrl: handoff.imageUrl || handoff.firstFrame || '',
+          style: handoff.style || '',
+        });
+        if (!res.success) throw new Error(res.error);
+        const taskId = res.data!.taskId;
+        for (let i = 0; i < 90; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/video?taskId=${taskId}`);
+          if (!pollRes.success) continue;
+          if (pollRes.data!.status === 'succeeded' && pollRes.data!.videoUrl) {
+            await onComplete({ handoffData: { text: input.substring(0, 1000), firstFrame: handoff.imageUrl || '', videoUrl: pollRes.data!.videoUrl } });
+            return;
+          }
+          if (pollRes.data!.status === 'failed') throw new Error('视频合成失败');
+        }
+        throw new Error('视频生成超时');
+      } catch (e: any) {
+        onAutoError?.(e.message || '视频生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.text, handoff.script, handoff.imageUrl, handoff.firstFrame, handoff.style, onComplete, onAutoError]);
 
   const handleGenerate = async () => {
     if (!text.trim()) return;

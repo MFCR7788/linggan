@@ -1,15 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Image as ImageIcon, FileText, Check } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function InspirationStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function InspirationStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  // Auto-execute: wait for items to load, then pick first
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current || loading) return;
+    autoTriggeredRef.current = true;
+    if (items.length === 0) {
+      onAutoError?.('素材库为空，请先上传素材');
+      return;
+    }
+    const item = items[0];
+    onComplete({
+      handoffData: {
+        text: item.title || '',
+        imageUrl: item.media_urls?.[0] || item.thumbnail_url || '',
+        inspirationId: item.id,
+      },
+      outputContentId: item.id,
+    });
+  }, [autoExecute, loading, items, onComplete, onAutoError]);
 
   useEffect(() => {
     apiClient.get<any[]>('/inspiration?limit=20&sortOrder=desc&ns=ai').then((res) => {

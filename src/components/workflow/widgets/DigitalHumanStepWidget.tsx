@@ -1,16 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Sparkles, Play } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
-export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
   const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const input = (handoff.text || handoff.script || '').trim();
+      if (!input) { onAutoError?.('缺少口播文本，无法自动生成数字人视频'); return; }
+      try {
+        const res = await apiClient.post<{ taskId: string }>('/ai/digital-human', {
+          text: input,
+          imageUrl: handoff.imageUrl || '',
+          audioUrl: handoff.audioUrl || '',
+        });
+        if (!res.success) throw new Error(res.error);
+        const taskId = res.data!.taskId;
+        for (let i = 0; i < 90; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/digital-human?taskId=${taskId}`);
+          if (!pollRes.success) continue;
+          if (pollRes.data!.status === 'succeeded' && pollRes.data!.videoUrl) {
+            await onComplete({ handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), videoUrl: pollRes.data!.videoUrl, firstFrame: handoff.imageUrl || '' } });
+            return;
+          }
+          if (pollRes.data!.status === 'failed') throw new Error('数字人生成失败');
+        }
+        throw new Error('数字人视频生成超时');
+      } catch (e: any) {
+        onAutoError?.(e.message || '数字人视频生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.text, handoff.script, handoff.imageUrl, handoff.audioUrl, onComplete, onAutoError]);
 
   const handleGenerate = async () => {
     if (!text.trim()) return;

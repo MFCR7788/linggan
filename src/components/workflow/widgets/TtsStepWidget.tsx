@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Play, Pause, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
@@ -13,7 +13,7 @@ const VOICES: { id: string; label: string; gender: string }[] = [
   { id: 'male_warm', label: '暖声男声', gender: 'male' },
 ];
 
-export function TtsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [text, setText] = useState(handoff.script || handoff.text || '');
   const [voice, setVoice] = useState('female_natural');
   const [generating, setGenerating] = useState(false);
@@ -21,6 +21,27 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetP
   const [playing, setPlaying] = useState(false);
   const [audio] = useState(() => typeof Audio !== 'undefined' ? new (window.Audio)() : null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const input = (handoff.script || handoff.text || '').trim();
+      if (!input) { onAutoError?.('缺少文本，无法自动生成配音'); return; }
+      try {
+        const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: input, voice });
+        if (!res.success) throw new Error(res.error);
+        const dataUri = `data:${res.data!.mimeType || 'audio/mpeg'};base64,${res.data!.audioBase64}`;
+        await onComplete({ handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), audioUrl: dataUri } });
+      } catch (e: any) {
+        onAutoError?.(e.message || '配音生成失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.script, handoff.text, voice, onComplete, onAutoError]);
 
   useEffect(() => {
     if (audioUrl && audio) {

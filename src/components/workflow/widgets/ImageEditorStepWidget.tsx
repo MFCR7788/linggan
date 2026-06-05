@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, Upload, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
@@ -11,13 +11,33 @@ const ACTIONS: { id: string; label: string; desc: string }[] = [
   { id: 'expand', label: '智能扩图', desc: '扩展画面周边空间' },
 ];
 
-export function ImageEditorStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
+export function ImageEditorStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [imageUrl, setImageUrl] = useState(handoff.imageUrl || '');
   const [urlInput, setUrlInput] = useState(handoff.imageUrl || '');
-  const [action, setAction] = useState('remove-bg');
+  const [action, setAction] = useState('enhance');
   const [processing, setProcessing] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+    async function autoRun() {
+      const img = handoff.imageUrl || '';
+      if (!img) { onAutoError?.('缺少图片，无法自动编辑'); return; }
+      try {
+        const res = await apiClient.post<{ url: string }>('/ai/image/edit', { action: 'enhance', imageUrl: img });
+        if (!res.success) throw new Error(res.error);
+        await onComplete({ handoffData: { imageUrl: res.data!.url } });
+      } catch (e: any) {
+        onAutoError?.(e.message || '图片编辑失败');
+      }
+    }
+    autoRun();
+  }, [autoExecute, handoff.imageUrl, onComplete, onAutoError]);
 
   const handleUrlLoad = () => {
     if (urlInput.trim()) setImageUrl(urlInput.trim());

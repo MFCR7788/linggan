@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, TrendingUp, ExternalLink, Check } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
@@ -17,11 +17,31 @@ interface HotspotItem {
   captured_at: string;
 }
 
-export function HotspotStepWidget({ onComplete, isCompleting }: StepWidgetProps) {
+export function HotspotStepWidget({ onComplete, isCompleting, autoExecute, onAutoError }: StepWidgetProps) {
   const [hotspots, setHotspots] = useState<HotspotItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoTriggeredRef = useRef(false);
+
+  useEffect(() => { if (!autoExecute) { autoTriggeredRef.current = false; } }, [autoExecute]);
+
+  // Auto-execute: wait for hotspots to load, then pick first
+  useEffect(() => {
+    if (!autoExecute || autoTriggeredRef.current || loading) return;
+    autoTriggeredRef.current = true;
+    if (hotspots.length === 0) {
+      onAutoError?.('暂无热点数据');
+      return;
+    }
+    const item = hotspots[0];
+    onComplete({
+      handoffData: {
+        text: item.ai_summary || item.original_content || item.title,
+        topic: item.title,
+      },
+    });
+  }, [autoExecute, loading, hotspots, onComplete, onAutoError]);
 
   useEffect(() => {
     apiClient.get<{ data: HotspotItem[] }>('/hotspot?limit=15&sortBy=captured_at&sortOrder=desc')
