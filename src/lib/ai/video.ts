@@ -1,7 +1,7 @@
-// AI Services - Video Generation (DashScope / Seedance)
+// AI Services - Video Generation (百炼 DashScope Wan 系列)
 
 import { optimizePrompt } from './image';
-import { DASHSCOPE_VIDEO_BASE, DOUBAO_BASE_URL, HAPPYHORSE_API_KEY, SEEDANCE_SERVICE_TIER, SEEDANCE_SUPPORTS_FLEX } from './constants';
+import { DASHSCOPE_VIDEO_BASE, HAPPYHORSE_API_KEY } from './constants';
 import { QUALITY_TIERS } from './types';
 import type { VideoTaskResult, I2VTaskResult } from './types';
 import type { VideoProvider, VideoModelConfig } from './types';
@@ -204,133 +204,7 @@ async function submitDashScopeVideoTask(
   }
 }
 
-// ====== Seedance 视频提交（ARK） ======
-
-/**
- * Seedance 离线推理档位(`service_tier`):
- * - flex: 5 折,延迟小时级,适合非实时批量任务(降本首选)
- * - default: 全价,延迟分钟级,适合即时预览
- *
- * 默认 flex。可通过 env `SEEDANCE_SERVICE_TIER=default` 切回快速档。
- * 适用范围:Seedance 1.x 全系(1.0-pro / 1.0-pro-fast / 1.0-lite / 1.5-pro);
- *          Seedance 2.0 不支持 flex,代码会自动回退到 default。
- */
-
-async function submitSeedanceTask(
-  config: VideoModelConfig,
-  prompt: string,
-  duration: number = 5,
-  imageUrl?: string,
-  lastFrameUrl?: string,
-  extraFrameUrls?: string[]
-): Promise<{ taskId: string | null; status: string; message: string }> {
-  const finalPrompt = await optimizePrompt(prompt, 'video');
-  const apiKey = process.env.DOUBAO_API_KEY;
-  if (!apiKey) return { taskId: null, status: 'error', message: 'DOUBAO_API_KEY 未配置' };
-
-  const content: Record<string, unknown>[] = [
-    { type: 'text', text: finalPrompt },
-  ];
-  if (imageUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: imageUrl },
-      role: 'first_frame',
-    });
-  }
-  if (lastFrameUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: lastFrameUrl },
-      role: 'last_frame',
-    });
-  }
-  // 中间关键帧（参考帧）
-  if (extraFrameUrls && extraFrameUrls.length > 0) {
-    for (const url of extraFrameUrls) {
-      content.push({
-        type: 'image_url',
-        image_url: { url },
-        role: 'reference_image',
-      });
-    }
-  }
-
-  // Seedance 2.0 不支持 flex,自动回退到 default
-  const tier = SEEDANCE_SUPPORTS_FLEX(config.model) ? SEEDANCE_SERVICE_TIER : 'default';
-
-  try {
-    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        content,
-        resolution: config.resolution || '720p',
-        ratio: '16:9',
-        duration: Math.min(Math.max(duration, 4), 15),
-        watermark: false,
-        service_tier: tier,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Seedance:${config.model}] API 错误:`, response.status, errText.substring(0, 500));
-      return { taskId: null, status: 'error', message: `Seedance 服务错误: ${response.status}` };
-    }
-
-    const data = await response.json();
-    const taskId = data.id;
-    if (!taskId) {
-      return { taskId: null, status: 'error', message: '未获取到任务ID' };
-    }
-    return { taskId, status: 'queued', message: tier === 'flex' ? '任务已提交(离线推理,5 折)' : '任务已提交' };
-  } catch (error) {
-    console.error(`[Seedance:${config.model}] 提交错误:`, error);
-    return { taskId: null, status: 'error', message: '网络错误' };
-  }
-}
-
-// ====== Seedance 任务状态查询 ======
-
-async function getSeedanceTaskStatus(
-  taskId: string
-): Promise<{ status: string; videoUrl?: string; message?: string }> {
-  const apiKey = process.env.DOUBAO_API_KEY;
-  if (!apiKey) return { status: 'error', message: 'DOUBAO_API_KEY 未配置' };
-
-  try {
-    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!response.ok) {
-      return { status: 'error', message: '查询失败' };
-    }
-
-    const data = await response.json();
-
-    if (data.status === 'succeeded') {
-      const videoUrl = data.content?.video_url;
-      return { status: 'succeeded', videoUrl, message: '生成完成' };
-    }
-
-    if (data.status === 'failed') {
-      return { status: 'failed', message: data.error?.message || data.message || '生成失败' };
-    }
-
-    return { status: 'running', message: '生成中...' };
-  } catch (error) {
-    console.error('Seedance query task error:', error);
-    return { status: 'error', message: '网络错误' };
-  }
-}
-
-// ====== 通用视频生成入口 ======
+// ====== 通用视频生成入口（百炼 DashScope Wan 系列） ======
 
 export async function submitVideoGenerationTask(
   tier: string,
@@ -342,7 +216,6 @@ export async function submitVideoGenerationTask(
   mode?: 'i2v' | 'multi'
 ): Promise<VideoTaskResult & { model: string; provider: VideoProvider }> {
   const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
-  // multi 模式: 首帧 + 尾帧 + 中间关键帧,优先用 multiImageI2v 配置
   let config: VideoModelConfig;
   if (mode === 'multi' && qt.multiImageI2v) {
     config = qt.multiImageI2v;
@@ -350,23 +223,15 @@ export async function submitVideoGenerationTask(
     config = imageUrl ? qt.i2v : qt.t2v;
   }
 
-  let result: VideoTaskResult;
-  if (config.provider === 'ark') {
-    result = await submitSeedanceTask(config, prompt, duration, imageUrl, lastFrameUrl, extraFrameUrls);
-  } else {
-    result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl);
-  }
+  const result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl);
 
   return { ...result, model: config.model, provider: config.provider };
 }
 
 export async function getVideoTaskStatusUniversal(
   taskId: string,
-  provider: VideoProvider
+  _provider: VideoProvider
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
-  if (provider === 'ark') {
-    return getSeedanceTaskStatus(taskId);
-  }
   return getVideoTaskStatus(taskId);
 }
 

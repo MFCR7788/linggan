@@ -37,9 +37,6 @@ export { generateAvatarVideo } from './avatar';
 export { getAvatarVideoStatus } from './avatar';
 
 // TTS
-export { cloneVoiceUpload } from './tts';
-export { cloneVoiceStatus } from './tts';
-export { synthesizeWithClonedVoice } from './tts';
 export { synthesizeWithCosyVoice } from './tts';
 
 // Content

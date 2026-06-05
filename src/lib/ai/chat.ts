@@ -1,4 +1,4 @@
-// AI Services - Chat APIs (DeepSeek, Qwen/DashScope, Doubao/ARK)
+// AI Services - Chat APIs (百炼 DeepSeek, Qwen/DashScope)
 
 import type { ChatMessage, ChatOptions } from './types';
 
@@ -13,25 +13,27 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// ====== DeepSeek API ======
+// ====== 百炼 DeepSeek API（兼容 OpenAI 格式） ======
+
+const BAILIAN_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 
 export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY is not configured');
+    throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const response = await fetchWithTimeout('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetchWithTimeout(`${BAILIAN_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || 'deepseek-chat',
+      model: options.model || 'deepseek-v3',
       messages: [
         { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
         { role: 'user', content: prompt },
@@ -102,26 +104,34 @@ export async function callQwen(
   return content;
 }
 
-// ====== Doubao/ARK API ======
+// ====== 百炼 Qwen API（替代原 Doubao/ARK） ======
+
+function mapDoubaoModel(model: string): string {
+  if (model.includes('vision') || model.includes('vl')) return 'qwen-vl-plus';
+  if (model.includes('doubao')) return 'qwen-plus';
+  return model;
+}
 
 export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DOUBAO_API_KEY;
-  const baseUrl = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
+  const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) {
-    throw new Error('DOUBAO_API_KEY is not configured');
+    throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
+  const rawModel = options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215';
+  const model = mapDoubaoModel(rawModel);
+
+  const response = await fetchWithTimeout(`${BAILIAN_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215',
+      model,
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
@@ -130,14 +140,14 @@ export async function callDoubaoChat(
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('Doubao API error:', error);
-    throw new Error(`Doubao API call failed: ${error.substring(0, 200)}`);
+    console.error('Qwen (百炼) API error:', error);
+    throw new Error(`Qwen API call failed: ${error.substring(0, 200)}`);
   }
 
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string') {
-    throw new Error(`Doubao returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+    throw new Error(`Qwen returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
   }
   return content;
 }

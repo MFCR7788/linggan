@@ -1,6 +1,6 @@
-// AI Services - Vision API (Doubao Vision)
+// AI Services - Vision API (百炼 Qwen-VL)
 
-import { callDoubaoChat } from './chat';
+import { callQwen } from './chat';
 import type { VisionResult } from './types';
 
 function extractTags(text: string): string[] {
@@ -13,7 +13,7 @@ export async function callDoubaoVision(
   prompt: string = '描述这张图片的内容'
 ): Promise<VisionResult> {
   try {
-    const content = await callDoubaoChat(
+    const content = await callQwen(
       [
         {
           role: 'user',
@@ -23,7 +23,7 @@ export async function callDoubaoVision(
           ],
         },
       ],
-      { temperature: 0.3, model: 'doubao-1.5-vision-pro-32k' }
+      { temperature: 0.3, model: 'qwen-vl-plus' }
     );
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);

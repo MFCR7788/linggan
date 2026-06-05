@@ -8,8 +8,6 @@ import { createAdminClient } from "@/lib/supabase-server";
 
 const execAsync = promisify(exec);
 
-const LOCAL_FUNASR_URL = process.env.FUNASR_API_URL || "";
-
 // 需要提取逐字稿的视频平台
 const TRANSCRIPT_PLATFORMS = [
   "douyin.com",
@@ -130,40 +128,31 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
       { timeout: 60000 }
     );
 
-    // 4. 语音识别 — 优先本地 FunASR，降级 DashScope Paraformer
-    let transcript = "";
-    const localResult = await callLocalFunASR(audioOutput);
-    if (localResult) {
-      transcript = localResult;
-      console.log("[ASR] 本地 FunASR 识别成功, 字数:", transcript.length);
-    } else {
-      // 降级: 上传到 Supabase → DashScope Paraformer
-      console.log("[ASR] 本地 FunASR 不可用, 降级到 DashScope");
-      const audioBuffer = await readFile(audioOutput);
-      const supabase = createAdminClient();
-      const storageName = `transcribe/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`;
+    // 4. 语音识别 — 百炼 Paraformer
+    const audioBuffer = await readFile(audioOutput);
+    const supabase = createAdminClient();
+    const storageName = `transcribe/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`;
 
-      const { error: uploadErr } = await supabase.storage
-        .from("lingji-media")
-        .upload(storageName, audioBuffer, {
-          contentType: "audio/wav",
-          upsert: false,
-        });
+    const { error: uploadErr } = await supabase.storage
+      .from("lingji-media")
+      .upload(storageName, audioBuffer, {
+        contentType: "audio/wav",
+        upsert: false,
+      });
 
-      if (uploadErr) {
-        console.error("音频上传失败:", uploadErr);
-        throw new Error("音频上传失败");
-      }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("lingji-media").getPublicUrl(storageName);
-
-      transcript = await callDashScopeASR(publicUrl);
-
-      // 清理 Supabase 上的临时音频文件
-      await supabase.storage.from("lingji-media").remove([storageName]);
+    if (uploadErr) {
+      console.error("音频上传失败:", uploadErr);
+      throw new Error("音频上传失败");
     }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("lingji-media").getPublicUrl(storageName);
+
+    const transcript = await callDashScopeASR(publicUrl);
+
+    // 清理 Supabase 上的临时音频文件
+    await supabase.storage.from("lingji-media").remove([storageName]);
 
     if (!transcript || transcript.trim().length === 0) {
       return { success: false, error: "未能识别到语音内容" };
@@ -185,40 +174,7 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
 }
 
 /**
- * 本地 FunASR 识别 — 直接传音频文件 base64
- * 优点：无需上传 Supabase，更快更省钱
- */
-async function callLocalFunASR(audioPath: string): Promise<string | null> {
-  if (!LOCAL_FUNASR_URL) return null;
-
-  try {
-    const audioBuffer = await readFile(audioPath);
-    const audioBase64 = audioBuffer.toString("base64");
-
-    const res = await fetch(`${LOCAL_FUNASR_URL}/asr`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio: audioBase64, format: "wav", sample_rate: 16000 }),
-      signal: AbortSignal.timeout(120000),
-    });
-
-    if (!res.ok) {
-      console.warn("[FunASR] 本地服务返回错误 HTTP", res.status);
-      return null;
-    }
-
-    const data = await res.json();
-    if (data.success && data.text) return data.text.trim();
-    if (!data.success) console.warn("[FunASR] 识别失败:", data.error);
-    return null;
-  } catch (e: unknown) {
-    console.warn("[FunASR] 本地服务不可用:", e instanceof Error ? e.message : e);
-    return null;
-  }
-}
-
-/**
- * DashScope Paraformer 文件转写 API (降级方案)
+ * 百炼 Paraformer 文件转写 API
  */
 async function callDashScopeASR(audioUrl: string): Promise<string> {
   const apiKey = process.env.DASHSCOPE_API_KEY;

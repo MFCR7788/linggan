@@ -1,18 +1,19 @@
-// AI Services - Shared Constants
+// AI Services - 百炼 DashScope 统一配置
 
-export const HAPPYHORSE_API_KEY = process.env.HAPPYHORSE_API_KEY;
-if (!HAPPYHORSE_API_KEY && process.env.NODE_ENV === 'production') {
-  console.warn('[HappyHorse] HAPPYHORSE_API_KEY 未配置, 视频生成相关接口将不可用');
+// 主 Key — 百炼 DashScope（文本/图片/视频/TTS/ASR 全部走这个）
+export const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY;
+if (!DASHSCOPE_API_KEY && process.env.NODE_ENV === 'production') {
+  console.warn('[百炼] DASHSCOPE_API_KEY 未配置, AI 服务将不可用');
 }
 
+// DashScope API 端点
+export const DASHSCOPE_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 export const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
-export const DOUBAO_BASE_URL = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
 export const DASHSCOPE_S2V_BASE = 'https://dashscope.aliyuncs.com/api/v1';
 
-export const VOLC_TTS_HOST = 'openspeech.bytedance.com';
+// HappyHorse / Wan 视频生成 — 与 DashScope 共用 Key
+export const HAPPYHORSE_API_KEY = DASHSCOPE_API_KEY;
 
+// 保留：HeyGen 数字人分身（百炼无替代方案）
 export const HEYGEN_BASE = 'https://api.heygen.com';
 export const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
-
-export const SEEDANCE_SERVICE_TIER = (process.env.SEEDANCE_SERVICE_TIER === 'default' ? 'default' : 'flex') as 'flex' | 'default';
-export const SEEDANCE_SUPPORTS_FLEX = (model: string) => model.includes('seedance-1-');

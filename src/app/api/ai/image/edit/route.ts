@@ -25,7 +25,7 @@ async function callDashScopeImageEdit(
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY 未配置');
 
   const body: Record<string, unknown> = {
-    model: 'wan2.2-image',
+    model: 'wanx2.1-t2i-turbo',
     input: {
       ref_image_url: imageUrl,
     },
@@ -46,28 +46,45 @@ async function callDashScopeImageEdit(
 
   body.input = input;
 
-  const response = await fetch(
-    `${DASHSCOPE_BASE}/services/aigc/image-generation/image-synthesis`,
+  // 提交异步任务
+  const submitRes = await fetch(
+    `${DASHSCOPE_BASE}/services/aigc/text2image/image-synthesis`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify(body),
     },
   );
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`DashScope 图片编辑失败: ${response.status} ${errText}`);
+  if (!submitRes.ok) {
+    const errText = await submitRes.text().catch(() => '');
+    throw new Error(`DashScope 图片编辑失败: ${submitRes.status} ${errText}`);
   }
 
-  const result = await response.json();
-  const outputUrl =
-    result?.output?.results?.[0]?.url ||
-    result?.output?.result_url ||
-    result?.data?.url;
+  const submitData = await submitRes.json();
+  const taskId = submitData.output?.task_id;
+  if (!taskId) throw new Error('图片编辑失败: 未获取到任务 ID');
+
+  // 轮询结果
+  let outputUrl: string | null = null;
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json();
+    if (data.output?.task_status === 'SUCCEEDED') {
+      outputUrl = data.output?.results?.[0]?.url || null;
+      break;
+    }
+    if (data.output?.task_status === 'FAILED') {
+      throw new Error(data.output?.message || '图片编辑失败');
+    }
+  }
 
   if (!outputUrl) {
     throw new Error('DashScope 未返回图片 URL');

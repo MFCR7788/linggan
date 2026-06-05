@@ -1,4 +1,4 @@
-// AI Services - DeepSeek, Doubao/ARK, Seedance
+// AI Services — 百炼 DashScope 统一（DeepSeek / Qwen / Wan / CosyVoice）
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
 import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken } from './runtime-config';
@@ -60,19 +60,19 @@ export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY is not configured');
+    throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const response = await fetchWithTimeout('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || 'deepseek-chat',
+      model: options.model || 'deepseek-v3',
       messages: [
         { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
         { role: 'user', content: prompt },
@@ -145,26 +145,36 @@ export async function callQwen(
   return content;
 }
 
-// ====== Doubao/ARK API ======
+// ====== 百炼 Qwen API（替代原 Doubao/ARK） ======
+
+function mapDoubaoModel(model: string): string {
+  // 视觉模型 → qwen-vl
+  if (model.includes('vision') || model.includes('vl')) return 'qwen-vl-plus';
+  // 其他 doubao 模型 → qwen-plus
+  if (model.includes('doubao')) return 'qwen-plus';
+  return model;
+}
 
 export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DOUBAO_API_KEY;
-  const baseUrl = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
+  const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) {
-    throw new Error('DOUBAO_API_KEY is not configured');
+    throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
+  const rawModel = options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215';
+  const model = mapDoubaoModel(rawModel);
+
+  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215',
+      model,
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
@@ -173,26 +183,26 @@ export async function callDoubaoChat(
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('Doubao API error:', error);
-    throw new Error(`Doubao API call failed: ${error.substring(0, 200)}`);
+    console.error('Qwen (百炼) API error:', error);
+    throw new Error(`Qwen API call failed: ${error.substring(0, 200)}`);
   }
 
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string') {
-    throw new Error(`Doubao returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+    throw new Error(`Qwen returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
   }
   return content;
 }
 
-// ====== Doubao Vision API ======
+// ====== 百炼 Qwen-VL Vision API ======
 
 export async function callDoubaoVision(
   imageUrl: string,
   prompt: string = '描述这张图片的内容'
 ): Promise<VisionResult> {
   try {
-    const content = await callDoubaoChat(
+    const content = await callQwen(
       [
         {
           role: 'user',
@@ -202,7 +212,7 @@ export async function callDoubaoVision(
           ],
         },
       ],
-      { temperature: 0.3, model: 'doubao-1.5-vision-pro-32k' }
+      { temperature: 0.3, model: 'qwen-vl-plus' }
     );
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -234,7 +244,7 @@ export async function callDoubaoVision(
 async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promise<string> {
   if (!rawPrompt || rawPrompt.length < 5) return rawPrompt;
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) return rawPrompt;
 
   const systemPrompt = type === 'image'
@@ -242,14 +252,14 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
     : `You are an expert AI video prompt engineer. Enhance the given prompt by adding details about scene, motion, camera movement, atmosphere, lighting transitions, and temporal progression. Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
 
   try {
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-v3',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Enhance this prompt for AI ${type} generation:\n\n${rawPrompt}` },
@@ -275,7 +285,7 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
   }
 }
 
-// ====== Seedance Image Generation ======
+// ====== 百炼 wan2.2-image 图片生成 ======
 
 function getSizeForRatio(ratio: string): string {
   switch (ratio) {
@@ -302,51 +312,72 @@ export async function generateImage(
   const finalPrompt = await optimizePrompt(prompt, 'image');
   console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
 
-  const apiKey = process.env.DOUBAO_API_KEY;
-  const baseUrl = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
-  const imageModelArkId = process.env.SEEDANCE_IMAGE_MODEL_ARK_ID;
-
-  if (!apiKey) throw new Error('DOUBAO_API_KEY is not configured');
-  if (!imageModelArkId) throw new Error('SEEDANCE_IMAGE_MODEL_ARK_ID is not configured');
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
 
   const size = getSizeForRatio(options.ratio || '1:1');
   const n = options.n || 1;
   const seed = options.seed;
 
+  // 百炼 wan2.2-image 使用 width*height 格式
+  const [w, h] = size.split('x');
+  const dashScopeSize = `${w}*${h}`;
+
   const requestBody: Record<string, unknown> = {
-    model: imageModelArkId,
-    prompt: finalPrompt,
-    n,
-    size,
+    model: 'wanx2.1-t2i-turbo',
+    input: { prompt: finalPrompt },
+    parameters: { size: dashScopeSize, n },
   };
   if (typeof seed === 'number' && Number.isFinite(seed) && seed >= 0) {
-    requestBody.seed = seed;
+    (requestBody.parameters as Record<string, unknown>).seed = seed;
     console.log(`[Image] 使用固定种子: ${seed}`);
   }
 
-  const response = await fetch(`${baseUrl}/images/generations`, {
+  // 提交异步任务
+  const submitRes = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      'X-DashScope-Async': 'enable',
     },
     body: JSON.stringify(requestBody),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Seedance image API error:', response.status, errorText);
-    throw new Error(`图片生成失败: ${response.status} ${errorText}`);
+  if (!submitRes.ok) {
+    const errorText = await submitRes.text();
+    console.error('wanx2.1-t2i-turbo API error:', submitRes.status, errorText);
+    throw new Error(`图片生成失败: ${submitRes.status} ${errorText}`);
   }
 
-  const data = await response.json();
-  const results = (data.data || []).map((item: any) => ({
-    imageUrl: item.url,
-    prompt: finalPrompt,
-    size,
-  }));
+  const submitData = await submitRes.json();
+  const taskId = submitData.output?.task_id;
+  if (!taskId) throw new Error('图片生成失败: 未获取到任务 ID');
 
-  return n === 1 ? results[0] : results;
+  // 轮询结果
+  const imageUrl = await pollImageTask(apiKey, taskId);
+  if (!imageUrl) throw new Error('图片生成超时');
+
+  const result: ImageResult = { imageUrl, prompt: finalPrompt, size };
+  return result;
+}
+
+async function pollImageTask(apiKey: string, taskId: string): Promise<string | null> {
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json();
+    if (data.output?.task_status === 'SUCCEEDED') {
+      return data.output?.results?.[0]?.url || null;
+    }
+    if (data.output?.task_status === 'FAILED') {
+      console.error('图片生成任务失败:', data.output?.message);
+      throw new Error(data.output?.message || '图片生成失败');
+    }
+  }
+  return null;
 }
 
 // ====== 视频模型注册表（从客户端安全模块导入） ======
@@ -357,7 +388,6 @@ export { type VideoProvider, type VideoModelConfig, type QualityTier, QUALITY_TI
 // ====== HappyHorse 视频生成（百炼 DashScope） ======
 
 const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1';
-const DOUBAO_BASE_URL = process.env.DOUBAO_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
 
 export async function submitVideoTask(
   prompt: string,
@@ -944,135 +974,8 @@ async function submitDashScopeVideoTask(
   }
 }
 
-// ====== Seedance 视频提交（ARK） ======
 
-/**
- * Seedance 离线推理档位(`service_tier`):
- * - flex: 5 折,延迟小时级,适合非实时批量任务(降本首选)
- * - default: 全价,延迟分钟级,适合即时预览
- *
- * 默认 flex。可通过 env `SEEDANCE_SERVICE_TIER=default` 切回快速档。
- * 适用范围:Seedance 1.x 全系(1.0-pro / 1.0-pro-fast / 1.0-lite / 1.5-pro);
- *          Seedance 2.0 不支持 flex,代码会自动回退到 default。
- */
-const SEEDANCE_SERVICE_TIER = (process.env.SEEDANCE_SERVICE_TIER === 'default' ? 'default' : 'flex') as 'flex' | 'default';
-const SEEDANCE_SUPPORTS_FLEX = (model: string) => model.includes('seedance-1-');
-
-async function submitSeedanceTask(
-  config: VideoModelConfig,
-  prompt: string,
-  duration: number = 5,
-  imageUrl?: string,
-  lastFrameUrl?: string,
-  extraFrameUrls?: string[]
-): Promise<{ taskId: string | null; status: string; message: string }> {
-  const finalPrompt = await optimizePrompt(prompt, 'video');
-  const apiKey = process.env.DOUBAO_API_KEY;
-  if (!apiKey) return { taskId: null, status: 'error', message: 'DOUBAO_API_KEY 未配置' };
-
-  const content: Record<string, unknown>[] = [
-    { type: 'text', text: finalPrompt },
-  ];
-  if (imageUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: imageUrl },
-      role: 'first_frame',
-    });
-  }
-  if (lastFrameUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: lastFrameUrl },
-      role: 'last_frame',
-    });
-  }
-  // 中间关键帧（参考帧）
-  if (extraFrameUrls && extraFrameUrls.length > 0) {
-    for (const url of extraFrameUrls) {
-      content.push({
-        type: 'image_url',
-        image_url: { url },
-        role: 'reference_image',
-      });
-    }
-  }
-
-  // Seedance 2.0 不支持 flex,自动回退到 default
-  const tier = SEEDANCE_SUPPORTS_FLEX(config.model) ? SEEDANCE_SERVICE_TIER : 'default';
-
-  try {
-    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        content,
-        resolution: config.resolution || '720p',
-        ratio: '16:9',
-        duration: Math.min(Math.max(duration, 4), 15),
-        watermark: false,
-        service_tier: tier,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Seedance:${config.model}] API 错误:`, response.status, errText.substring(0, 500));
-      return { taskId: null, status: 'error', message: `Seedance 服务错误: ${response.status}` };
-    }
-
-    const data = await response.json();
-    const taskId = data.id;
-    if (!taskId) {
-      return { taskId: null, status: 'error', message: '未获取到任务ID' };
-    }
-    return { taskId, status: 'queued', message: tier === 'flex' ? '任务已提交(离线推理,5 折)' : '任务已提交' };
-  } catch (error) {
-    console.error(`[Seedance:${config.model}] 提交错误:`, error);
-    return { taskId: null, status: 'error', message: '网络错误' };
-  }
-}
-
-// ====== Seedance 任务状态查询 ======
-
-async function getSeedanceTaskStatus(
-  taskId: string
-): Promise<{ status: string; videoUrl?: string; message?: string }> {
-  const apiKey = process.env.DOUBAO_API_KEY;
-  if (!apiKey) return { status: 'error', message: 'DOUBAO_API_KEY 未配置' };
-
-  try {
-    const response = await fetch(`${DOUBAO_BASE_URL}/contents/generations/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!response.ok) {
-      return { status: 'error', message: '查询失败' };
-    }
-
-    const data = await response.json();
-
-    if (data.status === 'succeeded') {
-      const videoUrl = data.content?.video_url;
-      return { status: 'succeeded', videoUrl, message: '生成完成' };
-    }
-
-    if (data.status === 'failed') {
-      return { status: 'failed', message: data.error?.message || data.message || '生成失败' };
-    }
-
-    return { status: 'running', message: '生成中...' };
-  } catch (error) {
-    console.error('Seedance query task error:', error);
-    return { status: 'error', message: '网络错误' };
-  }
-}
-
-// ====== 通用视频生成入口 ======
+// ====== 通用视频生成入口（百炼 DashScope Wan 系列） ======
 
 export async function submitVideoGenerationTask(
   tier: string,
@@ -1081,37 +984,27 @@ export async function submitVideoGenerationTask(
   imageUrl?: string,
   lastFrameUrl?: string,
   extraFrameUrls?: string[],
-  mode?: 'i2v' | 'multi'
+  mode?: "i2v" | "multi"
 ): Promise<VideoTaskResult & { model: string; provider: VideoProvider }> {
-  const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
-  // multi 模式: 首帧 + 尾帧 + 中间关键帧,优先用 multiImageI2v 配置
+  const qt = QUALITY_TIERS[tier] || QUALITY_TIERS["fast"];
   let config: VideoModelConfig;
-  if (mode === 'multi' && qt.multiImageI2v) {
+  if (mode === "multi" && qt.multiImageI2v) {
     config = qt.multiImageI2v;
   } else {
     config = imageUrl ? qt.i2v : qt.t2v;
   }
 
-  let result: VideoTaskResult;
-  if (config.provider === 'ark') {
-    result = await submitSeedanceTask(config, prompt, duration, imageUrl, lastFrameUrl, extraFrameUrls);
-  } else {
-    result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl);
-  }
+  const result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl);
 
   return { ...result, model: config.model, provider: config.provider };
 }
 
 export async function getVideoTaskStatusUniversal(
   taskId: string,
-  provider: VideoProvider
+  _provider: VideoProvider
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
-  if (provider === 'ark') {
-    return getSeedanceTaskStatus(taskId);
-  }
   return getVideoTaskStatus(taskId);
 }
-
 export async function generateVideo(prompt: string, duration: number = 5) {
   const result = await submitVideoTask(prompt, duration);
   if (result.taskId) {
@@ -1771,57 +1664,6 @@ export async function synthesizeWithCosyVoice(params: {
     return Buffer.from(ab);
   } catch (e: any) {
     console.warn('[CosyVoice] 调用失败:', e?.message || e);
-    return null;
-  }
-}
-
-// ====== 本地 Kokoro TTS (CPU 友好, 开源, Apache 2.0) ======
-
-const KOKORO_API_URL = process.env.KOKORO_API_URL || "";
-
-/** 内部 voice key → Kokoro voice 映射 */
-const KOKORO_VOICE_MAP: Record<string, string> = {
-  female_natural: "zf_xiaobei",
-  female_emotional: "zf_xiaoni",
-  female_professional: "zf_xiaoxiao",
-  female_warm: "zf_xiaoyi",
-  male_natural: "zm_yunjian",
-  male_warm: "zm_yunxi",
-  male_professional: "zm_yunyang",
-};
-
-export async function synthesizeWithLocalKokoro(text: string, voiceKey: string): Promise<Buffer | null> {
-  if (!KOKORO_API_URL) return null;
-
-  const kokoroVoice = KOKORO_VOICE_MAP[voiceKey] || "zf_xiaobei";
-
-  try {
-    const res = await fetch(`${KOKORO_API_URL}/v1/audio/speech`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "kokoro",
-        input: text,
-        voice: kokoroVoice,
-        speed: 1.0,
-        response_format: "mp3",
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!res.ok) {
-      console.warn(`[Kokoro] HTTP ${res.status}`);
-      return null;
-    }
-
-    const ab = await res.arrayBuffer();
-    if (ab.byteLength < 100) {
-      console.warn("[Kokoro] 返回音频过小");
-      return null;
-    }
-    return Buffer.from(ab);
-  } catch (e: unknown) {
-    console.warn("[Kokoro] 本地服务不可用:", e instanceof Error ? e.message : e);
     return null;
   }
 }
