@@ -94,8 +94,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '👤',
         desc: '头像 → AI 数字人口播 → 多平台分发,1 分钟日更',
         steps: [
-          { label: '上传头像', entry: '/ai/digital-human' },
-          { label: '写主题', entry: '/ai/digital-human' },
           { label: '一键生数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
         ],
@@ -105,12 +103,10 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         id: 'startup-story',
         title: '品牌故事短片',
         emoji: '🎬',
-        desc: '主题 → 故事脚本 → AI 视频分镜 → 合并 + BGM + 字幕',
+        desc: '主题 → 故事脚本 → AI 视频分镜 → AI 视频合成 + 字幕',
         steps: [
-          { label: '写故事主题', entry: '/ai/copywriting' },
           { label: 'AI 写故事', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { topic: '我的创业故事', style: 'story', industry: 'general' },
       },
@@ -134,7 +130,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🎙️',
         desc: '主题 → 科普文案 → AI 数字人口播 → 多平台分发',
         steps: [
-          { label: '选主题', entry: '/ai/copywriting' },
           { label: 'AI 写科普', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -149,8 +144,7 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         steps: [
           { label: '贴文章 URL', entry: '/inspiration' },
           { label: 'AI 文案提炼', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + 字幕', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'analysis', industry: 'education' },
       },
@@ -190,7 +184,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
           { label: '上传产品图', entry: '/inspiration' },
           { label: 'AI 文案 9 卖点', entry: '/ai/copywriting' },
           { label: '朋友圈 9 宫格', entry: '/ai/ads' },
-          { label: '下载 ZIP', entry: '/ai/ads' },
         ],
         prefills: { style: 'planting', industry: 'beauty' },
       },
@@ -200,10 +193,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🔄',
         desc: '产品图 → AI 多角度生图 → AI 图生视频 → 合并',
         steps: [
-          { label: '上传产品图', entry: '/ai/image' },
           { label: 'AI 多角度生图', entry: '/ai/image' },
-          { label: 'AI 图生视频', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { preset: 'product_main', style: 'planting' },
       },
@@ -213,7 +204,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📱',
         desc: '主题 → 种草文案 → AI 封面图 → 多平台分发',
         steps: [
-          { label: '选主题', entry: '/ai/copywriting' },
           { label: 'AI 写种草', entry: '/ai/copywriting' },
           { label: 'AI 封面图', entry: '/ai/image' },
           { label: '多平台分发', entry: '/publish' },
@@ -240,7 +230,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📊',
         desc: '行业话题 → 深度评论 → AI 数字人 → 视频号',
         steps: [
-          { label: '选话题', entry: '/ai/copywriting' },
           { label: '写深度评论', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -253,7 +242,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📋',
         desc: '客户案例 → 文案 → AI 配图 → 视频合成',
         steps: [
-          { label: '写案例', entry: '/ai/copywriting' },
           { label: 'AI 提炼', entry: '/ai/copywriting' },
           { label: 'AI 配图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
@@ -266,10 +254,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🎓',
         desc: '产品功能 → 教程文案 → 分镜 → AI 视频',
         steps: [
-          { label: '写功能要点', entry: '/ai/copywriting' },
           { label: 'AI 教程文案', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + 字幕', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'tutorial', industry: 'digital' },
       },
@@ -293,7 +279,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '💭',
         desc: '心情主题 → 共鸣文案 → AI 配图 → 多平台',
         steps: [
-          { label: '写心情', entry: '/ai/copywriting' },
           { label: 'AI 共鸣文案', entry: '/ai/copywriting' },
           { label: 'AI 配图', entry: '/ai/image' },
           { label: '多平台分发', entry: '/publish' },
@@ -306,8 +291,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '👤',
         desc: '头像 → AI 数字人口播 → 1 套形象日更',
         steps: [
-          { label: '上传头像', entry: '/ai/digital-human' },
-          { label: '写日常主题', entry: '/ai/digital-human' },
           { label: '一键生数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
         ],
@@ -319,10 +302,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📖',
         desc: '主题 → 故事脚本 → 分镜 → AI 视频合成',
         steps: [
-          { label: '写主题', entry: '/ai/copywriting' },
           { label: 'AI 写故事', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'story', industry: 'general' },
       },
@@ -346,7 +327,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📚',
         desc: '课程要点 → 教程文案 → AI 数字人口播 → 矩阵分发',
         steps: [
-          { label: '选课程要点', entry: '/ai/copywriting' },
           { label: 'AI 写教程', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -359,10 +339,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🔬',
         desc: '科普主题 → 干货文案 → AI 视频分镜 → B站/抖音',
         steps: [
-          { label: '选科普主题', entry: '/ai/copywriting' },
           { label: 'AI 写科普', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + 字幕', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'science', industry: 'education' },
       },
@@ -372,10 +350,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🏆',
         desc: '学员故事 → 文案 → 分镜 → AI 视频合成',
         steps: [
-          { label: '写学员故事', entry: '/ai/copywriting' },
           { label: 'AI 提炼', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'story', industry: 'education' },
       },
@@ -402,7 +378,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
           { label: '上传菜品图', entry: '/inspiration' },
           { label: 'AI 文案 9 卖点', entry: '/ai/copywriting' },
           { label: '朋友圈 9 宫格', entry: '/ai/ads' },
-          { label: '下载 ZIP', entry: '/ai/ads' },
         ],
         prefills: { style: 'planting', industry: 'food' },
       },
@@ -412,10 +387,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🍱',
         desc: '菜品图 → AI 多角度 → AI 图生视频 → 合并',
         steps: [
-          { label: '上传菜品图', entry: '/ai/image' },
           { label: 'AI 多角度生图', entry: '/ai/image' },
-          { label: 'AI 图生视频', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { preset: 'product_main', style: 'planting', industry: 'food' },
       },
@@ -425,10 +398,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '👨‍🍳',
         desc: '餐厅故事 → 故事脚本 → 分镜 → AI 视频',
         steps: [
-          { label: '写品牌故事', entry: '/ai/copywriting' },
           { label: 'AI 写故事', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'story', industry: 'food' },
       },
@@ -452,7 +423,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🔬',
         desc: '医美主题 → 科普文案 → AI 数字人口播 → 分发',
         steps: [
-          { label: '选科普主题', entry: '/ai/copywriting' },
           { label: 'AI 写科普', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -465,7 +435,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📊',
         desc: '案例对比 → 文案 → AI 配图 → AI 视频',
         steps: [
-          { label: '写案例', entry: '/ai/copywriting' },
           { label: 'AI 提炼对比', entry: '/ai/copywriting' },
           { label: 'AI 配图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
@@ -478,8 +447,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '👩‍⚕️',
         desc: '咨询师头像 → AI 数字人 → 知识口播 → 矩阵分发',
         steps: [
-          { label: '上传头像', entry: '/ai/digital-human' },
-          { label: '写专业主题', entry: '/ai/digital-human' },
           { label: '一键生数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
         ],
@@ -518,7 +485,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🏘️',
         desc: '小区配套 → 深度文案 → AI 数字人口播 → 分发',
         steps: [
-          { label: '写小区亮点', entry: '/ai/copywriting' },
           { label: 'AI 写讲解稿', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -531,7 +497,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🔨',
         desc: '改造前图 → AI 效果图 → 前后对比 → 短片合成',
         steps: [
-          { label: '上传原图', entry: '/ai/image' },
           { label: 'AI 设计效果图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
           { label: '多平台分发', entry: '/publish' },
@@ -558,7 +523,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🗺️',
         desc: '目的地 → 攻略文案 → 景点图片 → AI 视频 + BGM',
         steps: [
-          { label: '写攻略大纲', entry: '/ai/copywriting' },
           { label: 'AI 写攻略文', entry: '/ai/copywriting' },
           { label: 'AI 配景点图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
@@ -584,7 +548,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📸',
         desc: '景点 → 出片攻略 → AI 封面图 → AI 短片',
         steps: [
-          { label: '写景点主题', entry: '/ai/copywriting' },
           { label: 'AI 写出片指南', entry: '/ai/copywriting' },
           { label: 'AI 封面配图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
@@ -611,7 +574,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📖',
         desc: '育儿主题 → 科普文案 → AI 数字人口播 → 分发',
         steps: [
-          { label: '选育儿主题', entry: '/ai/copywriting' },
           { label: 'AI 写科普', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -637,10 +599,8 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🎬',
         desc: '成长点滴 → 故事脚本 → AI 视频分镜 → 成片',
         steps: [
-          { label: '写成长故事', entry: '/ai/copywriting' },
           { label: 'AI 写脚本', entry: '/ai/copywriting' },
-          { label: 'AI 视频分镜', entry: '/ai/video' },
-          { label: '合并 + BGM', entry: '/ai/video' },
+          { label: 'AI 视频合成', entry: '/ai/video' },
         ],
         prefills: { style: 'story', industry: 'baby' },
       },
@@ -664,7 +624,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🏋️',
         desc: '动作 → 教学文案 → AI 视频分镜 → 字幕 + BGM',
         steps: [
-          { label: '写动作要点', entry: '/ai/copywriting' },
           { label: 'AI 写教学稿', entry: '/ai/copywriting' },
           { label: 'AI 视频合成', entry: '/ai/video' },
           { label: '多平台分发', entry: '/publish' },
@@ -677,7 +636,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🥗',
         desc: '食材 → 饮食文案 → AI 美食图 → 分发',
         steps: [
-          { label: '写饮食计划', entry: '/ai/copywriting' },
           { label: 'AI 写食谱文', entry: '/ai/copywriting' },
           { label: 'AI 配美食图', entry: '/ai/image' },
           { label: '多平台分发', entry: '/publish' },
@@ -690,7 +648,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🔥',
         desc: '挑战主题 → 励志文案 → AI 视频 → 分发',
         steps: [
-          { label: '写挑战主题', entry: '/ai/copywriting' },
           { label: 'AI 写励志文', entry: '/ai/copywriting' },
           { label: 'AI 视频合成', entry: '/ai/video' },
           { label: '多平台分发', entry: '/publish' },
@@ -717,7 +674,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🐕',
         desc: '萌宠瞬间 → 文案 → AI 视频 → 多平台分发',
         steps: [
-          { label: '写今日主题', entry: '/ai/copywriting' },
           { label: 'AI 写文案', entry: '/ai/copywriting' },
           { label: 'AI 视频合成', entry: '/ai/video' },
           { label: '多平台分发', entry: '/publish' },
@@ -743,7 +699,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🏥',
         desc: '养护主题 → 科普文案 → AI 数字人 → 分发',
         steps: [
-          { label: '选养护主题', entry: '/ai/copywriting' },
           { label: 'AI 写科普', entry: '/ai/copywriting' },
           { label: 'AI 数字人', entry: '/ai/digital-human' },
           { label: '多平台分发', entry: '/publish' },
@@ -770,7 +725,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '📐',
         desc: '设计理念 → 文案 → AI 效果图 → 视频展示',
         steps: [
-          { label: '写设计理念', entry: '/ai/copywriting' },
           { label: 'AI 写案文', entry: '/ai/copywriting' },
           { label: 'AI 效果图', entry: '/ai/image' },
           { label: 'AI 视频合成', entry: '/ai/video' },
@@ -796,7 +750,6 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🪴',
         desc: '好物 → 种草文案 → AI 图片 → 分发',
         steps: [
-          { label: '写好物清单', entry: '/ai/copywriting' },
           { label: 'AI 写种草文', entry: '/ai/copywriting' },
           { label: 'AI 配图', entry: '/ai/image' },
           { label: '多平台分发', entry: '/publish' },
