@@ -26,10 +26,11 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting }: Ste
     try {
       const ct = CONTENT_TYPES.find((c) => c.id === contentType);
       const res = await apiClient.post<{ content: string }>('/ai/copywriting', {
-        prompt: ct ? `${ct.promptHint}\n\n标题：${topic.trim()}` : topic.trim(),
+        inspirations: [{ title: topic.trim(), originalText: topic.trim() }],
         type: contentType,
-        style: handoff.style || '',
+        style: ct?.promptHint || handoff.style || '',
         industry: handoff.industry || '',
+        userInstruction: ct?.promptHint || '',
       });
       if (!res.success) throw new Error(res.error);
       setResult(res.data!.content);
