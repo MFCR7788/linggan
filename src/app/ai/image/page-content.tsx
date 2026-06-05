@@ -69,7 +69,7 @@ function AIImageContent() {
   }, [userInput]);
 
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string>>(new Set());
-  const { data: inspirations } = useInspirations({ limit: 30 });
+  const { data: inspirations } = useInspirations({ type: 'image', limit: 30 });
 
   // ─── 2. 参数（联动预设） ────────────────────────────
   const [selectedStyle, setSelectedStyle] = useState('写实摄影');

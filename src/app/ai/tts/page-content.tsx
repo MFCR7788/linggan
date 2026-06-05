@@ -109,7 +109,7 @@ function TTSPageContent() {
 
   // 加载灵感
   useEffect(() => {
-    fetch('/api/inspiration?limit=20')
+    fetch('/api/inspiration?type=text&limit=20')
       .then((r) => r.json())
       .then((d) => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {});

@@ -155,7 +155,7 @@ function AIVideoContent() {
   // ─── 加载灵感数据 ────────────────────────────────────
 
   useEffect(() => {
-    fetch('/api/inspiration?limit=20')
+    fetch('/api/inspiration?type=video&limit=20')
       .then((r) => r.json())
       .then((d) => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {});

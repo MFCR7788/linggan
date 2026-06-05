@@ -280,7 +280,7 @@ function DigitalHumanContent() {
 
   // ─── 初始化 ───────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/inspiration?limit=30')
+    fetch('/api/inspiration?type=image&limit=30')
       .then(r => r.json())
       .then(d => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {});

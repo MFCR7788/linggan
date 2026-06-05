@@ -110,7 +110,7 @@ function AICopywritingContent() {
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('text');
   const [hideAiWorks, setHideAiWorks] = useState(false);
   const [sortMode, setSortMode] = useState<'smart' | 'recent'>('smart');
   const [refineModalOpen, setRefineModalOpen] = useState(false);
