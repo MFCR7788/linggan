@@ -6,15 +6,16 @@ import { apiClient } from '@/lib/api-client';
 import type { StepWidgetProps } from '../StepWidgetRegistry';
 
 const VOICES: { id: string; label: string; gender: string }[] = [
-  { id: 'zh_female_qingxin', label: '清新女声', gender: 'female' },
-  { id: 'zh_male_qingse', label: '磁性男声', gender: 'male' },
-  { id: 'zh_female_shuangkuai', label: '爽快女声', gender: 'female' },
-  { id: 'zh_male_wenrou', label: '温柔男声', gender: 'male' },
+  { id: 'female_natural', label: '温柔女声', gender: 'female' },
+  { id: 'female_emotional', label: '活泼女声', gender: 'female' },
+  { id: 'female_professional', label: '知性女声', gender: 'female' },
+  { id: 'male_natural', label: '磁性男声', gender: 'male' },
+  { id: 'male_warm', label: '暖声男声', gender: 'male' },
 ];
 
 export function TtsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetProps) {
   const [text, setText] = useState(handoff.script || handoff.text || '');
-  const [voice, setVoice] = useState('zh_female_qingxin');
+  const [voice, setVoice] = useState('female_natural');
   const [generating, setGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -34,9 +35,10 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetP
     setGenerating(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ url: string }>('/ai/tts', { text: text.trim(), voice });
+      const res = await apiClient.post<{ audioBase64: string; mimeType: string }>('/ai/tts', { text: text.trim(), voice });
       if (!res.success) throw new Error(res.error);
-      setAudioUrl(res.data!.url);
+      const dataUri = `data:${res.data!.mimeType || 'audio/mpeg'};base64,${res.data!.audioBase64}`;
+      setAudioUrl(dataUri);
     } catch (e: any) {
       setError(e.message || '生成失败');
     } finally {

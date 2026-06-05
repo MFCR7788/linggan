@@ -29,10 +29,10 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting }: StepWidge
       let attempts = 0;
       while (attempts < 60) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await apiClient.get<{ status: string; url?: string }>(`/ai/video?taskId=${taskId}`);
+        const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(`/ai/video?taskId=${taskId}`);
         if (pollRes.success && pollRes.data) {
-          if (pollRes.data.status === 'completed' && pollRes.data.url) {
-            setVideoUrl(pollRes.data.url);
+          if (pollRes.data.status === 'succeeded' && pollRes.data.videoUrl) {
+            setVideoUrl(pollRes.data.videoUrl);
             break;
           }
           if (pollRes.data.status === 'failed') {

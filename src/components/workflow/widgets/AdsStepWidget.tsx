@@ -30,13 +30,14 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting }: StepWidgetP
     setGenerating(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ images: string[] }>('/ai/ads', {
-        productName: productName.trim(),
-        imageUrl,
-        prompt: handoff.text || '',
+      const sellingPoints = [productName.trim(), '限时特惠', '品质保证', '点击了解', '好评如潮'];
+      const res = await apiClient.post<{ cells?: Array<{ imageUrl: string }> }>('/ai/ads/grid', {
+        product: productName.trim(),
+        sellingPoints,
+        referenceImage: imageUrl || undefined,
       });
       if (!res.success) throw new Error(res.error);
-      setResults(res.data!.images || []);
+      setResults((res.data!.cells || []).map((c) => c.imageUrl).filter(Boolean));
     } catch (e: any) {
       setError(e.message || '生成失败');
     } finally {

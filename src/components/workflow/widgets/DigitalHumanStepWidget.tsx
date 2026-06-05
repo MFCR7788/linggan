@@ -28,12 +28,12 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting }: St
       let attempts = 0;
       while (attempts < 90) {
         await new Promise((r) => setTimeout(r, 5000));
-        const pollRes = await apiClient.get<{ status: string; video_url?: string; url?: string }>(
+        const pollRes = await apiClient.get<{ status: string; videoUrl?: string }>(
           `/ai/digital-human?taskId=${taskId}`
         );
         if (pollRes.success && pollRes.data) {
-          const url = pollRes.data.video_url || pollRes.data.url;
-          if (pollRes.data.status === 'completed' && url) {
+          const url = pollRes.data.videoUrl;
+          if (pollRes.data.status === 'succeeded' && url) {
             setVideoUrl(url);
             break;
           }

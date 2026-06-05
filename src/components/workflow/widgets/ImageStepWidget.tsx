@@ -26,13 +26,13 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting }: StepWidge
     setGenerating(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ url: string }>('/ai/image', {
+      const res = await apiClient.post<{ imageUrl: string }>('/ai/image', {
         prompt: generatePrompt,
-        preset,
+        presetId: preset,
         style: handoff.style || '',
       });
       if (!res.success) throw new Error(res.error);
-      setResultUrl(res.data!.url);
+      setResultUrl(res.data!.imageUrl);
     } catch (e: any) {
       setError(e.message || '生成失败');
     } finally {
