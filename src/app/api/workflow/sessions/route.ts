@@ -3,7 +3,7 @@ import { createApiResponse, createApiError, getPaginationParams, createPaginated
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { ACCOUNT_TYPE_PRESETS } from '@/lib/account-presets';
-import { buildHandoffUrl } from '@/hooks/use-content-handoff';
+import { buildHandoffUrl } from '@/lib/handoff-url';
 
 export const dynamic = 'force-dynamic';
 

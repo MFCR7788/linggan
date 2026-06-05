@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Check, X } from 'lucide-react';
-import { buildHandoffUrl } from '@/hooks/use-content-handoff';
+import { buildHandoffUrl } from '@/lib/handoff-url';
 import type { WorkflowSession } from '@/types';
 
 interface Props {

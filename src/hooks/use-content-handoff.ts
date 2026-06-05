@@ -27,25 +27,10 @@ import { useCallback } from 'react';
  *   - preset: 生图预设
  *   - palette: 调色板
  */
-export type HandoffField =
-  | 'prompt'
-  | 'topic'
-  | 'firstFrame'
-  | 'imageUrl'
-  | 'audioUrl'
-  | 'text'
-  | 'script'
-  | 'inspirationId'
-  | 'style'
-  | 'industry'
-  | 'preset'
-  | 'palette'
-  | 'ratio';
-
-const FIELD_KEYS: HandoffField[] = [
-  'prompt', 'topic', 'firstFrame', 'imageUrl', 'audioUrl', 'text', 'script',
-  'inspirationId', 'style', 'industry', 'preset', 'palette', 'ratio',
-];
+import type { HandoffField } from '@/lib/handoff-url';
+export type { HandoffField } from '@/lib/handoff-url';
+import { HANDOFF_FIELD_KEYS, buildHandoffUrl } from '@/lib/handoff-url';
+export { buildHandoffUrl };
 
 export function useContentHandoff() {
   const router = useRouter();
@@ -58,7 +43,7 @@ export function useContentHandoff() {
   const handoff = useCallback(
     (target: string, params: Partial<Record<HandoffField, string | number | undefined>>) => {
       const query = new URLSearchParams();
-      for (const key of FIELD_KEYS) {
+      for (const key of HANDOFF_FIELD_KEYS) {
         const v = params[key];
         if (v === undefined || v === null || v === '') continue;
         query.set(key, String(v));
@@ -91,27 +76,10 @@ export function useContentHandoff() {
    * 一次性取所有支持的字段（用于在组件初始化时把 URL 参数写入状态）
    */
   const receiveAll = useCallback((): Partial<Record<HandoffField, string>> => {
-    return receive(FIELD_KEYS);
+    return receive(HANDOFF_FIELD_KEYS);
   }, [receive]);
 
   return { handoff, receive, receiveAll, searchParams };
 }
 
-/**
- * 非 hook 工具：在非组件代码里拼装 handoff URL
- * 例如保存到本地、或者在工具函数里 push
- */
-export function buildHandoffUrl(
-  target: string,
-  params: Partial<Record<HandoffField, string | number | undefined>>
-): string {
-  const query = new URLSearchParams();
-  for (const key of FIELD_KEYS) {
-    const v = params[key];
-    if (v === undefined || v === null || v === '') continue;
-    query.set(key, String(v));
-  }
-  const qs = query.toString();
-  return qs ? `${target}?${qs}` : target;
-}
 

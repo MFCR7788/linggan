@@ -2,7 +2,7 @@
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
-import { buildHandoffUrl } from '@/hooks/use-content-handoff';
+import { buildHandoffUrl } from '@/lib/handoff-url';
 import { StepResult } from '@/types';
 
 export const dynamic = 'force-dynamic';
