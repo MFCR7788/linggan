@@ -1,7 +1,7 @@
 // AI Services — 百炼 DashScope 统一（DeepSeek / Qwen / Wan / CosyVoice）
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
-import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken } from './runtime-config';
+import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken, getHappyHorseApiKey, getHeyGenApiKey, getDoubaoEndpointId, getEnv } from './runtime-config';
 
 // 通用 fetch 超时包装
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
@@ -168,7 +168,7 @@ export async function callDoubaoChat(
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const rawModel = options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215';
+  const rawModel = options.model || getDoubaoEndpointId() || 'doubao-seed-2.0-241215';
   const model = mapDoubaoModel(rawModel);
 
   const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -430,7 +430,7 @@ export async function submitVideoTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -484,7 +484,7 @@ export async function submitI2VTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -737,7 +737,7 @@ export async function getVideoTaskStatus(
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
     const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
     });
 
     if (!response.ok) {
@@ -780,7 +780,7 @@ export async function submitDigitalHumanTask(params: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -818,7 +818,7 @@ export async function getDigitalHumanTaskStatus(
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
     const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
     });
 
     if (!response.ok) {
@@ -864,7 +864,7 @@ export async function submitAnimateTask(params: {
 }): Promise<AnimateSubmitResult> {
   const { imageUrl, videoUrl, mode = 'animate', resolution = '720P' } = params;
 
-  const apiKey = process.env.HAPPYHORSE_API_KEY;
+  const apiKey = getHappyHorseApiKey();
   if (!apiKey) {
     return { taskId: null, status: 'error', message: 'HAPPYHORSE_API_KEY 未配置' };
   }
@@ -915,7 +915,7 @@ export async function getAnimateTaskStatus(
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
     const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
     });
     if (!response.ok) return { status: 'error', message: '查询失败' };
     const data = await response.json();
@@ -977,7 +977,7 @@ async function submitDashScopeVideoTask(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({ model: config.model, input, parameters }),
@@ -1359,8 +1359,8 @@ export async function fetchWeather(city: string): Promise<WeatherData | null> {
     const encodedCity = encodeURIComponent(city.trim());
     const url = `https://wttr.in/${encodedCity}?format=j1`;
 
-    const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY
-      || process.env.http_proxy || process.env.https_proxy;
+    const proxyUrl = getEnv('HTTP_PROXY') || getEnv('HTTPS_PROXY')
+      || getEnv('http_proxy') || getEnv('https_proxy');
 
     if (!proxyUrl) {
       // 无代理时用原生 https 直连
@@ -1769,7 +1769,8 @@ export async function trainAvatar(params: {
   name: string;
   lookalike?: boolean; // true=Digital Twin(视频), false=Photo Avatar(单图)
 }): Promise<AvatarTrainingResult> {
-  if (!process.env.HEYGEN_API_KEY) {
+  const heygenKey = getHeyGenApiKey();
+  if (!heygenKey) {
     return { ok: false, avatarId: null, status: 'failed', error: 'HEYGEN_API_KEY 未配置,数字分身功能不可用' };
   }
 
@@ -1780,7 +1781,7 @@ export async function trainAvatar(params: {
     const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': process.env.HEYGEN_API_KEY,
+        'X-Api-Key': heygenKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -1815,13 +1816,14 @@ export async function trainAvatar(params: {
 
 /** 查询数字分身训练状态 */
 export async function getAvatarTrainingStatus(avatarId: string): Promise<AvatarTrainingStatusResult> {
-  if (!process.env.HEYGEN_API_KEY) {
+  const heygenKey = getHeyGenApiKey();
+  if (!heygenKey) {
     return { avatarId, status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
     const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike/${avatarId}`, {
-      headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY },
+      headers: { 'X-Api-Key': heygenKey },
     });
 
     if (!response.ok) {
@@ -1856,7 +1858,8 @@ export async function generateAvatarVideo(params: {
   voiceId?: string; // 可选 TTS 音色
   backgroundColor?: string;
 }): Promise<{ ok: boolean; videoId?: string; videoUrl?: string; error?: string }> {
-  if (!process.env.HEYGEN_API_KEY) {
+  const heygenKey = getHeyGenApiKey();
+  if (!heygenKey) {
     return { ok: false, error: 'HEYGEN_API_KEY 未配置' };
   }
 
@@ -1865,7 +1868,7 @@ export async function generateAvatarVideo(params: {
     const response = await fetch(`${HEYGEN_BASE}/v1/video/generate`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': process.env.HEYGEN_API_KEY,
+        'X-Api-Key': heygenKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -1911,13 +1914,14 @@ export async function getAvatarVideoStatus(videoId: string): Promise<{
   videoUrl?: string;
   error?: string;
 }> {
-  if (!process.env.HEYGEN_API_KEY) {
+  const heygenKey = getHeyGenApiKey();
+  if (!heygenKey) {
     return { status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
     const response = await fetch(`${HEYGEN_BASE}/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
-      headers: { 'X-Api-Key': process.env.HEYGEN_API_KEY },
+      headers: { 'X-Api-Key': heygenKey },
     });
     if (!response.ok) return { status: 'failed', error: '查询失败' };
 

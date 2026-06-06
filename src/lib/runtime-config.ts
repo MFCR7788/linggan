@@ -55,4 +55,16 @@ export function getVolcTtsAccessToken(): string | undefined {
   return getEnv('VOLC_TTS_ACCESS_TOKEN');
 }
 
+export function getHappyHorseApiKey(): string | undefined {
+  return getEnv('HAPPYHORSE_API_KEY');
+}
+
+export function getHeyGenApiKey(): string | undefined {
+  return getEnv('HEYGEN_API_KEY');
+}
+
+export function getDoubaoEndpointId(): string | undefined {
+  return getEnv('DOUBAO_ENDPOINT_ID');
+}
+
 export { getEnv };
