@@ -940,7 +940,8 @@ async function submitDashScopeVideoTask(
   prompt: string,
   duration: number = 5,
   imageUrl?: string,
-  lastFrameUrl?: string
+  lastFrameUrl?: string,
+  extraFrameUrls?: string[]
 ): Promise<{ taskId: string | null; status: string; message: string }> {
   const finalPrompt = await optimizePrompt(prompt, 'video');
   const isWan = config.model.includes('wan');
@@ -948,13 +949,18 @@ async function submitDashScopeVideoTask(
   const input: Record<string, unknown> = { prompt: finalPrompt };
   if (imageUrl) {
     if (isWan) {
-      // Wan: img_url 是首帧, last_frame_url 是尾帧
       input.img_url = imageUrl;
       if (lastFrameUrl) input.last_frame_url = lastFrameUrl;
+      // Wan 多帧: 中间关键帧传为 reference_images
+      if (extraFrameUrls && extraFrameUrls.length > 0) {
+        input.reference_images = extraFrameUrls.slice(0, 5);
+      }
     } else {
-      // DashScope 通用: media 数组支持 first_frame / last_frame
       const media: Array<{ type: string; url: string }> = [{ type: 'first_frame', url: imageUrl }];
       if (lastFrameUrl) media.push({ type: 'last_frame', url: lastFrameUrl });
+      if (extraFrameUrls) {
+        extraFrameUrls.slice(0, 5).forEach((url) => media.push({ type: 'reference_frame', url }));
+      }
       input.media = media;
     }
   }
@@ -1021,7 +1027,7 @@ export async function submitVideoGenerationTask(
     config = imageUrl ? qt.i2v : qt.t2v;
   }
 
-  const result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl);
+  const result = await submitDashScopeVideoTask(config, prompt, duration, imageUrl, lastFrameUrl, extraFrameUrls);
 
   return { ...result, model: config.model, provider: config.provider };
 }
