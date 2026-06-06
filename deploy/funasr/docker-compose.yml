@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  funasr:
+    build: .
+    container_name: lingji-funasr
+    restart: unless-stopped
+    ports:
+      - "10096:10096"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      # 缓存模型文件，避免重启后重新下载
+      - ./models:/root/.cache/modelscope
+    mem_limit: 4g
+    cpus: 4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

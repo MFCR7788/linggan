@@ -1,0 +1,7 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+funasr==1.2.7
+modelscope==1.23.0
+torch>=2.0.0
+torchaudio>=2.0.0
+soundfile>=0.12.0

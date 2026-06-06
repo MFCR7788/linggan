@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  kokoro:
+    # Kokoro-FastAPI CPU 版 — OpenAI 兼容 TTS API
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: lingji-kokoro
+    restart: unless-stopped
+    ports:
+      - "8880:8880"
+    environment:
+      - TZ=Asia/Shanghai
+    mem_limit: 4g
+    cpus: 4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8880/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

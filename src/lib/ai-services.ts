@@ -61,7 +61,7 @@ export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
@@ -163,7 +163,7 @@ export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
@@ -248,8 +248,7 @@ export async function callDoubaoVision(
 async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promise<string> {
   if (!rawPrompt || rawPrompt.length < 5) return rawPrompt;
 
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) return rawPrompt;
+  const apiKey = getDashScopeApiKey();
 
   const systemPrompt = type === 'image'
     ? `You are an expert AI image prompt engineer for the wanx2.1-t2i-turbo model. This model excels at: photorealism, Chinese ink painting, illustration, and detailed scene rendering. It understands both Chinese and English prompts.
@@ -311,19 +310,20 @@ Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanat
 // ====== 百炼 wan2.2-image 图片生成 ======
 
 function getSizeForRatio(ratio: string): string {
+  // wanx2.1-t2i-turbo 限制：宽高 512-1440
   switch (ratio) {
     case '1:1':
-      return '1920x1920';
+      return '1440x1440';
     case '16:9':
-      return '2560x1440';
+      return '1440x810';
     case '9:16':
-      return '1440x2560';
+      return '810x1440';
     case '4:3':
-      return '2240x1680';
+      return '1440x1080';
     case '3:4':
-      return '1680x2240';
+      return '1080x1440';
     default:
-      return '1920x1920';
+      return '1440x1440';
   }
 }
 
@@ -335,7 +335,7 @@ export async function generateImage(
   const finalPrompt = await optimizePrompt(prompt, 'image');
   console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
 
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
 
   const size = getSizeForRatio(options.ratio || '1:1');
