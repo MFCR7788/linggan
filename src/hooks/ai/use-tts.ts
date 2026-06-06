@@ -48,8 +48,8 @@ export function useTts() {
       });
       if (!res.success) throw new Error(res.error || '生成失败');
       return {
-        audioBase64: res.data!.audioBase64,
-        mimeType: res.data!.mimeType || 'audio/mpeg',
+        audioBase64: (res as any).audioBase64,
+        mimeType: (res as any).mimeType || 'audio/mpeg',
       };
     } catch (e: any) {
       setError(e.message || '生成失败');
