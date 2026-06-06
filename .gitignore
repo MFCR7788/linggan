@@ -54,3 +54,4 @@ android/fastlane/test_output/
 
 # Claude plans
 .claude/plans/
+screenshots/
