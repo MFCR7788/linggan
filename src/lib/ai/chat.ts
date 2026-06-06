@@ -26,21 +26,24 @@ export async function callDeepSeek(
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
+  const body: Record<string, unknown> = {
+    model: options.model || 'deepseek-v3',
+    messages: [
+      { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+  };
+  if (options.enableSearch) body.enable_search = true;
+
   const response = await fetchWithTimeout(`${BAILIAN_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: options.model || 'deepseek-v3',
-      messages: [
-        { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2000,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

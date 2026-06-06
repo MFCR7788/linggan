@@ -31,6 +31,7 @@ interface ChatOptions {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  enableSearch?: boolean;
 }
 
 interface VisionResult {
@@ -65,21 +66,24 @@ export async function callDeepSeek(
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
+  const body: Record<string, unknown> = {
+    model: options.model || 'deepseek-v3',
+    messages: [
+      { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+  };
+  if (options.enableSearch) body.enable_search = true;
+
   const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: options.model || 'deepseek-v3',
-      messages: [
-        { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2000,
-    }),
+    body: JSON.stringify(body),
   }, 90000);
 
   if (!response.ok) {
@@ -1013,6 +1017,39 @@ export async function generateVideo(prompt: string, duration: number = 5) {
   throw new Error(result.message || '视频生成任务提交失败');
 }
 
+// ====== 联网搜索研究 ======
+
+export async function researchTopic(
+  topic: string,
+  context?: string
+): Promise<string> {
+  const contextBlock = context ? `\n参考背景：${context}` : '';
+
+  const prompt = `请联网搜索关于以下话题的最新信息和趋势，整理出一份研究简报：
+
+话题：${topic}${contextBlock}
+
+请从以下维度整理搜索结果：
+1. 📊 最新趋势和动态 — 该话题最近的流行方向、热门事件
+2. 🔥 热门观点和讨论 — 用户/行业关注的热点、争议点
+3. 📈 关键数据和案例 — 相关的统计数据、成功案例
+4. 💡 文案角度建议 — 基于以上信息，推荐 2-3 个文案切入点
+
+请确保引用的信息有时效性，标出来源。总字数控制在 500 字以内。`;
+
+  try {
+    const result = await callDeepSeek(prompt, {
+      temperature: 0.3,
+      maxTokens: 1200,
+      enableSearch: true,
+    });
+    return result;
+  } catch (e) {
+    console.error('Research failed:', e);
+    return '';
+  }
+}
+
 // ====== AI 总结灵感内容 ======
 
 export async function summarizeContent(
@@ -1064,7 +1101,8 @@ export async function generateCopywriting(
   noAiTaste: boolean = false,
   n: number = 1,
   industryInstruction?: string,
-  userInstruction?: string
+  userInstruction?: string,
+  researchContext?: string
 ): Promise<string | string[]> {
   const inspirationText = inspirations.map((i) => {
     const parts: string[] = [];
@@ -1083,8 +1121,12 @@ export async function generateCopywriting(
   const industryBlock = industryInstruction ? `\n${industryInstruction}\n` : '';
   const userBlock = userInstruction ? `\n【用户特别要求】\n${userInstruction}\n` : '';
 
+  const researchBlock = researchContext
+    ? `\n【联网搜索研究资料】\n${researchContext}\n\n请结合以上研究资料中的最新趋势、数据和热点，生成更有深度和时效性的文案。\n`
+    : '';
+
   const basePrompt = (angle: string) => `请基于以下灵感内容创作一篇${type}，风格要求：${style}。${angle}
-${industryBlock}${userBlock}
+${industryBlock}${userBlock}${researchBlock}
 灵感内容：
 ${inspirationText}
 

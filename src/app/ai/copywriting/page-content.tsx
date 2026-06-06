@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3 } from "lucide-react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3, Search } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -110,7 +110,7 @@ function AICopywritingContent() {
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
-  const { generate: generateCopywriting, refine: refineCopywriting, rewriteMulti: rewriteMultiCopy } = useCopywriting();
+  const { generate: generateCopywriting, refine: refineCopywriting, rewriteMulti: rewriteMultiCopy, researching } = useCopywriting();
   const [isRefining, setIsRefining] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('text');
   const [hideAiWorks, setHideAiWorks] = useState(false);
@@ -137,6 +137,7 @@ function AICopywritingContent() {
   // ─── Result state ──────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [researchResults, setResearchResults] = useState<string | null>(null);
   const [resultTab, setResultTab] = useState<"standard" | "noai">("standard");
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [standardContents, setStandardContents] = useState<string[]>([generateStandardContent()]);
@@ -368,7 +369,7 @@ function AICopywritingContent() {
           inspirations: selectedData, type: selectedType,
           style: styleLabel, noAiTaste: false, n: batchN,
           industry: selectedIndustry, userInstruction: finalInstruction,
-        }).then(r => r.content).catch(() => generateStandardContent()),
+        }).then(r => { if (r.researchResults) setResearchResults(r.researchResults); return r.content; }).catch(() => generateStandardContent()),
         noAiMode
           ? generateCopywriting({
               inspirations: selectedData, type: selectedType,
@@ -850,7 +851,9 @@ function AICopywritingContent() {
             {isLoading ? (
               <div className="flex flex-col items-center py-8 gap-3">
                 <div className="w-8 h-8 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-                <p style={{ color: '#9CA3AF', fontSize: 13 }}>AI 正在创作...</p>
+                <p style={{ color: '#9CA3AF', fontSize: 13 }}>
+                  {researching ? '正在搜索最新资料...' : 'AI 正在创作...'}
+                </p>
               </div>
             ) : (
               <>
@@ -887,6 +890,18 @@ function AICopywritingContent() {
                     </button>
                   ))}
                 </div>
+
+                {/* Research Results */}
+                {researchResults && (
+                  <details className="mb-3">
+                    <summary className="cursor-pointer py-2 px-3 rounded-lg text-xs flex items-center gap-1.5" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                      <Search size={14} /> 研究参考资料
+                    </summary>
+                    <div className="mt-2 p-3 rounded-lg text-xs leading-relaxed" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF', whiteSpace: 'pre-wrap' }}>
+                      {researchResults}
+                    </div>
+                  </details>
+                )}
 
                 {/* Content */}
                 <div className="p-4 rounded-xl mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>

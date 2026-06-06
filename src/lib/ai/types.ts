@@ -21,6 +21,7 @@ export interface ChatOptions {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  enableSearch?: boolean;
 }
 
 // ====== Vision Types ======

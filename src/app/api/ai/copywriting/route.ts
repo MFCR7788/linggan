@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
-import { generateCopywriting, logAiUsage } from '@/lib/ai-services';
+import { generateCopywriting, researchTopic, logAiUsage } from '@/lib/ai-services';
 import { findIndustry, renderIndustryInstruction, COPYWRITING_TYPES } from '@/lib/preset-templates';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
 
@@ -47,6 +47,20 @@ export const POST = withAuth(async ({ request, user }) => {
     const industryDef = industry ? findIndustry(industry) : undefined;
     const industryInstruction = industryDef ? renderIndustryInstruction(industryDef) : undefined;
 
+    // 联网搜索研究：从灵感素材和用户指令中提取话题
+    const topicTitles = inspirations
+      .map((i: { title?: string }) => i.title)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('、');
+    const researchTopic_str = userInstruction || topicTitles || typeLabel;
+    const researchContext = inspirations
+      .map((i: { aiSummary?: string; originalText?: string }) => i.aiSummary || i.originalText || '')
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('\n');
+    const researchResults = await researchTopic(researchTopic_str, researchContext || undefined);
+
     const result = await generateCopywriting(
       inspirations,
       typeLabel,
@@ -54,7 +68,8 @@ export const POST = withAuth(async ({ request, user }) => {
       noAiTaste || false,
       count,
       industryInstruction,
-      userInstruction
+      userInstruction,
+      researchResults || undefined
     );
 
     // 记录AI使用
@@ -94,6 +109,7 @@ export const POST = withAuth(async ({ request, user }) => {
       style,
       industry: industry || null,
       isBatch: count > 1,
+      researchResults: researchResults || undefined,
     }, 'Copywriting generated');
   } catch (error) {
     console.error('AI copywriting error:', error);

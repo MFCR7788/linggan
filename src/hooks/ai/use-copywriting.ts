@@ -26,15 +26,17 @@ export interface RefineParams {
 
 export function useCopywriting() {
   const [generating, setGenerating] = useState(false);
+  const [researching, setResearching] = useState(false);
   const [refining, setRefining] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = useCallback(async (params: CopywritingParams): Promise<{ content: string | string[] }> => {
+  const generate = useCallback(async (params: CopywritingParams): Promise<{ content: string | string[]; researchResults?: string }> => {
+    setResearching(true);
     setGenerating(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ content: string | string[] }>('/ai/copywriting', {
+      const res = await apiClient.post<{ content: string | string[]; researchResults?: string }>('/ai/copywriting', {
         inspirations: params.inspirations.map(i => ({
           title: i.title,
           originalText: i.originalText || i.title,
@@ -48,11 +50,12 @@ export function useCopywriting() {
         userInstruction: params.userInstruction || '',
       });
       if (!res.success) throw new Error(res.error || '生成失败');
-      return { content: res.data!.content };
+      return { content: res.data!.content, researchResults: res.data!.researchResults };
     } catch (e: any) {
       setError(e.message || '生成失败');
       throw e;
     } finally {
+      setResearching(false);
       setGenerating(false);
     }
   }, []);
@@ -94,5 +97,5 @@ export function useCopywriting() {
     }
   }, []);
 
-  return { generate, refine, rewriteMulti, generating, refining, rewriting, error, setError };
+  return { generate, refine, rewriteMulti, generating, researching, refining, rewriting, error, setError };
 }
