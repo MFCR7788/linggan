@@ -27,6 +27,21 @@ export interface TranscriptResult {
   error?: string;
 }
 
+/** 带时间戳的单句 */
+export interface TimedSentence {
+  begin_time: number;  // 毫秒
+  end_time: number;    // 毫秒
+  text: string;
+}
+
+export interface SubtitleResult {
+  success: boolean;
+  srt: string;               // SRT 格式字幕
+  transcript: string;         // 纯文本全文
+  sentences: TimedSentence[]; // 逐句时间戳
+  error?: string;
+}
+
 /**
  * Douyin/iesdouyin 专用：直接从网页解析视频 URL 再下载
  * 当 yt-dlp 反爬失败时的降级方案
@@ -227,6 +242,133 @@ async function callDashScopeASR(audioUrl: string): Promise<string> {
     .trim();
 
   return fullText;
+}
+
+export function generateSRT(sentences: TimedSentence[]): string {
+  return sentences
+    .map((s, i) => {
+      const start = msToSRTTime(s.begin_time);
+      const end = msToSRTTime(s.end_time);
+      return `${i + 1}\n${start} --> ${end}\n${s.text.trim()}\n`;
+    })
+    .join("\n");
+}
+
+function msToSRTTime(ms: number): string {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const msRemainder = Math.floor(ms % 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(msRemainder).padStart(3, "0")}`;
+}
+
+/**
+ * 百炼 Paraformer 文件转写 — 保留时间戳
+ */
+async function callDashScopeASRWithTimestamps(audioUrl: string): Promise<{
+  transcript: string;
+  sentences: TimedSentence[];
+}> {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
+
+  const submitRes = await fetch(
+    "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
+      },
+      body: JSON.stringify({
+        model: "paraformer-v2",
+        input: { file_urls: [audioUrl] },
+        parameters: {
+          format: "wav",
+          sample_rate: 16000,
+          disfluency_removal_enabled: false,
+        },
+      }),
+    }
+  );
+
+  const submitData = await submitRes.json();
+  if (!submitRes.ok) {
+    throw new Error(submitData.message || "ASR 任务提交失败");
+  }
+
+  const taskId = submitData.output?.task_id;
+  if (!taskId) throw new Error("未获取到 ASR 任务 ID");
+
+  const transcriptionUrl = await pollTranscriptionTask(apiKey, taskId);
+  if (!transcriptionUrl) throw new Error("ASR 转写超时");
+
+  const transcriptRes = await fetch(transcriptionUrl);
+  const transcriptData = await transcriptRes.json();
+
+  const transcripts = transcriptData.transcripts || [];
+  const allSentences: TimedSentence[] = [];
+  const fullTextParts: string[] = [];
+
+  for (const channel of transcripts) {
+    const sentences = channel.sentences || [];
+    for (const s of sentences) {
+      if (s.text?.trim()) {
+        allSentences.push({
+          begin_time: s.begin_time ?? 0,
+          end_time: s.end_time ?? 0,
+          text: s.text.trim(),
+        });
+        fullTextParts.push(s.text);
+      }
+    }
+    // 兼容无 sentences 字段的旧格式
+    if (sentences.length === 0 && channel.text?.trim()) {
+      fullTextParts.push(channel.text);
+    }
+  }
+
+  // 如果 API 没返回时间戳，用文本长度估算（中文 ~4 字/秒）
+  if (allSentences.length === 0) {
+    const fullText = fullTextParts.join("");
+    const estimatedMs = Math.max(1000, Math.ceil(fullText.length / 4) * 1000);
+    allSentences.push({
+      begin_time: 0,
+      end_time: estimatedMs,
+      text: fullText,
+    });
+  }
+
+  return {
+    transcript: fullTextParts.join(""),
+    sentences: allSentences,
+  };
+}
+
+/**
+ * 从音频 URL 生成字幕：调 Paraformer ASR → 输出 SRT + 逐句时间戳
+ */
+export async function generateSubtitlesFromAudio(audioUrl: string): Promise<SubtitleResult> {
+  try {
+    const { transcript, sentences } = await callDashScopeASRWithTimestamps(audioUrl);
+
+    if (!transcript || transcript.trim().length === 0) {
+      return { success: false, srt: "", transcript: "", sentences: [], error: "未能识别到语音内容" };
+    }
+
+    const srt = generateSRT(sentences);
+
+    return { success: true, srt, transcript, sentences };
+  } catch (error) {
+    return {
+      success: false,
+      srt: "",
+      transcript: "",
+      sentences: [],
+      error: error instanceof Error ? error.message : "字幕生成失败",
+    };
+  }
 }
 
 async function pollTranscriptionTask(

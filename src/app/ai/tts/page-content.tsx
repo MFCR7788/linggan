@@ -89,7 +89,7 @@ function TTSPageContent() {
   useEffect(() => {
     const params = receive(['text', 'script']);
     if (params.text || params.script) {
-      setText((params.text || params.script || '').slice(0, 1000));
+      setText((params.text || params.script || '').slice(0, 1500));
     }
   }, []);
 
@@ -98,7 +98,7 @@ function TTSPageContent() {
     if (!session?.accumulated_handoff) return;
     const h = session.accumulated_handoff as Record<string, string>;
     if (h.text || h.script) {
-      setText((h.text || h.script || '').slice(0, 1000));
+      setText((h.text || h.script || '').slice(0, 1500));
     }
   }, [session]);
 
@@ -376,15 +376,15 @@ function TTSPageContent() {
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="输入要配音的文本...支持中文/英文，最多2000字"
+                placeholder="输入要配音的文本...支持中文/英文，最多约1500字"
                 rows={5}
-                maxLength={2000}
+                maxLength={1500}
                 className="w-full px-3 py-2.5 rounded-xl bg-transparent text-sm outline-none resize-none"
                 style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)' }}
               />
               <div className="flex justify-end mt-1">
                 <span style={{ color: text.length > 1800 ? '#FCA5A5' : '#6B7280', fontSize: 11 }}>
-                  {text.length} / 2000
+                  {text.length} / 1500
                 </span>
               </div>
             </div>

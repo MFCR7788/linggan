@@ -1,4 +1,4 @@
-// TTS (Text-to-Speech) API — 百炼 CosyVoice v2
+// TTS (Text-to-Speech) API — 百炼 CosyVoice v2 / v3-flash
 import { NextResponse } from 'next/server';
 import { synthesizeWithCosyVoice } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
@@ -19,6 +19,34 @@ const VOICE_MAP: Record<string, { id: string; label: string; language: string }>
 const DEFAULT_VOICE = 'female_natural';
 const DEFAULT_SPEED = 1.15;
 const DEFAULT_PITCH = 1.0;
+
+/** 按标点切分长文本，每段不超过 maxChars 个字符 */
+function splitText(text: string, maxChars: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining);
+      break;
+    }
+    // 在 maxChars 范围内找最后一个标点作为断点
+    let cutAt = maxChars;
+    const searchRange = remaining.slice(0, maxChars);
+    const punctMatch = searchRange.match(/[。！？；\n!?;](?!.*[。！？；\n!?;])/);
+    if (punctMatch && punctMatch.index !== undefined && punctMatch.index > maxChars * 0.5) {
+      cutAt = punctMatch.index + 1;
+    } else {
+      // 退而找逗号
+      const commaMatch = searchRange.match(/[，、,](?!.*[，、,])/);
+      if (commaMatch && commaMatch.index !== undefined && commaMatch.index > maxChars * 0.5) {
+        cutAt = commaMatch.index + 1;
+      }
+    }
+    chunks.push(remaining.slice(0, cutAt));
+    remaining = remaining.slice(cutAt);
+  }
+  return chunks;
+}
 
 export const GET = withAuth(async ({ request, user: _user }) => {
   const { searchParams } = new URL(request.url);
@@ -42,9 +70,14 @@ export const POST = withAuth(async ({ request, user }) => {
       return NextResponse.json({ success: false, error: '文本不能为空' }, { status: 400 });
     }
 
+    // 最大 4500 字节 (~1500 中文字)，足够生成 2-3 分钟口播配音
     const textBytes = Buffer.byteLength(text, 'utf-8');
-    if (textBytes > 1000) {
-      return NextResponse.json({ success: false, error: `文本过长（${textBytes}/1000 字节）` }, { status: 400 });
+    const MAX_BYTES = 4500;
+    if (textBytes > MAX_BYTES) {
+      return NextResponse.json({
+        success: false,
+        error: `文本过长（${textBytes}/${MAX_BYTES} 字节，约 ${Math.floor(MAX_BYTES / 3)} 字），请分段生成`,
+      }, { status: 400 });
     }
 
     // 扣点(预扣)
@@ -73,28 +106,44 @@ export const POST = withAuth(async ({ request, user }) => {
     const pitchRatio = Math.min(Math.max(Number(pitch) || DEFAULT_PITCH, 0.5), 2.0);
     const voiceConfig = VOICE_MAP[voice] || VOICE_MAP[DEFAULT_VOICE];
 
-    // CosyVoice — 百炼 DashScope
-    const audio = await synthesizeWithCosyVoice({
-      text,
-      options: {
-        voice: voiceConfig.id as any,
-        speed: speedRatio,
-        pitch: pitchRatio,
-      },
-    });
+    // CosyVoice v2 单次上限 ~300 中文字，长文本自动分段合成后拼接
+    const MAX_CHARS_PER_CALL = 250;
+    const chunks = splitText(text, MAX_CHARS_PER_CALL);
+    const audioBuffers: Buffer[] = [];
 
-    if (!audio) {
-      await refund(user.id, creditCost, 'ai_tts', 'CosyVoice 合成失败退点', { chars: text.length });
-      return NextResponse.json({ success: false, error: '语音合成失败，请稍后重试' }, { status: 502 });
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (!chunk.trim()) continue;
+      const audio = await synthesizeWithCosyVoice({
+        text: chunk,
+        options: {
+          voice: voiceConfig.id as any,
+          speed: speedRatio,
+          pitch: pitchRatio,
+        },
+      });
+      if (!audio) {
+        await refund(user.id, creditCost, 'ai_tts', `CosyVoice 合成失败退点(第${i + 1}段)`, { chars: text.length });
+        return NextResponse.json({
+          success: false,
+          error: `语音合成失败（第 ${i + 1}/${chunks.length} 段），请稍后重试`,
+        }, { status: 502 });
+      }
+      audioBuffers.push(audio);
     }
+
+    const mergedAudio = audioBuffers.length === 1
+      ? audioBuffers[0]
+      : Buffer.concat(audioBuffers);
 
     return NextResponse.json({
       success: true,
-      audioBase64: audio.toString('base64'),
+      audioBase64: mergedAudio.toString('base64'),
       mimeType: 'audio/mpeg',
       voice: voiceConfig.label,
       engine: 'cosyvoice',
       creditsUsed: creditCost,
+      chunks: chunks.length,
     });
   } catch (error) {
     console.error('[TTS] Error:', error);
