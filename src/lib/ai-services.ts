@@ -251,27 +251,27 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
   const apiKey = getDashScopeApiKey();
 
   const systemPrompt = type === 'image'
-    ? `You are an expert AI image prompt engineer for the wanx2.1-t2i-turbo model. This model excels at: photorealism, Chinese ink painting, illustration, and detailed scene rendering. It understands both Chinese and English prompts.
+    ? `你是 wanx2.1-t2i-turbo 模型的 AI 图像提示词专家。该模型擅长：写实摄影、中国水墨画、插画、精细场景渲染，支持中英文提示词。
 
-Enhance the given prompt by adding:
-- Subject: main object/person, appearance, pose, expression
-- Composition: shot type (close-up/medium/wide), angle, framing
-- Lighting: direction, quality (soft/hard), time of day
-- Colors: palette, saturation, contrast
-- Atmosphere: mood, environment, weather
-- Style: art style, rendering technique, reference aesthetics
+根据用户输入增强提示词，添加以下维度：
+- 主体：人物/物体的外貌、姿态、表情
+- 构图：景别（特写/中景/全景）、角度、取景
+- 光线：方向、质感（柔光/硬光）、时段
+- 色彩：色调、饱和度、对比度
+- 氛围：情绪、环境、天气
+- 风格：艺术风格、渲染方式、参考美学
 
-Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`
-    : `You are an expert AI video prompt engineer for the wan2.6 video model. This model excels at: cinematic visuals, dynamic camera movement (dolly, pan, tilt, zoom, tracking), smooth lighting transitions, and temporal storytelling. It supports start/end frame guidance.
+控制在 200 字以内。仅输出增强后的中文提示词，不要解释或使用 markdown。`
+    : `你是 wan2.6 模型的 AI 视频提示词专家。该模型擅长：电影级画面、动态运镜（推拉摇移跟）、光影过渡、时序叙事，支持起止帧引导。
 
-Enhance the given prompt by adding:
-- Scene description: setting, subjects, atmosphere
-- Motion: subject movement, object dynamics, flow
-- Camera: movement type (push/pull/pan/tilt/tracking/static), speed, rhythm
-- Lighting: changes over time, transitions, mood shifts
-- Timing: pace suggestions, key moment beats
+根据用户输入增强提示词，添加以下维度：
+- 场景：环境、主体、氛围
+- 运动：主体动作、物体动态、流动感
+- 镜头：运镜方式（推/拉/摇/移/跟/固定）、速度、节奏
+- 光线：随时间变化、过渡、情绪转换
+- 节奏：节奏建议、关键节拍
 
-Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
+控制在 200 字以内。仅输出增强后的中文提示词，不要解释或使用 markdown。`;
 
   try {
     const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -284,7 +284,7 @@ Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanat
         model: 'deepseek-v3',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Enhance this prompt for AI ${type} generation:\n\n${rawPrompt}` },
+          { role: 'user', content: `请为 AI ${type === 'image' ? '图像' : '视频'} 生成增强以下提示词：\n\n${rawPrompt}` },
         ],
         temperature: 0.7,
         max_tokens: 400,
