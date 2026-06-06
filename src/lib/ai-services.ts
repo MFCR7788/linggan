@@ -966,7 +966,7 @@ async function submitDashScopeVideoTask(
   }
 
   const parameters: Record<string, unknown> = {
-    duration: Math.min(Math.max(duration, 3), 10),
+    duration: Math.min(Math.max(duration, 3), config.maxDuration || 10),
     watermark: false,
   };
 

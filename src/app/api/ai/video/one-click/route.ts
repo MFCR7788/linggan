@@ -50,8 +50,9 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     // 2. 预计算成本
+    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
     const segMeta = storyboard.map((scene) => {
-      const d = Math.min(Math.max(scene.duration, 3), 10);
+      const d = Math.min(Math.max(scene.duration, 3), qt.t2v.maxDuration || 10);
       return { duration: d, cost: calcAiVideoCost(d, tier) };
     });
     const totalCost = segMeta.reduce((sum, s) => sum + s.cost, 0);
@@ -78,7 +79,6 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     // 4. 并行提交所有分段
-    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
     const segments = await Promise.all(
       storyboard.map(async (scene, i) => {
         const insp = inspirations[i];
@@ -86,7 +86,7 @@ export const POST = withAuth(async ({ request, user }) => {
           ? insp.media_urls[0]
           : undefined;
 
-        const segDuration = Math.min(Math.max(scene.duration, 3), 10);
+        const segDuration = Math.min(Math.max(scene.duration, 3), qt.t2v.maxDuration || 10);
         let result;
         try {
           result = await submitVideoGenerationTask(

@@ -37,7 +37,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // ─── 预计算每段成本(按秒 × 档位系数) ─────────────────
     const segmentsMeta = (storyboard as StoryboardScene[]).map((scene) => {
-      const duration = Math.min(Math.max(scene.duration, 3), 10);
+      const duration = Math.min(Math.max(scene.duration, 3), qt.t2v.maxDuration || 10);
       return { duration, cost: calcAiVideoCost(duration, tier) };
     });
     const totalCost = segmentsMeta.reduce((sum, s) => sum + s.cost, 0);
@@ -77,7 +77,7 @@ export const POST = withAuth(async ({ request, user }) => {
           imageUrl = firstFrameUrl;
         }
 
-        const duration = Math.min(Math.max(scene.duration, 3), 10);
+        const duration = Math.min(Math.max(scene.duration, 3), qt.t2v.maxDuration || 10);
 
         let result;
         try {
