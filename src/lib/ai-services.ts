@@ -284,7 +284,7 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
         model: 'deepseek-v3',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `请为 AI ${type === 'image' ? '图像' : '视频'} 生成增强以下提示词：\n\n${rawPrompt}` },
+          { role: 'user', content: `请为 AI ${type === 'image' ? '图像' : '视频'} 增强以下提示词：\n\n${rawPrompt}` },
         ],
         temperature: 0.7,
         max_tokens: 400,
