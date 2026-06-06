@@ -18,6 +18,7 @@ import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { useVideoGeneration } from '@/hooks/ai/use-video-generation';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 import { apiClient } from '@/lib/api-client';
 
@@ -107,6 +108,7 @@ function AIVideoContent() {
   const [qualityTier, setQualityTier] = useState('fast');
   const [quickMode, setQuickMode] = useState(true);
   const [language, setLanguage] = useState('zh');
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频', 'ai_video');
 
   // ─── 首帧图片（关键：图生视频入口） ──────────────────────
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null);
@@ -1603,6 +1605,44 @@ function AIVideoContent() {
           </>
         )}
       </div>
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="px-4 pb-20">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
+          <div className="grid grid-cols-2 gap-2">
+            {historyItems.map((item) => (
+              <div
+                key={item.id}
+                className="relative rounded-xl overflow-hidden cursor-pointer transition-all"
+                style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  aspectRatio: '16/9',
+                }}
+                onClick={() => {
+                  if (item.videoUrl) window.open(item.videoUrl, '_blank');
+                  if (item.prompt) setTopic(item.prompt);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                {item.videoUrl ? (
+                  <video src={item.videoUrl} className="w-full h-full object-cover" preload="metadata" />
+                ) : item.imageUrl ? (
+                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span style={{ fontSize: 32 }}>🎬</span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}>
+                  <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

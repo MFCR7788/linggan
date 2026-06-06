@@ -5,7 +5,8 @@ import { createApiResponse, createApiError } from '@/lib/api-utils';
 
 // GET /api/chat/history — 获取会话列表或某会话的消息或我的作品
 //   ?session_id=xxx  → 获取该会话的消息
-//   ?works=true&type=文案|图片|视频  → 获取我的作品（AI 生成内容）
+//   ?works=true&type=文案|图片|视频|配音  → 获取我的作品（AI 生成内容）
+//   ?works=true&type=视频&sourcePlatform=ai_digital_human  → 按来源平台过滤
 //   无参数           → 获取会话列表
 export const GET = withAuth(async ({ request, user }) => {
   const { searchParams } = new URL(request.url);
@@ -15,7 +16,8 @@ export const GET = withAuth(async ({ request, user }) => {
 
   if (worksMode === 'true') {
     // 获取我的作品：chat_messages + content_items 合并
-    const workType = searchParams.get('type'); // 文案 | 图片 | 视频
+    const workType = searchParams.get('type'); // 文案 | 图片 | 视频 | 配音
+    const sourcePlatform = searchParams.get('sourcePlatform'); // 可选，按来源平台过滤
 
     // 1. chat_messages 中的 AI 创作记录
     const { data: messages, error: msgError } = await supabase
@@ -62,6 +64,7 @@ export const GET = withAuth(async ({ request, user }) => {
         metadata: m.metadata,
         content: m.content,
         content_type: m.content_type,
+        source_platform: m.metadata?.source_platform || null,
         _source: 'chat',
       };
     })
@@ -73,8 +76,8 @@ export const GET = withAuth(async ({ request, user }) => {
     });
 
     const contentWorks = (contentItems || []).map((ci: any) => {
-      const ciType = ci.type === 'video' ? '视频' : ci.type === 'image' ? '图片' : '文案';
-      const emoji = ci.type === 'video' ? '🎬' : ci.type === 'image' ? '🖼️' : '📄';
+      const ciType = ci.type === 'video' ? '视频' : ci.type === 'image' ? '图片' : ci.type === 'voice' ? '配音' : '文案';
+      const emoji = ci.type === 'video' ? '🎬' : ci.type === 'image' ? '🖼️' : ci.type === 'voice' ? '🔊' : '📄';
       const mediaUrl = ci.media_urls?.[0] || '';
       return {
         id: ci.id,
@@ -91,6 +94,7 @@ export const GET = withAuth(async ({ request, user }) => {
         },
         content: ci.ai_summary || ci.original_text || '',
         content_type: ci.type,
+        source_platform: ci.source_platform || null,
         _source: 'content_item',
       };
     });
@@ -108,6 +112,11 @@ export const GET = withAuth(async ({ request, user }) => {
     // 按类型筛选
     if (workType && workType !== '全部') {
       works = works.filter((w: any) => w.type === workType);
+    }
+
+    // 按来源平台筛选
+    if (sourcePlatform) {
+      works = works.filter((w: any) => w.source_platform === sourcePlatform);
     }
 
     return createApiResponse(works);

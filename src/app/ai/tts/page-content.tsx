@@ -11,6 +11,7 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import { useTts } from '@/hooks/ai/use-tts';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 
@@ -73,6 +74,9 @@ function TTSPageContent() {
     stage: 'upload' | 'training' | 'done' | 'failed';
   } | null>(null);
   const clonePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 历史生成
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('配音');
 
   // 加载已保存的克隆音色
   useEffect(() => {
@@ -178,6 +182,7 @@ function TTSPageContent() {
           type: 'voice',
           title: text.substring(0, 100) || 'AI 配音',
           original_text: text,
+          source_platform: 'ai_tts',
           tags: ['AI配音', voice],
           workflow_session_id: workflowSessionId || undefined,
         }),
@@ -760,6 +765,34 @@ function TTSPageContent() {
           )}
         </GlassCard>
       </div>
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="px-4 pb-20">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
+          <div className="space-y-2">
+            {historyItems.map((item) => (
+              <GlassCard key={item.id} hover className="!p-3 cursor-pointer"
+                onClick={() => {
+                  if (item.content) {
+                    setText(item.content);
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span style={{ fontSize: 20 }}>🔊</span>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
+                  </div>
+                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+        </div>
+      )}
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

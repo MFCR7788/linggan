@@ -20,6 +20,7 @@ import {
 import { useContentHandoff } from "@/hooks/use-content-handoff";
 import { useCopywriting } from "@/hooks/ai/use-copywriting";
 import { useWorkflowSession } from "@/hooks/use-workflow-session";
+import { useWorkHistory } from "@/hooks/use-work-history";
 import { WorkflowSessionBar } from "@/components/WorkflowSessionBar";
 
 const typeEmojis: Record<string, string> = {
@@ -147,6 +148,7 @@ function AICopywritingContent() {
   const [rewriteTab, setRewriteTab] = useState('xiaohongshu');
   const [isRewriting, setIsRewriting] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
   const userInputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -1045,6 +1047,33 @@ function AICopywritingContent() {
           handleConfirmRefine();
         }}
       />
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="px-4 pb-4">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
+          <div className="space-y-2">
+            {historyItems.map((item) => (
+              <GlassCard key={item.id} hover className="!p-3 cursor-pointer"
+                onClick={() => {
+                  if (item.content) setUserInput(item.content.substring(0, 200));
+                  if (item.prompt) setRefinedMessage(item.prompt);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span style={{ fontSize: 20 }}>{item.metadata?.generatedImage ? '🖼️' : '📄'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
+                  </div>
+                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

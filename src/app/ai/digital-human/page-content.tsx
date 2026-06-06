@@ -18,6 +18,7 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
+import { useWorkHistory } from '@/hooks/use-work-history';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 import { apiClient } from '@/lib/api-client';
 
@@ -246,6 +247,7 @@ function DigitalHumanContent() {
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const savedVideoUrls = useRef<Set<string>>(new Set()); // 防止重复自动保存
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频', 'ai_digital_human');
 
   // 自动保存生成的数字人视频到灵感库(标签含"数字人")
   const autoSaveDigitalHuman = async (videoUrl: string, title?: string) => {
@@ -260,6 +262,7 @@ function DigitalHumanContent() {
           title: title || `数字人视频 · ${resolution}`,
           media_urls: [videoUrl],
           tags: ['数字人', 'AI生成', 'video_material'],
+          source_platform: 'ai_digital_human',
           workflow_session_id: workflowSessionId || undefined,
         }),
       });
@@ -628,6 +631,7 @@ function DigitalHumanContent() {
           title: `Animate 角色动作 · ${animateMode === 'animate' ? '动作迁移' : '角色替换'}`,
           media_urls: [animateResultUrl],
           tags: ['Animate', '角色动作', 'wan2.2-animate'],
+          source_platform: 'ai_digital_human',
         }),
       });
       const data = await res.json();
@@ -712,6 +716,7 @@ function DigitalHumanContent() {
           title: `数字分身口播 · ${avatarInfo?.name || 'My Avatar'}`,
           media_urls: [avatarResultUrl],
           tags: ['数字分身', 'HeyGen', 'avatar_video'],
+          source_platform: 'ai_digital_human',
         }),
       });
       const data = await res.json();
@@ -757,6 +762,7 @@ function DigitalHumanContent() {
           title: title || `数字人视频 · ${resolution}`,
           media_urls: [u],
           tags: ['数字人', 'AI生成', 'video_material'],
+          source_platform: 'ai_digital_human',
         }),
       });
       const data = await res.json();
@@ -2197,6 +2203,42 @@ function DigitalHumanContent() {
         {dhMode === 'animate' && renderAnimateMode()}
         {dhMode === 'avatar' && renderAvatarMode()}
       </div>
+
+      {/* 历史生成 */}
+      {!historyLoading && historyItems.length > 0 && (
+        <div className="px-4 pb-20">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
+          <div className="grid grid-cols-2 gap-2">
+            {historyItems.map((item) => (
+              <div
+                key={item.id}
+                className="relative rounded-xl overflow-hidden cursor-pointer transition-all"
+                style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  aspectRatio: '9/16',
+                }}
+                onClick={() => {
+                  if (item.videoUrl) window.open(item.videoUrl, '_blank');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                {item.videoUrl ? (
+                  <video src={item.videoUrl} className="w-full h-full object-cover" preload="metadata" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span style={{ fontSize: 32 }}>👤</span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}>
+                  <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title}</p>
+                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
