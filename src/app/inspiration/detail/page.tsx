@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle } from "lucide-react";
+import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, ImageIcon, VideoIcon } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -579,6 +579,22 @@ function InspirationDetailContent() {
               </GlassCard>
             )}
 
+            {/* 生成提示词 */}
+            {inspiration.prompt && (
+              <GlassCard style={{ border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.06)" } as React.CSSProperties}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div
+                    className="w-6 h-6 rounded-md flex items-center justify-center"
+                    style={{ background: "#8B5CF6", fontSize: 10, color: "#fff", fontWeight: 700 }}
+                  >AI</div>
+                  <span style={{ color: "#C4B5FD", fontSize: 13, fontWeight: 600 }}>生成提示词</span>
+                </div>
+                <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {inspiration.prompt}
+                </p>
+              </GlassCard>
+            )}
+
             <GlassCard className="!p-3">
               <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 10 }}>快捷操作</p>
               <div className="grid grid-cols-2 gap-2">
@@ -587,6 +603,10 @@ function InspirationDetailContent() {
                   { label: "生成公众号文章", icon: <Zap size={14} />, action: () => generateContent('wechat') },
                   { label: "生成分镜脚本", icon: <Zap size={14} />, action: () => generateContent('script') },
                   { label: "分享", icon: <Share2 size={14} />, action: shareInspiration },
+                  ...(inspiration.prompt ? [
+                    { label: "做同款图片", icon: <ImageIcon size={14} />, action: () => router.push(`/ai/image?prompt=${encodeURIComponent(inspiration.prompt!)}`) },
+                    { label: "做同款视频", icon: <VideoIcon size={14} />, action: () => router.push(`/ai/video?prompt=${encodeURIComponent(inspiration.prompt!)}`) },
+                  ] : []),
                 ].map(({ label, icon, action }, idx) => (
                   <button
                     key={idx}

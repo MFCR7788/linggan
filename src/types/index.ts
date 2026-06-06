@@ -75,6 +75,7 @@ export interface ContentItem {
   extraction_status?: ExtractionStatus;
   extraction_error?: string;
   extracted_chars?: number;
+  prompt?: string;
   created_at: string;
   updated_at: string;
 }

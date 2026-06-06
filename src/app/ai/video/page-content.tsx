@@ -161,6 +161,14 @@ function AIVideoContent() {
       .catch(() => {});
   }, []);
 
+  // 做同款回填：从 URL query 接收 prompt
+  useEffect(() => {
+    const promptFromUrl = searchParams.get('prompt');
+    if (promptFromUrl) {
+      setTopic(decodeURIComponent(promptFromUrl).slice(0, 300));
+    }
+  }, [searchParams]);
+
   // ─── URL 参数接收（从 AI 生图 / AI 文案 带入） ────────
   useEffect(() => {
     const params = receive(['firstFrame', 'prompt', 'text', 'topic', 'style', 'imageUrl']);
@@ -348,6 +356,7 @@ function AIVideoContent() {
         type: 'video',
         title: title.substring(0, 100),
         original_text: sb?.visualPrompt || '',
+        prompt: sb?.visualPrompt || '',
         media_urls: [seg.videoUrl],
         source_platform: 'ai_video',
         tags: ['AI生成', '视频片段'],

@@ -89,6 +89,7 @@ function AIImageContent() {
   // ─── 生成结果 ────────────────────────────────────────
   const { refinePrompt: refineImagePrompt, generate: generateImage, refining: isRefining, generating } = useImageGeneration();
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('生成中...');
   const [isGenerated, setIsGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -131,6 +132,14 @@ function AIImageContent() {
       handlePresetChange(h.style);
     }
   }, [session]);
+
+  // 做同款回填：从 URL query 接收 prompt
+  useEffect(() => {
+    const promptFromUrl = searchParams.get('prompt');
+    if (promptFromUrl) {
+      setUserInput(decodeURIComponent(promptFromUrl));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (inspirations) {
@@ -224,15 +233,35 @@ function AIImageContent() {
       return;
     }
     setIsLoading(true);
+    setLoadingMessage('AI 正在优化提示词...');
     setError(null);
     setImageUrl(null);
     setIsGenerated(false);
     setLastUsedSeed(seed === '' ? null : Number(seed));
 
     try {
+      // 快速模式：先 AI 优化提示词
+      let effectivePrompt = finalPrompt;
+      if (quickMode && !refinedPrompt && userInput.trim()) {
+        try {
+          const res = await fetch('/api/ai/image/smart-prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userInput: userInput.trim() }),
+          });
+          const data = await res.json();
+          if (data.success && data.data.prompt) {
+            effectivePrompt = data.data.prompt;
+            setRefinedPrompt(data.data.prompt);
+          }
+        } catch {}
+      }
+
+      setLoadingMessage('AI 正在创作中...');
+
       const n = batchMode ? 4 : 1;
       const { imageUrl: genImageUrl, batchImages: genBatchImages } = await generateImage({
-        prompt: finalPrompt,
+        prompt: effectivePrompt,
         ratio: selectedRatio,
         n,
         presetId: selectedPresetId,
@@ -262,8 +291,9 @@ function AIImageContent() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               type: 'image',
-              title: finalPrompt.substring(0, 50),
-              original_text: finalPrompt,
+              title: effectivePrompt.substring(0, 50),
+              original_text: effectivePrompt,
+              prompt: effectivePrompt,
               source_platform: 'ai',
               media_urls: urls,
               tags: ['AI作品', 'AI图片', findImagePreset(selectedPresetId)?.label || ''],
@@ -790,7 +820,7 @@ function AIImageContent() {
                   <div className="absolute inset-0 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
                   <div className="absolute inset-2 rounded-full border-2 border-purple-400 border-b-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
                 </div>
-                <p style={{ color: '#9CA3AF', fontSize: 14 }}>AI 正在创作中...</p>
+                <p style={{ color: '#9CA3AF', fontSize: 14 }}>{loadingMessage}</p>
                 <p style={{ color: '#9CA3AF', fontSize: 12 }}>预计 10-20 秒</p>
               </div>
             ) : error ? (
@@ -973,6 +1003,7 @@ function AIImageContent() {
                               type: 'image',
                               title: finalPrompt?.substring(0, 50) || 'AI 生成图片',
                               original_text: finalPrompt,
+                              prompt: finalPrompt,
                               media_urls: [targetUrl],
                               tags: [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''],
                             }),
@@ -1005,6 +1036,7 @@ function AIImageContent() {
                                       type: 'image',
                                       title: (finalPrompt?.substring(0, 40) || 'AI') + ` (${batchImages.indexOf(url) + 1})`,
                                       original_text: finalPrompt,
+                                      prompt: finalPrompt,
                                       media_urls: [url],
                                       tags: [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''],
                                     }),

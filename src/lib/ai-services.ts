@@ -252,8 +252,27 @@ async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promi
   if (!apiKey) return rawPrompt;
 
   const systemPrompt = type === 'image'
-    ? `You are an expert AI image prompt engineer. Enhance the given prompt by adding vivid visual details: subject, scene, lighting, colors, style, composition, mood, and atmosphere. Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`
-    : `You are an expert AI video prompt engineer. Enhance the given prompt by adding details about scene, motion, camera movement, atmosphere, lighting transitions, and temporal progression. Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
+    ? `You are an expert AI image prompt engineer for the wanx2.1-t2i-turbo model. This model excels at: photorealism, Chinese ink painting, illustration, and detailed scene rendering. It understands both Chinese and English prompts.
+
+Enhance the given prompt by adding:
+- Subject: main object/person, appearance, pose, expression
+- Composition: shot type (close-up/medium/wide), angle, framing
+- Lighting: direction, quality (soft/hard), time of day
+- Colors: palette, saturation, contrast
+- Atmosphere: mood, environment, weather
+- Style: art style, rendering technique, reference aesthetics
+
+Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`
+    : `You are an expert AI video prompt engineer for the wan2.6 video model. This model excels at: cinematic visuals, dynamic camera movement (dolly, pan, tilt, zoom, tracking), smooth lighting transitions, and temporal storytelling. It supports start/end frame guidance.
+
+Enhance the given prompt by adding:
+- Scene description: setting, subjects, atmosphere
+- Motion: subject movement, object dynamics, flow
+- Camera: movement type (push/pull/pan/tilt/tracking/static), speed, rhythm
+- Lighting: changes over time, transitions, mood shifts
+- Timing: pace suggestions, key moment beats
+
+Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
 
   try {
     const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {

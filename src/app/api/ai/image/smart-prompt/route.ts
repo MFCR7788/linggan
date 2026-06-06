@@ -85,22 +85,26 @@ export const POST = withAuth(async ({ request, user }) => {
       paletteName ? `\n主色调：${paletteName}` : '',
     ].filter(Boolean).join('\n');
 
-    const prompt = `你是一个 AI 生图提示词专家。根据用户的素材、输入和预设，把它们提炼成一段精准的英文或中文提示词（不超过 150 字），用于驱动 AI 生图模型。
+    const prompt = `你是一个 AI 生图提示词专家。根据用户的素材、输入和预设，把它们提炼成一段精准的提示词，用于驱动 wanx2.1-t2i-turbo 生图模型。
+
+模型特性：擅长写实摄影、中国风、插画、动漫等多种风格，支持中英文 prompt。高质量的 prompt 应包含：主体描述、构图景别、光线氛围、色调风格、细节纹理。
 
 要求：
-1. 用 1-2 句精炼描述画面主体、场景、氛围、风格
-2. 包含构图、视角、光线、色调等具体细节
-3. 如果预设指定了风格/比例/色调，必须体现
-4. 直接输出 prompt 文本，不要有"提示词："等前缀
-5. 不要用换行，不要用项目符号
-6. 中文/英文皆可，匹配用户输入语言
+1. 清晰描述画面主体（人物/物品/场景），包含外观、姿态、表情等细节
+2. 指定构图方式（特写/中景/全景）、视角（平视/俯视/仰视）、画幅比例
+3. 描述光线（柔光/硬光/逆光/侧光）、氛围（温暖/冷峻/梦幻）、色调
+4. 明确艺术风格（写实摄影/国风水墨/赛博朋克/日系插画等）
+5. 加入质感细节（材质、纹理、光影层次）
+6. 如果预设指定了风格/比例/色调，必须体现
+7. 直接输出 prompt 文本，不要有"提示词："等前缀
+8. 输出不超过 300 字，中文/英文皆可，匹配用户输入语言
 
 ${systemContext}
 
 只输出最终 prompt，不要有其他内容。`;
 
     try {
-      const result = await callDeepSeek(prompt, { temperature: 0.5, maxTokens: 250 });
+      const result = await callDeepSeek(prompt, { temperature: 0.5, maxTokens: 400 });
       const finalPrompt = result.trim().replace(/^["「『]+|["」』]+$/g, '').slice(0, 400);
 
       return createApiResponse({
