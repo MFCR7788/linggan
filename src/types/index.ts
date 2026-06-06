@@ -47,8 +47,6 @@ export interface Tag {
   created_at: string;
 }
 
-export type ExtractionStatus = 'pending' | 'extracting' | 'extracted' | 'failed' | 'skipped';
-
 // 灵感/内容类型
 export interface ContentItem {
   id: string;
@@ -72,9 +70,6 @@ export interface ContentItem {
   original_filename?: string;
   original_file_size?: number;
   original_mime_type?: string;
-  extraction_status?: ExtractionStatus;
-  extraction_error?: string;
-  extracted_chars?: number;
   prompt?: string;
   created_at: string;
   updated_at: string;

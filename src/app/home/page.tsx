@@ -100,7 +100,6 @@ function HomeContent() {
     return recentInspirations.filter(item =>
       (item.title && item.title.toLowerCase().includes(query)) ||
       (item.original_text && item.original_text.toLowerCase().includes(query)) ||
-      (item.ai_summary && item.ai_summary.toLowerCase().includes(query)) ||
       (item.type && item.type.toLowerCase().includes(query))
     );
   }, [searchQuery, recentInspirations]);
@@ -407,10 +406,10 @@ function HomeContent() {
                         </button>
                       </div>
                       <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }} className="truncate">
-                        {item.title || item.ai_summary?.substring(0, 30) || item.original_text?.substring(0, 30) || "未命名灵感"}
+                        {item.title || item.original_text?.substring(0, 60) || "未命名灵感"}
                       </p>
                       <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
-                        {item.ai_summary || item.original_text || "暂无描述"}
+                        {item.original_text || "暂无描述"}
                       </p>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex gap-1.5 flex-wrap">

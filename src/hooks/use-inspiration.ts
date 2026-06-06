@@ -16,16 +16,7 @@ export function useInspiration(id?: string) {
       return response.data;
     },
     enabled: !!id,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      // 文档抽取/AI 总结中时，每 3 秒轮询
-      const processing =
-        data.extraction_status === 'pending' ||
-        data.extraction_status === 'extracting' ||
-        (!data.ai_summary && (data.analysis_status === 'pending' || data.analysis_status === 'processing'));
-      return processing ? 3000 : false;
-    },
+    refetchInterval: false,
   });
 }
 
@@ -99,7 +90,6 @@ export function useCreateInspiration() {
       title?: string;
       original_text?: string;
       summary?: string;
-      ai_summary?: string;
       category_id?: string;
       tags?: string[];
       source_url?: string;
@@ -170,20 +160,3 @@ export function useBatchDeleteInspiration() {
   });
 }
 
-export function useTriggerExtract() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiClient.post<ContentItem>(`/inspiration/${id}/extract`);
-      if (!response.success) {
-        throw new Error(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["inspirations"] });
-      queryClient.invalidateQueries({ queryKey: ["inspiration", id] });
-    },
-  });
-}

@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner } from "@/components";
 import FormattedText from "@/components/FormattedText";
 import { syncDevAuthCookie, getDevUserIdHeader } from "@/lib/dev-auth";
-import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration, useTriggerExtract } from "@/hooks/use-inspiration";
+import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration } from "@/hooks/use-inspiration";
 import { useCategories } from "@/hooks/use-categories";
 
 const typeEmojis: Record<string, string> = {
@@ -56,7 +56,6 @@ function InspirationDetailContent() {
   const { data: inspiration, isLoading, isError } = useInspiration(id);
   const { updateStatus } = useInspirationActions();
   const updateInspiration = useUpdateInspiration();
-  const triggerExtract = useTriggerExtract();
   const { data: categories } = useCategories();
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
@@ -134,7 +133,7 @@ function InspirationDetailContent() {
   const openEditModal = () => {
     setEditTitle(inspiration?.title || '');
     setEditText(inspiration?.original_text || '');
-    setEditSummary(inspiration?.ai_summary || '');
+    setEditSummary('');
     setEditCategoryId(inspiration?.category_id || '');
     const tagNames = (inspiration as any)?.content_tags
       ?.map((ct: any) => ct.tags?.name)
@@ -153,7 +152,6 @@ function InspirationDetailContent() {
         data: {
           ...(editTitle ? { title: editTitle } : {}),
           ...(editText ? { original_text: editText } : {}),
-          ...(editSummary ? { ai_summary: editSummary } : {}),
           ...(editCategoryId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editCategoryId) ? { category_id: editCategoryId } : {}),
         },
       });
@@ -170,7 +168,7 @@ function InspirationDetailContent() {
   const shareInspiration = async () => {
     const url = `${window.location.origin}/inspiration/detail?id=${id}`;
     const title = inspiration?.title || '灵感详情';
-    const text = inspiration?.ai_summary || inspiration?.title || '';
+    const text = inspiration?.original_text || inspiration?.title || '';
 
     // 优先使用系统原生分享
     if (navigator.share) {
@@ -308,7 +306,6 @@ function InspirationDetailContent() {
                     </p>
                     <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 2 }}>
                       {formatFileSize(inspiration.original_file_size)}
-                      {inspiration.extracted_chars ? ` · 已抽取 ${inspiration.extracted_chars} 字` : ''}
                     </p>
                     {inspiration.original_mime_type === 'application/pdf' && (
                       <div className="mt-2">
@@ -331,46 +328,11 @@ function InspirationDetailContent() {
                       >
                         <Download size={12} /> 下载
                       </a>
-                      {(inspiration.extraction_status === 'failed' || inspiration.analysis_status === 'failed') && (
-                        <button
-                          onClick={() => triggerExtract.mutate(id!)}
-                          disabled={triggerExtract.isPending}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
-                          style={{ background: "rgba(249,115,22,0.2)", color: "#FDBA74", border: "1px solid rgba(249,115,22,0.3)" }}
-                        >
-                          <RefreshCw size={12} className={triggerExtract.isPending ? 'animate-spin' : ''} />
-                          {triggerExtract.isPending ? '重试中...' : '重试 AI 总结'}
-                        </button>
-                      )}
                     </div>
-                    {inspiration.extraction_error && (
-                      <div className="flex items-start gap-1.5 mt-2 text-xs" style={{ color: "#FCA5A5" }}>
-                        <AlertCircle size={12} color="#EF4444" className="mt-0.5 flex-shrink-0" />
-                        <span>{inspiration.extraction_error}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </GlassCard>
             )}
-
-            {/* AI 总结中骨架（extracting/pending 状态） */}
-            {inspiration.original_file_url && !inspiration.ai_summary &&
-              (inspiration.extraction_status === 'pending' || inspiration.extraction_status === 'extracting' ||
-                inspiration.analysis_status === 'pending' || inspiration.analysis_status === 'processing') && (
-                <GlassCard className="mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin"
-                      style={{ borderColor: "rgba(249,115,22,0.4)", borderTopColor: "transparent" }} />
-                    <span style={{ color: "#FDBA74", fontSize: 13, fontWeight: 600 }}>AI 总结中...</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '90%' }} />
-                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '75%' }} />
-                    <div className="h-3 rounded animate-pulse" style={{ background: "rgba(255,255,255,0.08)", width: '60%' }} />
-                  </div>
-                </GlassCard>
-              )}
 
             {/* 原素材卡片 — 根据类型展示 */}
             <GlassCard style={{ overflow: 'hidden' }}>
@@ -418,9 +380,6 @@ function InspirationDetailContent() {
                     >
                       您的浏览器不支持视频播放
                     </video>
-                  )}
-                  {inspiration.ai_summary && (
-                    <FormattedText text={inspiration.ai_summary} color="#9CA3AF" fontSize={12} compact />
                   )}
                   {inspiration.original_text && (
                     <FormattedText text={inspiration.original_text} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
@@ -484,17 +443,15 @@ function InspirationDetailContent() {
                     </div>
                   </div>
 
-                  {/* 核心任务 */}
-                  {inspiration.ai_summary && (
+                  {/* 核心内容 */}
+                  {inspiration.original_text && (
                     <div className="mb-4 p-4 rounded-lg"
                       style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.25)" }}
                     >
                       <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-md flex items-center justify-center"
-                          style={{ background: "#3B82F6", color: "#fff", fontSize: 10, fontWeight: 700 }}>AI</div>
-                        <span style={{ color: "#FBBF24", fontSize: 13, fontWeight: 600 }}>🎯 核心任务</span>
+                        <span style={{ color: "#FBBF24", fontSize: 13, fontWeight: 600 }}>📝 核心内容</span>
                       </div>
-                      <FormattedText text={inspiration.ai_summary || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
+                      <FormattedText text={inspiration.original_text || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
                     </div>
                   )}
 
@@ -548,8 +505,8 @@ function InspirationDetailContent() {
                     </div>
                   )}
 
-                  {/* 原始内容（无 AI 分析时显示） */}
-                  {inspiration.original_text && !inspiration.ai_summary && !inspiration.ai_key_points?.length && (
+                  {/* 原始内容 */}
+                  {inspiration.original_text && (
                     <div className="mb-4">
                       <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 6 }}>📝 原始内容</p>
                       <FormattedText text={inspiration.original_text || ""} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
@@ -564,20 +521,6 @@ function InspirationDetailContent() {
               )}
             </GlassCard>
 
-            {inspiration.ai_summary && (
-              <GlassCard style={{ border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.06)" } as React.CSSProperties}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div
-                    className="w-6 h-6 rounded-md flex items-center justify-center"
-                    style={{ background: "#3B82F6", fontSize: 10, color: "#fff", fontWeight: 700 }}
-                  >AI</div>
-                  <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>AI 分析摘要</span>
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <FormattedText text={inspiration.ai_summary || ""} color="#E5E7EB" fontSize={13} lineHeight={1.7} />
-                </div>
-              </GlassCard>
-            )}
 
             {/* 生成提示词 */}
             {inspiration.prompt && (
@@ -639,7 +582,7 @@ function InspirationDetailContent() {
                           {item.title}
                         </p>
                         <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
-                          {item.ai_summary || item.original_text || "暂无描述"}
+                          {item.original_text?.substring(0, 60) || "暂无描述"}
                         </p>
                       </div>
                     </div>

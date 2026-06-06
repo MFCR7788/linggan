@@ -1,5 +1,5 @@
 // 文档上传 API 端点（PDF/DOCX/TXT/MD）
-// 文档上传后立即创建一条 type='text' 的灵感记录，并触发异步文本抽取+AI 总结
+// 文档上传后创建一条 type='text' 的灵感记录
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
@@ -84,7 +84,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .from('lingji-media')
       .getPublicUrl(filePath);
 
-    // 入库：type='text'，原文件作为附件，extraction_status='pending'
+    // 入库：type='text'，原文件作为附件
     const { data: item, error: insertError } = await supabase
       .from('content_items')
       .insert({
@@ -95,8 +95,6 @@ export const POST = withAuth(async ({ request, user }) => {
         original_filename: safeName,
         original_file_size: file.size,
         original_mime_type: file.type,
-        extraction_status: 'pending',
-        analysis_status: 'pending',
         source_platform: 'upload',
         status: 'active',
       })
@@ -122,7 +120,6 @@ export const POST = withAuth(async ({ request, user }) => {
         fileName: safeName,
         size: file.size,
         type: file.type,
-        extractionStatus: 'pending',
       },
       '文档上传成功'
     );

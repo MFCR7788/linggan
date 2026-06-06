@@ -167,7 +167,6 @@ function InspirationLibraryContent() {
   // 编辑状态
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [editSummary, setEditSummary] = useState("");
   const [editText, setEditText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showEditToast, setShowEditToast] = useState<string | null>(null);
@@ -209,7 +208,7 @@ function InspirationLibraryContent() {
     },
   });
   const isUploading = uploadItems.some(
-    (it) => it.status === 'uploading' || it.status === 'compressing' || it.status === 'creating' || it.status === 'extracting' || it.status === 'queued'
+    (it) => it.status === 'uploading' || it.status === 'compressing' || it.status === 'creating' || it.status === 'queued'
   );
 
   // 获取标签列表
@@ -329,7 +328,6 @@ function InspirationLibraryContent() {
     e.stopPropagation();
     setEditingItem(item);
     setEditTitle(item.title || "");
-    setEditSummary(item.ai_summary || "");
     setEditText(item.original_text || "");
   };
 
@@ -342,7 +340,6 @@ function InspirationLibraryContent() {
         id: editingItem.id,
         data: {
           title: editTitle.trim() || undefined,
-          ai_summary: editSummary.trim() || undefined,
           original_text: editText.trim() || undefined,
         },
       });
@@ -388,14 +385,8 @@ function InspirationLibraryContent() {
     setSelectedTagIds(next);
   };
 
-  // AI 总结中判定：extraction_status 是 pending/extracting 或 analysis_status 是 pending/processing
-  const isExtractingOrPending = (item: any): boolean => {
-    if (item.extraction_status === 'pending' || item.extraction_status === 'extracting') return true;
-    if (!item.ai_summary && (item.analysis_status === 'pending' || item.analysis_status === 'processing')) return true;
-    return false;
-  };
 
-  // ====== 抖音风格卡片(所有类型) ======
+  // ====== 统一卡片(所有类型) ======
   const renderCard = (item: any) => {
     const checked = selectedIds.has(item.id);
     const isVideo = item.type === "video";
@@ -461,10 +452,10 @@ function InspirationLibraryContent() {
           )}
         </div>
 
-        {/* 上半部分:媒体/内容预览 */}
+        {/* 上半部分:媒体/内容预览 — 统一 3/4 比例 */}
         <div className="relative w-full" style={{ aspectRatio: "3/4" }}>
           {hasMedia && thumbnailUrl ? (
-            isVideo && !item.thumbnail_url ? (
+            isVideo ? (
               <>
                 <video
                   src={thumbnailUrl}
@@ -473,7 +464,6 @@ function InspirationLibraryContent() {
                   preload="metadata"
                   playsInline
                 />
-                {/* 视频中央播放圈 */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
                   style={{ background: "rgba(0,0,0,0.2)" }}>
                   <div className="w-10 h-10 rounded-full flex items-center justify-center"
@@ -481,7 +471,6 @@ function InspirationLibraryContent() {
                     <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                   </div>
                 </div>
-                {/* 视频时长(右下角,跟类型角标不冲突) */}
                 {videoDuration && (
                   <span
                     className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
@@ -492,121 +481,43 @@ function InspirationLibraryContent() {
                 )}
               </>
             ) : (
-              <div className="relative w-full h-full">
-                <img
-                  src={item.thumbnail_url || thumbnailUrl}
-                  alt={item.title || "灵感图片"}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                />
-                {isVideo && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                    style={{ background: "rgba(0,0,0,0.2)" }}>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
-                      <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                    </div>
-                  </div>
-                )}
-                {/* 视频时长 */}
-                {isVideo && videoDuration && (
-                  <span
-                    className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
-                    style={{ background: "rgba(0,0,0,0.75)", color: "#FFFFFF" }}
-                  >
-                    {formatVideoDuration(videoDuration)}
-                  </span>
-                )}
-              </div>
+              <img
+                src={thumbnailUrl}
+                alt={item.title || "灵感图片"}
+                loading="lazy"
+                className="w-full h-full object-cover"
+              />
             )
-          ) : item.type === "text" && thumbnailUrl ? (
-            // 文档：显示文件图标 + 可点击链接
-            <div
-              className="w-full h-full flex flex-col items-center justify-center p-4 gap-3 overflow-hidden"
-              style={{ background: "rgba(30,64,175,0.12)" }}
-            >
-              <FileText size={36} color="#60A5FA" />
-              <span style={{ color: "#93C5FD", fontSize: 13, fontWeight: 600 }}>文档</span>
-              <a
-                href={thumbnailUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs underline truncate max-w-full px-2"
-                style={{ color: "#60A5FA" }}
-              >
-                {(() => {
-                  try {
-                    const url = new URL(thumbnailUrl);
-                    return decodeURIComponent(url.pathname.split('/').pop() || '查看文件');
-                  } catch { return '查看文件'; }
-                })()}
-              </a>
-            </div>
           ) : (
+            // 纯文本/文档：统一灰底 + 类型图标 + 文字预览
             <div
               className="w-full h-full flex flex-col items-center justify-center p-3 overflow-hidden"
               style={{ background: "rgba(255,255,255,0.05)" }}
             >
-              <span style={{ fontSize: 32 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
+              <span style={{ fontSize: 28 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
               <p
                 style={{ color: "#D1D5DB", fontSize: 11, textAlign: "center", marginTop: 8, lineHeight: 1.4 }}
                 className="line-clamp-4 w-full break-words"
               >
-                {item.ai_summary || item.original_text?.substring(0, 80) || item.title || "暂无内容"}
+                {item.original_text?.substring(0, 80) || item.title || "暂无内容"}
               </p>
             </div>
           )}
 
-          {/* 类型角标:非选择模式放左上(顶部操作层不挡),选择模式隐藏(避免和勾选重叠) */}
+          {/* 类型角标(左下) */}
           {!isSelecting && (
             <span
               className="absolute z-10 pointer-events-none"
               style={{
-                bottom: 8,
-                left: 8,
-                padding: "2px 6px",
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 500,
-                background: "rgba(0,0,0,0.65)",
-                color: "#FFFFFF",
+                bottom: 8, left: 8,
+                padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+                background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
                 maxWidth: "calc(100% - 16px)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}
               title={typeBadge}
             >
               {typeBadge}
-            </span>
-          )}
-
-          {/* AI 总结中徽标(右上,跟操作按钮并列,选择模式时也保留) */}
-          {isExtractingOrPending(item) && (
-            <span
-              className="absolute top-9 right-2 z-10 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 pointer-events-none"
-              style={{
-                background: "rgba(249,115,22,0.95)",
-                color: "#FFFFFF",
-                boxShadow: "0 0 0 0 rgba(249,115,22,0.7)",
-                animation: "pulse-orange 1.5s infinite",
-              }}
-            >
-              <span style={{
-                width: 5, height: 5, borderRadius: '50%',
-                background: '#FFFFFF', display: 'inline-block',
-                animation: 'pulse 1s infinite',
-              }} />
-              AI 总结中
-            </span>
-          )}
-          {item.extraction_status === 'failed' && (
-            <span
-              className="absolute top-9 right-2 z-10 px-1.5 py-0.5 rounded text-[10px] font-medium pointer-events-none"
-              style={{ background: "rgba(239,68,68,0.9)", color: "#FFFFFF" }}
-            >
-              抽取失败
             </span>
           )}
         </div>
@@ -617,7 +528,7 @@ function InspirationLibraryContent() {
             {item.title || "未命名"}
           </p>
           <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }} className="line-clamp-2 break-words">
-            {item.ai_summary || item.original_text?.substring(0, 60) || "暂无描述"}
+            {item.original_text?.substring(0, 60) || item.title || ""}
           </p>
           <div className="flex items-center justify-between mt-1.5 gap-1.5">
             <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">
@@ -762,14 +673,13 @@ function InspirationLibraryContent() {
           style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#93C5FD" }}>
           <div className="flex items-center gap-2 mb-2">
             <Upload size={18} className="animate-pulse" />
-            <span className="font-medium">正在上传 {uploadItems.filter((it) => it.status === 'done' || it.status === 'extracting' || it.status === 'error').length}/{uploadItems.length}</span>
+            <span className="font-medium">正在上传 {uploadItems.filter((it) => it.status === 'done' || it.status === 'error').length}/{uploadItems.length}</span>
           </div>
           <div className="space-y-1 max-h-32 overflow-y-auto">
             {uploadItems.map((it) => {
               const label =
                 it.status === 'compressing' ? '压缩中' :
                 it.status === 'uploading' ? `上传中 ${it.progress}%` :
-                it.status === 'extracting' ? 'AI 总结中' :
                 it.status === 'done' ? '完成' :
                 it.status === 'error' ? `失败：${it.error}` :
                 it.status === 'queued' ? '等待中' : it.status;
@@ -1006,24 +916,6 @@ function InspirationLibraryContent() {
               />
             </div>
 
-            {/* 描述/summary */}
-            <div className="mb-3">
-              <label className="block mb-1.5" style={{ color: "#9CA3AF", fontSize: 12 }}>描述</label>
-              <textarea
-                value={editSummary}
-                onChange={(e) => setEditSummary(e.target.value)}
-                placeholder="输入描述"
-                rows={3}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-                style={{
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "#FFFFFF",
-                }}
-              />
-            </div>
-
-            {/* 原始文本 */}
             <div className="mb-4">
               <label className="block mb-1.5" style={{ color: "#9CA3AF", fontSize: 12 }}>原文</label>
               <textarea
