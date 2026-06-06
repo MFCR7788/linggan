@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, VideoIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3, Search } from "lucide-react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3, Search } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -146,6 +146,7 @@ function AICopywritingContent() {
   const [rewriteContents, setRewriteContents] = useState<Record<string, string>>({});
   const [rewriteTab, setRewriteTab] = useState('xiaohongshu');
   const [isRewriting, setIsRewriting] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   const userInputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -439,9 +440,27 @@ function AICopywritingContent() {
     } catch (error) { console.error('Copy failed:', error); }
   };
 
+  const handleTTS = async () => {
+    setIsPlayingAudio(true);
+    try {
+      const res = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentContent.slice(0, 500), voice: 'female_natural', speed: 1.15 }),
+      });
+      if (!res.ok) throw new Error('配音失败');
+      const blob = await res.blob();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.onended = () => { setIsPlayingAudio(false); URL.revokeObjectURL(audio.src); };
+      audio.onerror = () => { setIsPlayingAudio(false); showToast('播放失败', 'error'); };
+      await audio.play();
+    } catch {
+      setIsPlayingAudio(false);
+      showToast('配音失败', 'error');
+    }
+  };
+
   const handleImportToImage = () => { handoff('/ai/image', { prompt: currentContent.slice(0, 300), topic: selectedType, industry: selectedIndustry, style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label }); };
-  const handleImportToVideo = () => { handoff('/ai/video', { text: currentContent.slice(0, 300), topic: selectedType, style: COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label }); };
-  const handleImportToDigitalHuman = () => { handoff('/ai/digital-human', { topic: currentContent.slice(0, 100), script: currentContent, style: selectedStyle, industry: selectedIndustry }); };
   const handleImportToAds = () => { handoff('/ai/ads', { topic: currentContent.slice(0, 200), text: currentContent, industry: selectedIndustry }); };
 
   const handleNavigate = (page: PageKey) => {
@@ -931,21 +950,21 @@ function AICopywritingContent() {
 
                 {/* 下一步：导入到其他模块 */}
                 <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6 }}>导入到下一步</p>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   {([
                     { icon: <ImageIcon size={14} />, label: 'AI 生图', onClick: handleImportToImage, color: '#8B5CF6' },
-                    { icon: <VideoIcon size={14} />, label: 'AI 视频', onClick: handleImportToVideo, color: '#F43F5E' },
-                    { icon: <Mic size={14} />, label: '数字人', onClick: handleImportToDigitalHuman, color: '#06B6D4' },
+                    { icon: <Mic size={14} />, label: 'AI 配音', onClick: handleTTS, color: '#10B981', loading: isPlayingAudio },
                     { icon: <Grid3x3 size={14} />, label: '9 宫格', onClick: handleImportToAds, color: '#F59E0B' },
-                  ]).map(({ icon, label, onClick, color }) => (
+                  ]).map(({ icon, label, onClick, color, loading }) => (
                     <button
                       key={label}
                       onClick={onClick}
+                      disabled={loading}
                       className="flex flex-col items-center gap-1 py-2 rounded-lg text-[10px]"
-                      style={{ background: `rgba(255,255,255,0.05)`, border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF' }}
+                      style={{ background: `rgba(255,255,255,0.05)`, border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF', opacity: loading ? 0.6 : 1 }}
                     >
-                      <span style={{ color }}>{icon}</span>
-                      {label}
+                      <span style={{ color }}>{loading ? <div className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" /> : icon}</span>
+                      {loading ? '播放中' : label}
                     </button>
                   ))}
                 </div>
