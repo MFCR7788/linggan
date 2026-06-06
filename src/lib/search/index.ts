@@ -99,4 +99,8 @@ export function prioritizeResults(results: SearchResult[]): SearchResult[] {
   });
 }
 
+export { searchDianping } from './dianping-search';
+export { aggregateSearch } from './aggregator';
+export type { SearchSource, AggregateOptions } from './aggregator';
+
 export { normalizeUrlForDedup, normalizeTitleForDedup };
