@@ -1,18 +1,17 @@
 "use client";
 
 
-import { Search, Bell, Zap, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar } from "lucide-react";
+import { Search, Bell, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
-import { ThumbnailPreview } from "@/components/ThumbnailPreview";
 import { useRouter } from "next/navigation";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useSchedules } from "@/hooks/use-schedule";
 import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
-import { TYPE_EMOJIS, TYPE_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
+import { TYPE_EMOJIS, PAGE_ROUTES } from "@/lib/style-constants";
 import type { ContentItem } from "@/types";
 
 interface HotTopic {
@@ -375,52 +374,30 @@ function HomeContent() {
               description="点击下方按钮，开始记录你的第一个灵感"
             />
           ) : filteredInspirations.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {filteredInspirations.slice(0, 5).map((item: ContentItem) => (
                 <GlassCard
                   key={item.id}
                   hover
-                  onClick={() => {
-                    console.log('首页点击灵感卡片，ID:', item.id, '数据:', item);
-                    router.push(`/inspiration/detail?id=${item.id}`);
-                  }}
-                  className="!p-4"
+                  onClick={() => router.push(`/inspiration/detail?id=${item.id}`)}
+                  className="!p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <ThumbnailPreview
-                      type={item.type}
-                      thumbnailUrl={item.thumbnail_url}
-                      mediaUrls={item.media_urls}
-                      voiceUrl={item.voice_url}
-                      size="md"
-                    />
+                  <div className="flex items-center gap-2.5">
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_EMOJIS[item.type] || "✨"}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <GlassBadge color="primary">{TYPE_LABELS[item.type] || "灵感"}</GlassBadge>
-                        <button
-                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs"
-                          style={{ background: "rgba(59,130,246,0.2)", color: "#93C5FD", border: "1px solid rgba(59,130,246,0.3)" }}
-                          onClick={(e) => { e.stopPropagation(); handleNavigate("ai-copywriting"); }}
-                        >
-                          <Zap size={12} /> 一键生成
-                        </button>
-                      </div>
-                      <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }} className="truncate">
-                        {item.title || item.original_text?.substring(0, 60) || "未命名灵感"}
-                      </p>
-                      <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
-                        {item.original_text || "暂无描述"}
-                      </p>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex gap-1.5 flex-wrap">
-                          {(item as unknown as { content_tags?: Array<{ id: string; tags?: { name: string } }> }).content_tags?.map((ct) => (
-                            <GlassBadge key={ct.id}>{ct.tags?.name}</GlassBadge>
-                          ))}
-                        </div>
-                        <span style={{ color: "#9CA3AF", fontSize: 11 }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }} className="truncate">
+                          {item.title || item.original_text?.substring(0, 40) || "未命名灵感"}
+                        </p>
+                        <span style={{ color: "#6B7280", fontSize: 11, flexShrink: 0 }}>
                           {new Date(item.created_at).toLocaleDateString("zh-CN")}
                         </span>
                       </div>
+                      {item.original_text && item.original_text !== (item.title || "") && (
+                        <p style={{ color: "#9CA3AF", fontSize: 12, marginTop: 1 }} className="truncate">
+                          {item.original_text}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </GlassCard>
