@@ -378,14 +378,16 @@ export async function generateImage(
   if (!taskId) throw new Error('图片生成失败: 未获取到任务 ID');
 
   // 轮询结果
-  const imageUrl = await pollImageTask(apiKey, taskId);
-  if (!imageUrl) throw new Error('图片生成超时');
+  const imageUrls = await pollImageTask(apiKey, taskId);
+  if (!imageUrls || imageUrls.length === 0) throw new Error('图片生成超时');
 
-  const result: ImageResult = { imageUrl, prompt: finalPrompt, size };
-  return result;
+  if (imageUrls.length === 1) {
+    return { imageUrl: imageUrls[0], prompt: finalPrompt, size };
+  }
+  return imageUrls.map((url) => ({ imageUrl: url, prompt: finalPrompt, size }));
 }
 
-async function pollImageTask(apiKey: string, taskId: string): Promise<string | null> {
+async function pollImageTask(apiKey: string, taskId: string): Promise<string[] | null> {
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
     const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
@@ -393,7 +395,9 @@ async function pollImageTask(apiKey: string, taskId: string): Promise<string | n
     });
     const data = await res.json();
     if (data.output?.task_status === 'SUCCEEDED') {
-      return data.output?.results?.[0]?.url || null;
+      const results = data.output?.results;
+      if (!results || results.length === 0) return null;
+      return results.map((r: any) => r.url).filter(Boolean);
     }
     if (data.output?.task_status === 'FAILED') {
       console.error('图片生成任务失败:', data.output?.message);
