@@ -10,7 +10,6 @@ export type UploadStatus =
   | 'compressing'
   | 'uploading'
   | 'creating'
-  | 'extracting'
   | 'done'
   | 'error';
 
@@ -180,23 +179,11 @@ export function useUploadQueue(options: UseUploadQueueOptions = {}) {
         // 3. 成功
         const resultId = data.body?.data?.id;
         updateItem(item.id, {
-          status: isDocument ? 'extracting' : 'done',
+          status: 'done',
           progress: 100,
           resultId,
         });
-        onSuccess?.({ ...item, status: isDocument ? 'extracting' : 'done', progress: 100, resultId });
-
-        // 4. 文档：fire-and-forget 触发抽取
-        if (isDocument && resultId) {
-          fetch(`/api/inspiration/${resultId}/extract`, { method: 'POST' })
-            .then(() => {
-              updateItem(item.id, { status: 'done' });
-              onSuccess?.({ ...item, status: 'done', progress: 100, resultId });
-            })
-            .catch((e) => {
-              console.warn('[upload-queue] 触发抽取失败:', e);
-            });
-        }
+        onSuccess?.({ ...item, status: 'done', progress: 100, resultId });
 
         return true;
       } catch (e: any) {
@@ -228,7 +215,7 @@ export function useUploadQueue(options: UseUploadQueueOptions = {}) {
         }
       }
       const final = itemsRef.current;
-      const succeeded = final.filter((it) => it.status === 'done' || it.status === 'extracting').length;
+      const succeeded = final.filter((it) => it.status === 'done').length;
       const failed = final.filter((it) => it.status === 'error').length;
       const inFlight = final.filter(
         (it) => it.status === 'uploading' || it.status === 'compressing'
@@ -236,7 +223,6 @@ export function useUploadQueue(options: UseUploadQueueOptions = {}) {
       const unknown = final.filter(
         (it) =>
           it.status !== 'done' &&
-          it.status !== 'extracting' &&
           it.status !== 'error' &&
           it.status !== 'uploading' &&
           it.status !== 'compressing'

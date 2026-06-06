@@ -225,6 +225,9 @@ function DigitalHumanContent() {
   const [ocStyle, setOcStyle] = useState('oral');
   const [ocPhase, setOcPhase] = useState('idle'); // idle|scripting|tts|uploading|submitting|generating|done|error
   const [ocError, setOcError] = useState<string | null>(null);
+  const [ocCurrentSegment, setOcCurrentSegment] = useState(0); // 当前正在处理的段号 (1-based)
+  const [ocTotalSegments, setOcTotalSegments] = useState(0); // 总段数
+  const [ocVideoUrls, setOcVideoUrls] = useState<string[]>([]); // 所有生成的视频 URL
   const ocAbortRef = useRef(false);
 
   // ─── 批量生成 ─────────────────────────────────────────
@@ -338,6 +341,34 @@ function DigitalHumanContent() {
 
   // wan2.2-s2v 硬限制 ≤ 20 秒, 超过会上游返 "input audio is longer than 20s"
   const MAX_AUDIO_SECONDS = 20;
+
+  /** 长脚本按标点拆成每段 ~maxChars 字的片段，适合数字人 20s 限制 */
+  function splitScriptForDigitalHuman(text: string, maxChars: number = 100): string[] {
+    const chunks: string[] = [];
+    let remaining = text.trim();
+    while (remaining.length > 0) {
+      if (remaining.length <= maxChars) {
+        chunks.push(remaining);
+        break;
+      }
+      // 在 maxChars 范围内找最后一个句号/问号/感叹号/换行作为断点
+      const searchRange = remaining.slice(0, maxChars);
+      const punctMatch = searchRange.match(/[。！？\n](?!.*[。！？\n])/);
+      let cutAt = maxChars;
+      if (punctMatch && punctMatch.index !== undefined && punctMatch.index > maxChars * 0.4) {
+        cutAt = punctMatch.index + 1;
+      } else {
+        // 退而找逗号
+        const commaMatch = searchRange.match(/[，、,](?!.*[，、,])/);
+        if (commaMatch && commaMatch.index !== undefined && commaMatch.index > maxChars * 0.4) {
+          cutAt = commaMatch.index + 1;
+        }
+      }
+      chunks.push(remaining.slice(0, cutAt).trim());
+      remaining = remaining.slice(cutAt).trim();
+    }
+    return chunks.filter(c => c.length > 0);
+  }
 
   // ─── Step 1: 图片处理 ────────────────────────────────
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -802,53 +833,95 @@ function DigitalHumanContent() {
 
     ocAbortRef.current = false;
     setOcError(null);
+    setOcVideoUrls([]);
 
-    // Step 1: 写稿
+    // Step 1: 写稿 (生成较长脚本,后续自动分段)
     setOcPhase('scripting');
     try {
-      const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: ocTopic, style: ocStyle, targetLength: 100, variantCount: 1 });
+      const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: ocTopic, style: ocStyle, targetLength: 400, variantCount: 1 });
       if (!sRes.success) throw new Error(sRes.error || '写稿失败');
       const script = sRes.data!.scripts[0];
       if (ocAbortRef.current) return;
 
-      // Step 2: TTS
-      setOcPhase('tts');
-      const ttsRes = await fetch('/api/ai/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: script, voice, speed, pitch }),
-      });
-      const ttsData = await ttsRes.json();
-      if (!ttsData.success || !ttsData.audioBase64) throw new Error(ttsData.error || '配音失败');
-      if (ocAbortRef.current) return;
+      // Step 2: 按 20s 限制自动拆段
+      const segments = splitScriptForDigitalHuman(script, 100);
+      setOcTotalSegments(segments.length);
+      setOcCurrentSegment(0);
+      const videoUrls: string[] = [];
 
-      // Step 3: 上传音频 + 测真实时长
-      setOcPhase('uploading');
-      const audUrl = await base64ToUrl(ttsData.audioBase64);
-      if (ocAbortRef.current) return;
-      // 测真实 audio.duration, 一键成片流程不依赖 state.audioDuration
-      let ocAudioDuration: number | undefined;
-      try {
-        ocAudioDuration = await measureAudioDuration(audUrl);
-        setAudioDuration(ocAudioDuration);
-        if (ocAudioDuration > MAX_AUDIO_SECONDS) {
-          throw new Error(`音频时长 ${ocAudioDuration.toFixed(1)} 秒,超过 wan2.2-s2v 模型的 ${MAX_AUDIO_SECONDS} 秒限制,请精简主题或换更短的口播脚本`);
-        }
-      } catch (e: any) {
-        if (e.message?.includes('超过') || e.message?.includes('限制')) throw e;
-        // 测时长失败不阻塞, 让后端兜底
+      // Step 3-N: 逐段 TTS → 上传 → 提交数字人 → 轮询
+      for (let i = 0; i < segments.length; i++) {
+        if (ocAbortRef.current) return;
+        setOcCurrentSegment(i + 1);
+
+        // TTS
+        setOcPhase('tts');
+        const ttsRes = await fetch('/api/ai/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: segments[i], voice, speed, pitch }),
+        });
+        const ttsData = await ttsRes.json();
+        if (!ttsData.success || !ttsData.audioBase64) throw new Error(ttsData.error || `第${i + 1}段配音失败`);
+        if (ocAbortRef.current) return;
+
+        // 上传音频
+        setOcPhase('uploading');
+        const audUrl = await base64ToUrl(ttsData.audioBase64);
+        if (ocAbortRef.current) return;
+
+        // 测时长兜底 (超过 20s 则跳过该段)
+        try {
+          const dur = await measureAudioDuration(audUrl);
+          if (dur > MAX_AUDIO_SECONDS) {
+            setToast({ message: `第${i + 1}段音频 ${dur.toFixed(1)}s 超 20s 限制,已跳过`, type: 'error' });
+            continue;
+          }
+        } catch { /* 测时长失败不阻塞 */ }
+
+        // 提交 + 轮询
+        setOcPhase('submitting');
+        await new Promise<void>((resolve, reject) => {
+          submitAndPoll(imageUrl, audUrl, resolution,
+            (videoUrl) => {
+              videoUrls.push(videoUrl);
+              setOcVideoUrls([...videoUrls]);
+              resolve();
+            },
+            (msg) => { reject(new Error(msg)); },
+          );
+          if (ocAbortRef.current) { resolve(); }
+        });
+        if (ocAbortRef.current) return;
       }
 
-      // Step 4-6: 提交 + 轮询
-      setOcPhase('submitting');
-      await new Promise<void>((resolve, reject) => {
-        submitAndPoll(imageUrl, audUrl, resolution,
-          (videoUrl) => { setFinalVideoUrl(videoUrl); setOcPhase('done'); autoSaveDigitalHuman(videoUrl, `数字人 · ${ocTopic}`); resolve(); },
-          (msg) => { setOcError(msg); setOcPhase('error'); reject(new Error(msg)); },
-          ocAudioDuration ?? audioDuration,
-        );
-        if (ocAbortRef.current) { setOcPhase('idle'); resolve(); }
-      });
+      if (videoUrls.length === 0) throw new Error('所有分段均生成失败,请精简主题或换更短的脚本');
+
+      // 多段自动合并为单视频
+      let mergedUrl: string | null = null;
+      if (videoUrls.length > 1) {
+        setOcPhase('merging');
+        try {
+          const mergeRes = await fetch('/api/ai/digital-human/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoUrls }),
+          });
+          const mergeData = await mergeRes.json();
+          if (mergeData.success && mergeData.data?.videoUrl) {
+            mergedUrl = mergeData.data.videoUrl;
+            setOcVideoUrls([]); // 合并成功,仅展示合并结果
+          } else {
+            console.warn('[dh-merge] 合并失败,保留分段:', mergeData.error);
+          }
+        } catch { /* 合并失败不阻塞,保留分段结果 */ }
+      }
+
+      // 全部完成,优先用合并后视频
+      const finalUrl = mergedUrl || videoUrls[0];
+      setFinalVideoUrl(finalUrl);
+      setOcPhase('done');
+      autoSaveDigitalHuman(finalUrl, `数字人 · ${ocTopic}`);
     } catch (err: any) {
       if (ocAbortRef.current) { setOcPhase('idle'); return; }
       setOcError(err.message);
@@ -1524,7 +1597,7 @@ function DigitalHumanContent() {
   const OC_PHASES: Record<string, string> = {
     idle: '准备中', scripting: 'AI 写稿中', tts: '语音合成中',
     uploading: '上传音频中', submitting: '提交任务中', generating: '生成视频中',
-    done: '完成', error: '出错',
+    merging: '合并视频中', done: '完成', error: '出错',
   };
 
   const renderOneClickMode = () => (
@@ -1580,7 +1653,31 @@ function DigitalHumanContent() {
             <Zap size={18} /> 一键成片
           </PrimaryButton>
         ) : ocPhase === 'done' ? (
-          renderVideoResult(finalVideoUrl!)
+          <div>
+            {ocVideoUrls.length > 1 ? (
+              // 多段结果: 展示全部视频
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 p-2 rounded-lg"
+                  style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                  <CheckCircle2 size={14} color="#22C55E" />
+                  <span style={{ color: '#86EFAC', fontSize: 12 }}>已生成 {ocVideoUrls.length} 段视频 (长脚本自动分段)</span>
+                </div>
+                {ocVideoUrls.map((url, i) => (
+                  <div key={i}>
+                    <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>片段 {i + 1}</p>
+                    {renderVideoResult(url, () => handleSave(url, `数字人 · ${ocTopic} (片段${i + 1})`))}
+                  </div>
+                ))}
+                <button onClick={() => { setOcPhase('idle'); setOcVideoUrls([]); setFinalVideoUrl(null); }}
+                  className="w-full py-2 rounded-xl text-xs flex items-center justify-center gap-1"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB' }}>
+                  <RefreshCw size={14} /> 重新生成
+                </button>
+              </div>
+            ) : (
+              renderVideoResult(finalVideoUrl!)
+            )}
+          </div>
         ) : ocPhase === 'error' ? (
           <div className="flex flex-col items-center py-4 gap-2">
             <XCircle size={30} color="#EF4444" />
@@ -1600,8 +1697,18 @@ function DigitalHumanContent() {
             </div>
             <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>{OC_PHASES[ocPhase]}</p>
             <p style={{ color: '#9CA3AF', fontSize: 11 }}>
-              {ocPhase === 'generating' ? '唇形同步 + 表情生成，预计 2-5 分钟' : '请稍候...'}
+              {ocPhase === 'merging'
+                ? '正在拼接多段视频...'
+                : ocTotalSegments > 1 && ocCurrentSegment > 0
+                ? `正在处理 ${ocCurrentSegment}/${ocTotalSegments} 段`
+                : ocPhase === 'generating' ? '唇形同步 + 表情生成，预计 2-5 分钟' : '请稍候...'}
             </p>
+            {ocTotalSegments > 1 && ocPhase !== 'merging' && (
+              <div className="w-full max-w-[200px] h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                <div className="h-full rounded-full transition-all duration-300"
+                  style={{ background: 'linear-gradient(90deg, #F43F5E, #F59E0B)', width: `${(ocCurrentSegment / ocTotalSegments) * 100}%` }} />
+              </div>
+            )}
             <button onClick={() => { ocAbortRef.current = true; setOcPhase('idle'); }}
               className="px-4 py-1.5 rounded-lg text-xs"
               style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>取消</button>
