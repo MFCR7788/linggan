@@ -60,6 +60,7 @@ export const GET = withAuth(async ({ request, user }) => {
         title: title || 'AI 生成内容',
         type: workTypeResult,
         time: m.created_at,
+        prompt: m.metadata?.prompt || m.metadata?.generatedImage?.prompt || m.metadata?.imageParams?.prompt || '',
         session_id: m.session_id,
         metadata: m.metadata,
         content: m.content,
@@ -85,6 +86,7 @@ export const GET = withAuth(async ({ request, user }) => {
         title: ci.title || 'AI 生成内容',
         type: ciType,
         time: ci.created_at,
+        prompt: ci.prompt || ci.original_text || '',
         session_id: ci.session_id || '',
         metadata: {
           source: 'content_item',

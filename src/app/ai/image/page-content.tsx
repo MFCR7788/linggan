@@ -161,7 +161,8 @@ function AIImageContent() {
             title: w.title || 'AI 生成图片',
             time: formatRelativeTime(w.time || ''),
             imageUrl: w.metadata?.generatedImage?.imageUrl || undefined,
-            content: w.content,
+            content: w.prompt || w.content || '',
+            metadata: w.metadata,
           })));
         }
       })
@@ -175,6 +176,21 @@ function AIImageContent() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  // 点击历史记录 → 回填提示词做同款
+  const handleHistoryClick = (item: any) => {
+    const raw = item.content || '';
+    const promptText = raw.replace(/<[^>]*>/g, '').trim();
+    if (promptText) {
+      setUserInput(promptText);
+      setRefinedPrompt('');
+      setIsGenerated(false);
+      setImageUrl(null);
+      setBatchImages([]);
+      setToast({ message: '提示词已回填，可直接生成或修改', type: 'success' });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // ─── 选预设 → 自动联动 ratio/style/palette ──────────
@@ -1053,7 +1069,7 @@ function AIImageContent() {
             <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
             <div className="space-y-3">
               {historyWorks.slice(0, 6).map((item) => (
-                <GlassCard key={item.id} hover className="!p-3">
+                <GlassCard key={item.id} hover className="!p-3 cursor-pointer" onClick={() => handleHistoryClick(item)}>
                   <div className="flex items-center gap-3">
                     {item.imageUrl ? (
                       <img
@@ -1070,7 +1086,13 @@ function AIImageContent() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 500, marginBottom: 4 }} className="truncate">{item.title}</p>
-                      <span style={{ color: '#6B7280', fontSize: 11 }}>{item.time}</span>
+                      <div className="flex items-center justify-between">
+                        <span style={{ color: '#6B7280', fontSize: 11 }}>{item.time}</span>
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px]"
+                          style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD' }}>
+                          <RotateCcw size={10} /> 做同款
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </GlassCard>
