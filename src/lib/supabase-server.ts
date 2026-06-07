@@ -83,6 +83,11 @@ export function createSupabaseServerClient() {
           }
         },
       },
+      cookieOptions: {
+        maxAge: 60 * 60 * 24 * 365,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      },
     }
   );
 }

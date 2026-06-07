@@ -151,6 +151,11 @@ export async function POST(request: NextRequest) {
             try { cookieStore.set({ name, value: '', ...options }); } catch { /* ignore */ }
           },
         },
+        cookieOptions: {
+          maxAge: 60 * 60 * 24 * 365,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        },
       }
     );
 
