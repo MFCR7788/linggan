@@ -1538,7 +1538,7 @@ function AIVideoContent() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="输入你的视频脚本或话题..."
-              rows={4}
+              rows={6}
               className="w-full p-3 rounded-lg text-sm resize-none"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
             />

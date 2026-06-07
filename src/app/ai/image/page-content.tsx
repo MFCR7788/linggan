@@ -433,7 +433,7 @@ function AIImageContent() {
               value={refinedPrompt || userInput}
               onChange={(e) => setUserInput(e.target.value)}
               placeholder="描述你想生成的图片，例如：一只橘猫坐在窗台上，阳光洒落..."
-              rows={3}
+              rows={6}
               className="w-full p-3 rounded-lg text-sm resize-none"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
             />
@@ -562,8 +562,8 @@ function AIImageContent() {
                 background: 'rgba(255,255,255,0.05)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 color: '#E5E7EB',
-                minHeight: 60,
-                maxHeight: 160,
+                minHeight: 80,
+                maxHeight: 200,
               }}
             />
           </div>
