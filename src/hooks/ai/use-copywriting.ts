@@ -28,7 +28,6 @@ export function useCopywriting() {
   const [generating, setGenerating] = useState(false);
   const [researching, setResearching] = useState(false);
   const [refining, setRefining] = useState(false);
-  const [rewriting, setRewriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const generate = useCallback(async (params: CopywritingParams): Promise<{ content: string | string[]; researchResults?: string }> => {
@@ -82,20 +81,5 @@ export function useCopywriting() {
     }
   }, []);
 
-  const rewriteMulti = useCallback(async (content: string): Promise<Record<string, string>> => {
-    setRewriting(true);
-    setError(null);
-    try {
-      const res = await apiClient.post<{ versions: Record<string, string> }>('/ai/copywriting/rewrite-multi', { content });
-      if (!res.success) throw new Error(res.error || '多平台改写失败');
-      return res.data!.versions || {};
-    } catch (e: any) {
-      setError(e.message || '多平台改写失败');
-      throw e;
-    } finally {
-      setRewriting(false);
-    }
-  }, []);
-
-  return { generate, refine, rewriteMulti, generating, researching, refining, rewriting, error, setError };
+  return { generate, refine, generating, researching, refining, error, setError };
 }

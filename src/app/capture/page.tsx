@@ -101,29 +101,6 @@ function CaptureContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 抖音式自动播报:最新 AI 消息生成完成 → 自动朗读
-  // 仅在 AI 生成新回复后触发，历史消息加载时不触发
-  // 用 ref 持有 msgActions,避免 callback 引用变化触发 effect 重复执行
-  const lastAutoSpokenRef = useRef<string | null>(null);
-  const isNewResponseRef = useRef(false);
-  const msgActionsRef = useRef(msgActions);
-  useEffect(() => { msgActionsRef.current = msgActions; });
-
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (
-      last?.type === 'ai' &&
-      last.content.length > 0 &&
-      speakingId !== last.id &&
-      lastAutoSpokenRef.current !== last.id &&
-      isNewResponseRef.current
-    ) {
-      isNewResponseRef.current = false;
-      lastAutoSpokenRef.current = last.id;
-      msgActionsRef.current.speakMessage(last);
-    }
-  }, [messages, speakingId]);
-
   // 卸载时停止播报(避免切页后台朗读)
   useEffect(() => {
     return () => { stopSpeaking(); };
@@ -202,7 +179,6 @@ function CaptureContent() {
           attachments: [{ url: videoUrl, name: file.name, type: 'video' as const }],
           timestamp: new Date(),
         };
-        isNewResponseRef.current = true;
         setMessages(prev => [...prev, aiMsg]);
       } catch {
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), type: 'ai', content: '视频分析失败，请重试。', timestamp: new Date() }]);
@@ -287,7 +263,6 @@ function CaptureContent() {
         generatedVideo: data.generatedVideo || undefined,
         timestamp: new Date(),
       };
-      isNewResponseRef.current = true;
       setMessages(prev => [...prev, aiMsg]);
 
       if (data.generatedVideo?.taskId) {
@@ -496,7 +471,6 @@ function CaptureContent() {
         linkFetchFailed,  // SPA/反爬 抓不到正文时显示"建议贴正文"提示
         timestamp: new Date(),
       };
-      isNewResponseRef.current = true;
       setMessages(prev => [...prev, aiMessage]);
 
       // 保存到服务端（含生成结果的媒体信息）
@@ -622,6 +596,9 @@ function CaptureContent() {
     deleteMessage(msg, setMessages);
   };
 
+  const handleSpeak = (msg: Message) => {
+    speakMessage(msg);
+  };
   const handleRegenerate = async (msg: Message) => {
     const result = await regenerateMessage(msg, messages, currentSessionId);
     if (result) {
@@ -1105,7 +1082,7 @@ function CaptureContent() {
                   savingId={savingId}
                   schedulingId={schedulingId}
                   onCopy={copyMessage}
-                  onSpeak={speakMessage}
+                  onSpeak={handleSpeak}
                   onShare={shareMessage}
                   onRegenerate={handleRegenerate}
                   onSave={(msg: any) => saveToInspiration(msg, messages).catch(() => showToast('保存失败，请重试', 'error'))}

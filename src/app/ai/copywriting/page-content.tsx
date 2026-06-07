@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, Layers, Globe, Wand2, FileText, Sparkles, X, Mic, Grid3x3, Search } from "lucide-react";
+import { Copy, RefreshCw, Share2, Zap, ChevronDown, ChevronUp, Check, ImageIcon, Layers, Wand2, FileText, Sparkles, X, Mic, Grid3x3, Search } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -111,7 +111,7 @@ function AICopywritingContent() {
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [userInput, setUserInput] = useState('');
   const [refinedMessage, setRefinedMessage] = useState('');
-  const { generate: generateCopywriting, refine: refineCopywriting, rewriteMulti: rewriteMultiCopy, researching } = useCopywriting();
+  const { generate: generateCopywriting, refine: refineCopywriting, researching } = useCopywriting();
   const [isRefining, setIsRefining] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'all' | 'text' | 'image' | 'video' | 'audio'>('text');
   const [hideAiWorks, setHideAiWorks] = useState(false);
@@ -144,9 +144,6 @@ function AICopywritingContent() {
   const [standardContents, setStandardContents] = useState<string[]>([generateStandardContent()]);
   const [noAiContents, setNoAiContents] = useState<string[]>([generateNoAiContent()]);
   const [copied, setCopied] = useState(false);
-  const [rewriteContents, setRewriteContents] = useState<Record<string, string>>({});
-  const [rewriteTab, setRewriteTab] = useState('xiaohongshu');
-  const [isRewriting, setIsRewriting] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('文案');
 
@@ -393,7 +390,6 @@ function AICopywritingContent() {
         setNoAiContents(Array.isArray(standardContent) ? standardContent : [standardContent]);
       }
 
-      setRewriteContents({});
 
       // 自动保存到灵感库
       const content = Array.isArray(standardContent) ? standardContent[0] : standardContent;
@@ -423,15 +419,6 @@ function AICopywritingContent() {
       setIsLoading(false);
       setIsGenerated(true);
     }
-  };
-
-  const handleRewriteMulti = async () => {
-    setIsRewriting(true);
-    try {
-      const versions = await rewriteMultiCopy(currentContent);
-      setRewriteContents(versions || {});
-    } catch (e) { console.error('Multi-platform rewrite failed:', e); }
-    setIsRewriting(false);
   };
 
   const handleCopy = async () => {
@@ -861,6 +848,16 @@ function AICopywritingContent() {
                   </button>
                 </label>
               </div>
+
+              {/* 生成按钮 — 在设置区底部便于配置完直接点 */}
+              <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <PrimaryButton size="md" onClick={handleGenerate} disabled={isLoading || (!userInput.trim() && !refinedMessage && selectedInspirations.size === 0)} className="!w-full !justify-center !py-2.5 !text-sm">
+                  <Zap size={16} /> {isLoading ? '生成中...' : 'AI 生成文案'}
+                </PrimaryButton>
+                <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+                  将按 {COPYWRITING_TYPES.find(t => t.id === selectedType)?.label} · {COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label} · {findIndustry(selectedIndustry)?.name}{batchMode ? ' · 批量×3' : ''}{noAiMode ? ' · 去AI味' : ''} 生成
+                </p>
+              </div>
             </div>
           )}
         </GlassCard>
@@ -975,63 +972,6 @@ function AICopywritingContent() {
           </GlassCard>
         )}
 
-        {/* ──── 多平台改写 ──── */}
-        {isGenerated && !isLoading && (
-          <GlassCard>
-            <div className="flex items-center justify-between mb-3">
-              <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600 }}>
-                <Globe size={14} color="#8B5CF6" style={{ display: 'inline', marginRight: 4 }} />
-                多平台改写
-              </p>
-              <button
-                onClick={handleRewriteMulti}
-                disabled={isRewriting}
-                className="px-3 py-1 rounded-lg text-[11px] flex items-center gap-1.5"
-                style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#C4B5FD' }}
-              >
-                {isRewriting ? <><div className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" /> 改写中</> : <><RefreshCw size={12} /> 一键改写</>}
-              </button>
-            </div>
-
-            {Object.keys(rewriteContents).length > 0 ? (
-              <>
-                <div className="flex gap-1 mb-3 overflow-x-auto">
-                  {[
-                    { key: 'xiaohongshu', label: '小红书' },
-                    { key: 'douyin', label: '抖音' },
-                    { key: 'wechat_article', label: '公众号' },
-                    { key: 'weibo', label: '微博' },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => setRewriteTab(key)}
-                      className="px-3 py-1.5 rounded-lg text-xs flex-shrink-0"
-                      style={rewriteTab === key
-                        ? { background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)', color: '#C4B5FD' }
-                        : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF' }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="p-3 rounded-xl mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <FormattedText text={rewriteContents[rewriteTab] || '暂无内容'} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
-                </div>
-                <button
-                  onClick={() => { navigator.clipboard.writeText(rewriteContents[rewriteTab] || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                  className="w-full py-2 rounded-lg text-xs flex items-center justify-center gap-1.5"
-                  style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)', color: '#C4B5FD' }}
-                >
-                  <Copy size={12} /> 复制
-                </button>
-              </>
-            ) : (
-              <p style={{ color: '#6B7280', fontSize: 12, textAlign: 'center', padding: 12 }}>
-                点击「一键改写」将文案转为四个平台版本
-              </p>
-            )}
-          </GlassCard>
-        )}
       </div>
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
