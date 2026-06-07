@@ -14,13 +14,14 @@ pnpm build        # 生产构建 (next build)
 pnpm lint         # ESLint 检查 (next lint, extends next/core-web-vitals)
 pnpm test         # 运行所有 vitest 测试 (jsdom 环境)
 pnpm test:watch   # vitest 监听模式
+npx cap sync      # 同步 H5 改动到 Capacitor 原生项目
 ```
 
 运行单个测试：`npx vitest run src/test/<file>.test.ts`
 
 vitest 配置了 `globals: true`，测试文件中 `describe`/`it`/`expect`/`vi` 无需 import。
 
-本地开发使用 pnpm（有 `pnpm-lock.yaml`），Vercel 和 GitHub Actions 使用 npm（有 `package-lock.json`），两个 lockfile 需保持同步。
+**Playwright E2E 测试**：`.claude/test-settings.mjs` 包含完整的 Playwright E2E 测试脚本，使用 Chromium + dev auth 注入，可测试 profile/settings 等受保护页面。手动运行该脚本需要先启动 `pnpm dev`，然后 `node .claude/test-settings.mjs`。
 
 ## 技术栈
 
@@ -29,8 +30,10 @@ vitest 配置了 `globals: true`，测试文件中 `describe`/`it`/`expect`/`vi`
 - **AI 服务**: 阿里云 DashScope (DeepSeek, Qwen, Wan, CosyVoice) + 火山引擎豆包 + OpenRouter + HeyGen + ElevenLabs + jina.ai Reader
 - **移动端**: Capacitor 8，WebView 加载 Vercel URL (`https://ai.zjsifan.com`)
 - **部署**: Vercel (前端 + API) + 阿里云 ECS (自部署 FunASR/Kokoro) + pm2
-- **测试**: Vitest + jsdom + @testing-library/react
+- **测试**: Vitest + jsdom + @testing-library/react，Playwright 用于 E2E
 - **CI/CD**: GitHub Actions (移动端发布到 TestFlight/Play Store, 服务端部署到阿里云)
+- **包管理器**: 本地开发用 pnpm（有 `pnpm-lock.yaml`），Vercel 和 GitHub Actions 用 npm（有 `package-lock.json`），两个 lockfile 需保持同步
+- **模块系统**: ESM (`"type": "module"`)，CommonJS 配置文件使用 `.cjs` 扩展名 (`postcss.config.cjs`)
 
 ## 项目结构
 
@@ -63,6 +66,17 @@ src/
 │   ├── storage/           # Supabase Storage 清理
 │   ├── analysis/          # 热点分析器
 │   ├── extract/           # 文档提取 (pdf-parse, mammoth)
+│   ├── video-models.ts    # AI 视频模型定义与参数
+│   ├── video-transcriber.ts  # 视频转文字/字幕提取
+│   ├── bgm-recommender.ts # 背景音乐智能推荐
+│   ├── ffmpeg-utils.ts    # FFmpeg 视频处理工具
+│   ├── notification-service.ts  # 站内通知服务
+│   ├── wechat-pay.ts      # 微信支付集成
+│   ├── account-presets.ts # 预设账号配置
+│   ├── preset-keywords.ts # AI 创作预设关键词
+│   ├── preset-templates.ts # AI 创作预设模板
+│   ├── text-utils.ts      # 文本处理工具
+│   ├── migrate.ts         # 数据库迁移辅助
 │   ├── handoff-url.ts     # 跨页面内容流转 (URL query 传参)
 │   └── style-constants.ts # 共享样式常量 (emoji, 平台色, 路由映射, 视频风格预设)
 ├── components/
@@ -114,8 +128,8 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - 生产：Supabase Auth (`getCurrentUser` in `supabase-server.ts`)
 - 开发：通过 `src/lib/dev-auth.ts` 实现 localStorage → cookie 桥接
   - 前端设置 `localStorage.dev_user` 对象 (`{ id: "..." }`)
-  - `syncDevAuthCookie()` 自动同步到 `dev_user_id` cookie，`getDevUserIdHeader()` 生成 `x-dev-user-id` header
-  - Middleware 读取 cookie/header 绕过 Supabase Auth 认证
+  - `syncDevAuthCookie()` 自动同步到 `dev_user_id` cookie
+  - Middleware 读取 `dev_user_id` cookie 绕过 Supabase Auth 认证 (仅 localhost 或配置了 `DEV_AUTH_SECRET` 时)
   - 可选 `DEV_AUTH_SECRET` 保护 dev auth 入口，否则仅限 localhost
 - **生产部署前必须删除** `middleware.ts` 和 `supabase-server.ts` 中的 dev auth 快捷路径
 - `AUTH_SALT` 首次上线后不可变更 (用于手机号登录的 deterministic password)
@@ -125,6 +139,8 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - `.env.local` 中的敏感配置通过 `src/lib/runtime-config.ts` 运行时从文件系统读取，不依赖 Next.js build 时内联
 - 读取 API key 用 `getDashScopeApiKey()` 等专有函数，不用 `process.env` 直接访问
 - `CRON_SECRET` 用于保护 Vercel cron 调用的端点 (`/api/jobs/claim`, `/api/platforms/metrics-fetch`)
+
+> **注意**: Middleware 中 Supabase 客户端使用 `process.env.SUPABASE_ANON_KEY`（无 `NEXT_PUBLIC_` 前缀），但 `.env.example` 中定义为 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。`.env.local` 中两个变量名均需设置。
 
 ### 前端事件系统
 
@@ -139,8 +155,22 @@ export const GET = withAuth(async ({ request, user, params }) => {
 
 - 主容器 `max-w-[448px]`，桌面端居中，两侧露出星空背景
 - iOS safe area: `env(safe-area-inset-*)` 在 layout.tsx 的 main 元素上
-- Capacitor 同步：修改 H5 后运行 `npx cap sync` 再构建原生应用
+- `capacitor-preview/` 是构建产物目录（已 gitignore），作为 Capacitor 的 `webDir`。修改 H5 后运行 `npx cap sync` 将其同步到原生项目
 - 原生端本地持久化用 `@capacitor/preferences`
+
+### TailwindCSS 主题
+
+`tailwind.config.js` 自定义主题色（`darkMode: "class"`）：
+
+| Token | 值 | 用途 |
+|-------|-----|------|
+| `primary` | `#3B82F6` | 主色调 (blue-500) |
+| `background` | `#0A1629` | 深色背景 (深蓝黑) |
+| `surface` | `rgba(255,255,255,0.12)` | 毛玻璃卡片表面 |
+| `border` | `rgba(255,255,255,0.3)` | 半透明边框 |
+| `muted-foreground` | `#9CA3AF` | 次要文本色 |
+
+毛玻璃 UI 样式常量在 `src/lib/style-constants.ts` 中定义了 `BG_GLASS`、`BORDER_GLASS` 等共享值。
 
 ### AI 任务队列 (V2.0.1)
 
@@ -180,6 +210,17 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - `vercel.json` 中 AI 视频/合并路由 `maxDuration: 60s`，热点检查 cron `maxDuration: 300s`
 - `next.config.mjs`: `serverActions.bodySizeLimit: '30mb'`, `serverComponentsExternalPackages: ['pdf-parse']`
 - build 命令为 `next build`，install 为 `npm install` (非 pnpm)
+
+**Vercel Cron 时间表** (全部为北京时间):
+
+| 时间 | 路径 | 用途 |
+|------|------|------|
+| 每天 08:00 | `/api/cron/check-hotspots` | 热点检查 |
+| 每天 00:00 | `/api/jobs/claim` | AI 任务队列领取 |
+| 每天 06:00 | `/api/platforms/metrics-fetch` | 平台指标拉取 |
+| 每天 12:00 | `/api/platforms/scheduled-publish` | 定时发布 |
+| 每月 1 日 16:00 | `/api/cron/credits-reset` | 点数重置 |
+| 每天 00:00 | `/api/cron/subscription-grant` | 订阅点数发放 |
 
 ### 构建移动应用
 

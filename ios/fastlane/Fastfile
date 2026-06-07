@@ -6,7 +6,7 @@ platform :ios do
     match(
       type: "appstore",
       readonly: true,
-      app_identifier: "com.lingji.app"
+      app_identifier: "com.mfcr7788.lingji"
     )
 
     increment_build_number(

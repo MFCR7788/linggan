@@ -29,7 +29,7 @@
 3. 选择 **App** → Continue
 4. 填写：
    - **Description**: 灵集
-   - **Bundle ID**: 选择 Explicit，输入 `com.lingji.app`
+   - **Bundle ID**: 选择 Explicit，输入 `com.mfcr7788.lingji`
 5. **Capabilities** 勾选需要的：
    - ✅ **Push Notifications** —— *本期不用，但建议勾选备用*
    - ✅ **Associated Domains** —— *如果未来要做 Universal Links*
@@ -65,7 +65,7 @@
 
 1. Apple Developer 后台 → **Profiles** → 点 **+** 号
 2. 选 **App Store** → Continue
-3. **App ID**: 选 `com.lingji.app` → Continue
+3. **App ID**: 选 `com.mfcr7788.lingji` → Continue
 4. 选择刚创建的 Distribution 证书 → Continue
 5. **Profile Name**: `Lingji AppStore` → Generate
 6. 下载 `Lingji_AppStore.mobileprovision`
@@ -79,7 +79,7 @@
 3. **Signing & Capabilities** 标签：
    - ✅ 勾选 **Automatically manage signing**
    - **Team**: 选择你的 Apple Developer 团队
-   - **Bundle Identifier**: 确认是 `com.lingji.app`
+   - **Bundle Identifier**: 确认是 `com.mfcr7788.lingji`
    - **Provisioning Profile**: 选 `Lingji AppStore`（或保持自动）
 4. **General** 标签：
    - **Display Name**: 灵集

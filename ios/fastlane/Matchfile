@@ -1,6 +1,6 @@
 storage_mode("git")
 git_url(ENV["MATCH_GIT_URL"])
 type("appstore")
-app_identifier("com.lingji.app")
+app_identifier("com.mfcr7788.lingji")
 username(ENV["APPLE_ID"])
 team_id(ENV["APPLE_TEAM_ID"])

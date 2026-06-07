@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>灵集</string>
+	<string>灵集</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,8 +22,23 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>灵集需要使用相机来拍照或扫描图片，用于创作素材的快速采集与 AI 图像识别分析。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>灵集使用设备麦克风来录制语音灵感（支持实时转写为文字）、录制 AI 配音前的参考音频（用于个性化音色与语音克隆），以及记录语音笔记。所有音频仅在您主动触发时开始录制，您可随时停止或删除。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>灵集需要将 AI 生成的图片和视频保存到您的相册。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>灵集需要访问相册以选择图片和视频作为创作素材。</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -47,20 +62,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>灵集需要使用相机来拍照或扫描图片，用于创作素材的快速采集与 AI 图像识别分析。</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>灵集使用设备麦克风来录制语音灵感（支持实时转写为文字）、录制 AI 配音前的参考音频（用于个性化音色与语音克隆），以及记录语音笔记。所有音频仅在您主动触发时开始录制，您可随时停止或删除。</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>灵集需要访问相册以选择图片和视频作为创作素材。</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>灵集需要将 AI 生成的图片和视频保存到您的相册。</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<false/>
-	</dict>
 </dict>
 </plist>
