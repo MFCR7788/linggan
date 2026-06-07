@@ -33,7 +33,7 @@ jobs:
             # 先停应用释放内存，清理旧构建缓存
             pm2 stop lingji
             rm -rf node_modules .next
-            npm ci
+            npm install
             npm run build
             pm2 start lingji --update-env
             pm2 save
