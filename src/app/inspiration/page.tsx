@@ -790,13 +790,6 @@ function InspirationLibraryContent() {
                 <Upload size={20} color="#E5E7EB" />
               </button>
               <button
-                className="p-1"
-                onClick={handleBatchDownload}
-                title="保存所有记录到本地"
-              >
-                <Download size={20} color="#E5E7EB" />
-              </button>
-              <button
                 onClick={() => { setSelectionMode(true); setSelectedIds(new Set()); }}
                 className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
                 style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "#E5E7EB" }}
