@@ -75,34 +75,6 @@ export const POST = withAuth(async ({ request, user }) => {
     // 记录AI使用
     await logAiUsage(user.id, 'copywriting', 1000 * count);
 
-    // 保存到"AI创作"作品集
-    if (!noAiTaste) {
-      const supabase = createAdminClient();
-      const { data: session } = await supabase
-        .from('chat_sessions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('title', 'AI创作')
-        .maybeSingle();
-      const sessionId = session?.id || (await supabase
-        .from('chat_sessions')
-        .insert({ user_id: user.id, title: 'AI创作' })
-        .select('id')
-        .single()
-      ).data?.id;
-      if (sessionId) {
-        const content = Array.isArray(result) ? result.join('\n\n---\n\n') : result;
-        await supabase.from('chat_messages').insert({
-          session_id: sessionId,
-          user_id: user.id,
-          type: 'ai',
-          content,
-          content_type: 'text',
-          metadata: { source: 'ai_creation', copywritingType: type, industry: industry || null },
-        });
-      }
-    }
-
     return createApiResponse({
       content: result,
       type,
