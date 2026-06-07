@@ -364,30 +364,40 @@ function AICopywritingContent() {
       const batchN = batchMode ? 3 : 1;
       const styleLabel = COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle;
 
-      const [standardResult, noAiResult] = await Promise.all([
-        generateCopywriting({
-          inspirations: selectedData, type: selectedType,
-          style: styleLabel, noAiTaste: false, n: batchN,
-          industry: selectedIndustry, userInstruction: finalInstruction,
-        }).then(r => { if (r.researchResults) setResearchResults(r.researchResults); return r.content; }).catch(() => generateStandardContent()),
-        noAiMode
-          ? generateCopywriting({
-              inspirations: selectedData, type: selectedType,
-              style: styleLabel, noAiTaste: true, n: batchN,
-              industry: selectedIndustry, userInstruction: finalInstruction,
-            }).then(r => r.content).catch(() => null as string | string[] | null)
-          : Promise.resolve(null),
-      ]);
+      // Step 1: 先生成标准版（基于灵感素材）
+      const standardRaw = await generateCopywriting({
+        inspirations: selectedData, type: selectedType,
+        style: styleLabel, noAiTaste: false, n: batchN,
+        industry: selectedIndustry, userInstruction: finalInstruction,
+      }).then(r => { if (r.researchResults) setResearchResults(r.researchResults); return r.content; }).catch(() => generateStandardContent());
 
-      const standardContent = typeof standardResult === 'string' ? [standardResult] : standardResult;
-      setStandardContents(Array.isArray(standardContent) ? standardContent : [standardContent]);
+      const standardContent = typeof standardRaw === 'string' ? [standardRaw] : standardRaw;
+      const standardArr = Array.isArray(standardContent) ? standardContent : [standardContent];
+      setStandardContents(standardArr);
       setCurrentBatchIndex(0);
+
+      // Step 2: 基于标准版改写去AI味版
+      let noAiResult: string | string[] | null = null;
+      if (noAiMode) {
+        const stdText = Array.isArray(standardRaw) ? standardRaw[0] : standardRaw;
+        try {
+          noAiResult = await generateCopywriting({
+            inspirations: [{ title: '标准版文案', originalText: stdText, aiSummary: '' }],
+            type: selectedType,
+            style: styleLabel,
+            noAiTaste: true,
+            n: batchN,
+            industry: selectedIndustry,
+            userInstruction: '请基于以上标准版文案进行去AI味改写，保持核心信息点和结构不变，只改变表达方式使其更自然口语化。' + (finalInstruction ? ` 原始创作要求：${finalInstruction}` : ''),
+          }).then(r => r.content);
+        } catch { noAiResult = null; }
+      }
 
       if (noAiResult) {
         const resolved = typeof noAiResult === 'string' ? [noAiResult] : noAiResult;
         setNoAiContents(Array.isArray(resolved) ? resolved : [resolved]);
       } else {
-        setNoAiContents(Array.isArray(standardContent) ? standardContent : [standardContent]);
+        setNoAiContents(standardArr);
       }
 
 
