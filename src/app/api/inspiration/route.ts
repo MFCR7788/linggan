@@ -165,8 +165,8 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError('媒体链接格式无效', 400);
   }
 
-  // 校验并映射类型：数据库 CHECK 约束只允许 'text','voice','image','video','link'
-  const VALID_TYPES = ['text', 'voice', 'image', 'video', 'link'];
+  // 校验并映射类型：数据库 CHECK 约束允许 'text','voice','image','video','link','audio'
+  const VALID_TYPES = ['text', 'voice', 'image', 'video', 'link', 'audio'];
   if (!VALID_TYPES.includes(type)) {
     return createApiError(`无效的内容类型: ${type}，允许: ${VALID_TYPES.join(', ')}`, 400);
   }
@@ -180,7 +180,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
   if (!effectiveCategoryId) {
     const typeToCategory: Record<string, string> = {
-      image: '图片', video: '视频', text: '灵感', voice: '灵感', link: '灵感',
+      image: '图片', video: '视频', text: '灵感', voice: '灵感', link: '灵感', audio: '音频',
     };
     const catName = typeToCategory[normalizedType] || '灵感';
     const { data: cat } = await supabase

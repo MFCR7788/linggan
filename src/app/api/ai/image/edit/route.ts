@@ -1,6 +1,5 @@
-// AI 图片编辑 API
+// AI 图片编辑 API — 使用 Qwen-Image-Edit 模型进行真正的图片编辑
 // POST { action: 'remove-bg' | 'enhance' | 'expand', imageUrl: string, prompt?: string }
-import { NextRequest } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
@@ -8,7 +7,7 @@ import { getDashScopeApiKey } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
-const DASHSCOPE_BASE = 'https://dashscope.aliyuncs.com/api/v1';
+const DASHSCOPE_MM_BASE = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 
 interface EditRequest {
   action: 'remove-bg' | 'enhance' | 'expand';
@@ -16,81 +15,82 @@ interface EditRequest {
   prompt?: string;
 }
 
-async function callDashScopeImageEdit(
-  action: string,
+const ACTION_PROMPTS: Record<string, { prompt: string; negative: string }> = {
+  'remove-bg': {
+    prompt: 'Remove the background completely. Replace with pure white background. Keep the main subject 100% intact — preserve all details, edges, colors, and textures exactly as they are.',
+    negative: 'background remnants, gray background, subject altered, missing parts, blurry edges, subject cropped',
+  },
+  'enhance': {
+    prompt: 'Enhance this image to higher quality. Improve sharpness, fine details, and color vibrancy. Keep the exact same composition, all subjects, and every element completely unchanged.',
+    negative: 'blurry, low quality, distorted, different composition, changed subjects, missing elements',
+  },
+  'expand': {
+    prompt: 'Expand the canvas outward to show more of the surrounding scene. Keep the original image content centered and completely unchanged. Naturally extend the scene to fill the new areas, matching the original style, lighting, and atmosphere.',
+    negative: 'seam, visible border, frame, distorted original, cropped original, changed original content',
+  },
+};
+
+async function editImage(
   imageUrl: string,
-  prompt?: string,
+  action: string,
+  customPrompt?: string,
 ): Promise<string> {
   const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY 未配置');
 
-  const body: Record<string, unknown> = {
-    model: 'wanx2.1-t2i-turbo',
+  const defaults = ACTION_PROMPTS[action] || ACTION_PROMPTS['enhance'];
+
+  const body = {
+    model: 'qwen-image-edit-plus',
     input: {
-      ref_image_url: imageUrl,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { image: imageUrl },
+            { text: customPrompt || defaults.prompt },
+          ],
+        },
+      ],
+    },
+    parameters: {
+      negative_prompt: defaults.negative,
+      watermark: false,
+      prompt_extend: true,
     },
   };
 
-  const input: Record<string, unknown> = { ref_image_url: imageUrl };
-
-  if (action === 'remove-bg') {
-    input.prompt = 'Remove the background. Keep only the main subject. Make the background transparent or white.';
-  } else if (action === 'enhance') {
-    input.prompt = prompt || 'Enhance this image to higher quality. Improve resolution, sharpness, and colors. Keep the same composition and subject.';
-    input.negative_prompt = 'blurry, low quality, distorted, ugly';
-  } else if (action === 'expand') {
-    input.prompt = prompt || 'Expand this image outward to a wider view. Fill in the surrounding space naturally. Keep the original content centered.';
-    input.negative_prompt = 'seam, border, frame, distorted edges';
-    body.parameters = { size: '1664*928' };
-  }
-
-  body.input = input;
-
-  // 提交异步任务
-  const submitRes = await fetch(
-    `${DASHSCOPE_BASE}/services/aigc/text2image/image-synthesis`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'X-DashScope-Async': 'enable',
-      },
-      body: JSON.stringify(body),
+  const res = await fetch(DASHSCOPE_MM_BASE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
     },
-  );
+    body: JSON.stringify(body),
+  });
 
-  if (!submitRes.ok) {
-    const errText = await submitRes.text().catch(() => '');
-    throw new Error(`DashScope 图片编辑失败: ${submitRes.status} ${errText}`);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`图片编辑失败: ${res.status} ${errText}`);
   }
 
-  const submitData = await submitRes.json();
-  const taskId = submitData.output?.task_id;
-  if (!taskId) throw new Error('图片编辑失败: 未获取到任务 ID');
+  const data = await res.json();
 
-  // 轮询结果
-  let outputUrl: string | null = null;
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    const data = await res.json();
-    if (data.output?.task_status === 'SUCCEEDED') {
-      outputUrl = data.output?.results?.[0]?.url || null;
-      break;
-    }
-    if (data.output?.task_status === 'FAILED') {
-      throw new Error(data.output?.message || '图片编辑失败');
-    }
+  if (data.code || data.message) {
+    throw new Error(data.message || `API 错误: ${data.code}`);
   }
 
-  if (!outputUrl) {
-    throw new Error('DashScope 未返回图片 URL');
+  const contents = data.output?.choices?.[0]?.message?.content;
+  if (!contents || !Array.isArray(contents)) {
+    throw new Error('图片编辑未返回结果');
   }
 
-  return outputUrl;
+  const resultImage = contents.find((c: { image?: string }) => c.image)?.image;
+  if (!resultImage) {
+    throw new Error('图片编辑未返回图片 URL');
+  }
+
+  return resultImage;
 }
 
 export const POST = withAuth(async ({ request, user }) => {
@@ -107,11 +107,10 @@ export const POST = withAuth(async ({ request, user }) => {
   }
 
   try {
-    // 扣点
     const creditCost = action === 'enhance' ? 3 : action === 'expand' ? 5 : 2;
     await consume(user.id, creditCost, 'ai_image_edit', `图片编辑: ${action}`);
 
-    const resultUrl = await callDashScopeImageEdit(action, imageUrl, prompt);
+    const resultUrl = await editImage(imageUrl, action, prompt);
 
     return createApiResponse(
       { url: resultUrl, action },

@@ -77,9 +77,10 @@ export const GET = withAuth(async ({ request, user }) => {
     });
 
     const contentWorks = (contentItems || []).map((ci: any) => {
-      const ciType = ci.type === 'video' ? '视频' : ci.type === 'image' ? '图片' : ci.type === 'voice' ? '配音' : '文案';
-      const emoji = ci.type === 'video' ? '🎬' : ci.type === 'image' ? '🖼️' : ci.type === 'voice' ? '🔊' : '📄';
+      const ciType = ci.type === 'video' ? '视频' : ci.type === 'image' ? '图片' : ci.type === 'voice' || ci.type === 'audio' ? '配音' : '文案';
+      const emoji = ci.type === 'video' ? '🎬' : ci.type === 'image' ? '🖼️' : ci.type === 'voice' || ci.type === 'audio' ? '🔊' : '📄';
       const mediaUrl = ci.media_urls?.[0] || '';
+      const isAudio = ci.type === 'voice' || ci.type === 'audio';
       return {
         id: ci.id,
         emoji,
@@ -92,6 +93,8 @@ export const GET = withAuth(async ({ request, user }) => {
           source: 'content_item',
           generatedVideo: ci.type === 'video' && mediaUrl ? { videoUrl: mediaUrl } : undefined,
           generatedImage: ci.type === 'image' && mediaUrl ? { imageUrl: mediaUrl } : undefined,
+          generatedAudio: isAudio && mediaUrl ? { audioUrl: mediaUrl } : undefined,
+          audioUrl: isAudio ? mediaUrl : undefined,
           videoThumbnail: ci.thumbnail_url || undefined,
         },
         content: ci.ai_summary || ci.original_text || '',
@@ -108,7 +111,7 @@ export const GET = withAuth(async ({ request, user }) => {
 
     // 过滤：只保留有实质内容的（文字长度>5 或有生成结果）
     works = works.filter((w: any) =>
-      (w.title?.length || 0) > 5 || w.type === '图片' || w.type === '视频'
+      (w.title?.length || 0) > 5 || w.type === '图片' || w.type === '视频' || w.type === '配音'
     );
 
     // 按类型筛选

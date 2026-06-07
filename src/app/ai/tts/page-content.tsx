@@ -174,14 +174,35 @@ function TTSPageContent() {
 
   const handleSave = async () => {
     if (!audioBase64) return;
+
+    // 将 base64 音频转为 Blob 上传到 storage
+    const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
+    const audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
+    const audioFile = new File([audioBlob], `tts-${Date.now()}.mp3`, { type: 'audio/mpeg' });
+
     try {
+      const formData = new FormData();
+      formData.append('file', audioFile);
+
+      const uploadRes = await fetch('/api/upload/inspiration', {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        setToast({ message: uploadData.error || '音频上传失败', type: 'error' });
+        return;
+      }
+
+      // 保存到灵感库（type: audio → 音频分类）
       const res = await fetch('/api/inspiration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'voice',
+          type: 'audio',
           title: text.substring(0, 100) || 'AI 配音',
           original_text: text,
+          media_urls: [uploadData.data.url],
           source_platform: 'ai_tts',
           tags: ['AI配音', voice],
           workflow_session_id: workflowSessionId || undefined,
@@ -772,7 +793,7 @@ function TTSPageContent() {
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
           <div className="space-y-2">
             {historyItems.map((item) => (
-              <GlassCard key={item.id} hover className="!p-3 cursor-pointer"
+              <GlassCard key={item.id} hover className="!p-3"
                 onClick={() => {
                   if (item.content) {
                     setText(item.content);
@@ -785,6 +806,15 @@ function TTSPageContent() {
                   <div className="flex-1 min-w-0">
                     <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
                     <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
+                    {item.audioUrl && (
+                      <audio
+                        controls
+                        src={item.audioUrl}
+                        style={{ height: 28, marginTop: 6, width: '100%' }}
+                        onClick={(e) => e.stopPropagation()}
+                        preload="metadata"
+                      />
+                    )}
                   </div>
                   <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
                 </div>
