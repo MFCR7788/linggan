@@ -26,14 +26,12 @@ export function BottomNav({
       className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full"
       style={{
         zIndex: 50,
-        maxWidth: 448,
-        // 兼容 iPhone X+ 底部 home indicator
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
       {/* Navigation Tabs */}
       <div
-        className="flex items-center justify-around px-2 py-3"
+        className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
         style={{
           background: "rgba(10, 22, 41, 0.95)",
           backdropFilter: "blur(20px)",

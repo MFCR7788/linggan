@@ -37,7 +37,7 @@ export default function RootLayout({
         <StarBackground />
         {/* 容器: 始终以手机端宽度展示，桌面端居中，两侧露出星空背景 */}
         <main
-          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px]"
+          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] md:max-w-[720px] lg:max-w-[1024px]"
           style={{
             minHeight: "100vh",
             // iOS safe area: 顶部给 status bar 留位置, 底部让 BottomNav 加 padding
