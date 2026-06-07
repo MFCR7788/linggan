@@ -532,7 +532,7 @@ function AICopywritingContent() {
           </button>
         </div>
         {quickMode && (
-          <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center', marginTop: -8 }}>
+          <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center', marginTop: 4, marginBottom: 0 }}>
             AI 自动选择最佳平台、风格和行业，输入主题即可生成
           </p>
         )}
@@ -544,7 +544,7 @@ function AICopywritingContent() {
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               placeholder="输入你想写的话题，例如：推荐一款适合干皮的粉底液..."
-              rows={3}
+              rows={10}
               className="w-full p-3 rounded-lg text-sm resize-none"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
             />
@@ -552,127 +552,6 @@ function AICopywritingContent() {
               <Zap size={14} /> {isLoading ? '生成中...' : '一键生成文案'}
             </PrimaryButton>
           </GlassCard>
-        )}
-
-        {/* ──── 配置区（折叠） ──── */}
-        {!quickMode && (
-        <GlassCard className="!p-0">
-          <button
-            className="flex items-center justify-between w-full px-3 py-2.5"
-            onClick={() => setSettingsOpen(!settingsOpen)}
-          >
-            <span style={{ color: '#9CA3AF', fontSize: 11 }}>
-              {selectedType && COPYWRITING_TYPES.find(t => t.id === selectedType)?.label} · {findIndustry(selectedIndustry)?.name} · {COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label}
-              {batchMode && ' · 批量'} {noAiMode && ' · 去AI味'}
-            </span>
-            {settingsOpen ? <ChevronUp size={14} color="#6B7280" /> : <ChevronDown size={14} color="#6B7280" />}
-          </button>
-          {settingsOpen && (
-            <div className="px-3 pb-3 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-
-              {/* Step 2: 平台 */}
-              <div>
-                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6, marginTop: 10 }}>
-                  <span style={{ color: '#3B82F6' }}>Step 2</span> · 平台与内容类型
-                </p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {COPYWRITING_TYPES.map(({ id, label, emoji, scenario }) => (
-                    <button
-                      key={id}
-                      onClick={() => setSelectedType(id)}
-                      className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
-                      style={{
-                        background: selectedType === id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                        border: selectedType === id ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                      }}
-                      title={scenario}
-                    >
-                      <span style={{ fontSize: 16 }}>{emoji}</span>
-                      <span style={{ color: selectedType === id ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: selectedType === id ? 600 : 400, textAlign: 'center', lineHeight: 1.2 }}>
-                        {label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Step 3: 文风 */}
-              <div>
-                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6 }}>
-                  <span style={{ color: '#3B82F6' }}>Step 3</span> · 文风
-                </p>
-                {Object.entries(stylesByCategory).map(([cat, styles]) => (
-                  <div key={cat} className="mb-2 last:mb-0">
-                    <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>{STYLE_CATEGORY_LABELS[cat] || cat}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {styles.map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => setSelectedStyle(s.id)}
-                          className="px-2 py-1 rounded-md text-[11px] transition-all"
-                          style={S.chip(selectedStyle === s.id)}
-                          title={s.hint}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Step 4: 行业 */}
-              <div>
-                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6 }}>
-                  <span style={{ color: '#3B82F6' }}>Step 4</span> · 行业
-                </p>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {COPYWRITING_INDUSTRIES.map((ind) => (
-                    <button
-                      key={ind.id}
-                      onClick={() => setSelectedIndustry(ind.id)}
-                      className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
-                      style={{
-                        background: selectedIndustry === ind.id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                        border: selectedIndustry === ind.id ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                      }}
-                      title={ind.audience}
-                    >
-                      <span style={{ fontSize: 16 }}>{ind.emoji}</span>
-                      <span style={{ color: selectedIndustry === ind.id ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: selectedIndustry === ind.id ? 600 : 400 }}>
-                        {ind.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Options */}
-              <div className="flex items-center gap-4 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>去 AI 味</span>
-                  <button
-                    onClick={() => setNoAiMode(!noAiMode)}
-                    className="w-9 h-5 rounded-full transition-all relative"
-                    style={{ background: noAiMode ? '#3B82F6' : 'rgba(255,255,255,0.2)' }}
-                  >
-                    <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: noAiMode ? 'calc(100% - 18px)' : 1 }} />
-                  </button>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>批量 ×3</span>
-                  <button
-                    onClick={() => setBatchMode(!batchMode)}
-                    className="w-9 h-5 rounded-full transition-all relative"
-                    style={{ background: batchMode ? '#F59E0B' : 'rgba(255,255,255,0.2)' }}
-                  >
-                    <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: batchMode ? 'calc(100% - 18px)' : 1 }} />
-                  </button>
-                </label>
-              </div>
-            </div>
-          )}
-        </GlassCard>
         )}
 
         {/* ──── Step 1: 选材与意图 ──── */}
@@ -796,7 +675,7 @@ function AICopywritingContent() {
               }}
               placeholder="写一篇面向 25-30 岁职场女性的抗老精华推荐…（可粘贴链接或图片）"
               className="w-full p-2.5 rounded-lg text-sm resize-none custom-scrollbar"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', minHeight: 56, maxHeight: 160, outline: 'none' }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', minHeight: 100, maxHeight: 200, outline: 'none' }}
             />
 
             {/* URL/图片状态 */}
@@ -861,6 +740,127 @@ function AICopywritingContent() {
                 <p style={{ color: '#C4B5FD', fontSize: 11, lineHeight: 1.5 }}>{refinedMessage}</p>
               </div>
               <button onClick={() => setRefinedMessage('')}><X size={12} color="#6B7280" /></button>
+            </div>
+          )}
+        </GlassCard>
+        )}
+
+        {/* ──── 配置区（折叠）──── */}
+        {!quickMode && (
+        <GlassCard className="!p-0">
+          <button
+            className="flex items-center justify-between w-full px-3 py-2.5"
+            onClick={() => setSettingsOpen(!settingsOpen)}
+          >
+            <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+              {selectedType && COPYWRITING_TYPES.find(t => t.id === selectedType)?.label} · {findIndustry(selectedIndustry)?.name} · {COPYWRITING_STYLES.find(s => s.id === selectedStyle)?.label}
+              {batchMode && ' · 批量'} {noAiMode && ' · 去AI味'}
+            </span>
+            {settingsOpen ? <ChevronUp size={14} color="#6B7280" /> : <ChevronDown size={14} color="#6B7280" />}
+          </button>
+          {settingsOpen && (
+            <div className="px-3 pb-3 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+
+              {/* Step 2: 平台 */}
+              <div>
+                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6, marginTop: 10 }}>
+                  <span style={{ color: '#3B82F6' }}>Step 2</span> · 平台与内容类型
+                </p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {COPYWRITING_TYPES.map(({ id, label, emoji, scenario }) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedType(id)}
+                      className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
+                      style={{
+                        background: selectedType === id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: selectedType === id ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                      }}
+                      title={scenario}
+                    >
+                      <span style={{ fontSize: 16 }}>{emoji}</span>
+                      <span style={{ color: selectedType === id ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: selectedType === id ? 600 : 400, textAlign: 'center', lineHeight: 1.2 }}>
+                        {label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 3: 文风 */}
+              <div>
+                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6 }}>
+                  <span style={{ color: '#3B82F6' }}>Step 3</span> · 文风
+                </p>
+                {Object.entries(stylesByCategory).map(([cat, styles]) => (
+                  <div key={cat} className="mb-2 last:mb-0">
+                    <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>{STYLE_CATEGORY_LABELS[cat] || cat}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {styles.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setSelectedStyle(s.id)}
+                          className="px-2 py-1 rounded-md text-[11px] transition-all"
+                          style={S.chip(selectedStyle === s.id)}
+                          title={s.hint}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Step 4: 行业 */}
+              <div>
+                <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 6 }}>
+                  <span style={{ color: '#3B82F6' }}>Step 4</span> · 行业
+                </p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {COPYWRITING_INDUSTRIES.map((ind) => (
+                    <button
+                      key={ind.id}
+                      onClick={() => setSelectedIndustry(ind.id)}
+                      className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
+                      style={{
+                        background: selectedIndustry === ind.id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: selectedIndustry === ind.id ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                      }}
+                      title={ind.audience}
+                    >
+                      <span style={{ fontSize: 16 }}>{ind.emoji}</span>
+                      <span style={{ color: selectedIndustry === ind.id ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: selectedIndustry === ind.id ? 600 : 400 }}>
+                        {ind.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="flex items-center gap-4 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>去 AI 味</span>
+                  <button
+                    onClick={() => setNoAiMode(!noAiMode)}
+                    className="w-9 h-5 rounded-full transition-all relative"
+                    style={{ background: noAiMode ? '#3B82F6' : 'rgba(255,255,255,0.2)' }}
+                  >
+                    <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: noAiMode ? 'calc(100% - 18px)' : 1 }} />
+                  </button>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>批量 ×3</span>
+                  <button
+                    onClick={() => setBatchMode(!batchMode)}
+                    className="w-9 h-5 rounded-full transition-all relative"
+                    style={{ background: batchMode ? '#F59E0B' : 'rgba(255,255,255,0.2)' }}
+                  >
+                    <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: batchMode ? 'calc(100% - 18px)' : 1 }} />
+                  </button>
+                </label>
+              </div>
             </div>
           )}
         </GlassCard>
@@ -1056,7 +1056,8 @@ function AICopywritingContent() {
             {historyItems.map((item) => (
               <GlassCard key={item.id} hover className="!p-3 cursor-pointer"
                 onClick={() => {
-                  if (item.content) setUserInput(item.content.substring(0, 200));
+                  const fullText = item.fullContent || item.content || '';
+                  if (fullText) setUserInput(fullText);
                   if (item.prompt) setRefinedMessage(item.prompt);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
@@ -1065,7 +1066,7 @@ function AICopywritingContent() {
                   <span style={{ fontSize: 20 }}>{item.metadata?.generatedImage ? '🖼️' : '📄'}</span>
                   <div className="flex-1 min-w-0">
                     <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
-                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 80) || ''}</p>
                   </div>
                   <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
                 </div>

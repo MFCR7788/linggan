@@ -11,6 +11,7 @@ export interface HistoryWork {
   videoUrl?: string;
   audioUrl?: string;
   content?: string;
+  fullContent?: string;
   prompt?: string;
   metadata?: any;
 }
@@ -36,6 +37,9 @@ export function useWorkHistory(workType: string, sourcePlatform?: string) {
               audioUrl: w.metadata?.generatedAudio?.audioUrl || w.metadata?.audioUrl || undefined,
               content: w.content
                 ? (typeof w.content === 'string' ? w.content : '').replace(/<[^>]*>/g, '').substring(0, 80)
+                : '',
+              fullContent: w.content
+                ? (typeof w.content === 'string' ? w.content : '').replace(/<[^>]*>/g, '')
                 : '',
               prompt: w.metadata?.prompt || w.content || '',
               metadata: w.metadata,
