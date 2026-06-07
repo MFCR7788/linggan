@@ -91,7 +91,7 @@ export function createSupabaseServerClient() {
 export async function getCurrentUser() {
   // 生产环境: 跳过 dev 短路, 只信任真实 Supabase 会话
   // 开发环境: dev header/cookie 用于无密码本地调试，需密钥校验或 localhost 限制
-  const isDev = process.env.NODE_ENV !== 'production';
+  const isDev = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_AUTH !== 'false';
 
   if (isDev) {
     const devAuthSecret = process.env.DEV_AUTH_SECRET;

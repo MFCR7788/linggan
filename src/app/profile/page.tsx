@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Settings, Bell, HelpCircle, LogOut, ChevronRight, Edit3,
-  BookOpen, Sparkles, TrendingUp, Star, Wallet, ArrowRight, Globe,
+  BookOpen, Sparkles, TrendingUp, Star, Wallet, ArrowRight, Globe, Shield,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -76,6 +76,7 @@ const menuItems = [
   { icon: <Globe size={18} />, label: '平台集成', page: 'profile-integrations' as PageKey, color: '#22C55E', desc: '公众号 / 微博 OAuth 授权' },
   { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey, color: '#8B5CF6', desc: '账号类型 · 安全 · 密码' },
   { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey, color: '#9CA3AF', desc: '功能说明 · 常见问题' },
+  { icon: <Shield size={18} />, label: '隐私政策', href: '/privacy', color: '#9CA3AF', desc: '了解我们如何保护您的数据' },
 ];
 
 function ProfileContent() {

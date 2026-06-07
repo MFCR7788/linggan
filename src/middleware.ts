@@ -37,10 +37,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 用 Supabase Auth 验证 session(兼容 dev cookie 兜底,仅限开发)
-  // TODO(prod): 部署生产前删除整个 dev auth 快捷路径（第 40-63 行），
-  // 仅保留下方的 Supabase Auth 验证。dev cookie 绕过会导致任意用户模拟。
-  const isDev = process.env.NODE_ENV !== 'production';
+  // 开发模式认证（仅 localhost 或配置了 DEV_AUTH_SECRET 时可用）
+  // 生产环境 (NODE_ENV=production) 下此代码块永不执行，
+  // 双重保护：可通过 ENABLE_DEV_AUTH=false 在开发构建中强制禁用
+  const isDev = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_AUTH !== 'false';
   if (isDev) {
     const devAuthSecret = process.env.DEV_AUTH_SECRET;
     if (devAuthSecret) {

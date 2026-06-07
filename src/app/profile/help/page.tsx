@@ -981,6 +981,15 @@ function HelpContent() {
                     <p style={{ color: '#6B7280', fontSize: 11 }}>15967675767（工作日 9:00-18:00）</p>
                   </div>
                 </a>
+                <button onClick={() => router.push('/privacy')} className="flex items-center gap-3 w-full text-left">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
+                    <span style={{ fontSize: 16 }}>🔒</span>
+                  </div>
+                  <div>
+                    <p style={{ color: '#E5E7EB', fontSize: 12 }}>隐私政策</p>
+                    <p style={{ color: '#6B7280', fontSize: 11 }}>了解我们如何保护您的数据</p>
+                  </div>
+                </button>
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.15)' }}>
                     <span style={{ fontSize: 16 }}>💬</span>
