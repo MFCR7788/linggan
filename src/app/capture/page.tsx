@@ -492,55 +492,6 @@ function CaptureContent() {
           ]);
         }
       }
-
-      // 自动保存到灵感库（有上传文件或 AI 生成内容时）
-      const hasMediaFiles = uploadedImages.length > 0 || uploadedDocs.length > 0;
-      const hasGenerated = !!(data.generatedImage || data.generatedVideo);
-      if (hasMediaFiles || hasGenerated) {
-        const mediaUrls: string[] = [
-          ...uploadedImages.map(img => img.url),
-          ...uploadedDocs.map(doc => doc.url),
-        ];
-        if (data.generatedImage?.imageUrl) mediaUrls.push(data.generatedImage.imageUrl);
-        if (data.generatedVideo?.videoUrl) mediaUrls.push(data.generatedVideo.videoUrl);
-
-        let inspType = 'text';
-        let inspTitle = '';
-        if (data.generatedVideo) {
-          inspType = 'video';
-          inspTitle = 'AI 生成视频';
-        } else if (data.generatedImage) {
-          inspType = 'image';
-          inspTitle = 'AI 生成图片';
-        } else if (uploadedImages.length > 0) {
-          inspType = 'image';
-          inspTitle = '图片分析';
-        } else if (hasDocs) {
-          inspType = 'text';
-          const docNames = uploadedDocs.map(d => d.name).join('、');
-          inspTitle = docNames ? `文档分析 - ${docNames}` : '文档分析';
-        }
-
-        if (text && (!inspTitle || inspTitle === '图片分析')) {
-          inspTitle = text.length > 40 ? text.substring(0, 40) + '...' : text;
-        }
-
-        fetch('/api/inspiration', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: inspType,
-            title: inspTitle || 'AI 对话记录',
-            original_text: text || null,
-            summary: aiContent,
-            media_urls: mediaUrls.length > 0 ? mediaUrls : null,
-            tags: ['AI对话'],
-            source_url: isLink ? (text.startsWith('http') ? text : `https://${text}`) : undefined,
-          }),
-        }).catch((e) => {
-          console.error('自动保存灵感失败:', e);
-        });
-      }
     } catch {
       const errorMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', content: '抱歉，处理失败，请重试。', timestamp: new Date() };
       setMessages(prev => [...prev, errorMsg]);

@@ -131,26 +131,9 @@ function AdsContent() {
         message: `已生成 ${result.successCount}/9 张封面`,
         type: result.successCount === 9 ? 'success' : 'error',
       });
-      // 工作流：自动保存到灵感库并推进
       if (isInWorkflow && result.cells.length > 0) {
         const firstCell = result.cells[0];
-        fetch('/api/inspiration', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'image',
-            title: `${product || 'ads'} 9宫格 ${firstCell.title || ''}`.substring(0, 100),
-            original_text: product,
-            source_platform: 'ai',
-            media_urls: result.cells.map((c) => c.imageUrl).filter(Boolean),
-            tags: ['AI作品', '9宫格', '广告素材'],
-            workflow_session_id: workflowSessionId || undefined,
-          }),
-        }).then(r => r.json()).then(data => {
-          if (data.success) {
-            completeCurrentStep({ topic: product, text: product, imageUrl: firstCell.imageUrl || '' }, data.data?.id);
-          }
-        }).catch(() => {});
+        completeCurrentStep({ topic: product, text: product, imageUrl: firstCell.imageUrl || '' }, undefined);
       }
     } catch (e: any) {
       setError(e.message || '网络错误');

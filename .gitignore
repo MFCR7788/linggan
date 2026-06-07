@@ -46,6 +46,7 @@ android/app/*.keystore
 capacitor-preview/
 
 # fastlane
+ios/fastlane/AuthKey_*.p8
 ios/fastlane/report.xml
 ios/fastlane/Preview.html
 ios/fastlane/test_output/

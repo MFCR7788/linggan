@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -160,6 +160,7 @@ function InspirationLibraryContent() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteTip, setShowDeleteTip] = useState<string | null>(null);
+  const [showInfoTip, setShowInfoTip] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadToast, setUploadToast] = useState<string | null>(null);
   const [uploadHasSucceeded, setUploadHasSucceeded] = useState(false);
@@ -299,6 +300,42 @@ function InspirationLibraryContent() {
     setTimeout(() => { setShowDeleteTip(null); }, 3000);
   };
 
+  const handleDownloadRecords = () => {
+    const targetItems = selectedIds.size > 0
+      ? items.filter((it: any) => selectedIds.has(it.id))
+      : items;
+    if (targetItems.length === 0) return;
+
+    const exportData = targetItems.map((item: any) => ({
+      title: item.title || '',
+      type: item.type,
+      original_text: item.original_text || '',
+      ai_summary: item.ai_summary || '',
+      source_url: item.source_url || '',
+      source_platform: item.source_platform || '',
+      media_urls: item.media_urls || [],
+      tags: item.tags || [],
+      status: item.status,
+      created_at: item.created_at,
+    }));
+
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lingji-inspiration-${new Date().toISOString().substring(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setShowInfoTip(`已导出 ${targetItems.length} 条灵感记录`);
+    setTimeout(() => setShowInfoTip(null), 3000);
+    if (selectedIds.size > 0) {
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    }
+  };
+
   const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -410,10 +447,9 @@ function InspirationLibraryContent() {
 
     return (
       <GlassCard
-        key={item.id}
         hover
         onClick={() => isSelecting ? toggleSelect(item.id) : handleNavigate("inspiration-detail", item.id)}
-        className="!p-0 overflow-hidden group relative flex flex-col"
+        className="!p-0 overflow-hidden group relative"
       >
         {/* 顶部操作层:选择模式勾选 / 常态编辑+删除(常驻,移动端也可见) */}
         <div className="absolute top-2 left-2 right-2 z-20 flex items-start justify-between pointer-events-none">
@@ -452,83 +488,118 @@ function InspirationLibraryContent() {
           )}
         </div>
 
-        {/* 上半部分:媒体/内容预览 — 统一 3/4 比例 */}
-        <div className="relative w-full" style={{ aspectRatio: "3/4" }}>
-          {hasMedia && thumbnailUrl ? (
-            isVideo ? (
-              <>
-                <video
-                  src={thumbnailUrl}
-                  className="w-full h-full object-cover"
-                  muted
-                  preload="metadata"
-                  playsInline
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                  style={{ background: "rgba(0,0,0,0.2)" }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
-                    <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                  </div>
+        {/* 媒体/内容预览 — 各类型自然高度 */}
+        {hasMedia && thumbnailUrl ? (
+          isVideo ? (
+            <div className="relative">
+              <video
+                src={thumbnailUrl}
+                className="w-full block"
+                style={{ maxHeight: 400 }}
+                muted
+                preload="metadata"
+                playsInline
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ background: "rgba(0,0,0,0.2)" }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
+                  <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                 </div>
-                {videoDuration && (
-                  <span
-                    className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
-                    style={{ background: "rgba(0,0,0,0.75)", color: "#FFFFFF" }}
-                  >
-                    {formatVideoDuration(videoDuration)}
-                  </span>
-                )}
-              </>
-            ) : (
+              </div>
+              {videoDuration && (
+                <span
+                  className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
+                  style={{ background: "rgba(0,0,0,0.75)", color: "#FFFFFF" }}
+                >
+                  {formatVideoDuration(videoDuration)}
+                </span>
+              )}
+              {/* 类型角标 */}
+              {!isSelecting && (
+                <span
+                  className="absolute z-10 pointer-events-none"
+                  style={{
+                    bottom: 8, left: 8,
+                    padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+                    background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
+                    maxWidth: "calc(100% - 16px)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={typeBadge}
+                >
+                  {typeBadge}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="relative">
               <img
                 src={thumbnailUrl}
                 alt={item.title || "灵感图片"}
                 loading="lazy"
-                className="w-full h-full object-cover"
+                className="w-full block"
+                style={{ maxHeight: 400, objectFit: 'cover' }}
               />
-            )
-          ) : (
-            // 纯文本/文档：统一灰底 + 类型图标 + 文字预览
+              {/* 类型角标 */}
+              {!isSelecting && (
+                <span
+                  className="absolute z-10 pointer-events-none"
+                  style={{
+                    bottom: 8, left: 8,
+                    padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+                    background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
+                    maxWidth: "calc(100% - 16px)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={typeBadge}
+                >
+                  {typeBadge}
+                </span>
+              )}
+            </div>
+          )
+        ) : (
+          // 纯文本/文档/音频：紧凑预览
+          <div className="relative">
             <div
-              className="w-full h-full flex flex-col items-center justify-center p-3 overflow-hidden"
+              className="px-3 py-4 flex items-start gap-3"
               style={{ background: "rgba(255,255,255,0.05)" }}
             >
-              <span style={{ fontSize: 28 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
+              <span style={{ fontSize: 28, flexShrink: 0 }}>{TYPE_EMOJIS[item.type] || "📝"}</span>
               <p
-                style={{ color: "#D1D5DB", fontSize: 11, textAlign: "center", marginTop: 8, lineHeight: 1.4 }}
-                className="line-clamp-4 w-full break-words"
+                style={{ color: "#D1D5DB", fontSize: 11, lineHeight: 1.5 }}
+                className="line-clamp-3 flex-1 break-words"
               >
-                {item.original_text?.substring(0, 80) || item.title || "暂无内容"}
+                {item.original_text?.substring(0, 120) || item.title || "暂无内容"}
               </p>
             </div>
-          )}
-
-          {/* 类型角标(左下) */}
-          {!isSelecting && (
-            <span
-              className="absolute z-10 pointer-events-none"
-              style={{
-                bottom: 8, left: 8,
-                padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
-                background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
-                maxWidth: "calc(100% - 16px)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}
-              title={typeBadge}
-            >
-              {typeBadge}
-            </span>
-          )}
-        </div>
+            {/* 类型角标 */}
+            {!isSelecting && (
+              <span
+                className="absolute z-10 pointer-events-none"
+                style={{
+                  bottom: 8, left: 8,
+                  padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+                  background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
+                  maxWidth: "calc(100% - 16px)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={typeBadge}
+              >
+                {typeBadge}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 底部信息 */}
-        <div className="p-2.5 flex-1 flex flex-col">
+        <div className="p-2.5">
           <p style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 600 }} className="line-clamp-2 mb-1 break-words">
             {item.title || "未命名"}
           </p>
           <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }} className="line-clamp-2 break-words">
-            {item.original_text?.substring(0, 60) || item.title || ""}
+            {item.original_text?.substring(0, 80) || item.title || ""}
           </p>
           <div className="flex items-center justify-between mt-1.5 gap-1.5">
             <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">
@@ -626,6 +697,18 @@ function InspirationLibraryContent() {
                 {selectedIds.size === items.length ? '取消全选' : '全选'}
               </button>
               <button
+                onClick={handleDownloadRecords}
+                disabled={selectedIds.size === 0}
+                className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
+                style={{
+                  background: selectedIds.size === 0 ? "rgba(255,255,255,0.05)" : "rgba(34,197,94,0.15)",
+                  border: selectedIds.size === 0 ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(34,197,94,0.3)",
+                  color: selectedIds.size === 0 ? "#6B7280" : "#86EFAC",
+                }}
+              >
+                <Download size={14} /> 导出{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </button>
+              <button
                 onClick={handleBatchDelete}
                 disabled={selectedIds.size === 0}
                 className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
@@ -646,6 +729,13 @@ function InspirationLibraryContent() {
             <div className="flex gap-3">
               <button className="p-1" onClick={() => fileInputRef.current?.click()} title="批量上传">
                 <Upload size={20} color="#E5E7EB" />
+              </button>
+              <button
+                className="p-1"
+                onClick={handleDownloadRecords}
+                title="导出所有记录"
+              >
+                <Download size={20} color="#E5E7EB" />
               </button>
               <button
                 onClick={() => { setSelectionMode(true); setSelectedIds(new Set()); }}
@@ -732,6 +822,12 @@ function InspirationLibraryContent() {
         <div className="mx-4 mt-3 p-3 rounded-lg flex items-center gap-2 text-sm"
           style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#FCA5A5" }}>
           <Trash2 size={18} color="#EF4444" /> {showDeleteTip}
+        </div>
+      )}
+      {showInfoTip && (
+        <div className="mx-4 mt-3 p-3 rounded-lg flex items-center gap-2 text-sm"
+          style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", color: "#86EFAC" }}>
+          <CheckCircle size={18} color="#22C55E" /> {showInfoTip}
         </div>
       )}
       {showEditToast && (
@@ -877,8 +973,12 @@ function InspirationLibraryContent() {
           <EmptyState icon="📝" title="还没有灵感"
             description="点击右上角上传按钮导入文件，或到灵感助手中记录灵感" />
         ) : !isLoading && !isScheduleType && items.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {items.map((item: any) => renderCard(item))}
+          <div className="columns-2 gap-3" style={{ columnGap: '0.75rem' }}>
+            {items.map((item: any) => (
+              <div key={item.id} className="break-inside-avoid" style={{ marginBottom: '0.75rem' }}>
+                {renderCard(item)}
+              </div>
+            ))}
           </div>
         ) : null}
       </div>

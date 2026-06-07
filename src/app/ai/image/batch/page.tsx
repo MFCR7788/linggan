@@ -317,11 +317,11 @@ function BatchImageContent() {
                   <Download size={14} /> 全部下载 ({progress.completed})
                 </button>
                 <button
-                  onClick={() => setToast({ message: '图片已自动保存到灵感库', type: 'success' })}
+                  onClick={() => setToast({ message: '批量图片已生成', type: 'success' })}
                   className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs"
                   style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', color: '#86EFAC' }}
                 >
-                  <CheckCircle2 size={14} /> 已自动存到灵感库
+                  <CheckCircle2 size={14} /> 已完成 ({progress.completed})
                 </button>
               </div>
             )}

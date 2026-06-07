@@ -458,7 +458,7 @@ function AIVideoContent() {
       });
       setMergedVideoUrl(videoUrl);
       setMergePhase('done');
-      setToast({ message: '合并完成,已自动保存到灵感库', type: 'success' });
+      setToast({ message: '合并完成', type: 'success' });
       if (isInWorkflow) {
         completeCurrentStep({
           text: topic,
@@ -1353,7 +1353,7 @@ function AIVideoContent() {
                   style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}
                 >
                   <CheckCircle2 size={14} color="#22C55E" />
-                  <span style={{ color: '#86EFAC', fontSize: 12 }}>合并完成,已自动存到灵感库</span>
+                  <span style={{ color: '#86EFAC', fontSize: 12 }}>合并完成</span>
                 </div>
                 <video src={mergedVideoUrl} controls playsInline
                   className="w-full rounded-xl"

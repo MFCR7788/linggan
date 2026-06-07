@@ -248,42 +248,8 @@ function DigitalHumanContent() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const savedVideoUrls = useRef<Set<string>>(new Set()); // 防止重复自动保存
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频', 'ai_digital_human');
-
-  // 自动保存生成的数字人视频到灵感库(标签含"数字人")
-  const autoSaveDigitalHuman = async (videoUrl: string, title?: string) => {
-    if (!videoUrl || savedVideoUrls.current.has(videoUrl)) return;
-    savedVideoUrls.current.add(videoUrl);
-    try {
-      const res = await fetch('/api/inspiration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'video',
-          title: title || `数字人视频 · ${resolution}`,
-          media_urls: [videoUrl],
-          tags: ['数字人', 'AI生成', 'video_material'],
-          source_platform: 'ai_digital_human',
-          workflow_session_id: workflowSessionId || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setToast({ message: '已自动保存到灵感库', type: 'success' });
-        if (isInWorkflow) {
-          completeCurrentStep({
-            text: ttsText,
-            script: ttsText,
-            topic: ocTopic || aiTopic,
-            imageUrl: imageUrl || '',
-            firstFrame: videoUrl,
-          }, data.data?.id);
-        }
-      } else setToast({ message: '自动保存失败,可手动重试', type: 'error' });
-    } catch { setToast({ message: '自动保存失败', type: 'error' }); }
-  };
 
   // ─── 初始化 ───────────────────────────────────────────
   useEffect(() => {
@@ -551,7 +517,7 @@ function DigitalHumanContent() {
 
     const poll = await submitAndPoll(
       imageUrl, finalAudioUrl, resolution,
-      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); autoSaveDigitalHuman(videoUrl, '手动配置数字人'); },
+      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } },
       (msg) => { setErrorMsg(msg); setGeneratePhase('error'); },
       audioDuration,
     );
@@ -921,7 +887,7 @@ function DigitalHumanContent() {
       const finalUrl = mergedUrl || videoUrls[0];
       setFinalVideoUrl(finalUrl);
       setOcPhase('done');
-      autoSaveDigitalHuman(finalUrl, `数字人 · ${ocTopic}`);
+      if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: finalUrl }, undefined); }
     } catch (err: any) {
       if (ocAbortRef.current) { setOcPhase('idle'); return; }
       setOcError(err.message);
@@ -993,7 +959,7 @@ function DigitalHumanContent() {
         updateItem({ status: 'submitting' });
         await new Promise<void>((resolve, reject) => {
           submitAndPoll(imageUrl, aUrl, resolution,
-            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); autoSaveDigitalHuman(videoUrl, `数字人 · ${item.topic}`); resolve(); },
+            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } resolve(); },
             (msg) => { updateItem({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
             audioDuration,
           );

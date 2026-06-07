@@ -391,25 +391,12 @@ function AICopywritingContent() {
       }
 
 
-      // 自动保存到灵感库
       const content = Array.isArray(standardContent) ? standardContent[0] : standardContent;
-      if (content) {
-        fetch('/api/inspiration', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'text', title: content.substring(0, 50), original_text: content,
-            source_platform: 'ai',
-            tags: ['AI作品', selectedType === 'xiaohongshu' ? '小红书' : selectedType === 'wechat_article' ? '公众号' : '文案'],
-            workflow_session_id: workflowSessionId || undefined,
-          }),
-        }).then(r => r.json()).then(data => {
-          if (isInWorkflow && data.success) {
-            completeCurrentStep(
-              { text: content.substring(0, 1000), topic: selectedType, style: selectedStyle, industry: selectedIndustry },
-              data.data?.id
-            );
-          }
-        }).catch(() => {});
+      if (isInWorkflow && content) {
+        completeCurrentStep(
+          { text: content.substring(0, 1000), topic: selectedType, style: selectedStyle, industry: selectedIndustry },
+          undefined
+        );
       }
     } catch (error) {
       setStandardContents([generateStandardContent()]);

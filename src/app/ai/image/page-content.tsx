@@ -281,32 +281,14 @@ function AIImageContent() {
         }
         setIsGenerated(true);
 
-        // 自动保存到灵感库
         const urls: string[] = genBatchImages && genBatchImages.length > 0
           ? genBatchImages
           : [genImageUrl].filter(Boolean);
-        if (urls.length > 0) {
-          fetch('/api/inspiration', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'image',
-              title: effectivePrompt.substring(0, 50),
-              original_text: effectivePrompt,
-              prompt: effectivePrompt,
-              source_platform: 'ai',
-              media_urls: urls,
-              tags: ['AI作品', 'AI图片', findImagePreset(selectedPresetId)?.label || ''],
-              workflow_session_id: workflowSessionId || undefined,
-            }),
-          }).then(r => r.json()).then(data => {
-            if (isInWorkflow && data.success) {
-              completeCurrentStep(
-                { prompt: finalPrompt, imageUrl: urls[0], topic: selectedPresetId, style: selectedStyle },
-                data.data?.id
-              );
-            }
-          }).catch(() => {});
+        if (isInWorkflow && urls.length > 0) {
+          completeCurrentStep(
+            { prompt: finalPrompt, imageUrl: urls[0], topic: selectedPresetId, style: selectedStyle },
+            undefined
+          );
         }
       } else {
         setError('生成失败，请重试');
