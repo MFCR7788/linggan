@@ -300,35 +300,85 @@ function InspirationLibraryContent() {
     setTimeout(() => { setShowDeleteTip(null); }, 3000);
   };
 
-  const handleDownloadRecords = () => {
+  // 下载媒体文件
+  const downloadFile = async (url: string, filename: string): Promise<boolean> => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      return true;
+    } catch {
+      window.open(url, '_blank');
+      return false;
+    }
+  };
+
+  const getDownloadFilename = (item: any): string => {
+    const urls = item.media_urls || [];
+    if (urls.length > 0) {
+      const ext = urls[0].split('.').pop()?.split('?')[0] || 'file';
+      // 根据类型推断合理的扩展名
+      if (item.type === 'video') return `${item.title || '视频'}.mp4`;
+      if (item.type === 'image') return `${item.title || '图片'}.${ext}`;
+      if (item.type === 'audio') return `${item.title || '音频'}.${ext}`;
+      return `${item.title || '文件'}.${ext}`;
+    }
+    return `${item.title || '灵感'}.txt`;
+  };
+
+  // 单条下载（静默，用于批量）
+  const downloadItemSilent = async (item: any): Promise<boolean> => {
+    const urls = item.media_urls || [];
+    if (urls.length > 0) {
+      return downloadFile(urls[0], getDownloadFilename(item));
+    }
+    // 纯文本：下载为 .txt
+    const text = item.original_text || item.title || '';
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${item.title || '灵感'}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    return true;
+  };
+
+  // 单条下载（卡片按钮）
+  const handleDownloadItem = async (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    await downloadItemSilent(item);
+    setShowInfoTip('已开始下载');
+    setTimeout(() => setShowInfoTip(null), 2000);
+  };
+
+  // 批量下载
+  const handleBatchDownload = async () => {
     const targetItems = selectedIds.size > 0
       ? items.filter((it: any) => selectedIds.has(it.id))
       : items;
     if (targetItems.length === 0) return;
 
-    const exportData = targetItems.map((item: any) => ({
-      title: item.title || '',
-      type: item.type,
-      original_text: item.original_text || '',
-      ai_summary: item.ai_summary || '',
-      source_url: item.source_url || '',
-      source_platform: item.source_platform || '',
-      media_urls: item.media_urls || [],
-      tags: item.tags || [],
-      status: item.status,
-      created_at: item.created_at,
-    }));
-
-    const json = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lingji-inspiration-${new Date().toISOString().substring(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    setShowInfoTip(`已导出 ${targetItems.length} 条灵感记录`);
+    let done = 0;
+    setShowInfoTip(`正在下载 ${targetItems.length} 条...`);
+    for (const item of targetItems) {
+      await downloadItemSilent(item);
+      done++;
+      if (done < targetItems.length) {
+        await new Promise(r => setTimeout(r, 400)); // 避免浏览器拦截
+      }
+    }
+    setShowInfoTip(`已下载 ${done} 条记录`);
     setTimeout(() => setShowInfoTip(null), 3000);
     if (selectedIds.size > 0) {
       setSelectedIds(new Set());
@@ -466,6 +516,15 @@ function InspirationLibraryContent() {
 
           {!isSelecting && (
             <div className="flex gap-1 pointer-events-auto">
+              <button
+                onClick={(e) => handleDownloadItem(e, item)}
+                className="p-1 rounded opacity-70 group-hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+                title="下载"
+                aria-label="下载"
+              >
+                <Download size={13} color="#E5E7EB" />
+              </button>
               <button
                 onClick={(e) => handleOpenEdit(e, item)}
                 className="p-1 rounded opacity-70 group-hover:opacity-100 transition-opacity"
@@ -697,7 +756,7 @@ function InspirationLibraryContent() {
                 {selectedIds.size === items.length ? '取消全选' : '全选'}
               </button>
               <button
-                onClick={handleDownloadRecords}
+                onClick={handleBatchDownload}
                 disabled={selectedIds.size === 0}
                 className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5"
                 style={{
@@ -706,7 +765,7 @@ function InspirationLibraryContent() {
                   color: selectedIds.size === 0 ? "#6B7280" : "#86EFAC",
                 }}
               >
-                <Download size={14} /> 导出{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                <Download size={14} /> 下载{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
               </button>
               <button
                 onClick={handleBatchDelete}
@@ -732,8 +791,8 @@ function InspirationLibraryContent() {
               </button>
               <button
                 className="p-1"
-                onClick={handleDownloadRecords}
-                title="导出所有记录"
+                onClick={handleBatchDownload}
+                title="保存所有记录到本地"
               >
                 <Download size={20} color="#E5E7EB" />
               </button>
