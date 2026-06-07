@@ -8,7 +8,7 @@ export interface Message {
   content: string;
   contentType?: 'text' | 'link' | 'image' | 'video' | 'voice' | 'audio';
   linkFetchFailed?: boolean;       // 链接抓取失败(SPA/反爬) — 前端显示"建议贴正文"
-  attachments?: { url: string; name: string; type: 'image' | 'video' | 'document' }[];
+  attachments?: { url: string; name: string; type: 'image' | 'video' | 'audio' | 'document' }[];
   mediaUrl?: string;
   sourceUrl?: string;
   generatedImage?: { imageUrl: string; prompt: string };

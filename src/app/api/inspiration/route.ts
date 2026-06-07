@@ -200,7 +200,7 @@ export const POST = withAuth(async ({ request, user }) => {
       user_id: user.id,
       type: normalizedType,
       title: title ? stripMarkdown(title) : null,
-      original_text: original_text ? stripMarkdown(original_text) : null,
+      original_text: original_text || null,
       ai_summary: summary || null,
       category_id: effectiveCategoryId,
       source_url: source_url || null,

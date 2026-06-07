@@ -75,6 +75,7 @@ function CaptureContent() {
   const [showExpandBtn, setShowExpandBtn] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // 按住说话:recording 录音中,willCancel 上滑到取消区松手即取消
   const [holdState, setHoldState] = useState<'idle' | 'recording' | 'willCancel'>('idle');
@@ -799,13 +800,17 @@ function CaptureContent() {
                 <div className={`px-3.5 py-2.5 ${msg.type === 'user' ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' : 'bg-gray-800 text-gray-100 rounded-2xl rounded-bl-sm'}`}>
                   <div className="text-sm leading-relaxed">
                     {msg.attachments?.filter(a => a.type === 'video').map((att, i) => (
-                      <div key={i} className="flex items-center gap-2 mb-2 text-gray-400 text-xs">
-                        <Video size={14} className="text-purple-400" />
-                        <span className="truncate max-w-[200px]">{att.name}</span>
+                      <div key={i} className="mb-2">
+                        <video src={att.url} controls playsInline preload="metadata" className="w-full max-w-[280px] rounded-lg bg-black" />
+                      </div>
+                    ))}
+                    {msg.attachments?.filter(a => a.type === 'audio').map((att, i) => (
+                      <div key={i} className="mb-2">
+                        <audio src={att.url} controls preload="metadata" className="w-full max-w-[280px]" />
                       </div>
                     ))}
                     {msg.attachments?.filter(a => a.type === 'image').map((att, i) => (
-                      <img key={i} src={att.url} alt="" loading="lazy" className="max-w-[180px] max-h-[180px] rounded-lg object-cover mb-2 cursor-pointer" onClick={() => window.open(att.url, '_blank')} />
+                      <img key={i} src={att.url} alt="" loading="lazy" className="max-w-[200px] max-h-[200px] rounded-lg object-cover mb-2 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLightboxSrc(att.url)} />
                     ))}
                     {msg.attachments?.filter(a => a.type === 'document').map((att, i) => (
                       <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 p-2 rounded-lg text-xs hover:opacity-80 transition-opacity" style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)' }}>
@@ -850,7 +855,7 @@ function CaptureContent() {
                   alt={msg.generatedImage.prompt}
                   loading="lazy"
                   className="w-full h-auto max-h-[60vh] object-contain rounded-xl cursor-pointer bg-gray-900/50"
-                  onClick={() => window.open(msg.generatedImage!.imageUrl, '_blank')}
+                  onClick={() => setLightboxSrc(msg.generatedImage!.imageUrl)}
                 />
                 {msg.generatedImage.prompt && (
                   <p className="text-[10px] text-gray-500 mt-1 truncate">{msg.generatedImage.prompt}</p>
@@ -1368,6 +1373,16 @@ function CaptureContent() {
             ))}
           </div>
         </>
+      )}
+
+      {/* 图片 Lightbox */}
+      {lightboxSrc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-pointer" onClick={() => setLightboxSrc(null)}>
+          <img src={lightboxSrc} alt="" className="max-w-[95vw] max-h-[95vh] object-contain" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
+            <X size={18} color="white" />
+          </button>
+        </div>
       )}
 
       <FloatingPlayer visible={!!speakingId} onStop={stopSpeaking} />
