@@ -13,6 +13,7 @@ import { useUser } from '@/hooks/use-user';
 import { ProtectedRoute } from '@/components';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase';
 
 interface UserStats {
   inspirationCount: number;
@@ -107,19 +108,14 @@ function ProfileContent() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {}
     if (typeof window !== 'undefined') {
-      // 清除 dev auth
       localStorage.removeItem('dev_user');
-      // 清除 Supabase auth cookies
-      document.cookie.split(';').forEach(c => {
-        const name = c.trim().split('=')[0];
-        if (name) {
-          document.cookie = `${name}=; path=/; max-age=0; domain=.zjsifan.com`;
-          document.cookie = `${name}=; path=/; max-age=0; domain=ai.zjsifan.com`;
-          document.cookie = `${name}=; path=/; max-age=0`;
-        }
-      });
+      document.cookie = 'dev_user_id=; path=/; max-age=0';
+      document.cookie = 'dev_auth_secret=; path=/; max-age=0';
     }
     router.push('/login');
   };
