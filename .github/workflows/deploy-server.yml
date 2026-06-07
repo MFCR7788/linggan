@@ -17,8 +17,12 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /var/www/lingji
-            git pull origin main
-            # 验证：确认源码已是最新
+            # 强制同步远程最新代码
+            echo "=== git remote ==="
+            git remote -v
+            echo "=== git fetch + reset ==="
+            git fetch origin main
+            git reset --hard origin/main
             echo "=== git log ==="
             git log --oneline -5
             echo "=== page-content.tsx key lines ==="
