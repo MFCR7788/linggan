@@ -93,7 +93,7 @@ export default function SupportPage() {
         <Section title="应用信息">
           <InfoRow label="应用名称" value="灵集" />
           <InfoRow label="版本" value="1.0.0" />
-          <InfoRow label="应用网址" value="https://linggan-two.vercel.app" />
+          <InfoRow label="应用网址" value="https://ai.zjsifan.com" />
         </Section>
       </div>
     </div>

@@ -18,14 +18,16 @@ pnpm test:watch   # vitest 监听模式
 
 运行单个测试：`npx vitest run src/test/<file>.test.ts`
 
-本地使用 pnpm（有 `pnpm-lock.yaml`），Vercel/GitHub Actions 使用 npm。
+vitest 配置了 `globals: true`，测试文件中 `describe`/`it`/`expect`/`vi` 无需 import。
+
+本地开发使用 pnpm（有 `pnpm-lock.yaml`），Vercel 和 GitHub Actions 使用 npm（有 `package-lock.json`），两个 lockfile 需保持同步。
 
 ## 技术栈
 
 - **前端**: Next.js 14 (App Router) + React 18 + TypeScript + TailwindCSS 3.4
 - **后端**: Next.js API Routes + Supabase (Postgres, Auth, Storage)
 - **AI 服务**: 阿里云 DashScope (DeepSeek, Qwen, Wan, CosyVoice) + 火山引擎豆包 + OpenRouter + HeyGen + ElevenLabs + jina.ai Reader
-- **移动端**: Capacitor 8，WebView 加载 Vercel URL (`https://linggan-two.vercel.app`)
+- **移动端**: Capacitor 8，WebView 加载 Vercel URL (`https://ai.zjsifan.com`)
 - **部署**: Vercel (前端 + API) + 阿里云 ECS (自部署 FunASR/Kokoro) + pm2
 - **测试**: Vitest + jsdom + @testing-library/react
 - **CI/CD**: GitHub Actions (移动端发布到 TestFlight/Play Store, 服务端部署到阿里云)
@@ -48,6 +50,7 @@ src/
 │   ├── supabase.ts        # 浏览器端 Supabase 客户端
 │   ├── supabase-server.ts # 服务端客户端 (createClient, createAdminClient, createPgPool)
 │   ├── runtime-config.ts  # 运行时从 .env.local 文件系统读取 (绕过 Next.js build 时内联)
+│   ├── dev-auth.ts        # 开发模式认证 (localStorage → cookie 桥接)
 │   ├── credits.ts         # 点数系统 (原子 CAS 扣点, RPC 降级, 退款流水)
 │   ├── credit-costs.ts    # 各功能扣点单价配置 (改价走 git review)
 │   ├── ai-services.ts     # 旧 AI 调用入口 (逐步迁移到 ai/ 子模块)
@@ -65,16 +68,19 @@ src/
 ├── components/
 │   ├── ui/               # 基础 UI 组件 (Button, Card, Input)
 │   ├── workflow/         # 工作流引擎 (StepWidgetRegistry + 10 个 StepWidget)
-│   ├── BottomNav.tsx     # 底部导航栏 (5 tabs)
+│   ├── BottomNav.tsx     # 底部导航栏 (5 tabs: 首页/灵感库/+/AI创作/我的，+ 为快速采集)
 │   ├── TopNav.tsx        # 顶部导航栏
 │   ├── Toast.tsx         # Toast 通知 (provider 模式)
 │   ├── GlassCard.tsx     # 毛玻璃卡片
-│   └── ...               # 其他共享组件
-├── hooks/                # 自定义 React hooks (19 个, ai/ 子目录)
+│   ├── ErrorBoundary.tsx # React 错误边界
+│   ├── InsufficientCreditsModal.tsx  # 点数不足弹窗 (监听 credits:insufficient 事件)
+│   ├── CreditsWarningBanner.tsx      # 点数不足横幅 (监听 credits:updated 事件)
+│   └── ...               # 其他共享组件 (PrimaryButton, StarBackground 等)
+├── hooks/                # 自定义 React hooks (use-navigate, use-user, use-inspiration, use-workflow-session 等 + ai/ 子目录)
 ├── providers/            # React context providers (ReactQuery, Toast)
 ├── types/                # TypeScript 类型 (index.ts 业务类型 + supabase.ts 数据库类型)
-└── test/                 # 12 个测试文件
-supabase/migrations/      # 18 个 SQL 迁移文件 (按序号)
+└── test/                 # 11 个测试文件 + setup.ts
+supabase/migrations/      # 17 个 SQL 迁移文件 (按序号 002-018)
 docs/                     # 需求文档、开发规划、API 清单
 scripts/                  # 运维脚本 (部署, 截图, 点数发放, cron 检查, logrotate)
 deploy/                   # 自部署 AI 服务 (Kokoro TTS, FunASR 语音识别)
@@ -106,7 +112,11 @@ export const GET = withAuth(async ({ request, user, params }) => {
 ### 认证
 
 - 生产：Supabase Auth (`getCurrentUser` in `supabase-server.ts`)
-- 开发：`dev_user_id` cookie 或 `x-dev-user-id` header 绕过认证
+- 开发：通过 `src/lib/dev-auth.ts` 实现 localStorage → cookie 桥接
+  - 前端设置 `localStorage.dev_user` 对象 (`{ id: "..." }`)
+  - `syncDevAuthCookie()` 自动同步到 `dev_user_id` cookie，`getDevUserIdHeader()` 生成 `x-dev-user-id` header
+  - Middleware 读取 cookie/header 绕过 Supabase Auth 认证
+  - 可选 `DEV_AUTH_SECRET` 保护 dev auth 入口，否则仅限 localhost
 - **生产部署前必须删除** `middleware.ts` 和 `supabase-server.ts` 中的 dev auth 快捷路径
 - `AUTH_SALT` 首次上线后不可变更 (用于手机号登录的 deterministic password)
 
@@ -115,6 +125,15 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - `.env.local` 中的敏感配置通过 `src/lib/runtime-config.ts` 运行时从文件系统读取，不依赖 Next.js build 时内联
 - 读取 API key 用 `getDashScopeApiKey()` 等专有函数，不用 `process.env` 直接访问
 - `CRON_SECRET` 用于保护 Vercel cron 调用的端点 (`/api/jobs/claim`, `/api/platforms/metrics-fetch`)
+
+### 前端事件系统
+
+`ApiClient` (src/lib/api-client.ts) 在 API 响应中自动派发 DOM 事件，驱动全局 UI 反馈：
+
+- `credits:insufficient` → `InsufficientCreditsModal` 弹出充值引导
+- `credits:updated` → `CreditsWarningBanner` 实时更新点数余额
+
+组件通过 `window.addEventListener` 监听这些事件，无需 props drilling。
 
 ### 移动端适配
 
@@ -146,6 +165,15 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - `createAdminClient()` → service_role key (绕过 RLS，仅服务端)
 - `createPgPool()` → 直连 Postgres (读 auth schema 等 PostgREST 禁的表)
 - `createSupabaseServerClient()` → 带 cookie 的 SSR 客户端
+
+### 共享常量
+
+`style-constants.ts` 是全项目引用的常量文件，修改会影响多处：
+- `PAGE_ROUTES` — 所有页面路由映射 (BottomNav、use-navigate 等引用)
+- `PLATFORM_COLORS` — 平台品牌色 (热点列表、发布页等引用)
+- `LANGUAGE_OPTIONS` / `STYLE_PRESETS` — AI 视频生成的语言和风格预设
+- `TYPE_EMOJIS` / `TYPE_LABELS` — 内容类型图标和标签
+- `BG_GLASS` / `BORDER_GLASS` 等 — 毛玻璃 UI 样式常量
 
 ### Vercel 部署要点
 
