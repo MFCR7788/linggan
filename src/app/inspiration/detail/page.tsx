@@ -10,6 +10,7 @@ import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner } from "@/components";
 import FormattedText from "@/components/FormattedText";
+import { stripMarkdown } from "@/lib/text-utils";
 import { syncDevAuthCookie, getDevUserIdHeader } from "@/lib/dev-auth";
 import { useInspiration, useInspirations, useInspirationActions, useUpdateInspiration } from "@/hooks/use-inspiration";
 import { useCategories } from "@/hooks/use-categories";
@@ -269,7 +270,7 @@ function InspirationDetailContent() {
             </div>
 
             <h1 style={{ color: "#FFFFFF", fontSize: 20, fontWeight: 700, lineHeight: 1.4 }}>
-              {inspiration.title || "未命名"}
+              {inspiration.title ? stripMarkdown(inspiration.title) : "未命名"}
             </h1>
 
             <p style={{ color: "#9CA3AF", fontSize: 12, marginTop: 6 }}>
@@ -579,10 +580,10 @@ function InspirationDetailContent() {
                           <GlassBadge color="primary">{typeLabels[item.type] || item.type}</GlassBadge>
                         </div>
                         <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }} className="truncate">
-                          {item.title}
+                          {item.title ? stripMarkdown(item.title) : ""}
                         </p>
                         <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
-                          {item.original_text?.substring(0, 60) || "暂无描述"}
+                          {item.original_text ? stripMarkdown(item.original_text.substring(0, 60)) : "暂无描述"}
                         </p>
                       </div>
                     </div>

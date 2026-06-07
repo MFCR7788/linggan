@@ -28,3 +28,61 @@ export function splitLongText(text: string, maxCharsPerSegment: number = 500): s
 
   return segments.filter(s => s.length > 0);
 }
+
+/**
+ * 去除 Markdown 格式化符号，返回纯文本。
+ * 处理：粗体/斜体/标题/列表/引用/代码/删除线。
+ */
+export function stripMarkdown(text: string): string {
+  if (!text) return text;
+
+  let result = text;
+
+  // 逐行处理行级格式
+  result = result
+    .split('\n')
+    .map(line => {
+      let l = line.trim();
+
+      // 标题: ### / ## / # 开头
+      l = l.replace(/^#{1,6}\s+/, '');
+
+      // 无序列表: - / * / + 开头
+      l = l.replace(/^[-*+]\s+/, '');
+
+      // 有序列表: 1. / 1) / 1、 开头
+      l = l.replace(/^\d+[.)、]\s*/, '');
+
+      // 引用: > 开头（多层 > >）
+      l = l.replace(/^(>+\s*)+/, '');
+
+      return l;
+    })
+    .join('\n');
+
+  // 内联格式
+  // 粗体: **text** 或 __text__
+  result = result.replace(/\*\*(.+?)\*\*/g, '$1');
+  result = result.replace(/__(.+?)__/g, '$1');
+
+  // 斜体: *text* 或 _text_（但不匹配 ** 残余）
+  result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+  result = result.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '$1');
+
+  // 删除线: ~~text~~
+  result = result.replace(/~~(.+?)~~/g, '$1');
+
+  // 行内代码: `text`
+  result = result.replace(/`(.+?)`/g, '$1');
+
+  // 链接: [text](url) → text
+  result = result.replace(/\[(.+?)\]\(.+?\)/g, '$1');
+
+  // 图片: ![alt](url) → alt
+  result = result.replace(/!\[(.+?)\]\(.+?\)/g, '$1');
+
+  // 清理多余空白
+  result = result.replace(/\n{3,}/g, '\n\n').trim();
+
+  return result;
+}

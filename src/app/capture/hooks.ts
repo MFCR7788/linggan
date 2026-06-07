@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useCreateInspiration } from '@/hooks/use-inspiration';
 import { useCreateSchedule } from '@/hooks/use-schedule';
 import { syncDevAuthCookie } from '@/lib/dev-auth';
+import { stripMarkdown } from '@/lib/text-utils';
 import { useToast } from '@/components/Toast';
 import type { Message, ChatSession } from './types';
 
@@ -354,13 +355,14 @@ export function useMessageActions() {
 
       const hasGenVideo = !!msg.generatedVideo?.videoUrl;
       const hasGenImage = !!msg.generatedImage?.imageUrl;
+      const cleanText = stripMarkdown(originalText);
       await createInspiration.mutateAsync({
         type: hasGenVideo ? 'video' as any
             : hasGenImage ? 'image' as any
             : userMsg?.attachments?.some(a => a.type === 'video') ? 'video' as any
             : userMsg?.attachments?.some(a => a.type === 'image') ? 'image' as any
             : 'text' as any,
-        title: originalText.length > 20 ? originalText.substring(0, 20) + '...' : originalText,
+        title: cleanText.length > 20 ? cleanText.substring(0, 20) + '...' : cleanText,
         original_text: originalText,
         summary: msg.content,
         tags: ['灵感'],
@@ -396,11 +398,12 @@ export function useMessageActions() {
         }
       }
       const originalText = userMsg ? userMsg.content : '';
+      const cleanTitle = stripMarkdown(list[0]?.title || originalText);
 
       // 1. 先保存 AI 分析内容为灵感（content_item）
       const createdInspiration = await createInspiration.mutateAsync({
         type: 'text' as any,
-        title: list[0]?.title || (originalText.length > 20 ? originalText.substring(0, 20) + '...' : originalText),
+        title: cleanTitle.length > 20 ? cleanTitle.substring(0, 20) + '...' : cleanTitle,
         original_text: originalText,
         summary: msg.content, // AI 分析全文作为 ai_summary
         tags: ['日程分析'],
@@ -683,4 +686,131 @@ export function useFileUpload() {
     objectUrlsRef,
     uploadFile, validateFile,
   };
+}
+
+// ====== 流式 TTS（逐句朗读 AI 实时生成内容） ======
+
+export function useStreamTTS() {
+  const [isStreamPlaying, setIsStreamPlaying] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const speakingRef = useRef(false);
+
+  const speakNext = useCallback(() => {
+    if (speakingRef.current) return;
+    if (queueRef.current.length === 0) {
+      setIsStreamPlaying(false);
+      return;
+    }
+    const sentence = queueRef.current.shift()!;
+    if (!sentence.trim()) {
+      speakNext();
+      return;
+    }
+    speakingRef.current = true;
+    try {
+      const u = new SpeechSynthesisUtterance(sentence);
+      u.lang = 'zh-CN';
+      u.rate = 1.15;
+      u.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const zhVoice = voices.find(v => /^zh/i.test(v.lang));
+      if (zhVoice) u.voice = zhVoice;
+      u.onend = () => {
+        speakingRef.current = false;
+        speakNext();
+      };
+      u.onerror = () => {
+        speakingRef.current = false;
+        speakNext();
+      };
+      window.speechSynthesis.speak(u);
+    } catch {
+      speakingRef.current = false;
+      speakNext();
+    }
+  }, []);
+
+  const startStream = useCallback(async (content: string, searchResults?: unknown[]) => {
+    // 停止之前播放
+    stopStream();
+    abortRef.current = new AbortController();
+
+    try {
+      const res = await fetch('/api/ai/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, searchResults }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok) return;
+
+      const reader = res.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let textBuffer = '';
+
+      setIsStreamPlaying(true);
+
+      const sentenceBreakers = /[。！？；\n]/;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.type === 'chunk' && data.content) {
+              textBuffer += data.content;
+              // 检测句子边界
+              const parts = textBuffer.split(sentenceBreakers);
+              // 最后一部分可能是不完整句子，保留
+              if (parts.length > 1) {
+                for (let i = 0; i < parts.length - 1; i++) {
+                  const sentence = parts[i].trim();
+                  if (sentence) queueRef.current.push(sentence);
+                }
+                textBuffer = parts[parts.length - 1] || '';
+                speakNext();
+              }
+            } else if (data.type === 'done') {
+              // 输出剩余文本
+              if (textBuffer.trim()) {
+                queueRef.current.push(textBuffer.trim());
+                speakNext();
+              }
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        console.warn('[StreamTTS] 流式播放失败:', e);
+      }
+    }
+  }, [speakNext]);
+
+  const stopStream = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    queueRef.current = [];
+    speakingRef.current = false;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    }
+    setIsStreamPlaying(false);
+  }, []);
+
+  return { isStreamPlaying, startStream, stopStream };
 }

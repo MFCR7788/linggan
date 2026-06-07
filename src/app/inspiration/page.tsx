@@ -12,6 +12,7 @@ import { useUploadQueue } from "@/hooks/use-upload-queue";
 import { useTags } from "@/hooks/use-categories";
 import { useSchedules } from "@/hooks/use-schedule";
 import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
+import { stripMarkdown } from "@/lib/text-utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 // ====== 常量 ======
@@ -630,7 +631,7 @@ function InspirationLibraryContent() {
                 style={{ color: "#D1D5DB", fontSize: 11, lineHeight: 1.5 }}
                 className="line-clamp-3 flex-1 break-words"
               >
-                {item.original_text?.substring(0, 120) || item.title || "暂无内容"}
+                {item.original_text ? stripMarkdown(item.original_text?.substring(0, 120)) : (item.title || "暂无内容")}
               </p>
             </div>
             {/* 类型角标 */}
@@ -655,10 +656,10 @@ function InspirationLibraryContent() {
         {/* 底部信息 */}
         <div className="p-2.5">
           <p style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 600 }} className="line-clamp-2 mb-1 break-words">
-            {item.title || "未命名"}
+            {item.title ? stripMarkdown(item.title) : "未命名"}
           </p>
           <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }} className="line-clamp-2 break-words">
-            {item.original_text?.substring(0, 80) || item.title || ""}
+            {item.original_text ? stripMarkdown(item.original_text?.substring(0, 80)) : (item.title ? stripMarkdown(item.title) : "")}
           </p>
           <div className="flex items-center justify-between mt-1.5 gap-1.5">
             <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">

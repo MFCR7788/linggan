@@ -2,6 +2,7 @@
 import { createApiResponse, createApiError, getPaginationParams, createPaginatedResponse } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
+import { stripMarkdown } from '@/lib/text-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -198,8 +199,8 @@ export const POST = withAuth(async ({ request, user }) => {
     .insert({
       user_id: user.id,
       type: normalizedType,
-      title: title || null,
-      original_text: original_text || null,
+      title: title ? stripMarkdown(title) : null,
+      original_text: original_text ? stripMarkdown(original_text) : null,
       ai_summary: summary || null,
       category_id: effectiveCategoryId,
       source_url: source_url || null,
