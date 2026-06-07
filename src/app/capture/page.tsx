@@ -81,6 +81,7 @@ function CaptureContent() {
   const voiceBtnRef = useRef<HTMLButtonElement>(null);
   const pressStartYRef = useRef(0);
   const holdHandledRef = useRef(false);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const MODEL_OPTIONS = [
     { id: "auto", label: "自动选择", desc: "根据内容自动切换最优模型" },
@@ -679,23 +680,35 @@ function CaptureContent() {
     setInputText(prev => prev + transcript);
   };
 
-  // 按住说话手势处理
-  const handlePressStart = (e: React.PointerEvent<HTMLButtonElement>) => {
+  // 按住说话手势处理 — 支持 Pointer + Touch 双事件
+  const handlePressStart = (e: React.PointerEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
     // 鼠标右键/中键忽略
-    if (e.button !== undefined && e.button !== 0) return;
+    if ('button' in e && e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     holdHandledRef.current = false;
-    pressStartYRef.current = e.clientY;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY || 0 : (e as React.PointerEvent).clientY;
+    pressStartYRef.current = clientY;
     setHoldState('recording');
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch { /* 部分浏览器不支持,忽略 */ }
+
+    // 指针捕获 (仅 PointerEvent 支持)
+    if ('pointerId' in e) {
+      try { (e.target as HTMLElement).setPointerCapture((e as React.PointerEvent).pointerId); } catch { /* 部分浏览器不支持 */ }
+    }
+
+    // 300ms 后仍未收到 move/end → 当作 tap（移动端兼容）
+    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = setTimeout(() => {
+      if (holdHandledRef.current) return;
+      holdHandledRef.current = true;
+    }, 300);
+
     startRecording();
   };
 
-  const handlePressMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const handlePressMove = (e: React.PointerEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
     if (holdState === 'idle') return;
-    const dy = pressStartYRef.current - e.clientY; // 上滑 dy>0
+    const clientY = 'touches' in e ? e.touches[0]?.clientY || 0 : (e as React.PointerEvent).clientY;
+    const dy = pressStartYRef.current - clientY; // 上滑 dy>0
     if (dy > 60) {
       if (holdState !== 'willCancel') setHoldState('willCancel');
     } else {
@@ -703,12 +716,18 @@ function CaptureContent() {
     }
   };
 
-  const handlePressEnd = async (e: React.PointerEvent<HTMLButtonElement>) => {
+  const handlePressEnd = async (e: React.PointerEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
+    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
     if (holdState === 'idle' || holdHandledRef.current) return;
     holdHandledRef.current = true;
     const wasCancel = holdState === 'willCancel';
     setHoldState('idle');
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+
+    // 释放指针捕获 (仅 PointerEvent 支持)
+    if ('pointerId' in e) {
+      try { (e.target as HTMLElement).releasePointerCapture((e as React.PointerEvent).pointerId); } catch { /* ignore */ }
+    }
+
     if (wasCancel) {
       cancelRecording();
       return;
@@ -1374,6 +1393,10 @@ function CaptureContent() {
                     onPointerMove={handlePressMove}
                     onPointerUp={handlePressEnd}
                     onPointerCancel={handlePressEnd}
+                    onTouchStart={handlePressStart}
+                    onTouchMove={handlePressMove}
+                    onTouchEnd={handlePressEnd}
+                    onTouchCancel={handlePressEnd}
                     onContextMenu={(e) => e.preventDefault()}
                     className="relative w-12 h-9 rounded-full flex items-center justify-center flex-shrink-0 select-none touch-none active:scale-95 transition-transform"
                     style={{

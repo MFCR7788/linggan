@@ -199,7 +199,44 @@ export function useMessageActions() {
     stopSpeakingInternal();
     setSpeakingId(msg.id);
 
-    // 3. 优先豆包 TTS
+    // 标记是否已被 API TTS 替换（避免 browser TTS 结束后又清状态）
+    let switchedToApi = false;
+    // 标记是否已被外部停止
+    let stopped = false;
+
+    // 3. 先用浏览器 TTS 立即开始播报（0 延迟）
+    let browserTtsStarted = false;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(msg.content);
+        u.lang = 'zh-CN';
+        u.rate = 1.15;
+        u.pitch = 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const zhVoice = voices.find(v => /^zh/i.test(v.lang));
+        if (zhVoice) u.voice = zhVoice;
+        u.onend = () => {
+          synthRef.current = null;
+          if (!switchedToApi && !stopped) {
+            setSpeakingId(prev => (prev === msg.id ? null : prev));
+          }
+        };
+        u.onerror = () => {
+          synthRef.current = null;
+          if (!switchedToApi && !stopped) {
+            setSpeakingId(prev => (prev === msg.id ? null : prev));
+          }
+        };
+        synthRef.current = u;
+        window.speechSynthesis.speak(u);
+        browserTtsStarted = true;
+      } catch (e) {
+        console.warn('[TTS] 浏览器 TTS 启动失败:', e);
+      }
+    }
+
+    // 4. 并行请求 API TTS（替换浏览器 TTS 为高质量音频）
     try {
       const res = await fetch('/api/ai/tts', {
         method: 'POST',
@@ -210,12 +247,19 @@ export function useMessageActions() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.audioBase64) {
+          // API TTS 就绪 → 停掉浏览器 TTS，切换到 API 音频
+          if (stopped) return;
+          switchedToApi = true;
+          if (browserTtsStarted) {
+            try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+            synthRef.current = null;
+          }
+
           const dataUrl = `data:${data.mimeType || 'audio/mpeg'};base64,${data.audioBase64}`;
           const audio = new Audio(dataUrl);
           audioRef.current = { audio, url: dataUrl };
           audio.onended = () => {
             audioRef.current = null;
-            // 如果还在播这条才清状态(避免被 stopSpeaking 后又清一次)
             setSpeakingId(prev => (prev === msg.id ? null : prev));
           };
           audio.onerror = () => {
@@ -227,40 +271,14 @@ export function useMessageActions() {
         }
       }
     } catch (e) {
-      console.warn('[TTS] 豆包 API 失败,降级到浏览器 TTS:', e);
+      console.warn('[TTS] API TTS 失败，继续使用浏览器 TTS:', e);
     }
 
-    // 4. 降级:浏览器 speechSynthesis
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(msg.content);
-        u.lang = 'zh-CN';
-        u.rate = 1.15;
-        u.pitch = 1.0;
-        // 选中文音色(如可用)
-        const voices = window.speechSynthesis.getVoices();
-        const zhVoice = voices.find(v => /^zh/i.test(v.lang));
-        if (zhVoice) u.voice = zhVoice;
-        u.onend = () => {
-          synthRef.current = null;
-          setSpeakingId(prev => (prev === msg.id ? null : prev));
-        };
-        u.onerror = () => {
-          synthRef.current = null;
-          setSpeakingId(prev => (prev === msg.id ? null : prev));
-        };
-        synthRef.current = u;
-        window.speechSynthesis.speak(u);
-        return;
-      } catch (e) {
-        console.warn('[TTS] 浏览器 TTS 也失败:', e);
-      }
+    // 5. 如果浏览器 TTS 也没启动成功
+    if (!browserTtsStarted) {
+      setSpeakingId(null);
+      showToast('当前环境不支持语音播报', 'error');
     }
-
-    // 5. 都没成功
-    setSpeakingId(null);
-    showToast('当前环境不支持语音播报', 'error');
   }, [speakingId, showToast]);
 
   const stopSpeaking = useCallback(() => {
@@ -489,6 +507,9 @@ export function useVoiceRecording() {
   };
 
   const startRecording = () => {
+    // 防止 pointer + touch 双事件同时触发导致重复启动
+    if (recognitionRef.current) return;
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) { showToast('您的浏览器不支持语音识别，请使用 Chrome 浏览器', 'warning'); return; }
 
