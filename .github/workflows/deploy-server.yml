@@ -18,6 +18,11 @@ jobs:
           script: |
             cd /var/www/lingji
             git pull origin main
+            # 验证：确认源码已是最新
+            echo "=== git log ==="
+            git log --oneline -5
+            echo "=== page-content.tsx key lines ==="
+            grep -n 'rows={10}\|fullText\|minHeight: 100' src/app/ai/copywriting/page-content.tsx || echo "WARNING: key changes NOT found!"
             # 同步 env var（运行时敏感配置）
             sed -i 's/^VOLC_TTS_APP_ID=.*/VOLC_TTS_APP_ID=3190895677/' .env.local
             sed -i 's/^VOLC_TTS_ACCESS_TOKEN=.*/VOLC_TTS_ACCESS_TOKEN=Zh6To_wJHre-04fgY-8ttmx2p7jblGsf/' .env.local
