@@ -22,6 +22,7 @@ jobs:
             sed -i 's/^VOLC_TTS_APP_ID=.*/VOLC_TTS_APP_ID=3190895677/' .env.local
             sed -i 's/^VOLC_TTS_ACCESS_TOKEN=.*/VOLC_TTS_ACCESS_TOKEN=Zh6To_wJHre-04fgY-8ttmx2p7jblGsf/' .env.local
             npm ci
+            rm -rf .next
             npm run build
             pm2 restart lingji --update-env
             pm2 save
