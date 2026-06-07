@@ -1,12 +1,12 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.lingji.app',
+  appId: 'com.mfcr7788.lingji',
   appName: '灵集',
   webDir: 'capacitor-preview',
   server: {
     // Vercel 生产部署 URL
-    url: 'https://linggan-two.vercel.app',
+    url: 'https://ai.zjsifan.com',
     cleartext: false,
   },
   plugins: {
