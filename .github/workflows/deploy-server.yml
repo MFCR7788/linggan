@@ -30,6 +30,7 @@ jobs:
             # 同步 env var（运行时敏感配置）
             sed -i "s#^VOLC_TTS_APP_ID=.*#VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}#" .env.local
             sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local
+            sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}#" .env.local
             # 先停应用释放内存，清理旧构建缓存
             pm2 stop lingji
             rm -rf node_modules .next
@@ -37,3 +38,8 @@ jobs:
             npm run build
             pm2 start lingji --update-env
             pm2 save
+            # 安装 crontab 定时任务
+            chmod +x scripts/cron-runner.sh
+            crontab scripts/ecs-crontab.txt
+            echo "=== crontab installed ==="
+            crontab -l

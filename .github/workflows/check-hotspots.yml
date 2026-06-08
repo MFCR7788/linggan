@@ -1,31 +1,18 @@
-name: Check Hotspots
+name: Check Hotspots (Backup)
 
 on:
-  schedule:
-    # 每 3 小时触发一次（UTC 0/3/6/9/12/15/18/21 → 北京时间 8/11/14/17/20/23/2/5）
-    - cron: '0 */3 * * *'
-  workflow_dispatch: # 允许在 Actions 页面手动触发
+  workflow_dispatch: # 手动触发，ECS crontab 是主力
 
 jobs:
   check-hotspots:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger hotspot check
-        env:
-          API_URL: ${{ secrets.LINGJI_API_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          if [ -z "$API_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "::error::缺少必要的 secrets: LINGJI_API_URL / CRON_SECRET"
-            exit 1
-          fi
-          # -m 280: Vercel 函数 maxDuration=300，留 20s 余量
-          # -w 输出 HTTP 状态码；-f 在 HTTP 错误时让 curl 失败
-          http_code=$(curl -sS -m 280 -o /tmp/hotspot-resp.json -w "%{http_code}" \
-            "${API_URL}/api/cron/check-hotspots?secret=${CRON_SECRET}")
-          echo "HTTP ${http_code}"
-          cat /tmp/hotspot-resp.json
-          if [ "$http_code" != "200" ]; then
-            echo "::error::热点检查失败 (HTTP ${http_code})"
-            exit 1
-          fi
+      - name: Trigger hotspot check via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /var/www/lingji
+            bash scripts/cron-runner.sh /api/cron/check-hotspots

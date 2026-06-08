@@ -1,0 +1,26 @@
+# 灵集 ECS 定时任务（北京时间）
+# 安装: crontab scripts/ecs-crontab.txt
+# 查看: crontab -l
+# 编辑: crontab -e
+# 日志: logs/cron-*.log
+
+# 每天 08:00 — 热点检查
+0 8 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/check-hotspots
+
+# 每天 00:00 — AI 任务队列领取
+0 0 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/jobs/claim
+
+# 每天 06:00 — 平台指标拉取
+0 6 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/platforms/metrics-fetch
+
+# 每天 12:00 — 定时发布
+0 12 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/platforms/scheduled-publish
+
+# 每天 03:47 — 历史清理
+47 3 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/cleanup-history
+
+# 每月 1 日 16:00 — 点数重置
+0 16 1 * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/credits-reset
+
+# 每天 00:00 — 订阅点数发放
+0 0 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/subscription-grant
