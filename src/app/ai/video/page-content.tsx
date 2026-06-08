@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Zap, ChevronDown, ChevronUp, Download, FolderOpen, RefreshCw, Share2, Mic, Grid3x3, Layers,
-  ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle2, XCircle,
+  ChevronLeft, AlertCircle, Loader2, CheckCircle2, XCircle,
   Settings, Wand2, Sparkles, ImageIcon, Upload, X, Link2, Music,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
@@ -102,12 +102,12 @@ function AIVideoContent() {
   // ─── Step 1: 确定方向 ──────────────────────────────────
 
   const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
+  const [inspirationsLoading, setInspirationsLoading] = useState(true);
   const [selectedInspirations, setSelectedInspirations] = useState<Set<string | number>>(new Set());
   const [topic, setTopic] = useState('');
   const [stylePreset, setStylePreset] = useState('douyin_hot');
   const [duration, setDuration] = useState(10);
   const [qualityTier, setQualityTier] = useState('fast');
-  const [quickMode, setQuickMode] = useState(true);
   const [language, setLanguage] = useState('zh');
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频', 'ai_video');
 
@@ -150,10 +150,9 @@ function AIVideoContent() {
   const [segments, setSegments] = useState<SegmentState[]>([]);
   const [genPhase, setGenPhase] = useState<'idle' | 'submitting' | 'generating' | 'done' | 'error'>('idle');
   const [genError, setGenError] = useState<string | null>(null);
-  const [oneClickMode, setOneClickMode] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const { generateStoryboard: genStoryboard, submitSegments: submitSegs, oneClick: oneClickGen, mergeVideo: mergeVid, cancelPolling, phase: hookPhase, segments: hookSegs, storyboard: hookStoryboard, mergedVideoUrl: hookMergedVideoUrl, error: hookError } = useVideoGeneration();
+  const { generateStoryboard: genStoryboard, submitSegments: submitSegs, mergeVideo: mergeVid, cancelPolling, phase: hookPhase, segments: hookSegs, storyboard: hookStoryboard, mergedVideoUrl: hookMergedVideoUrl, error: hookError } = useVideoGeneration();
 
   // ─── 合并状态(Step 3 完成后用户点"合并") ───────────
   const [mergePhase, setMergePhase] = useState<'idle' | 'merging' | 'done' | 'error'>('idle');
@@ -163,9 +162,11 @@ function AIVideoContent() {
   // ─── 加载灵感数据 ────────────────────────────────────
 
   useEffect(() => {
-    apiClient.get<InspirationItem[]>('/inspiration?type=video&limit=20')
+    setInspirationsLoading(true);
+    apiClient.get<InspirationItem[]>('/inspiration?limit=50')
       .then((res) => { if (res.success) setInspirations(res.data || []); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setInspirationsLoading(false));
   }, []);
 
   // 做同款回填：从 URL query 接收 prompt
@@ -319,34 +320,6 @@ function AIVideoContent() {
       setGenPhase('error');
     }
   }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier, multiFrameMode, extraFramesText, lastFrameUrl, firstFrameUrl, sceneFrames, submitSegs]);
-
-  const handleOneClickGenerate = async () => {
-    if (selectedInspirations.size === 0) {
-      setToast({ message: '请先选择素材', type: 'error' });
-      return;
-    }
-    setOneClickMode(true);
-    setCurrentStep(4);
-    setGenPhase('submitting');
-    setGenError(null);
-
-    const selectedData = inspirations.filter((i) => selectedInspirations.has(i.id));
-
-    try {
-      const { storyboard: sb, segments: segs } = await oneClickGen({
-        inspirations: selectedData,
-        topic: topic.trim() || undefined,
-        stylePreset,
-        qualityTier,
-        language,
-      });
-      if (sb) setStoryboard(sb);
-    } catch (e: any) {
-      console.error('[OneClick] 一键成片失败:', e);
-      setGenError(e.message || '一键成片失败');
-      setGenPhase('error');
-    }
-  };
 
   const handleCancel = () => {
     cancelPolling();
@@ -524,6 +497,20 @@ function AIVideoContent() {
 
   const renderStep1 = () => (
     <>
+      {/* 主题方向 */}
+      <GlassCard>
+        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          <span style={{ color: '#06B6D4' }}>主题</span> · 方向
+        </p>
+        <input
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="例：产品发布、旅行vlog、知识科普..."
+          className="w-full px-3 py-2 rounded-xl bg-transparent text-sm outline-none"
+          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+        />
+      </GlassCard>
+
       {/* 首帧图片（关键：图生视频入口） */}
       <GlassCard>
         <div className="flex items-center justify-between mb-2">
@@ -581,8 +568,10 @@ function AIVideoContent() {
 
         {firstFrameTab === 'inspiration' && (
           <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
-            {inspirations.length === 0 ? (
+            {inspirationsLoading ? (
               <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 8 }}>加载中...</p>
+            ) : inspirations.filter((i) => i.type === 'image' && i.media_urls && i.media_urls.length > 0).length === 0 ? (
+              <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 8 }}>暂无图片灵感</p>
             ) : (
               inspirations
                 .filter((i) => i.type === 'image' && i.media_urls && i.media_urls.length > 0)
@@ -770,7 +759,11 @@ function AIVideoContent() {
           <span style={{ color: '#3B82F6' }}>素材</span> · 灵感库选材
         </p>
         <div className="space-y-2 max-h-48 overflow-y-auto">
-          {inspirations.length > 0 ? (
+          {inspirationsLoading ? (
+            <p style={{ color: '#9CA3AF', textAlign: 'center', padding: 16 }}>加载中...</p>
+          ) : inspirations.length === 0 ? (
+            <p style={{ color: '#9CA3AF', textAlign: 'center', padding: 16 }}>暂无灵感，去灵感库添加吧</p>
+          ) : (
             inspirations.map((item) => (
               <div
                 key={item.id}
@@ -797,10 +790,6 @@ function AIVideoContent() {
                 </span>
               </div>
             ))
-          ) : (
-            <p style={{ color: '#9CA3AF', textAlign: 'center', padding: 16 }}>
-              {inspirations.length === 0 ? '加载中...' : '暂无灵感，去灵感库添加吧'}
-            </p>
           )}
         </div>
         <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 8 }}>
@@ -956,44 +945,6 @@ function AIVideoContent() {
           </div>
         )}
       </div>
-
-      {/* 主题 */}
-      <GlassCard>
-        <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>主题方向（可选）</p>
-        <input
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="例：产品发布、旅行vlog、知识科普..."
-          className="w-full px-3 py-2 rounded-xl bg-transparent text-sm outline-none"
-          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-        />
-      </GlassCard>
-
-      {/* 一键成片 */}
-      <GlassCard
-        hover
-        onClick={handleOneClickGenerate}
-        className="!p-4 relative overflow-hidden"
-        style={{
-          border: '1px solid rgba(239,68,68,0.4)',
-          background: 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.08))',
-        }}
-      >
-        <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl" style={{ background: 'rgba(239,68,68,0.15)' }} />
-        <div className="flex items-center gap-3 relative">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.3)' }}>
-            <Wand2 size={20} color="#FCA5A5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p style={{ color: '#FCA5A5', fontSize: 14, fontWeight: 700 }}>一键成片</p>
-            <p style={{ color: '#9CA3AF', fontSize: 11 }}>
-              自动分镜 + 生成 · 选好素材直接出片
-            </p>
-          </div>
-          <ChevronRight size={18} color="#FCA5A5" />
-        </div>
-      </GlassCard>
 
       {/* 生成按钮 */}
       <PrimaryButton fullWidth size="lg" onClick={handleGenerateStoryboardV2} disabled={isGenerating || selectedInspirations.size === 0}>
@@ -1656,9 +1607,6 @@ function AIVideoContent() {
               style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
           </div>
           <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
-            {oneClickMode && (
-              <span style={{ color: '#FCA5A5', fontSize: 11, display: 'block', marginBottom: 4 }}>一键成片 · 自动分镜+生成</span>
-            )}
             {genPhase === 'submitting' ? '正在提交任务...' :
              genPhase === 'generating' ? '正在生成视频片段...' : '处理中...'}
           </p>
@@ -1715,94 +1663,38 @@ function AIVideoContent() {
       )}
 
       <div className="flex-1 px-4 pt-4 space-y-4">
-        {/* 快速/完整模式切换 */}
-        <div className="flex rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
-          <button
-            onClick={() => setQuickMode(true)}
-            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1"
-            style={{
-              background: quickMode ? 'linear-gradient(135deg, #F43F5E, #E11D48)' : 'transparent',
-              color: quickMode ? '#FFFFFF' : '#6B7280',
-            }}
-          >
-            <Zap size={12} /> 快速模式
-          </button>
-          <button
-            onClick={() => setQuickMode(false)}
-            className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-            style={{
-              background: !quickMode ? 'rgba(255,255,255,0.1)' : 'transparent',
-              color: !quickMode ? '#FFFFFF' : '#6B7280',
-            }}
-          >
-            完整模式
-          </button>
+        {/* 步骤指示器 */}
+        <div className="overflow-x-auto">
+          <div className="flex gap-0 min-w-max justify-center">
+            {STEPS.map((step, i) => {
+              const stepIndex = i + 1;
+              return (
+                <button key={step} onClick={() => { if (stepIndex <= currentStep && !isGenActive) setCurrentStep(stepIndex); }}
+                  className="flex flex-col items-center gap-1 px-3">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                    style={{
+                      background: stepIndex === currentStep ? '#3B82F6' : stepIndex < currentStep ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)',
+                      border: stepIndex === currentStep ? 'none' : stepIndex < currentStep ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.2)',
+                      color: stepIndex === currentStep ? '#FFFFFF' : stepIndex < currentStep ? '#86EFAC' : '#9CA3AF',
+                      boxShadow: stepIndex === currentStep ? '0 0 12px rgba(59,130,246,0.5)' : 'none',
+                    }}>
+                    {stepIndex < currentStep ? '✓' : stepIndex}
+                  </div>
+                  <span style={{
+                    color: stepIndex === currentStep ? '#3B82F6' : stepIndex < currentStep ? '#86EFAC' : '#9CA3AF',
+                    fontSize: 10, whiteSpace: 'nowrap',
+                  }}>{step}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* 快速模式：简洁输入 */}
-        <div style={{ display: quickMode ? undefined : 'none' }}>
-          <GlassCard className="!p-3 space-y-3">
-            <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }}>
-              AI 自动选择最佳风格和参数，输入脚本即可生成视频
-            </p>
-            <textarea
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="输入你的视频脚本或话题..."
-              rows={6}
-              className="w-full p-3 rounded-lg text-sm resize-none"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', outline: 'none' }}
-            />
-            <button
-              onClick={handleGenerateStoryboardV2}
-              disabled={isGenerating || !topic.trim()}
-              className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"
-              style={{
-                background: topic.trim() ? 'linear-gradient(135deg, #F43F5E, #E11D48)' : 'rgba(255,255,255,0.06)',
-                color: topic.trim() ? '#FFFFFF' : '#4B5563',
-              }}
-            >
-              {isGenerating ? <><Loader2 size={16} className="animate-spin" /> 生成中...</> : <><Sparkles size={16} /> 一键生成视频</>}
-            </button>
-          </GlassCard>
-        </div>
-
-        {/* 完整模式：详细设置 */}
-        <div style={{ display: quickMode ? 'none' : undefined }}>
-          <>
-            <div className="overflow-x-auto">
-              <div className="flex gap-0 min-w-max justify-center">
-                {STEPS.map((step, i) => {
-                  const stepIndex = i + 1;
-                  return (
-                    <button key={step} onClick={() => { if (stepIndex <= currentStep && !isGenActive) setCurrentStep(stepIndex); }}
-                      className="flex flex-col items-center gap-1 px-3">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{
-                          background: stepIndex === currentStep ? '#3B82F6' : stepIndex < currentStep ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)',
-                          border: stepIndex === currentStep ? 'none' : stepIndex < currentStep ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.2)',
-                          color: stepIndex === currentStep ? '#FFFFFF' : stepIndex < currentStep ? '#86EFAC' : '#9CA3AF',
-                          boxShadow: stepIndex === currentStep ? '0 0 12px rgba(59,130,246,0.5)' : 'none',
-                        }}>
-                        {stepIndex < currentStep ? '✓' : stepIndex}
-                      </div>
-                      <span style={{
-                        color: stepIndex === currentStep ? '#3B82F6' : stepIndex < currentStep ? '#86EFAC' : '#9CA3AF',
-                        fontSize: 10, whiteSpace: 'nowrap',
-                      }}>{step}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Step 内容 */}
-            {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && genPhase === 'idle' && renderStep4()}
-          </>
-        </div>
+        {/* Step 内容 */}
+        {currentStep === 1 && renderStep1()}
+        {currentStep === 2 && renderStep2()}
+        {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && genPhase === 'idle' && renderStep4()}
 
         {/* 生成中 / 生成完成 — 全屏占据 */}
         {(isGenActive || genPhase === 'done') && (

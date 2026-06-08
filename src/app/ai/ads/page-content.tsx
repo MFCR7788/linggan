@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy, FolderOpen, Upload, Image } from 'lucide-react';
+import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy, FolderOpen, Upload, Link2 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
@@ -47,9 +47,10 @@ function AdsContent() {
   const [product, setProduct] = useState('');
   const [sellingPoints, setSellingPoints] = useState<string[]>([...DEMO_SELLING_POINTS]);
   const [referenceImage, setReferenceImage] = useState<string>('');
+  const [referenceTab, setReferenceTab] = useState<'inspiration' | 'url' | 'upload'>('inspiration');
+  const [referenceInput, setReferenceInput] = useState('');
   const [extra, setExtra] = useState<string>(''); // mood / tone / layoutType
   const [uploadingRef, setUploadingRef] = useState(false);
-  const [showInspPicker, setShowInspPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: imageInspirations = [] } = useInspirations({ type: 'image', limit: 30 });
 
@@ -148,12 +149,6 @@ function AdsContent() {
       setUploadingRef(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
-
-  // 从灵感库选择参考图
-  const handlePickFromInspiration = (url: string) => {
-    setReferenceImage(url);
-    setShowInspPicker(false);
   };
 
   const addSellingPoint = () => {
@@ -510,60 +505,117 @@ function AdsContent() {
 
         {/* 参考图（可选） */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-            参考图 <span style={{ color: '#6B7280', fontSize: 10, fontWeight: 400 }}>(可选,可从 AI 生图页带入)</span>
-          </p>
-          {referenceImage ? (
-            <div className="relative inline-block">
-              <img
-                src={referenceImage}
-                alt="参考"
-                className="w-24 h-24 rounded-lg object-cover"
-                style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-              />
+          <div className="flex items-center justify-between mb-2">
+            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
+              <span style={{ color: '#8B5CF6' }}>参考图</span> · 视觉风格参考
+              <span style={{ color: '#6B7280', fontSize: 10, fontWeight: 400, marginLeft: 4 }}>（可选）</span>
+            </p>
+            {referenceImage && (
               <button
                 onClick={() => setReferenceImage('')}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(239,68,68,0.8)' }}
-                title="移除"
+                className="text-xs flex items-center gap-1 px-2 py-0.5 rounded"
+                style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}
               >
-                <X size={10} color="#fff" />
+                <X size={11} /> 清除
               </button>
+            )}
+          </div>
+
+          {/* 已选参考图预览 */}
+          {referenceImage && (
+            <div
+              className="mb-3 rounded-xl overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.15), rgba(59,130,246,0.15))',
+                border: '1px solid rgba(139,92,246,0.3)',
+                aspectRatio: '1/1',
+                maxHeight: 160,
+              }}
+            >
+              <img src={referenceImage} alt="参考图" className="w-full h-full object-cover" />
             </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p style={{ color: '#6B7280', fontSize: 11 }}>
-                上传参考图可帮助 AI 更好地匹配视觉风格
-              </p>
-              <div className="flex gap-2">
+          )}
+
+          {/* 三个 tab */}
+          <div className="flex rounded-lg overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            {([
+              { key: 'inspiration' as const, label: '灵感库', icon: '📚' },
+              { key: 'url' as const, label: 'URL', icon: '🔗' },
+              { key: 'upload' as const, label: '上传', icon: '📤' },
+            ]).map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => setReferenceTab(key)}
+                className="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition-all"
+                style={{
+                  background: referenceTab === key ? 'rgba(139,92,246,0.2)' : 'transparent',
+                  color: referenceTab === key ? '#C4B5FD' : '#9CA3AF',
+                  fontWeight: referenceTab === key ? 600 : 400,
+                }}
+              >
+                <span>{icon}</span> {label}
+              </button>
+            ))}
+          </div>
+
+          {referenceTab === 'inspiration' && (
+            <div className="max-h-40 overflow-y-auto custom-scrollbar">
+              {(imageInspirations as any[]).filter((item: any) => item.media_urls?.[0]).length === 0 ? (
+                <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 16 }}>
+                  暂无图片灵感，可先到灵感库上传
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(imageInspirations as any[])
+                    .filter((item: any) => item.media_urls?.[0])
+                    .map((item: any) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setReferenceImage(item.media_urls![0])}
+                        className="aspect-square rounded-lg overflow-hidden transition-all"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: referenceImage === item.media_urls![0]
+                            ? '2px solid rgba(139,92,246,0.6)'
+                            : '1px solid rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <img
+                          src={item.media_urls![0]}
+                          alt={item.title || ''}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {referenceTab === 'url' && (
+            <div>
+              <div className="flex gap-1.5">
+                <input
+                  value={referenceInput}
+                  onChange={(e) => setReferenceInput(e.target.value)}
+                  placeholder="https://... 图片 URL"
+                  className="flex-1 px-2.5 py-2 rounded-lg text-xs bg-transparent outline-none"
+                  style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+                />
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingRef}
-                  className="px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1.5"
-                  style={{
-                    background: 'rgba(59,130,246,0.15)',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    color: '#93C5FD',
-                  }}
+                  onClick={() => { if (referenceInput.trim()) { setReferenceImage(referenceInput.trim()); setReferenceInput(''); } }}
+                  className="px-3 py-1.5 rounded-lg text-xs"
+                  style={{ background: 'rgba(139,92,246,0.2)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.3)' }}
                 >
-                  {uploadingRef ? (
-                    <><Loader2 size={11} className="animate-spin" /> 上传中...</>
-                  ) : (
-                    <><Upload size={11} /> 本地上传</>
-                  )}
-                </button>
-                <button
-                  onClick={() => setShowInspPicker(true)}
-                  className="px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1.5"
-                  style={{
-                    background: 'rgba(139,92,246,0.15)',
-                    border: '1px solid rgba(139,92,246,0.3)',
-                    color: '#C4B5FD',
-                  }}
-                >
-                  <Image size={11} /> 灵感库选择
+                  <Link2 size={11} className="inline mr-0.5" /> 应用
                 </button>
               </div>
+            </div>
+          )}
+
+          {referenceTab === 'upload' && (
+            <div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -571,6 +623,18 @@ function AdsContent() {
                 className="hidden"
                 onChange={handleUploadRefImage}
               />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingRef}
+                className="w-full py-3 rounded-lg text-xs flex items-center justify-center gap-1.5"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', color: '#9CA3AF' }}
+              >
+                {uploadingRef ? (
+                  <><Loader2 size={14} className="animate-spin" /> 上传中...</>
+                ) : (
+                  <><Upload size={14} /> 点击选择本地图片</>
+                )}
+              </button>
             </div>
           )}
         </GlassCard>
@@ -764,53 +828,6 @@ function AdsContent() {
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* 灵感库图片选择器 */}
-      {showInspPicker && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-          onClick={() => setShowInspPicker(false)}>
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
-          <div className="relative w-full sm:max-w-md mx-4 mb-4 sm:mb-0 p-4 rounded-2xl max-h-[70vh] flex flex-col"
-            style={{ background: "rgba(31,41,55,0.98)", border: "1px solid rgba(255,255,255,0.12)" }}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }}>从灵感库选择图片</h3>
-              <button onClick={() => setShowInspPicker(false)} className="p-1 rounded" style={{ background: "rgba(255,255,255,0.08)" }}>
-                <X size={16} color="#9CA3AF" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {(imageInspirations as any[]).length === 0 ? (
-                <p style={{ color: "#6B7280", fontSize: 12, textAlign: "center", padding: "24px 0" }}>
-                  暂无图片灵感，可先到灵感库上传
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {(imageInspirations as any[]).map((item: any) => (
-                    <button
-                      key={item.id}
-                      onClick={() => handlePickFromInspiration(item.media_urls?.[0] || '')}
-                      disabled={!item.media_urls?.[0]}
-                      className="aspect-square rounded-lg overflow-hidden transition-all"
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        opacity: item.media_urls?.[0] ? 1 : 0.4,
-                      }}
-                    >
-                      {item.media_urls?.[0] ? (
-                        <img src={item.media_urls[0]} alt={item.title || ''} className="w-full h-full object-cover" loading="lazy" />
-                      ) : (
-                        <span style={{ color: "#6B7280", fontSize: 10 }}>无图</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
