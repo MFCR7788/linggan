@@ -423,11 +423,16 @@ function getSizeForRatio(ratio: string): string {
 
 export async function generateImage(
   prompt: string,
-  options: { ratio?: string; n?: number; seed?: number } = {}
+  options: { ratio?: string; n?: number; seed?: number; skipOptimize?: boolean } = {}
 ): Promise<ImageResult | ImageResult[]> {
-  // 先优化提示词
-  const finalPrompt = await optimizePrompt(prompt, 'image');
-  console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
+  const finalPrompt = options.skipOptimize
+    ? prompt
+    : await optimizePrompt(prompt, 'image');
+  if (options.skipOptimize) {
+    console.log(`[Image] 跳过优化: "${prompt.substring(0, 60)}..."`);
+  } else {
+    console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
+  }
 
   const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');

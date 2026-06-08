@@ -222,15 +222,23 @@ JSON:`;
       if (!c.prompt) c.prompt = `${product}, ${c.visualAngle || ''}`;
     }
 
-    // 3) 并发调 generateImage 9 次
-    const imageResults = await Promise.allSettled(
-      cells.map((c) =>
-        generateImage(c.prompt, {
-          ratio: '1:1',
-          n: 1,
-        }).then((r: any) => (Array.isArray(r) ? r[0] : r))
-      )
-    );
+    // 3) 分批并发调 generateImage（每批 3 张，LLM prompt 已优化故跳过）
+    const CONCURRENCY = 3;
+    const imageResults: PromiseSettledResult<{ imageUrl?: string }>[] = [];
+    for (let batchStart = 0; batchStart < cells.length; batchStart += CONCURRENCY) {
+      const batch = cells.slice(batchStart, batchStart + CONCURRENCY);
+      const batchResults = await Promise.allSettled(
+        batch.map((c) =>
+          generateImage(c.prompt, { ratio: '1:1', n: 1, skipOptimize: true })
+            .then((r: any) => (Array.isArray(r) ? r[0] : r))
+        )
+      );
+      imageResults.push(...batchResults);
+      // 批次间稍作间隔，避免触发限流
+      if (batchStart + CONCURRENCY < cells.length) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
 
     // 4) 失败格子按张退
     let successCount = 0;
