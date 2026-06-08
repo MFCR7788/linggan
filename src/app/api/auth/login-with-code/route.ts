@@ -130,18 +130,35 @@ export async function POST(request: NextRequest) {
           if (list.users.length < 100) break;
         }
       } else {
-        // GoTrue 异常（unexpected_failure）→ RPC 兜底（通过 PostgREST 调 create_user_via_sql）
+        // GoTrue 异常 → 先查找已有用户，没有再 RPC 创建
         console.warn('[login] GoTrue createUser 异常:', createError?.code, createError?.message);
-        const rpcResult = await rpcCreateUser(supabase, authEmail, deterministicPassword, phone, displayName);
-        if ('id' in rpcResult) {
-          authUserId = rpcResult.id;
-          isNewUser = true;
-          console.log('[login] RPC 创建用户成功:', authUserId);
+        let existingUserId: string | null = null;
+        for (let page = 1; page <= 5; page++) {
+          const { data: list } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+          if (!list?.users?.length) break;
+          const found = list.users.find((u: any) =>
+            u.email === authEmail || u.user_metadata?.phone === phone
+          );
+          if (found) { existingUserId = found.id; break; }
+          if (list.users.length < 100) break;
+        }
+
+        if (existingUserId) {
+          authUserId = existingUserId;
+          console.log('[login] listUsers 找到已有用户:', authUserId);
         } else {
-          return NextResponse.json({
-            success: false,
-            error: `注册失败: GoTrue 故障且 RPC 兜底也失败。请在 Supabase SQL Editor 确保已创建 create_user_via_sql 函数。RPC 错误: ${rpcResult.error}。GoTrue 错误: ${createError?.message || 'unknown'}`,
-          }, { status: 500 });
+          // 不存在 → RPC 创建新用户
+          const rpcResult = await rpcCreateUser(supabase, authEmail, deterministicPassword, phone, displayName);
+          if ('id' in rpcResult) {
+            authUserId = rpcResult.id;
+            isNewUser = true;
+            console.log('[login] RPC 创建用户成功:', authUserId);
+          } else {
+            return NextResponse.json({
+              success: false,
+              error: `注册失败: GoTrue 故障且 RPC 兜底也失败。请在 Supabase SQL Editor 确保已创建 create_user_via_sql 函数。RPC 错误: ${rpcResult.error}。GoTrue 错误: ${createError?.message || 'unknown'}`,
+            }, { status: 500 });
+          }
         }
       }
     }
