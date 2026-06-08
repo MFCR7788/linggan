@@ -77,44 +77,61 @@ export async function POST(request: NextRequest) {
     const authEmail = toAuthEmail(phone);
     const deterministicPassword = derivePassword(phone);
 
-    // 2. 查找 Supabase Auth 用户(按 email 查,Supabase Phone provider 默认禁用)
-    // 逐页扫描 listUsers(分页限制),防止用户量大时漏查
+    // 2. 创建或查找用户
+    //    策略：先尝试 createUser（新用户快速路径），若邮箱已存在则 listUsers 查找
     let authUserId: string | null = null;
-    let existing: any = null;
-    const maxPages = 10; // 最多扫 10 页(2000 用户),足够覆盖当前规模
-    for (let page = 1; page <= maxPages; page++) {
-      const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-      if (listError) {
-        console.error(`[login] listUsers 第${page}页失败:`, listError);
-        break;
+    let isNewUser = false;
+
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
+      email: authEmail,
+      password: deterministicPassword,
+      email_confirm: true,
+      user_metadata: {
+        phone,
+        username: username || phone,
+        source: 'phone_code',
+      },
+    });
+
+    if (!createError && created?.user) {
+      // 新用户创建成功
+      authUserId = created.user.id;
+      isNewUser = true;
+      console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
+    } else if (createError && (
+      String(createError.message).toLowerCase().includes('already') ||
+      createError.code === 'email_exists' ||
+      createError.code === 'user_already_exists'
+    )) {
+      // 邮箱已存在 → 逐页扫描 listUsers 查找
+      console.log(`[login] 用户已存在,查找中... (${createError.message})`);
+      let existing: any = null;
+      const maxPages = 10;
+      for (let page = 1; page <= maxPages; page++) {
+        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
+        if (listError) {
+          console.error(`[login] listUsers 第${page}页失败:`, listError);
+          break;
+        }
+        existing = listData?.users?.find(
+          (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
+        );
+        if (existing) { authUserId = existing.id; break; }
+        if (!listData?.users || listData.users.length < 200) break;
       }
-      existing = listData?.users?.find(
-        (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
-      );
-      if (existing) { authUserId = existing.id; break; }
-      if (!listData?.users || listData.users.length < 200) break; // 最后一页
+
+      if (!authUserId) {
+        console.error('[login] 用户邮箱已存在但 listUsers 未找到:', authEmail);
+        return NextResponse.json({ success: false, error: '账号已存在但查找失败,请联系客服' }, { status: 500 });
+      }
+    } else {
+      // 真正的创建错误（非重复）
+      console.error('[login] createUser 失败:', JSON.stringify(createError));
+      return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
     }
 
-    // 3. 不存在则创建(用 email 字段而非 phone,绕开 Supabase Phone provider)
-    if (!authUserId) {
-      const { data: created, error: createError } = await supabase.auth.admin.createUser({
-        email: authEmail,
-        password: deterministicPassword,
-        email_confirm: true,
-        user_metadata: {
-          phone,
-          username: username || phone,
-          source: 'phone_code',
-        },
-      });
-      if (createError || !created?.user) {
-        console.error('[login] createUser 失败:', createError);
-        return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
-      }
-      authUserId = created.user.id;
-      console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
-    } else {
-      // 4. 已存在：确保 email 已确认 + 密码匹配（老用户可能 email 未确认）
+    // 3. 已存在用户：确保 email_confirm + 密码正确，迁移老用户 email
+    if (!isNewUser) {
       const { error: ensureErr } = await supabase.auth.admin.updateUserById(authUserId, {
         email_confirm: true,
         password: deterministicPassword,
@@ -123,9 +140,10 @@ export async function POST(request: NextRequest) {
         console.warn('[login] ensureUserAuth 失败:', ensureErr.message);
       }
 
-      // 4a. 老用户(Phase C 前的)只有 phone 字段,迁移到 email 登录
-      const existingEmail: string | undefined = existing?.email;
-      if (existingEmail !== authEmail) {
+      // 老用户(Phase C 前的)可能 email 不是 authEmail 格式，需要迁移
+      // 用 getUserById 确认当前 email
+      const { data: authUser } = await supabase.auth.admin.getUserById(authUserId);
+      if (authUser?.user?.email !== authEmail) {
         const { error: migrateErr } = await supabase.auth.admin.updateUserById(authUserId, {
           email: authEmail,
           email_confirm: true,
@@ -137,7 +155,8 @@ export async function POST(request: NextRequest) {
           console.log(`[login] 老用户已迁移: ${authUserId} → email=${authEmail}`);
         }
       }
-      // 4b. 更新 username(若有)
+
+      // 更新 username(若有)
       if (username) {
         await supabase.auth.admin.updateUserById(authUserId, {
           user_metadata: { phone, username, source: 'phone_code' },
@@ -145,10 +164,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. 写 public.users(若不存在,触发 init_user_credits 给 30 credits)
+    // 4. 写 public.users(若不存在,触发 init_user_credits 给 30 credits)
     await ensureUserProfile(authUserId, phone, username || phone, supabase);
 
-    // 6. 用 ssr 客户端 signInWithPassword(自动 set sb-access-token cookie)
+    // 5. 用 ssr 客户端 signInWithPassword(自动 set sb-access-token cookie)
     const cookieStore = cookies();
     const ssr = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -173,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     let signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
     if (signInResult.error) {
-      // 7. 兜底：密码重置 + 确认邮箱
+      // 6. 兜底：密码重置 + 确认邮箱
       console.warn(`[login] signInWithPassword 失败(code=${signInResult.error.code}, msg=${signInResult.error.message}), 兜底重置...`);
       const { error: resetError } = await supabase.auth.admin.updateUserById(authUserId, {
         email_confirm: true,
@@ -190,7 +209,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 8. 清除 dev cookie(已废弃)
+    // 7. 清除 dev cookie(已废弃)
     cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
 
     return NextResponse.json({
