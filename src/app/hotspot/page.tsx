@@ -428,6 +428,7 @@ function KeywordsTab({
   showAddKeyword, setShowAddKeyword, newKeyword, setNewKeyword, addingKeyword,
   handleAddKeyword, handleToggleKeyword, handleDeleteKeyword,
   onToInspiration, expandedId, onExpand,
+  pendingKeywords, togglePendingKeyword, batchAddKeywords,
 }: any) {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 290px)' }}>
@@ -477,11 +478,16 @@ function KeywordsTab({
               <div className="flex flex-wrap gap-1">
                 {matchedPresets.slice(0, 12).map((pk) => {
                   const alreadyAdded = keywords.some((kw: any) => kw.keyword === pk.keyword);
+                  const isPending = pendingKeywords.has(pk.keyword);
                   return (
-                    <button key={pk.keyword} onClick={() => !alreadyAdded && handleAddKeyword(pk.keyword)} disabled={alreadyAdded || addingKeyword}
+                    <button key={pk.keyword} onClick={() => { if (!alreadyAdded) togglePendingKeyword(pk.keyword); }} disabled={alreadyAdded}
                       className="px-1.5 py-0.5 rounded text-[11px]"
-                      style={{ background: alreadyAdded ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: alreadyAdded ? '#6EE7B7' : '#9CA3AF', border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
-                      {pk.keyword} {alreadyAdded ? '✓' : '+'}
+                      style={{
+                        background: alreadyAdded ? 'rgba(34,197,94,0.1)' : isPending ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
+                        color: alreadyAdded ? '#6EE7B7' : isPending ? '#93C5FD' : '#9CA3AF',
+                        border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : isPending ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                      }}>
+                      {pk.keyword} {alreadyAdded ? '✓' : isPending ? '✓' : '+'}
                     </button>
                   );
                 })}
@@ -504,11 +510,16 @@ function KeywordsTab({
                   <div className="flex flex-wrap gap-1">
                     {cat.keywords.map((pk) => {
                       const alreadyAdded = keywords.some((kw: any) => kw.keyword === pk.keyword);
+                      const isPending = pendingKeywords.has(pk.keyword);
                       return (
-                        <button key={pk.keyword} onClick={() => !alreadyAdded && handleAddKeyword(pk.keyword)} disabled={alreadyAdded || addingKeyword}
+                        <button key={pk.keyword} onClick={() => { if (!alreadyAdded) togglePendingKeyword(pk.keyword); }} disabled={alreadyAdded}
                           className="px-1.5 py-0.5 rounded text-[11px]"
-                          style={{ background: alreadyAdded ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: alreadyAdded ? '#6EE7B7' : '#9CA3AF', border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
-                          {pk.keyword} {alreadyAdded ? '✓' : '+'}
+                          style={{
+                            background: alreadyAdded ? 'rgba(34,197,94,0.1)' : isPending ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
+                            color: alreadyAdded ? '#6EE7B7' : isPending ? '#93C5FD' : '#9CA3AF',
+                            border: `1px solid ${alreadyAdded ? 'rgba(34,197,94,0.2)' : isPending ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                          }}>
+                          {pk.keyword} {alreadyAdded ? '✓' : isPending ? '✓' : '+'}
                         </button>
                       );
                     })}
@@ -519,6 +530,31 @@ function KeywordsTab({
           </div>
         );
       })()}
+
+      {/* 待添加关键词 + 批量添加按钮 */}
+      {pendingKeywords.size > 0 && (
+        <div className="mb-2 rounded-lg p-2" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <span style={{ color: '#93C5FD', fontSize: 11 }}>待添加 ({pendingKeywords.size})</span>
+            <button onClick={batchAddKeywords} disabled={addingKeyword}
+              className="px-3 py-1 rounded-lg text-[11px] font-medium"
+              style={{ background: 'rgba(59,130,246,0.25)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.4)' }}>
+              {addingKeyword ? <Loader2 size={12} className="animate-spin" /> : `添加 (${pendingKeywords.size})`}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {[...pendingKeywords].map((kw) => (
+              <span key={kw} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px]"
+                style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.3)' }}>
+                {kw}
+                <button onClick={() => togglePendingKeyword(kw)} className="ml-0.5">
+                  <X size={10} color="#6B7280" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 双栏：关键词列表 + 选中关键词热点 */}
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -825,6 +861,7 @@ function HotspotRadarInner() {
 
   const [showAddKeyword, setShowAddKeyword] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'today' | 'all' | 'urgent' | 'unread'>('all');
+  const [pendingKeywords, setPendingKeywords] = useState<Set<string>>(new Set());
 
   const authHeaders = getDevUserIdHeader();
 
@@ -980,6 +1017,37 @@ function HotspotRadarInner() {
     finally { setAddingKeyword(false); }
   };
 
+  const togglePendingKeyword = (kw: string) => {
+    setPendingKeywords((prev) => {
+      const next = new Set(prev);
+      if (next.has(kw)) next.delete(kw); else next.add(kw);
+      return next;
+    });
+  };
+
+  const batchAddKeywords = async () => {
+    if (pendingKeywords.size === 0) return;
+    setAddingKeyword(true);
+    syncDevAuthCookie();
+    let successCount = 0;
+    for (const kw of pendingKeywords) {
+      try {
+        let platforms: string[] | undefined;
+        for (const cat of PRESET_CATEGORIES) {
+          const found = cat.keywords.find(k => k.keyword === kw);
+          if (found) { platforms = found.platforms; break; }
+        }
+        const res = await fetch('/api/keywords', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ keyword: kw, platforms }) });
+        if (res.ok) successCount++;
+      } catch { /* continue */ }
+    }
+    setPendingKeywords(new Set());
+    setAddingKeyword(false);
+    fetchData();
+    setCheckResult(`已添加 ${successCount}/${pendingKeywords.size} 个监控词`);
+    setTimeout(() => setCheckResult(null), 3000);
+  };
+
   const handleToggleKeyword = async (id: string, currentActive: boolean) => {
     syncDevAuthCookie();
     try { await fetch(`/api/keywords/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ is_active: !currentActive }) }); fetchData(); } catch { setToast({ type: 'error', message: '操作失败' }); }
@@ -1116,6 +1184,7 @@ function HotspotRadarInner() {
               handleDeleteKeyword={handleDeleteKeyword}
               onToInspiration={handleToInspiration}
               expandedId={expandedId} onExpand={handleExpand}
+              pendingKeywords={pendingKeywords} togglePendingKeyword={togglePendingKeyword} batchAddKeywords={batchAddKeywords}
             />
           )}
           {activeTab === 'search' && (
