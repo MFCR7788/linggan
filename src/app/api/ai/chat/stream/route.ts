@@ -19,7 +19,7 @@ export const POST = withAuth(async ({ request, user }) => {
   } catch (e) {
     if (e instanceof InsufficientCreditsError) {
       return NextResponse.json(
-        { error: `余额不足:需要 ${creditCost} credits`, code: 'INSUFFICIENT_CREDITS' },
+        { error: `余额不足:需要 ${creditCost} 灵力`, code: 'INSUFFICIENT_CREDITS' },
         { status: 402 }
       ) as NextResponse;
     }

@@ -87,7 +87,7 @@ function PackagesContent() {
           clearInterval(pollTimerRef.current);
           pollTimerRef.current = null;
         }
-        showToast(`支付成功!+${r.data.creditsGranted} credits 已到账`, 'success');
+        showToast(`支付成功!+${r.data.creditsGranted} 灵力 已到账`, 'success');
       } else if (r.data.status === 'expired' || r.data.status === 'failed') {
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
@@ -179,9 +179,9 @@ function PackagesContent() {
           <div className="flex items-center gap-2">
             <Gift size={20} color="#F472B6" />
             <div>
-              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>加油包 = 永久有效 credits</p>
+              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>加油包 = 永久有效灵力</p>
               <p style={{ color: '#9CA3AF', fontSize: 11 }} className="mt-0.5">
-                订阅外的额外 credits,一次性购买,长期有效(180-365 天)
+                订阅外的额外灵力,一次性购买,长期有效(180-365 天)
               </p>
             </div>
           </div>
@@ -232,10 +232,10 @@ function PackagesContent() {
                   <div className="text-right">
                     <p style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 700 }}>
                       {(pkg.credits + pkg.bonus_credits).toLocaleString()}
-                      <span style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>credits</span>
+                      <span style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>灵力</span>
                     </p>
                     <p style={{ color: '#6B7280', fontSize: 10 }} className="mt-0.5">
-                      ¥{pricePerCredit}/credit
+                      ¥{pricePerCredit}/灵力
                     </p>
                   </div>
                 </div>
@@ -282,8 +282,8 @@ function PackagesContent() {
           <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6 }}>
             <strong style={{ color: '#FFFFFF' }}>关于加油包:</strong><br />
             · 微信 H5 支付,扫码/跳转完成 → 立即到账<br />
-            · 加油包 credits 长期有效(180-365 天),不清零<br />
-            · 单 credit 越买越便宜,推荐「企业包」单价 ¥0.107<br />
+            · 加油包灵力长期有效(180-365 天),不清零<br />
+            · 单灵力越买越便宜,推荐「企业包」单价 ¥0.107<br />
             · 余额不足时,生成会失败并提示充值,不会乱扣
           </p>
         </GlassCard>
@@ -305,7 +305,7 @@ function PackagesContent() {
               确认购买 {confirming.name}
             </p>
             <p style={{ color: '#9CA3AF', fontSize: 12 }} className="mb-3">
-              ¥{confirming.price_cny} → +{(confirming.credits + confirming.bonus_credits).toLocaleString()} credits
+              ¥{confirming.price_cny} → +{(confirming.credits + confirming.bonus_credits).toLocaleString()} 灵力
             </p>
             <div
               className="rounded-lg p-3 mb-4"
@@ -362,11 +362,11 @@ function PackagesContent() {
                   支付成功
                 </p>
                 <p style={{ color: '#10B981', fontSize: 13, textAlign: 'center' }} className="mb-3">
-                  +{order.creditsToGrant + order.bonusCredits} credits 已到账
+                  +{order.creditsToGrant + order.bonusCredits} 灵力 已到账
                 </p>
                 {balanceAfter !== null && (
                   <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-4">
-                    当前余额:<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{balanceAfter}</span> credits
+                    当前余额:<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{balanceAfter}</span> 灵力
                   </p>
                 )}
                 <button

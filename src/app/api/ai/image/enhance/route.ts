@@ -121,7 +121,7 @@ export const POST = withAuth(async ({ request, user }) => {
         return NextResponse.json(
           {
             success: false,
-            error: `余额不足:需要 ${creditCost} credits,当前 ${e.available} credits`,
+            error: `余额不足:需要 ${creditCost} 灵力，当前 ${e.available} 灵力`,
             code: 'INSUFFICIENT_CREDITS',
             data: { required: creditCost, available: e.available },
           },

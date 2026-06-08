@@ -148,7 +148,7 @@ function BillingContent() {
   return (
     <div className="flex flex-col min-h-screen pb-12">
       <TopNav
-        title="我的灵感点"
+        title="我的灵力"
         showBack
         onBack={() => router.push('/profile')}
       />
@@ -168,7 +168,7 @@ function BillingContent() {
                 <p style={{ color: '#9CA3AF', fontSize: 11 }}>当前余额</p>
                 <p style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 700 }}>
                   {loading ? '—' : balance.toLocaleString()}
-                  <span style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 400, marginLeft: 4 }}>credits</span>
+                  <span style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 400, marginLeft: 4 }}>灵力</span>
                 </p>
                 {loadError && (
                   <p style={{ color: '#FCA5A5', fontSize: 11, marginTop: 2 }}>{loadError}</p>
@@ -201,7 +201,7 @@ function BillingContent() {
               {TIER_LABELS[tier] || tier}
             </span>
             <span style={{ color: '#9CA3AF', fontSize: 11 }} className="flex-1">
-              {tier === 'free' ? '升级订阅享更多 credits' : '订阅周期内,credits 每月发放'}
+              {tier === 'free' ? '升级订阅享更多灵力' : '订阅周期内,灵力每月发放'}
             </span>
             <button
               onClick={() => router.push('/profile/billing/packages')}
@@ -340,7 +340,7 @@ function BillingContent() {
                           )}
                         </div>
                         <p style={{ color: '#9CA3AF', fontSize: 10 }} className="mt-1">
-                          {sub.monthly_credits} credits/月 ·{' '}
+                          {sub.monthly_credits} 灵力/月 ·{' '}
                           {new Date(sub.started_at).toLocaleDateString('zh-CN')} ~ {expiresAt.toLocaleDateString('zh-CN')}
                         </p>
                         {isActive && (

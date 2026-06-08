@@ -119,7 +119,7 @@ export const POST = withAuth(async ({ request, user }) => {
   } catch (e: unknown) {
     if (e instanceof InsufficientCreditsError) {
       return createApiError(
-        `余额不足: 需要 ${e.required} credits，当前 ${e.available}`,
+        `余额不足: 需要 ${e.required} 灵力，当前 ${e.available}`,
         402,
       );
     }

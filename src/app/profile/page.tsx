@@ -70,7 +70,7 @@ const TIER_COLORS: Record<string, string> = {
 
 // 菜单项:只保留真实可达的入口
 const menuItems = [
-  { icon: <Wallet size={18} />, label: '我的灵感点', href: '/profile/billing', color: '#F472B6', desc: '余额 · 流水 · 加油包 · 订阅' },
+  { icon: <Wallet size={18} />, label: '我的灵力', href: '/profile/billing', color: '#F472B6', desc: '余额 · 流水 · 加油包 · 订阅' },
   { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey, color: '#3B82F6', desc: '热点预警 · 系统消息' },
   { icon: <TrendingUp size={18} />, label: '热点监控', page: 'hotspot' as PageKey, color: '#EF4444', desc: '关键词驱动的实时追踪' },
   { icon: <BookOpen size={18} />, label: '灵感库', page: 'inspiration' as PageKey, color: '#F59E0B', desc: '查看 / 编辑全部素材' },
@@ -225,7 +225,7 @@ function ProfileContent() {
           </div>
         </GlassCard>
 
-        {/* 我的灵感点 — 真实余额卡片(原「我的灵感点」+「订阅管理」合并入口) */}
+        {/* 我的灵力 — 真实余额卡片(原「我的灵感点」+「订阅管理」合并入口) */}
         <GlassCard
           className="!p-4 cursor-pointer"
           onClick={() => router.push('/profile/billing')}
@@ -240,7 +240,7 @@ function ProfileContent() {
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5">
                 <span style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 700 }}>{balance.toLocaleString()}</span>
-                <span style={{ color: '#9CA3AF', fontSize: 12 }}>credits</span>
+                <span style={{ color: '#9CA3AF', fontSize: 12 }}>灵力</span>
               </div>
               <p style={{ color: '#9CA3AF', fontSize: 11 }} className="mt-0.5">
                 余额 · {tierLabel} · 加油包 / 流水 / 取消订阅

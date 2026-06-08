@@ -60,7 +60,7 @@ export interface SubscriptionTier {
 
 export class InsufficientCreditsError extends Error {
   constructor(public required: number, public available: number) {
-    super(`余额不足:需要 ${required} credits,当前余额 ${available}`);
+    super(`余额不足:需要 ${required} 灵力，当前余额 ${available}`);
     this.name = 'InsufficientCreditsError';
   }
 }

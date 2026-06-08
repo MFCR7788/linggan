@@ -5,6 +5,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
 import { createAdminClient, createPgPool } from '@/lib/supabase-server';
+import { grant } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,6 +165,13 @@ export async function POST(request: NextRequest) {
 
     // ─── 4. 确保 public.users ───
     await ensureUserProfile(authUserId, phone, displayName, supabase);
+
+    // 新用户注册赠送初始灵力
+    if (isNewUser) {
+      await grant(authUserId, 100, 'admin_adjust', 'signup_bonus', '新用户注册赠送 100 灵力').catch(err => {
+        console.error('[login] 新用户赠送灵力失败:', err);
+      });
+    }
 
     // ─── 5. SSR session cookie ───
     const cookieStore = cookies();

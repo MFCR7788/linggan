@@ -102,7 +102,7 @@ function SubscribeContent() {
         }
         // 同步当前套餐
         await load();
-        showToast(`订阅成功!首月赠送 ${r.data.creditsGranted} credits`, 'success');
+        showToast(`订阅成功!首月赠送 ${r.data.creditsGranted} 灵力`, 'success');
       } else if (r.data.status === 'expired' || r.data.status === 'failed') {
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
@@ -220,9 +220,9 @@ function SubscribeContent() {
           <div className="flex items-center gap-2">
             <Sparkles size={20} color="#F472B6" />
             <div>
-              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>订阅 = 每月自动送 credits</p>
+              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>订阅 = 每月自动送灵力</p>
               <p style={{ color: '#9CA3AF', fontSize: 11 }} className="mt-0.5">
-                月底未消耗完的订阅 credits 会清零(加油包余额不受影响)
+                月底未消耗完的订阅灵力会清零(加油包余额不受影响)
               </p>
             </div>
           </div>
@@ -282,7 +282,7 @@ function SubscribeContent() {
                   style={{ background: `${color}15`, border: `1px solid ${color}33` }}
                 >
                   <p style={{ color: color, fontSize: 13, fontWeight: 600 }}>
-                    {isFree ? `每月 ${tier.monthly_credits} credits(试用)` : `每月 ${tier.monthly_credits} credits`}
+                    {isFree ? `每月 ${tier.monthly_credits} 灵力(试用)` : `每月 ${tier.monthly_credits} 灵力`}
                   </p>
                 </div>
 
@@ -333,10 +333,10 @@ function SubscribeContent() {
           <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6 }}>
             <strong style={{ color: '#FFFFFF' }}>关于订阅:</strong><br />
             · 微信 H5 支付,跳转微信 → 完成 → 立即生效<br />
-            · 月底未消耗完的订阅赠送 credits 会清零(加油包余额不受影响)<br />
-            · 升级套餐立即生效,首月 credits 按新档位赠送<br />
-            · 降级套餐当前周期结束后生效,已赠送 credits 不退<br />
-            · 单 credit 越买越便宜,Studio(¥0.166) / 企业(¥0.167) 是 ROI 最高的档位
+            · 月底未消耗完的订阅赠送灵力会清零(加油包余额不受影响)<br />
+            · 升级套餐立即生效,首月灵力按新档位赠送<br />
+            · 降级套餐当前周期结束后生效,已赠送灵力不退<br />
+            · 单灵力越买越便宜,Studio(¥0.166) / 企业(¥0.167) 是 ROI 最高的档位
           </p>
         </GlassCard>
       </div>
@@ -359,7 +359,7 @@ function SubscribeContent() {
             <p style={{ color: '#9CA3AF', fontSize: 12 }} className="mb-3">
               {confirming.tier === 'free'
                 ? '降级到免费版,当前订阅周期结束后生效'
-                : `¥${confirming.monthly_price_cny}/月 · 每月赠送 ${confirming.monthly_credits} credits · 30 天`}
+                : `¥${confirming.monthly_price_cny}/月 · 每月赠送 ${confirming.monthly_credits} 灵力 · 30 天`}
             </p>
             {confirming.tier !== 'free' && (
               <div
@@ -429,11 +429,11 @@ function SubscribeContent() {
                   订阅成功
                 </p>
                 <p style={{ color: '#10B981', fontSize: 13, textAlign: 'center' }} className="mb-3">
-                  {order.tierName} · 首月 +{order.creditsToGrant} credits 已到账
+                  {order.tierName} · 首月 +{order.creditsToGrant} 灵力 已到账
                 </p>
                 {balanceAfter !== null && (
                   <p style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }} className="mb-4">
-                    当前余额:<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{balanceAfter}</span> credits
+                    当前余额:<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{balanceAfter}</span> 灵力
                   </p>
                 )}
                 <button
@@ -483,7 +483,7 @@ function SubscribeContent() {
                 >
                   <p style={{ color: '#07C160', fontSize: 11, lineHeight: 1.5 }}>
                     📱 已为你打开微信支付页面,请在新标签中完成付款<br />
-                    付款成功后,本月 credits 将自动到账
+                    付款成功后,本月灵力将自动到账
                   </p>
                 </div>
                 <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }} className="mb-3">

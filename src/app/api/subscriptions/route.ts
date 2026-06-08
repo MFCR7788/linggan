@@ -161,7 +161,7 @@ export const POST = withAuth(async ({ request, user }) => {
       expiresAt: expiresAt.toISOString(),
       creditsGranted: tierDef.monthly_credits,
       balanceAfter: grantResult.balanceAfter,
-      message: `订阅成功!本月已赠送 ${tierDef.monthly_credits} credits,30 天后到期`,
+      message: `订阅成功!本月已赠送 ${tierDef.monthly_credits} 灵力，30 天后到期`,
     }, '订阅成功');
   } catch (e: any) {
     console.error('[Subscriptions] POST error:', e);

@@ -100,7 +100,7 @@ export function CreditsWarningBanner() {
       </div>
       <div className="flex-1 min-w-0">
         <p style={{ color: '#FFFFFF', fontSize: 12, fontWeight: 600 }}>
-          余额仅剩 <span style={{ color: '#FCD34D' }}>{balance}</span> credits
+          余额仅剩 <span style={{ color: '#FCD34D' }}>{balance}</span> 灵力
         </p>
         <p style={{ color: '#D1D5DB', fontSize: 10, marginTop: 1 }}>
           建议充值以免生成中断

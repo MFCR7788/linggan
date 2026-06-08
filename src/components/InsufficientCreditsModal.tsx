@@ -69,13 +69,13 @@ export function InsufficientCreditsModal() {
           style={{ color: '#FFFFFF', fontSize: 18, fontWeight: 700, textAlign: 'center' }}
           className="mb-1"
         >
-          灵感点不足
+          灵力不足
         </p>
         <p
           style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }}
           className="mb-4"
         >
-          继续生成需要补充 credits
+          继续生成需要补充灵力
         </p>
 
         <div
@@ -88,19 +88,19 @@ export function InsufficientCreditsModal() {
           <div className="flex justify-between items-center">
             <span style={{ color: '#9CA3AF', fontSize: 12 }}>本次消耗</span>
             <span style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
-              {detail.required} credits
+              {detail.required} 灵力
             </span>
           </div>
           <div className="flex justify-between items-center">
             <span style={{ color: '#9CA3AF', fontSize: 12 }}>当前余额</span>
             <span style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
-              {detail.available} credits
+              {detail.available} 灵力
             </span>
           </div>
           <div className="flex justify-between items-center pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <span style={{ color: '#F472B6', fontSize: 12, fontWeight: 600 }}>还差</span>
             <span style={{ color: '#F472B6', fontSize: 14, fontWeight: 700 }}>
-              {shortage} credits
+              {shortage} 灵力
             </span>
           </div>
         </div>
@@ -140,7 +140,7 @@ export function InsufficientCreditsModal() {
           style={{ color: '#6B7280', fontSize: 10, textAlign: 'center' }}
           className="mt-3"
         >
-          首充体验包 ¥29 = 120 credits · 长期有效
+          首充体验包 ¥29 = 120 灵力 · 长期有效
         </p>
       </div>
     </div>
