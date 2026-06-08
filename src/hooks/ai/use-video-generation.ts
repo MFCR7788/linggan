@@ -72,6 +72,16 @@ export interface SimpleGenerateParams {
   imageUrl?: string;
   style?: string;
   duration?: number;
+  voiceStyle?: string;
+  bgmStyle?: string;
+}
+
+export interface LongGenerateParams {
+  script: string;
+  topic?: string;
+  voiceStyle?: string;
+  bgmStyle?: string;
+  duration?: number;
 }
 
 export interface SimpleGenerateResult {
@@ -117,6 +127,8 @@ export function useVideoGeneration() {
         imageUrl: params.imageUrl || '',
         style: params.style || '',
         duration: params.duration || 5,
+        voiceStyle: params.voiceStyle || 'professional',
+        bgmStyle: params.bgmStyle || 'tech',
       });
       if (!res.success) throw new Error(res.error || '提交失败');
 
@@ -136,6 +148,106 @@ export function useVideoGeneration() {
         setSimpleProgress(`生成中... ${Math.round((attempts / 90) * 100)}%`);
       }
       throw new Error('生成超时，请稍后重试');
+    } catch (e: any) {
+      setError(e.message || '生成失败');
+      throw e;
+    } finally {
+      setSimpleGenerating(false);
+      setSimpleProgress('');
+    }
+  }, []);
+
+  // ─── Long video generate (Workflow use case) ─────────
+  const generateLongVideo = useCallback(async (params: LongGenerateParams): Promise<SimpleGenerateResult> => {
+    setSimpleGenerating(true);
+    setSimpleVideoUrl(null);
+    setSimpleProgress('正在分析脚本生成分镜...');
+    setError(null);
+
+    try {
+      // Calculate duration from script length: Chinese ~3 chars/sec, clamped 10-120s
+      const cleanText = params.script.replace(/<[^>]*>/g, '').replace(/\s/g, '');
+      const textDuration = Math.max(10, Math.min(120, Math.ceil(cleanText.length / 3)));
+      const duration = params.duration || textDuration;
+
+      // 1. Call one-click API to generate storyboard + submit segments
+      const ocRes = await apiClient.post<{
+        storyboard: any[];
+        segments: any[];
+        taskIds: string;
+        providers: string;
+      }>('/ai/video/one-click', {
+        inspirations: [{
+          id: Date.now(),
+          title: (params.topic || '产品介绍').substring(0, 40),
+          original_text: params.script,
+          ai_summary: params.script.substring(0, 200),
+        }],
+        topic: params.topic || '产品介绍',
+        stylePreset: 'product_show',
+        qualityTier: 'premium',
+        duration,
+      });
+
+      if (!ocRes.success) throw new Error(ocRes.error || '分镜生成失败');
+
+      const { storyboard, taskIds, providers } = ocRes.data!;
+
+      // 2. Poll until all segments complete
+      let allDone = false;
+      let segResults: Record<string, { status: string; videoUrl?: string }> = {};
+      let attempts = 0;
+
+      while (!allDone && attempts < 120) {
+        await new Promise(r => setTimeout(r, 5000));
+        attempts++;
+        setSimpleProgress(`视频片段生成中... ${attempts * 5}s`);
+
+        const pollRes = await apiClient.get<{
+          results?: Record<string, { status: string; videoUrl?: string }>;
+          progress?: { allDone: boolean };
+        }>(`/ai/video/generate?taskIds=${taskIds}&providers=${providers}`);
+
+        if (pollRes.success && pollRes.data) {
+          if (pollRes.data.results) segResults = pollRes.data.results;
+          if (pollRes.data.progress?.allDone) {
+            allDone = true;
+          }
+        }
+      }
+
+      if (!allDone) throw new Error('视频生成超时，请稍后重试');
+
+      // 3. Collect video URLs and merge
+      const videoUrls = Object.values(segResults)
+        .filter((s: any) => s.status === 'succeeded' && s.videoUrl)
+        .map((s: any) => s.videoUrl);
+
+      if (videoUrls.length === 0) throw new Error('没有成功生成的视频片段');
+
+      setSimpleProgress('正在合并视频片段...');
+
+      const mergeRes = await apiClient.post<{ videoUrl: string }>('/ai/video/merge', {
+        videoUrls,
+        bgmStyle: params.bgmStyle || 'tech',
+        subtitleStyle: 'modern',
+        subtitlePosition: 'bottom',
+        storyboard: (storyboard as any[]).map((s: any) => ({
+          index: s.index,
+          timeStart: s.timeStart,
+          timeEnd: s.timeEnd,
+          duration: s.duration,
+          subtitle: s.subtitle || '',
+        })),
+        stylePreset: 'product_show',
+        language: 'zh',
+        topic: params.topic || '产品介绍',
+      });
+
+      if (!mergeRes.success) throw new Error(mergeRes.error || '合并失败');
+
+      setSimpleVideoUrl(mergeRes.data!.videoUrl);
+      return { videoUrl: mergeRes.data!.videoUrl };
     } catch (e: any) {
       setError(e.message || '生成失败');
       throw e;
@@ -376,7 +488,7 @@ export function useVideoGeneration() {
 
   return {
     // Simple
-    simpleGenerate, simpleGenerating, simpleProgress, simpleVideoUrl,
+    simpleGenerate, generateLongVideo, simpleGenerating, simpleProgress, simpleVideoUrl,
     // Pipeline
     generateStoryboard, submitSegments, oneClick, mergeVideo, cancelPolling,
     generatingStoryboard, generatingSegments, merging,

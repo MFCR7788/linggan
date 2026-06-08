@@ -100,6 +100,100 @@ export async function callDeepSeek(
   return content;
 }
 
+// DeepSeek 流式输出（异步生成器，逐块 yield 文本）
+export async function* callDeepSeekStream(
+  prompt: string,
+  options: ChatOptions = {}
+): AsyncGenerator<string, string, unknown> {
+  const apiKey = getDashScopeApiKey();
+  if (!apiKey) {
+    throw new Error('DASHSCOPE_API_KEY is not configured');
+  }
+
+  const body: Record<string, unknown> = {
+    model: options.model || 'deepseek-v3',
+    messages: [
+      { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+    stream: true,
+  };
+  if (options.enableSearch) body.enable_search = true;
+
+  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  }, 120000);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DeepSeek stream failed: ${error.substring(0, 200)}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (jsonStr === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const delta = parsed?.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullContent += delta;
+            yield delta;
+          }
+        } catch {
+          // 跳过无法解析的行
+        }
+      }
+    }
+
+    // 处理流结束后 buffer 中剩余的完整行
+    if (buffer.trim()) {
+      const trimmed = buffer.trim();
+      if (trimmed.startsWith('data:')) {
+        const jsonStr = trimmed.slice(5).trim();
+        if (jsonStr !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              yield delta;
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return fullContent;
+}
+
 // ====== 通义千问 / DashScope API ======
 
 export async function callQwen(
@@ -531,9 +625,9 @@ export interface StoryboardScene {
   transition: string;
 }
 
-/** 按目标时长计算分段 */
-export function calcSegmentDurations(totalDuration: number): number[] {
-  const numSegments = Math.ceil(totalDuration / 10);
+/** 按目标时长计算分段，segmentMax 为单段最长秒数（默认10，premium可达15） */
+export function calcSegmentDurations(totalDuration: number, segmentMax: number = 10): number[] {
+  const numSegments = Math.ceil(totalDuration / segmentMax);
   const baseDuration = Math.floor(totalDuration / numSegments);
   const remainder = totalDuration - baseDuration * numSegments;
   const durations: number[] = [];
@@ -639,10 +733,11 @@ export async function generateStoryboardV2(params: {
   topic?: string;
   language?: string;
   firstFrameUrl?: string;
+  segmentMax?: number;
 }): Promise<StoryboardScene[]> {
-  const { inspirations, stylePreset, duration, topic, language = 'zh', firstFrameUrl } = params;
+  const { inspirations, stylePreset, duration, topic, language = 'zh', firstFrameUrl, segmentMax = 10 } = params;
   const preset = STYLE_PRESETS[stylePreset] || STYLE_PRESETS.random;
-  const durations = calcSegmentDurations(duration);
+  const durations = calcSegmentDurations(duration, segmentMax);
   const numSegments = durations.length;
 
   // 语言配置

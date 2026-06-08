@@ -274,10 +274,10 @@ export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
         emoji: '🎓',
         desc: '产品功能 → 教程文案 → 分镜 → AI 视频',
         steps: [
-          { label: 'AI 教程文案', entry: '/ai/copywriting' },
-          { label: 'AI 视频合成', entry: '/ai/video' },
+          { label: 'AI 教程文案', entry: '/ai/copywriting', role: '你需要为产品功能介绍视频撰写口播脚本。要求：1. 开头3秒用痛点或悬念吸引注意力 2. 按模块逐个介绍功能，每个功能附带画面建议[画面：xxx] 3. 语言口语化、有节奏感，像真人讲解 4. 总时长控制在60-90秒的口播量（约200-300字）' },
+          { label: 'AI 视频合成', entry: '/ai/video', role: '你是一个产品演示视频导演。根据脚本中的[画面：xxx]提示生成对应的演示画面，运镜平稳，字幕清晰，整体风格专业现代。' },
         ],
-        prefills: { style: 'tutorial', industry: 'digital' },
+        prefills: { topic: '产品功能介绍与使用教程', style: 'script', industry: 'digital' },
       },
     ],
   },

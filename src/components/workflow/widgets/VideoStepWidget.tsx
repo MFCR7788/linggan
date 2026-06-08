@@ -9,7 +9,7 @@ import type { StepWidgetProps } from '../StepWidgetRegistry';
 export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute, onAutoError, role }: StepWidgetProps) {
   const [text, setText] = useState(handoff.text || handoff.script || '');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const { simpleGenerate, simpleGenerating: generating, simpleProgress: progress, error, setError } = useVideoGeneration();
+  const { simpleGenerate, generateLongVideo, simpleGenerating: generating, simpleProgress: progress, error, setError } = useVideoGeneration();
   const autoTriggeredRef = useRef(false);
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('视频');
 
@@ -22,27 +22,61 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
       const input = (handoff.text || handoff.script || '').trim();
       if (!input) { onAutoError?.('缺少视频脚本，无法自动生成视频'); return; }
       try {
-        const { videoUrl: url } = await simpleGenerate({
-          prompt: role ? `${role}\n${input}` : input,
-          imageUrl: handoff.imageUrl || handoff.firstFrame || '',
-          style: handoff.style || '',
-        });
+        // Script longer than 100 chars → use full pipeline (storyboard + segments + merge)
+        const useLongPipeline = input.length > 100;
+        let url: string;
+        if (useLongPipeline) {
+          const result = await generateLongVideo({
+            script: role ? `${role}\n${input}` : input,
+            topic: handoff.topic || handoff.style || '产品介绍',
+            voiceStyle: 'professional',
+            bgmStyle: 'tech',
+          });
+          url = result.videoUrl;
+        } else {
+          const result = await simpleGenerate({
+            prompt: role ? `${role}\n${input}` : input,
+            imageUrl: handoff.imageUrl || handoff.firstFrame || '',
+            style: handoff.style || '',
+            duration: 10,
+            voiceStyle: 'professional',
+            bgmStyle: 'tech',
+          });
+          url = result.videoUrl;
+        }
         await onComplete({ handoffData: { text: input.substring(0, 1000), firstFrame: handoff.imageUrl || '', videoUrl: url } });
       } catch (e: any) {
         onAutoError?.(e.message || '视频生成失败');
       }
     }
     autoRun();
-  }, [autoExecute, handoff.text, handoff.script, handoff.imageUrl, handoff.firstFrame, handoff.style, onComplete, onAutoError]);
+  }, [autoExecute, handoff.text, handoff.script, handoff.imageUrl, handoff.firstFrame, handoff.style, handoff.topic, onComplete, onAutoError, role, generateLongVideo, simpleGenerate]);
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
     try {
-      const { videoUrl: url } = await simpleGenerate({
-        prompt: text.trim(),
-        imageUrl: handoff.imageUrl || handoff.firstFrame || '',
-        style: handoff.style || '',
-      });
+      const input = text.trim();
+      const useLongPipeline = input.length > 100;
+      let url: string;
+      if (useLongPipeline) {
+        const result = await generateLongVideo({
+          script: input,
+          topic: handoff.topic || handoff.style || '产品介绍',
+          voiceStyle: 'professional',
+          bgmStyle: 'tech',
+        });
+        url = result.videoUrl;
+      } else {
+        const result = await simpleGenerate({
+          prompt: input,
+          imageUrl: handoff.imageUrl || handoff.firstFrame || '',
+          style: handoff.style || '',
+          duration: 10,
+          voiceStyle: 'professional',
+          bgmStyle: 'tech',
+        });
+        url = result.videoUrl;
+      }
       if (url) setVideoUrl(url);
     } catch {}
   };
@@ -83,11 +117,11 @@ export function VideoStepWidget({ handoff, onComplete, isCompleting, autoExecute
             }}
           >
             {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generating ? (progress || '生成中...') : '生成视频'}
+            {generating ? (progress || '生成中...') : (text.trim().length > 100 ? '生成完整视频（分镜+合成）' : '生成视频')}
           </button>
           {progress && (
             <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div className="h-full rounded-full transition-all" style={{ width: progress.includes('%') ? progress : '10%', background: 'linear-gradient(90deg, #F43F5E, #E11D48)' }} />
+              <div className="h-full rounded-full transition-all" style={{ width: '60%', background: 'linear-gradient(90deg, #F43F5E, #E11D48)' }} />
             </div>
           )}
         </>

@@ -10,6 +10,12 @@ import { calcAiVideoCost } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
 
+/** 按文本字数估算口播时长（中文约3字/秒） */
+function calcTextDuration(text: string): number {
+  const len = text.replace(/<[^>]*>/g, '').replace(/\s/g, '').length;
+  return Math.max(10, Math.ceil(len / 3));
+}
+
 /** 自动计算推荐时长 */
 function autoDuration(inspirationCount: number): number {
   if (inspirationCount >= 5) return 60;
@@ -26,6 +32,7 @@ export const POST = withAuth(async ({ request, user }) => {
       stylePreset = 'douyin_hot',
       qualityTier = 'fast',
       language = 'zh',
+      duration: durationOverride,
     } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations) || inspirations.length === 0) {
@@ -33,7 +40,10 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
-    const duration = autoDuration(inspirations.length);
+    const textContent = inspirations.map((i: any) => i.original_text || i.ai_summary || '').join(' ');
+    const duration = durationOverride || (textContent ? calcTextDuration(textContent) : autoDuration(inspirations.length));
+    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
+    const segmentMax = qt.t2v.maxDuration || 10;
 
     // 1. 生成分镜
     let storyboard;
@@ -44,13 +54,13 @@ export const POST = withAuth(async ({ request, user }) => {
         duration,
         topic: topic || undefined,
         language,
+        segmentMax,
       });
     } catch (e: any) {
       return createApiError(`分镜生成失败: ${e?.message || '未知错误'}`, 500);
     }
 
     // 2. 预计算成本
-    const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
     const segMeta = storyboard.map((scene) => {
       const d = Math.min(Math.max(scene.duration, 3), qt.t2v.maxDuration || 10);
       return { duration: d, cost: calcAiVideoCost(d, tier) };
