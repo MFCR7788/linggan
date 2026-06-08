@@ -47,27 +47,27 @@
   "crons": [
     {
       "path": "/api/cron/check-hotspots",
-      "schedule": "0 8 * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/jobs/claim",
-      "schedule": "0 0 * * *"
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/platforms/metrics-fetch",
-      "schedule": "0 6 * * *"
+      "schedule": "0 22 * * *"
     },
     {
       "path": "/api/platforms/scheduled-publish",
-      "schedule": "0 12 * * *"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/cron/credits-reset",
-      "schedule": "0 16 1 * *"
+      "schedule": "0 8 1 * *"
     },
     {
       "path": "/api/cron/subscription-grant",
-      "schedule": "0 0 * * *"
+      "schedule": "0 16 * * *"
     }
   ]
 }
