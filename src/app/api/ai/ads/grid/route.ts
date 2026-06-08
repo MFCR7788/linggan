@@ -16,8 +16,6 @@ import { saveWorkHistory } from '@/lib/supabase-server';
 export const dynamic = 'force-dynamic';
 
 const GRID_SIZE = 9;
-const MAX_SELLING_POINTS = 5;
-const MIN_SELLING_POINTS = 3;
 const MAX_TITLE_LENGTH = 20;
 
 interface CellResult {
@@ -42,14 +40,18 @@ export const POST = withAuth(async ({ request, user }) => {
   if (!product || typeof product !== 'string' || product.length > 100) {
     return createApiError('product 必填, 不超过 100 字', 400);
   }
-  if (!Array.isArray(sellingPoints) || sellingPoints.length < MIN_SELLING_POINTS || sellingPoints.length > MAX_SELLING_POINTS) {
-    return createApiError(`sellingPoints 必须是 ${MIN_SELLING_POINTS}-${MAX_SELLING_POINTS} 个`, 400);
-  }
-  for (const sp of sellingPoints) {
-    if (typeof sp !== 'string' || !sp.trim()) {
-      return createApiError('sellingPoints 每项不能为空', 400);
+  // 校验 sellingPoints（按场景区分）
+  const validSellingPoints = (sellingPoints || []).filter((sp: string) => typeof sp === 'string' && sp.trim());
+  if (scene === 'product') {
+    if (validSellingPoints.length < 3 || validSellingPoints.length > 5) {
+      return createApiError('产品宣传场景下 sellingPoints 需要 3-5 个有效项', 400);
+    }
+  } else if (scene === 'lifestyle') {
+    if (validSellingPoints.length < 1 || validSellingPoints.length > 8) {
+      return createApiError('生活记录场景下至少需要 1 个元素，最多 8 个', 400);
     }
   }
+  // 其他场景 sellingPoints 可选
 
   // ─── 预扣 9 张的 credits ─────────────────────────
   const creditCost = calcAdsCost(GRID_SIZE);
@@ -75,8 +77,8 @@ export const POST = withAuth(async ({ request, user }) => {
   try {
     // 1) DeepSeek 生成 9 个视觉角度 + 9 句标题
     const buildAnglesPrompt = (): string => {
-      const sellingPointsStr = sellingPoints.length > 0
-        ? `\n元素/卖点: ${sellingPoints.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+      const sellingPointsStr = validSellingPoints.length > 0
+        ? `\n元素/卖点: ${validSellingPoints.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`
         : '';
       const extraStr = extra ? `\n补充: ${extra}` : '';
 
@@ -252,7 +254,7 @@ JSON:`;
           imageUrl: (r as any).value.imageUrl,
           title: c.title,
           prompt: c.prompt,
-          sellingPointIndex: i % sellingPoints.length,
+          sellingPointIndex: validSellingPoints.length > 0 ? i % validSellingPoints.length : 0,
           visualAngle: c.visualAngle,
         };
       }
@@ -260,7 +262,7 @@ JSON:`;
         imageUrl: '',
         title: c.title,
         prompt: c.prompt,
-        sellingPointIndex: i % sellingPoints.length,
+        sellingPointIndex: validSellingPoints.length > 0 ? i % validSellingPoints.length : 0,
         visualAngle: c.visualAngle,
       };
     });
@@ -289,7 +291,7 @@ JSON:`;
     return createApiResponse(
       {
         product,
-        sellingPoints,
+        sellingPoints: validSellingPoints,
         cells: finalCells,
         successCount,
         failedCount,
