@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -178,6 +178,7 @@ function InspirationLibraryContent() {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState(0); // index into SORT_OPTIONS
   const [openDropdown, setOpenDropdown] = useState<"time" | "tag" | "sort" | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video'; url: string; title: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -443,6 +444,31 @@ function InspirationLibraryContent() {
     }
   };
 
+  const openImagePreview = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    setPreviewMedia({ type: 'image', url: item.media_urls[0], title: item.title || '图片预览' });
+  };
+
+  const toggleVideoPlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const container = (e.currentTarget as HTMLElement).closest('.video-container');
+    const video = container?.querySelector('video') as HTMLVideoElement | null;
+    if (video) {
+      if (video.paused) video.play();
+      else video.pause();
+    }
+  };
+
+  const openVideoFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const container = (e.currentTarget as HTMLElement).closest('.video-container');
+    const video = container?.querySelector('video') as HTMLVideoElement | null;
+    if (video) {
+      if (video.requestFullscreen) video.requestFullscreen();
+      else if ((video as any).webkitEnterFullscreen) (video as any).webkitEnterFullscreen();
+    }
+  };
+
   useEffect(() => {
     if (searchParams.get('saved') === 'true') {
       setShowSavedTip(true);
@@ -551,7 +577,7 @@ function InspirationLibraryContent() {
         {/* 媒体/内容预览 — 各类型自然高度 */}
         {hasMedia && thumbnailUrl ? (
           isVideo ? (
-            <div className="relative">
+            <div className="relative video-container">
               <video
                 src={thumbnailUrl}
                 className="w-full block"
@@ -560,13 +586,26 @@ function InspirationLibraryContent() {
                 preload="metadata"
                 playsInline
               />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ background: "rgba(0,0,0,0.2)" }}>
+              <div
+                className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                style={{ background: "rgba(0,0,0,0.2)" }}
+                onClick={toggleVideoPlay}
+              >
                 <div className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{ background: "rgba(0,0,0,0.6)", border: "2px solid rgba(255,255,255,0.5)" }}>
                   <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                 </div>
               </div>
+              {/* 全屏按钮 */}
+              <button
+                onClick={openVideoFullscreen}
+                className="absolute top-10 right-2 z-10 p-1 rounded opacity-70 hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+                title="全屏"
+                aria-label="全屏"
+              >
+                <Expand size={13} color="#E5E7EB" />
+              </button>
               {videoDuration && (
                 <span
                   className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium z-10"
@@ -593,7 +632,7 @@ function InspirationLibraryContent() {
               )}
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative cursor-pointer" onClick={(e) => openImagePreview(e, item)}>
               <img
                 src={thumbnailUrl}
                 alt={item.title || "灵感图片"}
@@ -601,6 +640,13 @@ function InspirationLibraryContent() {
                 className="w-full block"
                 style={{ maxHeight: 400, objectFit: 'cover' }}
               />
+              {/* 全屏预览按钮 */}
+              <span
+                className="absolute top-2 right-2 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+              >
+                <Expand size={14} color="#E5E7EB" />
+              </span>
               {/* 类型角标 */}
               {!isSelecting && (
                 <span
@@ -619,6 +665,42 @@ function InspirationLibraryContent() {
               )}
             </div>
           )
+        ) : item.type === 'audio' && thumbnailUrl ? (
+          // 音频播放器
+          <div className="relative">
+            <div className="px-3 py-4" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span style={{ fontSize: 20 }}>{TYPE_EMOJIS[item.type] || "🎵"}</span>
+                <span style={{ color: "#D1D5DB", fontSize: 11 }} className="truncate">
+                  {item.original_filename || item.title || '音频'}
+                </span>
+              </div>
+              <audio
+                src={thumbnailUrl}
+                controls
+                preload="metadata"
+                className="w-full"
+                style={{ height: 32, filter: 'invert(0.85)' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            {/* 类型角标 */}
+            {!isSelecting && (
+              <span
+                className="absolute z-10 pointer-events-none"
+                style={{
+                  bottom: 8, left: 8,
+                  padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 500,
+                  background: "rgba(0,0,0,0.65)", color: "#FFFFFF",
+                  maxWidth: "calc(100% - 16px)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={typeBadge}
+              >
+                {typeBadge}
+              </span>
+            )}
+          </div>
         ) : (
           // 纯文本/文档/音频：紧凑预览
           <div className="relative">
@@ -1106,6 +1188,47 @@ function InspirationLibraryContent() {
                 {isSaving ? "保存中..." : "保存"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 全屏预览弹窗 */}
+      {previewMedia && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          onClick={() => setPreviewMedia(null)}
+        >
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(8px)" }} />
+          <div className="relative max-w-[95vw] max-h-[95vh]" onClick={(e) => e.stopPropagation()}>
+            {/* 关闭按钮 */}
+            <button
+              onClick={() => setPreviewMedia(null)}
+              className="absolute -top-10 right-0 p-1.5 rounded-lg z-10"
+              style={{ background: "rgba(255,255,255,0.1)" }}
+              aria-label="关闭"
+            >
+              <X size={20} color="#FFFFFF" />
+            </button>
+            {/* 标题 */}
+            <p className="absolute -top-10 left-0 truncate max-w-[70vw]"
+              style={{ color: "#D1D5DB", fontSize: 13, lineHeight: "32px" }}>
+              {previewMedia.title}
+            </p>
+            {previewMedia.type === 'image' ? (
+              <img
+                src={previewMedia.url}
+                alt={previewMedia.title}
+                className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg"
+              />
+            ) : (
+              <video
+                src={previewMedia.url}
+                controls
+                autoPlay
+                className="max-w-[95vw] max-h-[90vh] rounded-lg"
+                style={{ outline: 'none' }}
+              />
+            )}
           </div>
         </div>
       )}

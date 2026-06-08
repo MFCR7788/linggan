@@ -6,15 +6,19 @@ import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost } from '@/lib/credit-costs';
 import { saveWorkHistory } from '@/lib/supabase-server';
 
-// 音色列表 — CosyVoice v2 预设
+// 音色列表 — CosyVoice v2 预设（2026-06 校对官方文档）
 const VOICE_MAP: Record<string, { id: string; label: string; language: string }> = {
-  female_natural: { id: 'longxiaochun_v2', label: '龙小淳(温柔女声·默认)', language: 'zh' },
-  female_emotional: { id: 'longxiaoxia_v2', label: '龙小夏(活泼女声)', language: 'zh' },
+  // 女声
+  female_natural: { id: 'longxiaochun_v2', label: '龙小淳(温柔姐姐·默认)', language: 'zh' },
+  female_emotional: { id: 'longxiaoxia_v2', label: '龙小夏(温柔女声)', language: 'zh' },
   female_professional: { id: 'longxiaoyu_v2', label: '龙小玉(知性女声)', language: 'zh' },
-  female_warm: { id: 'longhua_v2', label: '龙华(暖声女声)', language: 'zh' },
-  male_natural: { id: 'longyue_v2', label: '龙悦(磁性质声)', language: 'zh' },
-  male_warm: { id: 'longcheng_v2', label: '龙橙(暖声男声)', language: 'zh' },
-  male_professional: { id: 'longjing_v2', label: '龙靖(沉稳男声)', language: 'zh' },
+  female_warm: { id: 'longhua_v2', label: '龙华(活泼女声)', language: 'zh' },
+  female_magnetic: { id: 'longyue_v2', label: '龙悦(磁性女声)', language: 'zh' },
+  female_broadcast: { id: 'longjing_v2', label: '龙婧(播音女声)', language: 'zh' },
+  // 男声
+  male_sunny: { id: 'longcheng_v2', label: '龙橙(阳光男声)', language: 'zh' },
+  male_natural: { id: 'longshu_v2', label: '龙书(新闻男声)', language: 'zh' },
+  male_warm: { id: 'longxiu_v2', label: '龙修(说书男声)', language: 'zh' },
 };
 
 const DEFAULT_VOICE = 'female_natural';

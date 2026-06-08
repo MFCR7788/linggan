@@ -15,6 +15,7 @@ import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from '@/lib/style-constants';
 import { QUALITY_TIERS, type QualityTier } from '@/lib/video-models';
+import { calcAiVideoCost, CREDIT_COSTS } from '@/lib/credit-costs';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { useVideoGeneration } from '@/hooks/ai/use-video-generation';
@@ -78,7 +79,7 @@ const bgmOptions = [
 const subtitleStyles = ['白色粗体', '黄色描边', '黑底白字', '渐变彩色'];
 const subtitlePositions = ['底部', '中部', '顶部'];
 
-const STEPS = ['确定方向', '分镜预览', '生成'];
+const STEPS = ['确定方向', '分镜预览', '首帧生成', '视频生成'];
 
 const stylePresets = Object.entries(STYLE_PRESETS);
 
@@ -128,6 +129,10 @@ function AIVideoContent() {
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // ─── Step 3: 首帧生成 ─────────────────────────────────
+  const [sceneFrames, setSceneFrames] = useState<Record<number, string>>({});
+  const [generatingFrames, setGeneratingFrames] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     if (editingSceneIndex !== null && editInputRef.current) {
       editInputRef.current.focus();
@@ -139,7 +144,7 @@ function AIVideoContent() {
   const [subtitleStyle, setSubtitleStyle] = useState('白色粗体');
   const [subtitlePos, setSubtitlePos] = useState('底部');
 
-  // ─── Step 3: 生成 ─────────────────────────────────────
+  // ─── Step 4: 视频生成 ─────────────────────────────────────
 
   const [currentStep, setCurrentStep] = useState(1);
   const [segments, setSegments] = useState<SegmentState[]>([]);
@@ -301,6 +306,7 @@ function AIVideoContent() {
         inspirations: selectedData,
         qualityTier,
         firstFrameUrl: firstFrameUrl || undefined,
+        sceneFrames,
         lastFrameUrl: lastFrame,
         extraFrameUrls,
         multiFrameMode,
@@ -312,7 +318,7 @@ function AIVideoContent() {
       setGenError(e.message || '提交失败');
       setGenPhase('error');
     }
-  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier, multiFrameMode, extraFramesText, lastFrameUrl, firstFrameUrl, submitSegs]);
+  }, [storyboard, inspirations, selectedInspirations, bgmStyle, subtitleStyle, subtitlePos, qualityTier, multiFrameMode, extraFramesText, lastFrameUrl, firstFrameUrl, sceneFrames, submitSegs]);
 
   const handleOneClickGenerate = async () => {
     if (selectedInspirations.size === 0) {
@@ -320,7 +326,7 @@ function AIVideoContent() {
       return;
     }
     setOneClickMode(true);
-    setCurrentStep(3);
+    setCurrentStep(4);
     setGenPhase('submitting');
     setGenError(null);
 
@@ -428,7 +434,35 @@ function AIVideoContent() {
     setIsAutoSubtitling(false);
   };
 
-  // ─── Step 3 完成后:合并视频 + BGM + 字幕 ───────────
+  // ─── 首帧生成：为单个分镜生成首帧图片 ──────────────
+
+  const generateSceneFrame = async (sceneIndex: number, visualPrompt: string) => {
+    setGeneratingFrames((prev) => new Set(prev).add(sceneIndex));
+    try {
+      const res = await apiClient.post<{ imageUrl: string } | { imageUrl: string }[]>('/ai/image', {
+        prompt: visualPrompt,
+        ratio: '16:9',
+        n: 1,
+      });
+      if (res.success && res.data) {
+        const url = Array.isArray(res.data) ? res.data[0]?.imageUrl : res.data.imageUrl;
+        if (url) {
+          setSceneFrames((prev) => ({ ...prev, [sceneIndex]: url }));
+        }
+      } else {
+        setToast({ message: `段${sceneIndex + 1} 首帧生成失败: ${res.error || '未知错误'}`, type: 'error' });
+      }
+    } catch {
+      setToast({ message: `段${sceneIndex + 1} 首帧生成失败`, type: 'error' });
+    }
+    setGeneratingFrames((prev) => {
+      const next = new Set(prev);
+      next.delete(sceneIndex);
+      return next;
+    });
+  };
+
+  // ─── Step 4 完成后:合并视频 + BGM + 字幕 ───────────
   const handleMerge = async () => {
     if (mergePhase === 'merging') return;
     const succeededSegments = segments.filter((s) => s.status === 'succeeded' && s.videoUrl);
@@ -1157,26 +1191,196 @@ function AIVideoContent() {
         <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(1)}>
           <ChevronLeft size={16} /> 上一步
         </PrimaryButton>
-        <PrimaryButton fullWidth size="md" onClick={() => { setCurrentStep(3); submitGenerate(); }}>
-          <Zap size={16} /> 开始生成视频
+        <PrimaryButton fullWidth size="md" onClick={() => setCurrentStep(3)}>
+          <ImageIcon size={16} /> 下一步：生成首帧
         </PrimaryButton>
       </div>
     </>
   );
 
   const renderStep3 = () => (
+    <>
+      {/* 首帧生成卡片 */}
+      <GlassCard>
+        <div className="flex items-center justify-between mb-3">
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+            <span style={{ color: '#F59E0B' }}>首帧</span> · 为每段分镜生成画面
+          </p>
+          {storyboard.length > 0 && (
+            <button
+              onClick={() => {
+                storyboard.forEach((scene) => {
+                  if (!sceneFrames[scene.index] && !generatingFrames.has(scene.index)) {
+                    generateSceneFrame(scene.index, scene.visualPrompt);
+                  }
+                });
+              }}
+              disabled={generatingFrames.size > 0}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
+              style={{
+                background: 'rgba(245,158,11,0.15)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                color: '#FCD34D',
+                opacity: generatingFrames.size > 0 ? 0.5 : 1,
+              }}
+            >
+              <Sparkles size={11} /> 全部生成
+            </button>
+          )}
+        </div>
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12 }}>
+          首帧将作为图生视频的起始画面，不满意可重新生成
+        </p>
+        <div className="space-y-3">
+          {storyboard.map((scene) => {
+            const hasFrame = !!sceneFrames[scene.index];
+            const isGenerating = generatingFrames.has(scene.index);
+            return (
+              <div key={scene.index}
+                className="p-3 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 rounded text-xs font-bold"
+                    style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D' }}>
+                    段{scene.index + 1}
+                  </span>
+                  <span style={{ color: '#F59E0B', fontSize: 11 }}>{scene.duration}秒</span>
+                </div>
+                <p style={{ color: '#E5E7EB', fontSize: 11, marginBottom: 2, lineHeight: 1.5 }}
+                  className="line-clamp-2">
+                  {scene.visualPrompt}
+                </p>
+                {scene.subtitle && (
+                  <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 8 }}>{scene.subtitle}</p>
+                )}
+
+                {/* 已生成的首帧预览 */}
+                {hasFrame && (
+                  <div className="mb-2 rounded-lg overflow-hidden"
+                    style={{ border: '1px solid rgba(245,158,11,0.3)', aspectRatio: '16/9', maxHeight: 180 }}>
+                    <img src={sceneFrames[scene.index]} alt={`段${scene.index + 1} 首帧`}
+                      className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                {/* 生成中 */}
+                {isGenerating && (
+                  <div className="flex items-center justify-center gap-2 py-4 mb-2 rounded-lg"
+                    style={{ background: 'rgba(245,158,11,0.08)', border: '1px dashed rgba(245,158,11,0.2)' }}>
+                    <Loader2 size={14} className="animate-spin" color="#FCD34D" />
+                    <span style={{ color: '#FCD34D', fontSize: 11 }}>生成中...</span>
+                  </div>
+                )}
+
+                {/* 操作按钮 */}
+                <button
+                  onClick={() => generateSceneFrame(scene.index, scene.visualPrompt)}
+                  disabled={isGenerating}
+                  className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-xs transition-all"
+                  style={{
+                    background: hasFrame ? 'rgba(139,92,246,0.12)' : 'rgba(245,158,11,0.12)',
+                    border: hasFrame ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                    color: hasFrame ? '#C4B5FD' : '#FCD34D',
+                    opacity: isGenerating ? 0.5 : 1,
+                  }}
+                >
+                  {isGenerating ? (
+                    <><Loader2 size={11} className="animate-spin" /> 生成中...</>
+                  ) : hasFrame ? (
+                    <><RefreshCw size={11} /> 重新生成</>
+                  ) : (
+                    <><ImageIcon size={11} /> 生成首帧</>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </GlassCard>
+
+      {/* 操作按钮 */}
+      <div className="flex gap-3">
+        <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(2)}>
+          <ChevronLeft size={16} /> 上一步
+        </PrimaryButton>
+        <PrimaryButton fullWidth size="md"
+          onClick={() => { setCurrentStep(4); submitGenerate(); }}
+          disabled={Object.keys(sceneFrames).length === 0 && storyboard.length > 0}>
+          <Zap size={16} />
+          {Object.keys(sceneFrames).length > 0
+            ? `开始生成视频 (${Object.keys(sceneFrames).length}/${storyboard.length} 段有首帧)`
+            : '跳过首帧，直接生成视频'}
+        </PrimaryButton>
+      </div>
+    </>
+  );
+
+  const renderStep4 = () => (
     <GlassCard>
       {genPhase === 'idle' ? (
+        (() => {
+          // 计算预估灵力消耗
+          const qt = QUALITY_TIERS[qualityTier] || QUALITY_TIERS['fast'];
+          const segMax = qt.t2v.maxDuration || 10;
+          const videoCost = storyboard.reduce((sum, scene) => {
+            const d = Math.min(Math.max(scene.duration, 3), segMax);
+            return sum + calcAiVideoCost(d, qualityTier as 'fast' | 'standard' | 'premium');
+          }, 0);
+          const mergeCost = CREDIT_COSTS.ai_video_post.merge;
+          const frameCount = Object.keys(sceneFrames).length;
+          const framesAlreadyPaid = frameCount * CREDIT_COSTS.ai_image.perImage;
+          const upcomingCost = videoCost + mergeCost;
+          const totalCost = upcomingCost + framesAlreadyPaid + CREDIT_COSTS.ai_video_post.storyboard;
+          return (
         <>
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#3B82F6' }}>确认</span> · 生成参数
           </p>
+
+          {/* 灵力消耗估算 */}
+          <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Zap size={12} color="#FCD34D" />
+              <span style={{ color: '#FCD34D', fontSize: 12, fontWeight: 600 }}>预估灵力消耗</span>
+            </div>
+            <div className="space-y-1">
+              {[
+                { label: '视频生成', detail: `${storyboard.length} 段 × ${qualityTier === 'fast' ? '流畅' : qualityTier === 'standard' ? '标准' : '超高清'}`, cost: videoCost, soon: true },
+                { label: '合并后期', detail: '拼接 + BGM + 字幕', cost: mergeCost, soon: true },
+              ].map(({ label, detail, cost, soon }) => (
+                <div key={label} className="flex justify-between items-center">
+                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                    {label} <span style={{ color: '#6B7280', fontSize: 10 }}>{detail}</span>
+                    {soon && <span style={{ color: '#FBBF24', fontSize: 9, marginLeft: 4 }}>待扣</span>}
+                  </span>
+                  <span style={{ color: soon ? '#FCD34D' : '#6B7280', fontSize: 12, fontWeight: 600 }}>{cost}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 4, paddingTop: 4 }}
+                className="flex justify-between items-center">
+                <span style={{ color: '#E5E7EB', fontSize: 12, fontWeight: 600 }}>本次待扣</span>
+                <span style={{ color: '#FCD34D', fontSize: 14, fontWeight: 700 }}>{upcomingCost} 灵力</span>
+              </div>
+              {(framesAlreadyPaid > 0 || true) && (
+                <div className="flex justify-between items-center mt-1">
+                  <span style={{ color: '#6B7280', fontSize: 10 }}>
+                    已扣：分镜 {CREDIT_COSTS.ai_video_post.storyboard}{frameCount > 0 ? ` + 首帧 ${framesAlreadyPaid}` : ''}
+                  </span>
+                  <span style={{ color: '#6B7280', fontSize: 10 }}>
+                    本视频合计 ≈{totalCost} 灵力
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2 mb-4">
             {[
               { label: '素材数', value: `${selectedInspirations.size} 个` },
               { label: '风格', value: STYLE_PRESETS[stylePreset]?.label || '-' },
               { label: '目标时长', value: `${duration} 秒` },
               { label: '分段数', value: `${storyboard.length} 段` },
+              { label: '首帧数', value: `${frameCount}/${storyboard.length} 段` },
               { label: '背景音乐', value: bgmOptions.find((b) => b.id === bgmStyle)?.label },
               { label: '字幕样式', value: `${subtitleStyle} · ${subtitlePos}` },
             ].map(({ label, value }) => (
@@ -1187,10 +1391,17 @@ function AIVideoContent() {
               </div>
             ))}
           </div>
-          <PrimaryButton fullWidth size="lg" onClick={submitGenerate}>
-            <Zap size={16} /> 开始生成
-          </PrimaryButton>
+          <div className="flex gap-3">
+            <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(3)}>
+              <ChevronLeft size={16} /> 上一步
+            </PrimaryButton>
+            <PrimaryButton fullWidth size="lg" onClick={submitGenerate}>
+              <Zap size={16} /> 开始生成 · {upcomingCost} 灵力
+            </PrimaryButton>
+          </div>
         </>
+          );
+        })()
       ) : genPhase === 'done' ? (
         <>
           {/* 成功提示 */}
@@ -1588,7 +1799,8 @@ function AIVideoContent() {
             {/* Step 内容 */}
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && genPhase === 'idle' && renderStep3()}
+            {currentStep === 3 && renderStep3()}
+            {currentStep === 4 && genPhase === 'idle' && renderStep4()}
           </>
         </div>
 
@@ -1597,10 +1809,10 @@ function AIVideoContent() {
           <>
             {genPhase === 'done' ? (
               <div className="pt-2">
-                {renderStep3()}
+                {renderStep4()}
               </div>
             ) : (
-              renderStep3()
+              renderStep4()
             )}
           </>
         )}

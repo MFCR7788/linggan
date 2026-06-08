@@ -95,6 +95,7 @@ export function useCreateInspiration() {
       source_url?: string;
       source_platform?: string;
       media_urls?: string[];
+      prompt?: string;
     }) => {
       const response = await apiClient.post<ContentItem>("/inspiration", data);
       if (!response.success) {

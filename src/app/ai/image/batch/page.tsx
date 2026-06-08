@@ -144,7 +144,7 @@ function BatchImageContent() {
             <div className="flex-1">
               <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>AI 批量生图</p>
               <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, marginTop: 2 }}>
-                一次提交最多 50 个 prompt,自动并发生成。适合电商主图、课程配图、朋友圈广告素材。
+                一次提交最多 50 个 prompt,自动并发生成。适合电商主图、课程配图、朋友圈素材。
               </p>
             </div>
           </div>

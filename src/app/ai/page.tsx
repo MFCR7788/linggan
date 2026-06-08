@@ -39,7 +39,7 @@ const aiCreationTools: AITool[] = [
   { icon: <Music size={28} />, title: "AI 配音", desc: "把文字转成自然语音，多种音色可选", color: "#22C55E", page: "ai-tts" as PageKey },
   { icon: <Mic size={28} />, title: "AI 数字人", desc: "用虚拟主播替你出镜讲解，无需真人拍摄", color: "#06B6D4", page: "ai-digital-human" as PageKey },
   { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "输入文案，自动合成带字幕和配乐的短视频", color: "#F43F5E", page: "ai-video" as PageKey },
-  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "上传产品图，自动生成9张营销卡片", color: "#F59E0B", page: "ai-ads" as PageKey },
+  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "AI 智能生成 9 张朋友圈配图，支持 6 种场景", color: "#F59E0B", page: "ai-ads" as PageKey },
   { icon: <TrendingUp size={28} />, title: "AI 热点选题", desc: "发现当下热门话题，帮你找到创作灵感", color: "#EF4444", path: "/hotspot" },
   { icon: <Send size={28} />, title: "多平台分发", desc: "一键把内容发布到小红书、公众号等多个平台", color: "#F43F5E", path: "/publish" },
 ];

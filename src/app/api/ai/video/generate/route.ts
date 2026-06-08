@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export const POST = withAuth(async ({ request, user }) => {
   try {
-    const { storyboard, inspirations, qualityTier, firstFrameUrl, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
+    const { storyboard, inspirations, qualityTier, firstFrameUrl, sceneFrames, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
     const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
     const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
     const hasMultiFrame = videoMode === 'multi' && (lastFrameUrl || (Array.isArray(extraFrameUrls) && extraFrameUrls.length > 0));
@@ -68,9 +68,11 @@ export const POST = withAuth(async ({ request, user }) => {
     const segments = await Promise.all(
       (storyboard as StoryboardScene[]).map(async (scene, i) => {
         const insp = inspirations?.[i];
-        // 优先：i==0 用 firstFrameUrl（首帧一致），i>0 用对应素材图，否则用 firstFrameUrl 作为延续
+        // 优先级：分镜首帧 > 素材图 > firstFrameUrl（首帧一致）
         let imageUrl: string | undefined;
-        if (i === 0 && firstFrameUrl) {
+        if (sceneFrames && sceneFrames[scene.index]) {
+          imageUrl = sceneFrames[scene.index];
+        } else if (i === 0 && firstFrameUrl) {
           imageUrl = firstFrameUrl;
         } else if (insp?.type === 'image' && insp?.media_urls?.[0]) {
           imageUrl = insp.media_urls[0];

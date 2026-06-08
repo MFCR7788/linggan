@@ -542,7 +542,7 @@ function TTSPageContent() {
                   <>
                     <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6 }}>
                       上传 30 秒清晰人声样本(无背景音乐),系统会训练你的专属音色,约 1-5 分钟完成。
-                      <span style={{ color: '#FBBF24' }}>首次训练 ¥99,合成按字符数计费 ~¥0.0001/字</span>
+                      <span style={{ color: '#FBBF24' }}>700 灵力一次性（火山引擎 ¥99），合成 ~¥0.0001/字</span>
                     </p>
 
                     {/* 音频上传 */}
@@ -648,7 +648,7 @@ function TTSPageContent() {
                         }}
                       >
                         <Sparkles size={14} />
-                        {cloning ? '上传中...' : '开始训练 (¥99 一次性)'}
+                        {cloning ? '上传中...' : '开始训练 · 700 灵力'}
                       </button>
                     )}
                   </>

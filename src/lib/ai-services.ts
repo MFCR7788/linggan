@@ -768,6 +768,7 @@ ${topic ? `主题方向：${topic}` : ''}${materialContext}${firstFrameUrl ? `\n
 1. visualPrompt 用${subtitleLang}，详细描述画面内容、光线、色彩、风格、运镜（<150词），融入"${preset.visualStyle}"的风格特征
 2. subtitle 用${subtitleLang}，简短有力（每段1-2句），${langOpt.promptInstruction}
 3. transition 用英文（fade/cut/dissolve/wipe），根据画面节奏选择
+4. **画面连贯性**：相邻分镜之间需保持视觉连贯。统一色调和光线风格；如出现同一主体（人物/产品），保持外观一致；前一段的落幅构图应自然衔接到下一段的起幅构图，避免跳跃感${numSegments > 1 ? '。请先在心里确定整体的色彩基调、主体特征和运镜节奏，再逐一写出各段 visualPrompt' : ''}
 
 请严格以JSON数组格式输出，不要其他文字：
 [

@@ -1,4 +1,4 @@
-// 朋友圈广告 9 宫格 API (V2.0.1 + V2.0.3 扣点)
+// 朋友圈 9 宫格 API (V2.0.1 + V2.0.3 扣点)
 // POST /api/ai/ads/grid
 // Body: { product: string, sellingPoints: string[], referenceImage?: string }
 // Response: { success, data: { cells: [{ imageUrl, title, prompt, sellingPointIndex }] } }
@@ -30,10 +30,12 @@ interface CellResult {
 
 export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
-  const { product, sellingPoints, referenceImage } = body as {
+  const { product, sellingPoints, referenceImage, scene, extra } = body as {
     product?: string;
     sellingPoints?: string[];
     referenceImage?: string;
+    scene?: string;
+    extra?: string;
   };
 
   // 校验
@@ -72,14 +74,103 @@ export const POST = withAuth(async ({ request, user }) => {
 
   try {
     // 1) DeepSeek 生成 9 个视觉角度 + 9 句标题
-    const anglesPrompt = `你是顶级电商广告创意总监。为产品「${product}」设计朋友圈广告 9 宫格素材。
-卖点列表: ${sellingPoints.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+    const buildAnglesPrompt = (): string => {
+      const sellingPointsStr = sellingPoints.length > 0
+        ? `\n元素/卖点: ${sellingPoints.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+        : '';
+      const extraStr = extra ? `\n补充: ${extra}` : '';
 
-要求:
-1. 生成 9 个不同的视觉角度（如: 痛点共鸣、场景代入、产品特写、对比、用户证言、节日情感、品牌调性、生活方式、限时紧迫）
-2. 每个角度配一句 20 字内的朋友圈广告标题（带 emoji）
-3. 每个角度配一段 30-80 字的"生图 prompt 描述"（中文,直接给 AI 生图模型用）
-4. 9 个角度尽量分散,避免重复
+      switch (scene) {
+        case 'lifestyle':
+          return `你是顶级生活方式博主和摄影师。为主题「${product}」设计朋友圈 9 宫格。
+用 9 张图讲一个完整的故事，从开场到收尾。${sellingPointsStr}${extraStr}
+
+视觉角度(9 个不同方向): 全景氛围、细节特写、人物互动、美食/物品、光影情绪、过程记录、环境背景、趣味花絮、收尾回顾。
+每张图的 prompt 描述要具体——包含拍摄视角、光线、构图的建议。
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "全景氛围", "title": "20字内朋友圈配文(带emoji)", "prompt": "30-80字生图描述" }
+  ]
+}
+
+JSON:`;
+
+        case 'festival':
+          return `你是顶级节日策划和摄影师。为「${product}」设计朋友圈 9 宫格。
+营造完整的节日/纪念日氛围感。${extraStr}
+
+视觉角度(9 个不同方向): 主题装饰、美食/物品特写、人物合照、礼物/鲜花、氛围灯光、仪式瞬间、细节情绪、环境全景、收尾祝福。
+统一暖色调/节日色调，每张 prompt 包含色调、光线、构图建议。
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "主题装饰", "title": "20字内朋友圈配文(带emoji)", "prompt": "30-80字生图描述" }
+  ]
+}
+
+JSON:`;
+
+        case 'aesthetic':
+          return `你是顶级艺术摄影师和视觉设计师。为主题「${product}」设计朋友圈 9 宫格。
+追求统一的美学风格和情绪表达，不是产品展示，而是艺术化的视觉叙事。${extraStr}
+
+视觉角度(9 个不同方向): 光影对比、色彩层次、构图留白、纹理细节、意境氛围、抽象表达、空间关系、时间流逝、收尾点睛。
+每张 prompt 需详细描述色调、光影方向、构图手法、氛围关键词。
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "光影对比", "title": "20字内朋友圈配文(带emoji)", "prompt": "30-80字生图描述" }
+  ]
+}
+
+JSON:`;
+
+        case 'creative':
+          return `你是顶级视觉设计师，擅长 9 宫格创意排版。为内容「${product}」设计朋友圈 9 宫格。
+重点是画面在 3×3 网格中的视觉构成关系，而非单一图片的内容。${extraStr}
+
+视觉角度(基于排版逻辑，9 个不同位置/角色):
+- 若为中心主图型: 1 张核心主图 + 8 张配套细节
+- 若为拼接长图型: 9 等分描述长图的每个区块
+- 若为对称型: 1/9、2/8、3/7、4/6 成对呼应，5 居中
+- 若为故事叙事型: 按时间线从左上到右下排列
+请根据内容自动选择最合适的排版逻辑，9 张图需有明确的视觉构成关系。
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "排版角色名", "title": "20字内朋友圈配文(带emoji)", "prompt": "30-80字生图描述(含该格在九宫格中的位置和视觉角色)" }
+  ]
+}
+
+JSON:`;
+
+        case 'hobby':
+          return `你是顶级兴趣博主和内容创作者。为「${product}」设计朋友圈 9 宫格。
+展示作品/成果的同时，也呈现过程和细节，让观众有代入感。${extraStr}
+
+视觉角度(9 个不同方向): 成品展示、制作/创作过程、细节放大、使用/穿戴场景、工具/材料、前后对比、成果合集、花絮/幕后、收尾展示。
+每张 prompt 结合具体内容给出风格化描述。
+
+返回严格 JSON（无 markdown 代码块标记）:
+{
+  "cells": [
+    { "visualAngle": "成品展示", "title": "20字内朋友圈配文(带emoji)", "prompt": "30-80字生图描述" }
+  ]
+}
+
+JSON:`;
+
+        default: // 'product' or undefined
+          return `你是顶级社交媒体视觉内容设计师。为「${product}」设计朋友圈 9 宫格素材。
+${sellingPointsStr}${extraStr}
+
+视觉角度(9 个不同方向): 痛点共鸣、场景代入、产品特写、对比展示、用户场景、节日/热点借势、品牌调性、生活方式、限时/稀缺感。
+每张配一句 20 字内的朋友圈配文（带 emoji），以及一段 30-80 字的生图 prompt 描述。
 
 返回严格 JSON（无 markdown 代码块标记）:
 {
@@ -89,6 +180,10 @@ export const POST = withAuth(async ({ request, user }) => {
 }
 
 JSON:`;
+      }
+    };
+
+    const anglesPrompt = buildAnglesPrompt();
 
     const llmResult = await callDeepSeek(anglesPrompt, { temperature: 0.9 });
     if (!llmResult) {
@@ -120,7 +215,7 @@ JSON:`;
     // 2) 校验每条 title 长度
     for (const c of cells) {
       if (!c.title || c.title.length > MAX_TITLE_LENGTH) {
-        c.title = (c.title || '朋友圈广告').substring(0, MAX_TITLE_LENGTH);
+        c.title = (c.title || '朋友圈配图').substring(0, MAX_TITLE_LENGTH);
       }
       if (!c.prompt) c.prompt = `${product}, ${c.visualAngle || ''}`;
     }

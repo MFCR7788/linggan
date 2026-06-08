@@ -40,6 +40,7 @@ export interface SubmitSegmentsParams {
   inspirations: { id: string | number; title: string; type?: string; original_text?: string; ai_summary?: string }[];
   qualityTier: string;
   firstFrameUrl?: string;
+  sceneFrames?: Record<number, string>;
   lastFrameUrl?: string;
   extraFrameUrls?: string[];
   multiFrameMode?: boolean;
@@ -299,6 +300,7 @@ export function useVideoGeneration() {
         inspirations: params.inspirations,
         qualityTier: params.qualityTier,
         firstFrameUrl: params.firstFrameUrl || undefined,
+        sceneFrames: params.sceneFrames || undefined,
         lastFrameUrl: params.lastFrameUrl || undefined,
         extraFrameUrls: params.extraFrameUrls || undefined,
         mode: params.multiFrameMode ? 'multi' : 'i2v',

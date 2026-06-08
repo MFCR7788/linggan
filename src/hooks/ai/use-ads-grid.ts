@@ -16,6 +16,8 @@ export interface AdsGridParams {
   sellingPoints: string[];
   referenceImage?: string;
   context?: string;
+  scene?: string;
+  extra?: string;
 }
 
 export interface AdsGridResult {
@@ -38,6 +40,8 @@ export function useAdsGrid() {
         sellingPoints: params.sellingPoints,
         referenceImage: params.referenceImage || undefined,
         context: params.context || '',
+        scene: params.scene || 'product',
+        extra: params.extra || '',
       });
       if (!res.success) throw new Error(res.error || '生成失败');
       const result = {

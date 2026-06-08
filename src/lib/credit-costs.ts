@@ -38,12 +38,12 @@ export const CREDIT_COSTS = {
   // ─── 视频(按秒计,×档位系数) ──────────────────────────
   // fast(Seedance 1.0-pro-fast flex 5 折):¥0.08/秒 → 1.5 credits = ¥0.45 毛利率 82%
   // standard(Wan 2.6):¥0.5/秒 → 5 credits = ¥1.5 毛利率 67%
-  // premium(Seedance 2.0/1080p):¥2/秒 → 20 credits = ¥6 毛利率 67%
+  // premium(Seedance 2.0/1080p):¥2/秒 → 15 credits = ¥4.5 毛利率 56%
   // 计算公式:cost = ceil(duration × tier)
   ai_video: {
     fast: 1.5,
     standard: 5,
-    premium: 20,
+    premium: 15,
   },
 
   // ─── 配音(TTS) ────────────────────────────────────────
@@ -53,7 +53,7 @@ export const CREDIT_COSTS = {
     minCost: 1,  // 最低 1 credit,避免 < 100 字收 0
   },
 
-  // ─── 9 宫格(朋友圈广告) ──────────────────────────────
+  // ─── 9 宫格(朋友圈配图) ──────────────────────────────
   // 9 张图,每张 2 credits(用 image 的同价,但允许失败单张退)
   ai_ads: {
     perGrid: 2,  // 失败单张退
@@ -94,9 +94,9 @@ export const CREDIT_COSTS = {
 
   // ─── 训练类(一次性) ──────────────────────────────────
   // HeyGen Digital Twin 训练约 ¥50 → 300 credits ≈ ¥42-72(视套餐) → 盈亏平衡+
-  // 火山 TTS 复刻 ¥99 一次性 → 600 credits ≈ ¥85-145 → 盈亏平衡+
+  // 火山 TTS 复刻 ¥99 一次性 → 700 credits ≈ ¥99-169 → 大包持平/标准以上盈利
   voice_clone: {
-    oneTime: 600,
+    oneTime: 700,
   },
   digital_twin: {
     oneTime: 300,

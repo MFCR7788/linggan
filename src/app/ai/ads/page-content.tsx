@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy } from 'lucide-react';
+import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy, FolderOpen } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
@@ -14,8 +14,26 @@ import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 import { useAdsGrid, type GridCell } from '@/hooks/ai/use-ads-grid';
 import { useWorkHistory } from '@/hooks/use-work-history';
+import { useCreateInspiration } from '@/hooks/use-inspiration';
 
 const DEMO_SELLING_POINTS = ['轻便折叠', '避震舒适', '时尚颜值'];
+
+const SCENES = [
+  { key: 'product', icon: '🛍️', label: '产品宣传', desc: '产品/服务营销素材' },
+  { key: 'lifestyle', icon: '🌴', label: '生活记录', desc: '旅行/美食/日常/穿搭' },
+  { key: 'festival', icon: '🎊', label: '节日纪念', desc: '节日/生日/毕业/纪念日' },
+  { key: 'aesthetic', icon: '🎨', label: '摄影美学', desc: '风景/静物/国风/文艺' },
+  { key: 'creative', icon: '🔲', label: '创意排版', desc: '拼接长图/对称/故事叙事' },
+  { key: 'hobby', icon: '✨', label: '兴趣展示', desc: '书画/手工/读书/健身' },
+] as const;
+
+const LAYOUT_OPTIONS = [
+  { value: 'center', label: '中心主图 — C位放核心大图，四周填充细节' },
+  { value: 'split', label: '拼接长图 — 一张完整长图切9等分' },
+  { value: 'symmetric', label: '对称式 — 1/9、2/8、3/7、4/6 成对呼应' },
+  { value: 'story', label: '故事叙事 — 按时间线从左上到右下' },
+  { value: 'minimal', label: '纯色图文 — 低饱和背景穿插实拍+文字' },
+];
 
 function AdsContent() {
   const router = useRouter();
@@ -25,9 +43,11 @@ function AdsContent() {
   const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 表单 state ──────────────────────────────
+  const [scene, setScene] = useState<string>('product');
   const [product, setProduct] = useState('');
   const [sellingPoints, setSellingPoints] = useState<string[]>([...DEMO_SELLING_POINTS]);
   const [referenceImage, setReferenceImage] = useState<string>('');
+  const [extra, setExtra] = useState<string>(''); // mood / tone / layoutType
 
   // 接收 handoff（从生图页带过来）
   useEffect(() => {
@@ -65,6 +85,7 @@ function AdsContent() {
 
   // ─── 历史生成 ──────────────────────────────
   const { items: historyItems, isLoading: historyLoading } = useWorkHistory('图片');
+  const createInspiration = useCreateInspiration();
 
   // 动态加载 JSZip（CDN）
   useEffect(() => {
@@ -89,17 +110,31 @@ function AdsContent() {
     });
   };
 
+  const handleSceneChange = (newScene: string) => {
+    setScene(newScene);
+    setCells(null);
+    setError(null);
+    setExtra('');
+    if (newScene === 'product') {
+      setSellingPoints(['轻便折叠', '避震舒适', '时尚颜值']);
+    } else {
+      setSellingPoints(['', '', '']);
+    }
+  };
+
   const addSellingPoint = () => {
-    if (sellingPoints.length >= 5) {
-      setToast({ message: '最多 5 个卖点', type: 'error' });
+    const max = scene === 'product' ? 5 : 8;
+    if (sellingPoints.length >= max) {
+      setToast({ message: `最多 ${max} 个`, type: 'error' });
       return;
     }
     setSellingPoints((prev) => [...prev, '']);
   };
 
   const removeSellingPoint = (i: number) => {
-    if (sellingPoints.length <= 3) {
-      setToast({ message: '至少 3 个卖点', type: 'error' });
+    const min = scene === 'product' ? 3 : 1;
+    if (sellingPoints.length <= min) {
+      setToast({ message: scene === 'product' ? '至少 3 个卖点' : '至少 1 个元素', type: 'error' });
       return;
     }
     setSellingPoints((prev) => prev.filter((_, idx) => idx !== i));
@@ -108,12 +143,13 @@ function AdsContent() {
   // ─── 生成 9 宫格 ──────────────────────────────
   const handleGenerate = async () => {
     if (!product.trim()) {
-      setToast({ message: '请填写产品/服务名', type: 'error' });
+      setToast({ message: '请填写主题/产品名', type: 'error' });
       return;
     }
     const validPoints = sellingPoints.filter((p) => p.trim());
-    if (validPoints.length < 3) {
-      setToast({ message: '至少需要 3 个有效卖点', type: 'error' });
+    const needsElements = scene === 'product' || scene === 'lifestyle';
+    if (needsElements && validPoints.length < (scene === 'product' ? 3 : 1)) {
+      setToast({ message: scene === 'product' ? '至少需要 3 个有效卖点' : '至少需要 1 个元素', type: 'error' });
       return;
     }
 
@@ -124,6 +160,8 @@ function AdsContent() {
         product: product.trim(),
         sellingPoints: validPoints,
         referenceImage: referenceImage || undefined,
+        scene,
+        extra: extra || undefined,
       });
       setCells(result.cells);
       setProgressText('');
@@ -152,10 +190,10 @@ function AdsContent() {
       setProgressText('正在打包 ZIP...');
       const JSZip = (window as any).JSZip;
       const zip = new JSZip();
-      const folder = zip.folder(`${product || 'ads'}-朋友圈9宫格`);
+      const folder = zip.folder(`${product || '9宫格'}-朋友圈9宫格`);
 
       // 写一个 Excel 友好的 CSV 标题行
-      let csv = '序号,标题,视觉角度,封面URL,对应卖点\n';
+      let csv = `序号,标题,视觉角度,封面URL,${scene === 'product' ? '对应卖点' : '对应元素'}\n`;
       cells.forEach((c, i) => {
         const sp = sellingPoints[c.sellingPointIndex] || '';
         csv += `${i + 1},"${c.title}","${c.visualAngle}",${c.imageUrl},"${sp}"\n`;
@@ -182,7 +220,7 @@ function AdsContent() {
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${product || 'ads'}-朋友圈9宫格.zip`;
+      a.download = `${product || '9宫格'}-朋友圈9宫格.zip`;
       a.click();
       URL.revokeObjectURL(url);
       setProgressText('');
@@ -203,6 +241,75 @@ function AdsContent() {
     }
   };
 
+  // 逐张保存全部图片（适合手机保存到相册，桌面也可用）
+  const handleSaveAllImages = async () => {
+    if (!cells) return;
+    const validCells = cells.filter((c) => c.imageUrl);
+    if (validCells.length === 0) {
+      setToast({ message: '没有可保存的图片', type: 'error' });
+      return;
+    }
+    setProgressText(`正在保存 0/${validCells.length}...`);
+    for (let i = 0; i < validCells.length; i++) {
+      const c = validCells[i];
+      try {
+        const res = await fetch(c.imageUrl);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = c.imageUrl.includes('.png') ? 'png' : 'jpg';
+        const safeTitle = (c.title || `图片${i + 1}`).replace(/[\\/:*?"<>|]/g, '_').substring(0, 15);
+        a.download = `${i + 1}_${safeTitle}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setProgressText(`正在保存 ${i + 1}/${validCells.length}...`);
+        if (i < validCells.length - 1) {
+          await new Promise((r) => setTimeout(r, 300)); // 防止浏览器拦截连续下载
+        }
+      } catch (e) {
+        console.error(`保存第 ${i + 1} 张失败`, e);
+      }
+    }
+    setProgressText('');
+    setToast({ message: `已保存 ${validCells.length} 张图片`, type: 'success' });
+  };
+
+  // 保存全部图片到灵感库
+  const [savingToInspiration, setSavingToInspiration] = useState(false);
+  const handleSaveToInspiration = async () => {
+    if (!cells) return;
+    const validCells = cells.filter((c) => c.imageUrl);
+    if (validCells.length === 0) {
+      setToast({ message: '没有可保存的图片', type: 'error' });
+      return;
+    }
+    setSavingToInspiration(true);
+    setProgressText(`灵感库 0/${validCells.length}...`);
+    let done = 0;
+    for (let i = 0; i < validCells.length; i++) {
+      const c = validCells[i];
+      try {
+        await createInspiration.mutateAsync({
+          type: 'image',
+          title: c.title || `${product || '9宫格'} #${i + 1}`,
+          media_urls: [c.imageUrl],
+          source_platform: 'ai',
+          prompt: c.prompt || c.visualAngle,
+        });
+        done++;
+        setProgressText(`灵感库 ${done}/${validCells.length}...`);
+      } catch (e: any) {
+        console.error(`灵感库保存 ${i + 1} 失败`, e);
+      }
+    }
+    setSavingToInspiration(false);
+    setProgressText('');
+    setToast({ message: `已存入灵感库 ${done}/${validCells.length} 张`, type: done > 0 ? 'success' : 'error' });
+  };
+
   // 快捷导航
   const handleNavigate = (page: PageKey) => {
     const map: Partial<Record<PageKey, string>> = {
@@ -212,40 +319,59 @@ function AdsContent() {
     router.push(map[page] || '/home');
   };
 
-  const validPoints = sellingPoints.filter((p) => p.trim()).length;
-  const canGenerate = product.trim() && validPoints >= 3 && !isGenerating;
+  const validPointsCount = sellingPoints.filter((p) => p.trim()).length;
+  const needsElements = scene === 'product' || scene === 'lifestyle';
+  const canGenerate = product.trim() && !isGenerating && (
+    needsElements ? validPointsCount >= (scene === 'product' ? 3 : 1) : true
+  );
 
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
-      <TopNav title="朋友圈广告 9 宫格" showBack onBack={() => router.push('/ai')} />
+      <TopNav title="朋友圈 9 宫格" showBack onBack={() => router.push('/ai')} />
 
       {isInWorkflow && session && (
         <WorkflowSessionBar session={session} onPause={pauseSession} onResume={resumeSession} onAbandon={abandonSession} />
       )}
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">
-        {/* 顶部说明 */}
+        {/* 场景选择器 */}
         <GlassCard className="!p-3">
-          <div className="flex items-start gap-2">
-            <Sparkles size={16} color="#8B5CF6" />
-            <div className="flex-1">
-              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>朋友圈广告素材包</p>
-              <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, marginTop: 2 }}>
-                输入产品/服务名 + 3-5 个卖点,AI 自动设计 9 个不同视觉角度的 1:1 封面 + 9 句广告标题,一键打包 ZIP(含标题 CSV + 9 张图)。
-              </p>
-            </div>
+          <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 500, marginBottom: 8 }}>选择场景</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {SCENES.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => handleSceneChange(s.key)}
+                className="flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-center transition-all"
+                style={{
+                  background: scene === s.key ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: scene === s.key ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <span style={{ fontSize: 18 }}>{s.icon}</span>
+                <span style={{ color: scene === s.key ? '#C4B5FD' : '#D1D5DB', fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                <span style={{ color: '#6B7280', fontSize: 9 }}>{s.desc}</span>
+              </button>
+            ))}
           </div>
         </GlassCard>
 
-        {/* Step 1: 产品名 */}
+        {/* 主题输入（所有场景共用） */}
         <GlassCard>
           <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-            <span style={{ color: '#3B82F6' }}>Step 1</span> · 产品/服务名
+            {scene === 'product' ? '产品/品牌名' : scene === 'festival' ? '节日/场合' : '主题描述'}
           </p>
           <input
             value={product}
             onChange={(e) => setProduct(e.target.value)}
-            placeholder="例: 婴儿推车 / 轻食餐 / 健身房年卡..."
+            placeholder={
+              scene === 'product' ? '例: 婴儿推车 / 轻食餐 / 健身房年卡...' :
+              scene === 'lifestyle' ? '例: 周末野餐 / 杭州西湖一日游 / 今日穿搭...' :
+              scene === 'festival' ? '例: 端午节 / 闺蜜生日 / 毕业典礼...' :
+              scene === 'aesthetic' ? '例: 莫奈花园色调 / 国风山水 / 日系胶片...' :
+              scene === 'creative' ? '例: 新品发布会海报 / 旅拍写真大片...' :
+              '例: 书法作品集 / 手工皮具制作 / 本周书单...'
+            }
             maxLength={100}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-transparent outline-none"
             style={{
@@ -256,55 +382,102 @@ function AdsContent() {
           />
         </GlassCard>
 
-        {/* Step 2: 卖点 */}
-        <GlassCard>
-          <div className="flex items-center justify-between mb-2">
-            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
-              <span style={{ color: '#8B5CF6' }}>Step 2</span> · 卖点 (3-5 个)
-            </p>
-            <button
-              onClick={addSellingPoint}
-              disabled={sellingPoints.length >= 5}
-              className="text-[10px] flex items-center gap-1"
-              style={{ color: sellingPoints.length >= 5 ? '#6B7280' : '#93C5FD' }}
-            >
-              <Plus size={10} /> 加卖点
-            </button>
-          </div>
-          <div className="space-y-2">
-            {sellingPoints.map((sp, i) => (
-              <div key={i} className="flex gap-1.5">
-                <input
-                  value={sp}
-                  onChange={(e) => updateSellingPoint(i, e.target.value)}
-                  placeholder={`卖点 ${i + 1} (例: 轻便折叠)`}
-                  maxLength={50}
-                  className="flex-1 px-3 py-2 rounded-lg text-xs bg-transparent outline-none"
-                  style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#E5E7EB',
-                  }}
-                />
-                {sellingPoints.length > 3 && (
-                  <button
-                    onClick={() => removeSellingPoint(i)}
-                    className="px-2 py-2 rounded-lg"
-                    style={{ background: 'rgba(239,68,68,0.1)' }}
-                    title="删除"
-                  >
-                    <Trash2 size={12} color="#FCA5A5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+        {/* 卖点/元素（产品 and 生活记录 场景） */}
+        {(scene === 'product' || scene === 'lifestyle') && (
+          <GlassCard>
+            <div className="flex items-center justify-between mb-2">
+              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
+                {scene === 'product' ? '卖点/特点 (3-5 个)' : '要包含的元素 (3-8 个)'}
+              </p>
+              <button
+                onClick={addSellingPoint}
+                disabled={sellingPoints.length >= (scene === 'product' ? 5 : 8)}
+                className="text-[10px] flex items-center gap-1"
+                style={{ color: sellingPoints.length >= (scene === 'product' ? 5 : 8) ? '#6B7280' : '#93C5FD' }}
+              >
+                <Plus size={10} /> 添加
+              </button>
+            </div>
+            <div className="space-y-2">
+              {sellingPoints.map((sp, i) => (
+                <div key={i} className="flex gap-1.5">
+                  <input
+                    value={sp}
+                    onChange={(e) => updateSellingPoint(i, e.target.value)}
+                    placeholder={scene === 'product' ? `卖点 ${i + 1} (例: 轻便折叠)` : `元素 ${i + 1} (例: 食物特写)`}
+                    maxLength={50}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs bg-transparent outline-none"
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#E5E7EB',
+                    }}
+                  />
+                  {sellingPoints.length > (scene === 'product' ? 3 : 1) && (
+                    <button
+                      onClick={() => removeSellingPoint(i)}
+                      className="px-2 py-2 rounded-lg"
+                      style={{ background: 'rgba(239,68,68,0.1)' }}
+                      title="删除"
+                    >
+                      <Trash2 size={12} color="#FCA5A5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+        )}
 
-        {/* Step 3: 参考图（可选） */}
+        {/* 额外参数（节日氛围/色调/排版方式/风格） */}
+        {(scene === 'festival' || scene === 'aesthetic' || scene === 'creative' || scene === 'hobby') && (
+          <GlassCard>
+            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+              {scene === 'creative' ? '排版方式' : scene === 'aesthetic' ? '色调偏好' : scene === 'festival' ? '氛围/风格' : '风格/特点'}
+              <span style={{ color: '#6B7280', fontSize: 10, marginLeft: 4 }}>(可选)</span>
+            </p>
+            {scene === 'creative' ? (
+              <div className="space-y-1.5">
+                {LAYOUT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setExtra(extra === opt.value ? '' : opt.value)}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-all"
+                    style={{
+                      background: extra === opt.value ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: extra === opt.value ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      color: extra === opt.value ? '#C4B5FD' : '#9CA3AF',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <input
+                value={extra}
+                onChange={(e) => setExtra(e.target.value)}
+                placeholder={
+                  scene === 'festival' ? '例: 传统温馨 / 现代简约 / 浪漫粉色系...' :
+                  scene === 'aesthetic' ? '例: 柔和粉色系 / 高级灰调 / 暖黄复古...' :
+                  '例: 极简风 / 日系 / 手作感...'
+                }
+                maxLength={50}
+                className="w-full px-3 py-2.5 rounded-lg text-sm bg-transparent outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#E5E7EB',
+                }}
+              />
+            )}
+          </GlassCard>
+        )}
+
+        {/* 参考图（可选） */}
         <GlassCard>
           <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-            <span style={{ color: '#22C55E' }}>Step 3</span> · 参考图(可选,从 AI 生图带入)
+            参考图 <span style={{ color: '#6B7280', fontSize: 10, fontWeight: 400 }}>(可选,可从 AI 生图页带入)</span>
           </p>
           {referenceImage ? (
             <div className="relative inline-block">
@@ -325,7 +498,7 @@ function AdsContent() {
             </div>
           ) : (
             <p style={{ color: '#6B7280', fontSize: 11 }}>
-              从 AI 生图页 → 选「AI 图生视频」旁加个「导入朋友圈 9 宫格」按钮, 或手动粘贴 URL
+              可从其他 AI 工具页带入参考图，或手动粘贴图片 URL
             </p>
           )}
         </GlassCard>
@@ -361,18 +534,48 @@ function AdsContent() {
               <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
                 📦 9 宫格素材
               </p>
-              <button
-                onClick={handleDownloadZip}
-                className="px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))',
-                  border: '1px solid rgba(59,130,246,0.5)',
-                  color: '#93C5FD',
-                  fontWeight: 600,
-                }}
-              >
-                <Download size={11} /> 下载 ZIP
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleDownloadZip}
+                  className="px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))',
+                    border: '1px solid rgba(59,130,246,0.5)',
+                    color: '#93C5FD',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Download size={11} /> ZIP
+                </button>
+                <button
+                  onClick={handleSaveAllImages}
+                  disabled={isGenerating}
+                  className="px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(34,197,94,0.25), rgba(59,130,246,0.25))',
+                    border: '1px solid rgba(34,197,94,0.4)',
+                    color: '#86EFAC',
+                    fontWeight: 600,
+                    opacity: isGenerating ? 0.4 : 1,
+                  }}
+                >
+                  <Download size={11} /> 保存图片
+                </button>
+                <button
+                  onClick={handleSaveToInspiration}
+                  disabled={savingToInspiration}
+                  className="px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.25), rgba(59,130,246,0.25))',
+                    border: '1px solid rgba(139,92,246,0.4)',
+                    color: '#C4B5FD',
+                    fontWeight: 600,
+                    opacity: savingToInspiration ? 0.4 : 1,
+                  }}
+                >
+                  <FolderOpen size={11} /> 存灵感库
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -447,7 +650,7 @@ function AdsContent() {
             >
               <CheckCircle2 size={14} color="#86EFAC" />
               <p style={{ color: '#86EFAC', fontSize: 11, lineHeight: 1.5 }}>
-                下载的 ZIP 含 9 张 1:1 封面 + 1 份标题 CSV(序号/标题/角度/对应卖点)。可直接投放朋友圈广告。
+                下载的 ZIP 含 9 张 1:1 封面 + 1 份标题 CSV(序号/标题/角度/对应描述)。可直接发布朋友圈。
               </p>
             </div>
           </GlassCard>
