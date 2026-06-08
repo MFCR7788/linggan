@@ -23,14 +23,16 @@ export async function GET(request: Request) {
     const result = await runHotspotCheck();
     const duration = Date.now() - startTime;
 
-    console.log(`[Cron] Hotspot check completed in ${duration}ms: ${result.newCount} new, ${result.errors.length} errors`);
+    console.log(`[Cron] Hotspot check completed in ${duration}ms: ${result.newCount} new, ${result.errors.length} errors, ${result.processedGroups}/${result.processedGroups + result.remainingGroups} groups`);
 
     return createApiResponse({
       newHotspots: result.newCount,
       errors: result.errors,
       durationMs: duration,
+      processedGroups: result.processedGroups,
+      remainingGroups: result.remainingGroups,
       timestamp: new Date().toISOString(),
-    }, `检查完成：${result.newCount} 条新热点，耗时 ${(duration / 1000).toFixed(1)}s`);
+    }, `检查完成：${result.newCount} 条新热点，${result.processedGroups} 组已处理${result.remainingGroups > 0 ? `，${result.remainingGroups} 组待下次` : ''}，耗时 ${(duration / 1000).toFixed(1)}s`);
   } catch (error) {
     console.error('[Cron] Hotspot check failed:', error);
     return createApiError('热点检查失败', 500);

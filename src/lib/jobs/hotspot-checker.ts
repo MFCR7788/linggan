@@ -10,7 +10,11 @@ import { SearchResult, HotListItem } from '../search/types';
 
 // 来源配额
 const TWITTER_QUOTA = 0;   // 没有 Twitter API Key，设为 0
-const OTHER_QUOTA = 15;
+const OTHER_QUOTA = 8;     // 每个关键词最多处理 8 条候选项
+
+// 单次调用限制（Vercel maxDuration=300s，curl timeout=280s）
+const MAX_KEYWORD_GROUPS = 5;   // 每次最多处理 5 个关键词组
+const DEADLINE_SECONDS = 250;   // 在 Vercel 超时前 50s 停止处理
 
 // 热榜缓存，一次检查周期只拉取一次
 interface HotListCache {
@@ -171,28 +175,33 @@ function buildHotItemPayload(item: SearchResult, analysis: { isReal?: boolean; r
  * 关键词去重：相同文本的关键词分组处理，只搜索/AI分析一次
  * 热点共享：同一关键词的多个用户都能获得热点条目
  */
-export async function runHotspotCheck(): Promise<{ newCount: number; errors: string[] }> {
+export async function runHotspotCheck(): Promise<{ newCount: number; errors: string[]; processedGroups: number; remainingGroups: number }> {
   console.log('Starting hotspot check...');
   const errors: string[] = [];
   let newCount = 0;
+  let processedGroups = 0;
+  let remainingGroups = 0;
+  let totalGroups = 0;
+  const startTime = Date.now();
 
   try {
     const supabase = createAdminClient();
 
-    // 获取所有激活的用户监控关键词
+    // 获取所有激活的用户监控关键词（按 last_check_at 升序，优先处理最久未检查的）
     const { data: activeKeywords, error: kwError } = await supabase
       .from('monitor_keywords')
       .select('*')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('last_check_at', { ascending: true, nullsFirst: true });
 
     if (kwError) {
       console.error('Failed to fetch keywords:', kwError);
-      return { newCount: 0, errors: ['Database query failed'] };
+      return { newCount: 0, errors: ['Database query failed'], processedGroups: 0, remainingGroups: 0 };
     }
 
     if (!activeKeywords || activeKeywords.length === 0) {
       console.log('No active keywords to monitor');
-      return { newCount: 0, errors: [] };
+      return { newCount: 0, errors: [], processedGroups: 0, remainingGroups: 0 };
     }
 
     // ---- 按关键词文本分组去重（忽略大小写/首尾空格） ----
@@ -202,7 +211,8 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
       if (!keywordMap.has(normalized)) keywordMap.set(normalized, []);
       keywordMap.get(normalized)!.push(kw);
     }
-    console.log(`Total ${activeKeywords.length} active keywords → ${keywordMap.size} unique`);
+    totalGroups = keywordMap.size;
+    console.log(`Total ${activeKeywords.length} active keywords → ${totalGroups} unique groups`);
 
     // 一次检查周期只拉取一次热榜
     const hotLists = await fetchAllHotLists();
@@ -210,8 +220,17 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
     // 按关键词分组，并发处理（限制 3 个并发以避免触发 API 限流）
     const keywordGroups = Array.from(keywordMap.entries());
     const CONCURRENCY = 3;
+    const maxGroups = Math.min(MAX_KEYWORD_GROUPS, keywordGroups.length);
 
-    for (let g = 0; g < keywordGroups.length; g += CONCURRENCY) {
+    for (let g = 0; g < maxGroups && processedGroups < maxGroups; g += CONCURRENCY) {
+      // 检查全局截止时间
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (elapsed > DEADLINE_SECONDS) {
+        remainingGroups = totalGroups - processedGroups;
+        console.log(`Deadline reached (${elapsed.toFixed(0)}s). Stopping. ${processedGroups}/${totalGroups} groups processed.`);
+        break;
+      }
+
       const batch = keywordGroups.slice(g, g + CONCURRENCY);
       const batchResults = await Promise.allSettled(
         batch.map(async ([normalizedKey, keywordRows]) => {
@@ -356,13 +375,17 @@ export async function runHotspotCheck(): Promise<{ newCount: number; errors: str
           errors.push(`Error checking "${kw}": ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
         }
       }
+      processedGroups += batch.length;
     }
+
+    remainingGroups = totalGroups - processedGroups;
 
   } catch (error) {
     console.error('Hotspot check error:', error);
     errors.push(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  console.log(`\nHotspot check completed. Found ${newCount} new hotspots.`);
-  return { newCount, errors };
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\nHotspot check completed in ${duration}s. Found ${newCount} new hotspots. ${processedGroups}/${totalGroups} groups processed${remainingGroups > 0 ? `, ${remainingGroups} remaining for next run` : ''}.`);
+  return { newCount, errors, processedGroups, remainingGroups };
 }
