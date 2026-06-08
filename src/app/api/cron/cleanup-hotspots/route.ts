@@ -6,9 +6,9 @@ import { createAdminClient } from '@/lib/supabase-server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = process.env['CRON_SECRET'] || process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  const expectedSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
   if (!expectedSecret) {
-    return createApiError('CRON_SECRET / SUPABASE_SERVICE_ROLE_KEY 未配置,拒绝执行', 500);
+    return createApiError('SUPABASE_SERVICE_ROLE_KEY / CRON_SECRET 未配置,拒绝执行', 500);
   }
   const { searchParams } = new URL(request.url);
   const secret =

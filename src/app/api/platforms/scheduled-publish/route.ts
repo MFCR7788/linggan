@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 function checkAuth(request: Request): boolean {
-  const secret = process.env['CRON_SECRET'] || process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  const secret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
   if (!secret) return false;
   const url = new URL(request.url);
   return request.headers.get('authorization') === `Bearer ${secret}`

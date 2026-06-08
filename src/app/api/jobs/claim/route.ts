@@ -13,7 +13,7 @@ const WORKER_ID_PREFIX = 'vercel-cron';
 export async function POST(request: Request): Promise<NextResponse> {
   // 1) CRON_SECRET 鉴权
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env['CRON_SECRET'] || process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  const cronSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
   if (cronSecret) {
     const expected = `Bearer ${cronSecret}`;
     if (authHeader !== expected) {
