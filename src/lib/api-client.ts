@@ -32,6 +32,12 @@ class ApiClient {
         },
       });
 
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 100)}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
