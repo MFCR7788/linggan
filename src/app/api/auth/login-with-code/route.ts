@@ -78,17 +78,22 @@ export async function POST(request: NextRequest) {
     const deterministicPassword = derivePassword(phone);
 
     // 2. 查找 Supabase Auth 用户(按 email 查,Supabase Phone provider 默认禁用)
+    // 逐页扫描 listUsers(分页限制),防止用户量大时漏查
     let authUserId: string | null = null;
-    // listUsers 默认按 email/phone/元数据分页;为简单起见,精确查 email
-    const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (listError) {
-      console.error('[login] listUsers 失败:', listError);
-      return NextResponse.json({ success: false, error: '服务暂时不可用' }, { status: 500 });
+    let existing: any = null;
+    const maxPages = 10; // 最多扫 10 页(2000 用户),足够覆盖当前规模
+    for (let page = 1; page <= maxPages; page++) {
+      const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
+      if (listError) {
+        console.error(`[login] listUsers 第${page}页失败:`, listError);
+        break;
+      }
+      existing = listData?.users?.find(
+        (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
+      );
+      if (existing) { authUserId = existing.id; break; }
+      if (!listData?.users || listData.users.length < 200) break; // 最后一页
     }
-    const existing = listData?.users?.find(
-      (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
-    );
-    authUserId = existing?.id ?? null;
 
     // 3. 不存在则创建(用 email 字段而非 phone,绕开 Supabase Phone provider)
     if (!authUserId) {
@@ -109,7 +114,15 @@ export async function POST(request: NextRequest) {
       authUserId = created.user.id;
       console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
     } else {
-      // 4. 已存在
+      // 4. 已存在：确保 email 已确认 + 密码匹配（老用户可能 email 未确认）
+      const { error: ensureErr } = await supabase.auth.admin.updateUserById(authUserId, {
+        email_confirm: true,
+        password: deterministicPassword,
+      });
+      if (ensureErr) {
+        console.warn('[login] ensureUserAuth 失败:', ensureErr.message);
+      }
+
       // 4a. 老用户(Phase C 前的)只有 phone 字段,迁移到 email 登录
       const existingEmail: string | undefined = existing?.email;
       if (existingEmail !== authEmail) {
@@ -120,7 +133,6 @@ export async function POST(request: NextRequest) {
         });
         if (migrateErr) {
           console.error('[login] 老用户迁移到 email 失败:', migrateErr);
-          // 不阻断登录,先尝试 signIn(可能老密码碰巧对了)
         } else {
           console.log(`[login] 老用户已迁移: ${authUserId} → email=${authEmail}`);
         }
@@ -161,18 +173,19 @@ export async function POST(request: NextRequest) {
 
     let signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
     if (signInResult.error) {
-      // 7. 老用户密码不匹配 → 重置
-      console.warn(`[login] signInWithPassword 失败(${signInResult.error.message}),重置密码后重试`);
+      // 7. 兜底：密码重置 + 确认邮箱
+      console.warn(`[login] signInWithPassword 失败(code=${signInResult.error.code}, msg=${signInResult.error.message}), 兜底重置...`);
       const { error: resetError } = await supabase.auth.admin.updateUserById(authUserId, {
+        email_confirm: true,
         password: deterministicPassword,
       });
       if (resetError) {
-        console.error('[login] 重置密码失败:', resetError);
+        console.error('[login] 兜底重置失败:', JSON.stringify(resetError));
         return NextResponse.json({ success: false, error: '登录失败,请稍后重试' }, { status: 500 });
       }
       signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
       if (signInResult.error) {
-        console.error('[login] 重置后仍登录失败:', signInResult.error);
+        console.error(`[login] 兜底重置后仍失败, code=${signInResult.error.code}, msg=${signInResult.error.message}, status=${signInResult.error.status}`);
         return NextResponse.json({ success: false, error: '登录失败,请稍后重试' }, { status: 500 });
       }
     }
