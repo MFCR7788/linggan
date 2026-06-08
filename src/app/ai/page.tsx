@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2, TrendingUp, Scissors, Plus, Wrench, CheckSquare, X } from "lucide-react";
+import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, Sparkles, ArrowRight, Trash2, TrendingUp, Scissors, Plus, Wrench, CheckSquare, X, Check, Loader2 } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
@@ -13,7 +13,7 @@ import { AccountTypeOnboarding } from "@/components/AccountTypeOnboarding";
 import { CreditsWarningBanner } from "@/components/CreditsWarningBanner";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useAccountType } from "@/hooks/use-account-type";
-import { getRecommendations } from "@/lib/account-presets";
+import { getRecommendations, ACCOUNT_TYPE_PRESETS, type AccountTypeId } from "@/lib/account-presets";
 import { useWorkflowSessions, useWorkflowSession } from "@/hooks/use-workflow-session";
 import { WorkflowSessionCard } from "@/components/WorkflowSessionCard";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
@@ -61,7 +61,9 @@ function AICreationContent() {
   const [highlightFirstCombo, setHighlightFirstCombo] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { accountType, preset } = useAccountType();
+  const { accountType, preset, setAccountType } = useAccountType();
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [switchingId, setSwitchingId] = useState<AccountTypeId | null>(null);
   const recommendations = getRecommendations(accountType);
 
   // 工作流会话
@@ -340,7 +342,7 @@ function AICreationContent() {
                 </p>
               </div>
               <button
-                onClick={() => router.push('/profile/settings')}
+                onClick={() => setShowAccountPicker(true)}
                 className="text-[11px] flex items-center gap-0.5"
                 style={{ color: '#93C5FD' }}
               >
@@ -679,6 +681,81 @@ function AICreationContent() {
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <AccountTypeOnboarding open={showOnboarding} onClose={closeOnboarding} />
+      {showAccountPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={() => setShowAccountPicker(false)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-[448px] rounded-t-3xl p-5 pb-8 animate-slide-up max-h-[70vh] overflow-y-auto"
+            style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.08)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700 }}>选择账号类型</p>
+                <p style={{ color: '#9CA3AF', fontSize: 11 }}>AI 创作中心会推荐对应视频组合</p>
+              </div>
+              <button
+                onClick={() => setShowAccountPicker(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.08)' }}
+              >
+                <X size={14} color="#9CA3AF" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {ACCOUNT_TYPE_PRESETS.map((p) => {
+                const selected = p.id === accountType;
+                const switching = switchingId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={async () => {
+                      if (selected || switchingId) return;
+                      setSwitchingId(p.id);
+                      const result = await setAccountType(p.id);
+                      setSwitchingId(null);
+                      if (result.ok) {
+                        setShowAccountPicker(false);
+                        setToast({ message: `已切换到「${p.label}」，AI 创作中心推荐组合已更新`, type: 'success' });
+                      } else {
+                        setToast({ message: result.error || '切换失败', type: 'error' });
+                      }
+                    }}
+                    disabled={!!switchingId}
+                    className="text-left p-3 rounded-2xl transition-all active:scale-[0.98]"
+                    style={{
+                      background: selected
+                        ? 'linear-gradient(135deg, rgba(244,114,182,0.18), rgba(139,92,246,0.18))'
+                        : 'rgba(255,255,255,0.04)',
+                      border: selected
+                        ? '1px solid rgba(244,114,182,0.5)'
+                        : '1px solid rgba(255,255,255,0.08)',
+                      opacity: switchingId && !switching ? 0.5 : 1,
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span style={{ fontSize: 20 }}>{p.emoji}</span>
+                      <span style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>{p.label}</span>
+                      {selected && !switching && (
+                        <Check size={14} color="#F9A8D4" className="ml-auto" />
+                      )}
+                      {switching && (
+                        <Loader2 size={14} color="#F9A8D4" className="ml-auto animate-spin" />
+                      )}
+                    </div>
+                    <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.4 }}>
+                      {p.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {showCustomBuilder && (
         <CustomComboBuilder
           onSave={handleSaveCustomCombo}

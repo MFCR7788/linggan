@@ -46,6 +46,7 @@ function CaptureContent() {
     copiedId, regeneratingId, savingId, schedulingId, speakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
     speakMessage, stopSpeaking, regenerateMessage, saveToInspiration, addToSchedule,
+    scheduledItems,
   } = msgActions;
 
   // 语音
@@ -945,20 +946,55 @@ function CaptureContent() {
                           📍 {s.location}
                         </p>
                       )}
+                      {s.suggestions && s.suggestions.length > 0 && (
+                        <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(139,92,246,0.15)' }}>
+                          {s.suggestions.map((si, i) => (
+                            <p key={i} style={{ color: '#A78BFA', fontSize: 10, lineHeight: 1.5 }}>
+                              {i + 1}. {si}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToSchedule(msg, messages, idx);
+                        }}
+                        disabled={scheduledItems.has(`${msg.id}-${idx}`) || schedulingId === msg.id}
+                        className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80 disabled:opacity-50"
+                        style={{ background: scheduledItems.has(`${msg.id}-${idx}`) ? 'rgba(16,185,129,0.5)' : 'rgba(139,92,246,0.4)' }}
+                      >
+                        {scheduledItems.has(`${msg.id}-${idx}`) ? (
+                          <>✅ 已添加</>
+                        ) : (
+                          <>📅 添加到日程</>
+                        )}
+                      </button>
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={() => addToSchedule(msg, messages)}
-                  className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80"
-                  style={{ background: 'rgba(139,92,246,0.4)' }}
-                >
-                  {schedulingId === msg.id ? (
-                    <>✅ 已全部添加</>
-                  ) : (
-                    <>📅 添加全部日程 ({msg.schedules.length}条)</>
-                  )}
-                </button>
+                {(() => {
+                  const allCount = msg.schedules.length;
+                  const addedCount = msg.schedules.filter((_, i) => scheduledItems.has(`${msg.id}-${i}`)).length;
+                  const remaining = allCount - addedCount;
+                  const allDone = remaining === 0 && !schedulingId;
+                  return (
+                    <button
+                      onClick={() => addToSchedule(msg, messages)}
+                      disabled={allDone || schedulingId === msg.id}
+                      className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80 disabled:opacity-50"
+                      style={{ background: allDone ? 'rgba(16,185,129,0.5)' : 'rgba(139,92,246,0.4)' }}
+                    >
+                      {schedulingId === msg.id ? (
+                        <>✅ 已全部添加</>
+                      ) : allDone ? (
+                        <>✅ 已全部添加</>
+                      ) : (
+                        <>📅 添加全部日程 ({remaining}/{allCount}条)</>
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
             )}
 

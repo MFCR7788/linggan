@@ -154,6 +154,7 @@ export function useMessageActions() {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [scheduledItems, setScheduledItems] = useState<Set<string>>(new Set());
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -379,14 +380,19 @@ export function useMessageActions() {
     }
   }, [createInspiration]);
 
-  const addToSchedule = useCallback(async (msg: Message, _allMessages: Message[]) => {
+  const addToSchedule = useCallback(async (msg: Message, _allMessages: Message[], scheduleIndex?: number) => {
     const list = msg.schedules || (msg.schedule ? [msg.schedule] : null);
     if (!list) return;
+    // 单个添加时只加指定项；全部添加时跳过已添加的
+    const itemsToAdd = scheduleIndex !== undefined
+      ? [list[scheduleIndex]]
+      : list.filter((_, i) => !scheduledItems.has(`${msg.id}-${i}`));
+    if (itemsToAdd.length === 0) return;
     setSchedulingId(msg.id);
     try {
       syncDevAuthCookie();
 
-      for (const s of list) {
+      for (const s of itemsToAdd) {
         await createSchedule.mutateAsync({
           title: s.title,
           description: s.description || undefined,
@@ -397,7 +403,18 @@ export function useMessageActions() {
           suggestions: s.suggestions?.length ? s.suggestions : undefined,
         });
       }
-      showToast(`已成功添加 ${list.length} 条日程到首页和日程库`, 'success');
+
+      setScheduledItems(prev => {
+        const next = new Set(prev);
+        if (scheduleIndex !== undefined) {
+          next.add(`${msg.id}-${scheduleIndex}`);
+        } else {
+          list.forEach((_, i) => next.add(`${msg.id}-${i}`));
+        }
+        return next;
+      });
+
+      showToast(`已成功添加 ${itemsToAdd.length} 条日程到首页和日程库`, 'success');
       setTimeout(() => setSchedulingId(null), 2000);
     } catch (e: any) {
       const errMsg = e?.message || '未知错误';
@@ -405,13 +422,14 @@ export function useMessageActions() {
       showToast('添加日程失败: ' + errMsg, 'error');
       setSchedulingId(null);
     }
-  }, [createSchedule]);
+  }, [createSchedule, scheduledItems]);
 
   return {
     copiedId, regeneratingId, savingId, schedulingId, speakingId,
     setCopiedId, setRegeneratingId, setSavingId, setSchedulingId, setSpeakingId,
     copyMessage, shareMessage, modifyMessage, deleteMessage,
     speakMessage, stopSpeaking, regenerateMessage, saveToInspiration, addToSchedule,
+    scheduledItems,
   };
 }
 

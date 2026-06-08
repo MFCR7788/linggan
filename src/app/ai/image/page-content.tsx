@@ -22,6 +22,7 @@ import {
   findImagePalette,
 } from '@/lib/preset-templates';
 import { syncDevAuthCookie } from '@/lib/dev-auth';
+import { apiClient } from '@/lib/api-client';
 
 const STYLE_OPTIONS = ['写实摄影', '插画风格', '赛博朋克', '极简主义', '水彩手绘', '3D渲染', '复古胶片', '国潮风格'];
 const RATIO_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'];
@@ -992,23 +993,22 @@ function AIImageContent() {
                       <ActionBtn
                         icon={<Save size={14} />}
                         label="存选中"
-                        onClick={() => {
+                        onClick={async () => {
                           if (!targetUrl) return;
-                          fetch('/api/inspiration', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
+                          try {
+                            const tags = [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''].filter(t => t && t.trim());
+                            const res = await apiClient.post('/inspiration', {
                               type: 'image',
                               title: finalPrompt?.substring(0, 50) || 'AI 生成图片',
                               original_text: finalPrompt,
                               prompt: finalPrompt,
                               media_urls: [targetUrl],
-                              tags: [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''],
-                            }),
-                          }).then(res => res.json()).then(data => {
-                            if (data.success) setToast({ message: '已保存到灵感库', type: 'success' });
-                            else setToast({ message: '保存失败: ' + (data.error || '未知错误'), type: 'error' });
-                          }).catch(() => setToast({ message: '保存失败', type: 'error' }));
+                              source_platform: 'ai_image',
+                              tags,
+                            });
+                            if (res.success) setToast({ message: '已保存到灵感库', type: 'success' });
+                            else setToast({ message: '保存失败: ' + (res.error || '未知错误'), type: 'error' });
+                          } catch { setToast({ message: '保存失败', type: 'error' }); }
                         }}
                         disabled={!targetUrl}
                       />
@@ -1025,20 +1025,18 @@ function AIImageContent() {
                           label={`全部存 (${batchImages.length})`}
                           onClick={async () => {
                             try {
+                              const tags = [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''].filter(t => t && t.trim());
                               const results = await Promise.all(
-                                batchImages.map((url) =>
-                                  fetch('/api/inspiration', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      type: 'image',
-                                      title: (finalPrompt?.substring(0, 40) || 'AI') + ` (${batchImages.indexOf(url) + 1})`,
-                                      original_text: finalPrompt,
-                                      prompt: finalPrompt,
-                                      media_urls: [url],
-                                      tags: [selectedStyle, 'AI生成', findImagePreset(selectedPresetId)?.label || ''],
-                                    }),
-                                  }).then(r => r.json())
+                                batchImages.map((url, i) =>
+                                  apiClient.post('/inspiration', {
+                                    type: 'image',
+                                    title: (finalPrompt?.substring(0, 40) || 'AI') + ` (${i + 1})`,
+                                    original_text: finalPrompt,
+                                    prompt: finalPrompt,
+                                    media_urls: [url],
+                                    source_platform: 'ai_image',
+                                    tags,
+                                  })
                                 )
                               );
                               const ok = results.filter(r => r.success).length;

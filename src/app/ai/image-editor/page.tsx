@@ -4,12 +4,13 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Scissors, Sparkles, Maximize, Upload, Download,
-  Loader2, Image as ImageIcon, RefreshCw,
+  Loader2, Image as ImageIcon, RefreshCw, Save, Check,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { useToast } from '@/components/Toast';
+import { apiClient } from '@/lib/api-client';
 
 type EditAction = 'remove-bg' | 'enhance' | 'expand';
 
@@ -29,6 +30,15 @@ function ImageEditorContent() {
   const [processing, setProcessing] = useState(false);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [editHistory, setEditHistory] = useState<Array<{
+    action: EditAction;
+    actionLabel: string;
+    imageUrl: string;
+    resultUrl: string;
+    time: string;
+  }>>([]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -70,7 +80,16 @@ function ImageEditorContent() {
       if (!data.success) {
         showToast(data.error || '处理失败', 'error');
       } else {
-        setResultUrl(data.data.url);
+        const url = data.data.url;
+        setResultUrl(url);
+        setSaved(false);
+        setEditHistory(prev => [{
+          action,
+          actionLabel: TABS.find(t => t.key === action)?.label || action,
+          imageUrl,
+          resultUrl: url,
+          time: new Date().toISOString(),
+        }, ...prev].slice(0, 20));
         showToast('处理完成', 'success');
       }
     } catch {
@@ -214,26 +233,8 @@ function ImageEditorContent() {
         {/* 结果展示 */}
         {resultUrl && (
           <GlassCard className="!p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600 }}>处理结果</p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleDownload}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px]"
-                  style={{ background: 'rgba(34,197,94,0.15)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.3)' }}
-                >
-                  <Download size={12} /> 下载
-                </button>
-                <button
-                  onClick={() => setImageUrl(resultUrl)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px]"
-                  style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.3)' }}
-                >
-                  <RefreshCw size={12} /> 继续编辑
-                </button>
-              </div>
-            </div>
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>处理结果</p>
+            <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
               <img
                 src={resultUrl}
                 alt="编辑结果"
@@ -243,6 +244,95 @@ function ImageEditorContent() {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  if (!resultUrl || saving) return;
+                  setSaving(true);
+                  try {
+                    const res = await apiClient.post('/inspiration', {
+                      type: 'image',
+                      title: `${TABS.find(t => t.key === action)?.label} - ${new Date().toLocaleString('zh-CN')}`,
+                      media_urls: [resultUrl],
+                      source_platform: 'ai_image_editor',
+                      tags: ['AI图片编辑', TABS.find(t => t.key === action)?.label || ''].filter(t => t),
+                    });
+                    if (res.success) {
+                      setSaved(true);
+                      showToast('已保存到灵感库', 'success');
+                    } else {
+                      showToast('保存失败: ' + (res.error || '未知错误'), 'error');
+                    }
+                  } catch {
+                    showToast('保存失败', 'error');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving || saved}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{
+                  background: saved ? 'rgba(16,185,129,0.2)' : 'rgba(244,114,182,0.15)',
+                  color: saved ? '#4ADE80' : '#F472B6',
+                  border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(244,114,182,0.3)'}`,
+                }}
+              >
+                {saved ? <Check size={14} /> : <Save size={14} />}
+                {saved ? '已保存' : saving ? '保存中...' : '保存到灵感库'}
+              </button>
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs"
+                style={{ background: 'rgba(34,197,94,0.1)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.3)' }}
+              >
+                <Download size={14} /> 下载
+              </button>
+              <button
+                onClick={() => { setImageUrl(resultUrl); setResultUrl(null); setSaved(false); }}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs"
+                style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.3)' }}
+              >
+                <RefreshCw size={14} /> 继续编辑
+              </button>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* 历史生成 */}
+        {editHistory.length > 0 && (
+          <GlassCard className="!p-4">
+            <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
+            <div className="grid grid-cols-3 gap-2">
+              {editHistory.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setAction(item.action);
+                    setImageUrl(item.resultUrl);
+                    setResultUrl(null);
+                    setSaved(false);
+                  }}
+                  className="rounded-lg overflow-hidden relative group"
+                  style={{ border: '1px solid rgba(255,255,255,0.06)', aspectRatio: '1/1' }}
+                >
+                  <img
+                    src={item.resultUrl}
+                    alt={item.actionLabel}
+                    className="w-full h-full object-cover"
+                    style={{ background: 'rgba(0,0,0,0.3)' }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <div
+                    className="absolute inset-x-0 bottom-0 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}
+                  >
+                    <span style={{ color: '#E5E7EB', fontSize: 9 }}>{item.actionLabel}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </GlassCard>
         )}

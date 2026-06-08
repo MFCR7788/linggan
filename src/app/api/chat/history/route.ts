@@ -15,35 +15,25 @@ export const GET = withAuth(async ({ request, user }) => {
   const supabase = createAdminClient();
 
   if (worksMode === 'true') {
-    // 获取我的作品：chat_messages + content_items 合并
-    const workType = searchParams.get('type'); // 文案 | 图片 | 视频 | 配音
-    const sourcePlatform = searchParams.get('sourcePlatform'); // 可选，按来源平台过滤
+    // 获取我的作品：仅来自 chat_messages（临时历史，7天自动过期）
+    const workType = searchParams.get('type');
+    const sourcePlatform = searchParams.get('sourcePlatform');
 
-    // 1. chat_messages 中的 AI 创作记录
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // chat_messages 中最近 7 天的 AI 创作记录
     const { data: messages, error: msgError } = await supabase
       .from('chat_messages')
       .select('id, content, content_type, metadata, created_at, session_id')
       .eq('user_id', user.id)
       .eq('type', 'ai')
       .contains('metadata', { source: 'ai_creation' })
+      .gte('created_at', sevenDaysAgo)
       .order('created_at', { ascending: false })
       .limit(30);
 
     if (msgError) {
       console.error('[Works] 查询 chat_messages 失败:', msgError);
-    }
-
-    // 2. content_items 中的直接保存作品（如 AI 视频向导、图片生成）
-    const { data: contentItems, error: ciError } = await supabase
-      .from('content_items')
-      .select('*')
-      .eq('user_id', user.id)
-      .in('status', ['active', 'completed'])
-      .order('created_at', { ascending: false })
-      .limit(30);
-
-    if (ciError) {
-      console.error('[Works] 查询 content_items 失败:', ciError);
     }
 
     // 映射统一格式
@@ -76,43 +66,13 @@ export const GET = withAuth(async ({ request, user }) => {
       return true;
     });
 
-    const contentWorks = (contentItems || []).map((ci: any) => {
-      const ciType = ci.type === 'video' ? '视频' : ci.type === 'image' ? '图片' : ci.type === 'voice' || ci.type === 'audio' ? '配音' : '文案';
-      const emoji = ci.type === 'video' ? '🎬' : ci.type === 'image' ? '🖼️' : ci.type === 'voice' || ci.type === 'audio' ? '🔊' : '📄';
-      const mediaUrl = ci.media_urls?.[0] || '';
-      const isAudio = ci.type === 'voice' || ci.type === 'audio';
-      return {
-        id: ci.id,
-        emoji,
-        title: ci.title || 'AI 生成内容',
-        type: ciType,
-        time: ci.created_at,
-        prompt: ci.prompt || ci.original_text || '',
-        session_id: ci.session_id || '',
-        metadata: {
-          source: 'content_item',
-          generatedVideo: ci.type === 'video' && mediaUrl ? { videoUrl: mediaUrl } : undefined,
-          generatedImage: ci.type === 'image' && mediaUrl ? { imageUrl: mediaUrl } : undefined,
-          generatedAudio: isAudio && mediaUrl ? { audioUrl: mediaUrl } : undefined,
-          audioUrl: isAudio ? mediaUrl : undefined,
-          videoThumbnail: ci.thumbnail_url || undefined,
-        },
-        content: ci.ai_summary || ci.original_text || '',
-        content_type: ci.type,
-        source_platform: ci.source_platform || null,
-        _source: 'content_item',
-      };
-    });
-
-    // 合并并按时间倒序
-    let works = [...chatWorks, ...contentWorks]
+    // 按时间倒序并过滤
+    let works = chatWorks
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, 30);
-
-    // 过滤：只保留有实质内容的（文字长度>5 或有生成结果）
-    works = works.filter((w: any) =>
-      (w.title?.length || 0) > 5 || w.type === '图片' || w.type === '视频' || w.type === '配音'
-    );
+      .slice(0, 30)
+      .filter((w: any) =>
+        (w.title?.length || 0) > 5 || w.type === '图片' || w.type === '视频' || w.type === '配音'
+      );
 
     // 按类型筛选
     if (workType && workType !== '全部') {

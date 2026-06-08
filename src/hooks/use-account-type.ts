@@ -4,7 +4,7 @@
 // 优先级:1) useUser() 的 accountType 字段  2) localStorage 兜底(dev 模式常用)
 // 写入:调 PATCH /user/profile,成功后写 localStorage 立即生效(不等待 invalidate)
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useUser } from './use-user';
 import { apiClient } from '@/lib/api-client';
 import { getAccountTypePreset } from '@/lib/account-presets';
@@ -36,7 +36,7 @@ function setLocalAccountType(id: AccountTypeId | null) {
 
 export function useAccountType() {
   const { data: user, refetch } = useUser();
-  const localType = useMemo(() => getLocalAccountType(), []);
+  const [localType, setLocalType] = useState<AccountTypeId | null>(() => getLocalAccountType());
 
   // user.account_type 是后端真源,localStorage 是兜底(dev 模式 / 后端暂不支持)
   const accountType: AccountTypeId | null = useMemo(() => {
@@ -46,18 +46,18 @@ export function useAccountType() {
 
   const preset = useMemo(() => getAccountTypePreset(accountType), [accountType]);
 
-  /** 写入账号类型:同步写 localStorage,异步 PATCH /user/profile,成功后 refetch */
+  /** 写入账号类型:同步写 localStorage + 更新 state,异步 PATCH /user/profile */
   const setAccountType = useCallback(
     async (id: AccountTypeId | null) => {
-      // 立即写 localStorage(下次读立即生效)
+      // 立即写 localStorage + 更新本地 state(UI 立即响应)
       setLocalAccountType(id);
+      setLocalType(id);
 
       // 调后端 PATCH(若失败不阻塞本地,下次同步会被覆盖)
       if (id) {
         try {
           const res = await apiClient.patch('/user/profile', { account_type: id });
           if (res.success) {
-            // refetch 拿最新 user
             await refetch();
             return { ok: true, error: null };
           }
