@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const deterministicPassword = derivePassword(phone);
 
     // 2. 创建或查找用户
-    //    策略：先尝试 createUser（新用户快速路径），若邮箱已存在则 listUsers 查找
+    //    策略：先尝试 createUser（新用户快速路径），任何失败都回退到 listUsers 查找
     let authUserId: string | null = null;
     let isNewUser = false;
 
@@ -98,13 +98,13 @@ export async function POST(request: NextRequest) {
       authUserId = created.user.id;
       isNewUser = true;
       console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
-    } else if (createError && (
-      String(createError.message).toLowerCase().includes('already') ||
-      createError.code === 'email_exists' ||
-      createError.code === 'user_already_exists'
-    )) {
-      // 邮箱已存在 → 逐页扫描 listUsers 查找
-      console.log(`[login] 用户已存在,查找中... (${createError.message})`);
+    } else {
+      // createUser 失败（最常见原因：邮箱已存在）→ 逐页扫描 listUsers 查找
+      if (createError) {
+        console.log(`[login] createUser 失败,回退 listUsers 查找... (code=${createError.code}, msg=${createError.message})`);
+      } else {
+        console.log('[login] createUser 无错误但无 user 返回,回退 listUsers 查找...');
+      }
       let existing: any = null;
       const maxPages = 10;
       for (let page = 1; page <= maxPages; page++) {
@@ -121,13 +121,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (!authUserId) {
-        console.error('[login] 用户邮箱已存在但 listUsers 未找到:', authEmail);
-        return NextResponse.json({ success: false, error: '账号已存在但查找失败,请联系客服' }, { status: 500 });
+        console.error('[login] createUser 失败且 listUsers 未找到:', authEmail, createError ? JSON.stringify(createError) : '');
+        return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
       }
-    } else {
-      // 真正的创建错误（非重复）
-      console.error('[login] createUser 失败:', JSON.stringify(createError));
-      return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
     }
 
     // 3. 已存在用户：确保 email_confirm + 密码正确，迁移老用户 email
