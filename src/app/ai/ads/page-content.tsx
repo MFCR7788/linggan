@@ -822,35 +822,58 @@ function AdsContent() {
       {!historyLoading && historyItems.length > 0 && (
         <div className="px-4 pb-20">
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="space-y-3">
             {historyItems.map((item) => {
-              const images = item.metadata?.generatedImage?.batchImages ||
-                            (item.metadata?.generatedImage?.imageUrl ? [item.metadata.generatedImage.imageUrl] : []);
-              const firstImage = images[0] || item.imageUrl;
+              const cells = item.metadata?.generatedAds?.cells as Array<{ imageUrl: string; title: string; visualAngle?: string }> | undefined;
+              const firstImage = cells?.[0]?.imageUrl || item.imageUrl;
+              const totalCells = cells?.length || 0;
               return (
-                <div
+                <GlassCard
                   key={item.id}
-                  className="rounded-lg overflow-hidden cursor-pointer transition-all"
-                  style={{
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    aspectRatio: '1',
-                  }}
+                  hover
+                  className="!p-3 cursor-pointer"
                   onClick={() => {
-                    if (item.title) {
-                      setProduct(item.title);
-                    }
+                    if (item.title) setProduct(item.title);
+                    const sceneFromMeta = item.metadata?.generatedAds?.scene;
+                    if (sceneFromMeta) setScene(sceneFromMeta);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 >
-                  {firstImage ? (
-                    <img src={firstImage} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span style={{ fontSize: 24 }}>🎬</span>
+                  <div className="flex items-center gap-3">
+                    {firstImage ? (
+                      <img
+                        src={firstImage}
+                        alt={item.title}
+                        loading="lazy"
+                        className="w-20 h-20 rounded-xl object-cover flex-shrink-0"
+                        style={{ background: 'rgba(255,255,255,0.05)' }}
+                      />
+                    ) : (
+                      <div
+                        className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
+                        style={{ background: 'rgba(255,255,255,0.05)' }}
+                      >
+                        📦
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 500, marginBottom: 4 }} className="truncate">
+                        {item.title}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span style={{ color: '#6B7280', fontSize: 11 }}>
+                          {item.time}{totalCells > 0 ? ` · ${totalCells} 张` : ''}
+                        </span>
+                        <span
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px]"
+                          style={{ background: 'rgba(139,92,246,0.15)', color: '#C4B5FD' }}
+                        >
+                          🔄 做同款
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                </GlassCard>
               );
             })}
           </div>
