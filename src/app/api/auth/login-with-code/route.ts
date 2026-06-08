@@ -18,7 +18,7 @@ function toAuthEmail(phone: string): string {
 }
 
 /** 直连 Postgres 创建用户（完全绕过 GoTrue） */
-async function sqlCreateUser(email: string, password: string, phone: string, username: string): Promise<string | null> {
+async function sqlCreateUser(email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
   let pool: any = null;
   try {
     pool = createPgPool();
@@ -47,10 +47,10 @@ async function sqlCreateUser(email: string, password: string, phone: string, use
       ) RETURNING id`,
       [email, password, appMeta, userMeta]
     );
-    return result.rows[0]?.id || null;
+    return { id: result.rows[0]?.id };
   } catch (e: any) {
     console.error('[login] SQL 直插失败:', e?.message || e);
-    return null;
+    return { error: e?.message || String(e) };
   } finally {
     if (pool) await pool.end().catch(() => {});
   }
@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
       const { data: created, error: createError } = await supabase.auth.admin.createUser({
         email: authEmail,
         password: deterministicPassword,
+        email_confirm: true,
       });
 
       if (!createError && created?.user) {
@@ -140,14 +141,15 @@ export async function POST(request: NextRequest) {
       } else {
         // GoTrue 异常（unexpected_failure）→ SQL 直插兜底
         console.warn('[login] GoTrue createUser 异常:', createError?.code, createError?.message);
-        authUserId = await sqlCreateUser(authEmail, deterministicPassword, phone, displayName);
-        if (authUserId) {
+        const sqlResult = await sqlCreateUser(authEmail, deterministicPassword, phone, displayName);
+        if ('id' in sqlResult) {
+          authUserId = sqlResult.id;
           isNewUser = true;
           console.log('[login] SQL 直插创建成功:', authUserId);
         } else {
           return NextResponse.json({
             success: false,
-            error: `注册失败: GoTrue 创建失败且 SQL 直插不可用。请确保 Vercel 环境变量已配置 DATABASE_URL。原始错误: ${createError?.message || 'unknown'} (${createError?.code || 'unknown'})`,
+            error: `注册失败: GoTrue 创建失败且 SQL 直插不可用。SQL 错误: ${sqlResult.error}。请确保 Vercel 环境变量已配置 DATABASE_URL (Supabase Dashboard → Settings → Database → Connection string)。GoTrue 错误: ${createError?.message || 'unknown'} (${createError?.code || 'unknown'})`,
           }, { status: 500 });
         }
       }
