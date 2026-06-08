@@ -24,6 +24,17 @@ function deriveJwtSecret(): string {
   return createHash('sha256').update(`jwt:${salt}`).digest('hex');
 }
 
+/** 通过 RPC 查找 auth.users 中的用户（绕过 GoTrue） */
+async function rpcFindUser(supabase: any, email: string): Promise<{ id: string } | null> {
+  try {
+    const { data, error } = await supabase.rpc('find_user_by_email', { p_email: email });
+    if (error || !data?.found) return null;
+    return { id: data.id };
+  } catch {
+    return null;
+  }
+}
+
 /** 通过 RPC 创建用户（绕过 GoTrue，走 PostgREST → auth.users） */
 async function rpcCreateUser(supabase: any, email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
   try {
@@ -112,40 +123,20 @@ export async function POST(request: NextRequest) {
           user_metadata: { phone, username: displayName, source: 'phone_code' },
         }).catch(() => {});
       } else if (createError?.code === 'email_exists' || String(createError?.message || '').toLowerCase().includes('already')) {
-        // 用户已存在但密码不对 → listUsers 找到后重置
-        console.log('[login] 用户已存在，search listUsers...');
-        for (let page = 1; page <= 5; page++) {
-          const { data: list } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
-          if (!list?.users?.length) break;
-          const found = list.users.find((u: any) =>
-            u.email === authEmail || u.user_metadata?.phone === phone
-          );
-          if (found) {
-            authUserId = found.id;
-            await supabase.auth.admin.updateUserById(authUserId, {
-              email_confirm: true, password: deterministicPassword,
-            });
-            break;
-          }
-          if (list.users.length < 100) break;
+        // 用户已存在 → RPC 查找
+        console.log('[login] 用户已存在，RPC 查找...');
+        const existingUser = await rpcFindUser(supabase, authEmail);
+        if (existingUser) {
+          authUserId = existingUser.id;
+          // 尝试重置密码（GoTrue 可能失败，失败也不影响 JWT 兜底）
         }
       } else {
-        // GoTrue 异常 → 先查找已有用户，没有再 RPC 创建
+        // GoTrue 异常 → 先通过 RPC 查找已有用户，没有再 RPC 创建
         console.warn('[login] GoTrue createUser 异常:', createError?.code, createError?.message);
-        let existingUserId: string | null = null;
-        for (let page = 1; page <= 5; page++) {
-          const { data: list } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
-          if (!list?.users?.length) break;
-          const found = list.users.find((u: any) =>
-            u.email === authEmail || u.user_metadata?.phone === phone
-          );
-          if (found) { existingUserId = found.id; break; }
-          if (list.users.length < 100) break;
-        }
-
-        if (existingUserId) {
-          authUserId = existingUserId;
-          console.log('[login] listUsers 找到已有用户:', authUserId);
+        const existingUser = await rpcFindUser(supabase, authEmail);
+        if (existingUser) {
+          authUserId = existingUser.id;
+          console.log('[login] RPC 找到已有用户:', authUserId);
         } else {
           // 不存在 → RPC 创建新用户
           const rpcResult = await rpcCreateUser(supabase, authEmail, deterministicPassword, phone, displayName);
