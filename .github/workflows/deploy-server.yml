@@ -28,8 +28,8 @@ jobs:
             echo "=== page-content.tsx key lines ==="
             grep -n 'rows={10}\|fullText\|minHeight: 100' src/app/ai/copywriting/page-content.tsx || echo "WARNING: key changes NOT found!"
             # 同步 env var（运行时敏感配置）
-            sed -i 's/^VOLC_TTS_APP_ID=.*/VOLC_TTS_APP_ID=3190895677/' .env.local
-            sed -i 's/^VOLC_TTS_ACCESS_TOKEN=.*/VOLC_TTS_ACCESS_TOKEN=Zh6To_wJHre-04fgY-8ttmx2p7jblGsf/' .env.local
+            sed -i "s#^VOLC_TTS_APP_ID=.*#VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}#" .env.local
+            sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local
             # 先停应用释放内存，清理旧构建缓存
             pm2 stop lingji
             rm -rf node_modules .next
