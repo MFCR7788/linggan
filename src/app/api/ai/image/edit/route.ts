@@ -4,6 +4,7 @@ import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
 import { getDashScopeApiKey } from '@/lib/runtime-config';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,6 +112,18 @@ export const POST = withAuth(async ({ request, user }) => {
     await consume(user.id, creditCost, 'ai_image_edit', `图片编辑: ${action}`);
 
     const resultUrl = await editImage(imageUrl, action, prompt);
+
+    const actionLabel = action === 'remove-bg' ? '背景移除' : action === 'enhance' ? '画质增强' : '智能扩图';
+    await saveWorkHistory(user.id, `图片编辑: ${actionLabel}`, {
+      source_platform: 'ai_image_editor',
+      generatedImage: {
+        imageUrl: resultUrl,
+        action,
+        actionLabel,
+        prompt: prompt || '',
+      },
+      prompt: prompt || '',
+    });
 
     return createApiResponse(
       { url: resultUrl, action },

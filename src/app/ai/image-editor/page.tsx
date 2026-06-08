@@ -11,6 +11,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { useToast } from '@/components/Toast';
 import { apiClient } from '@/lib/api-client';
+import { useWorkHistory } from '@/hooks/use-work-history';
 
 type EditAction = 'remove-bg' | 'enhance' | 'expand';
 
@@ -32,13 +33,7 @@ function ImageEditorContent() {
   const [customPrompt, setCustomPrompt] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [editHistory, setEditHistory] = useState<Array<{
-    action: EditAction;
-    actionLabel: string;
-    imageUrl: string;
-    resultUrl: string;
-    time: string;
-  }>>([]);
+  const { items: historyItems, isLoading: historyLoading } = useWorkHistory('图片', 'ai_image_editor');
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,13 +78,6 @@ function ImageEditorContent() {
         const url = data.data.url;
         setResultUrl(url);
         setSaved(false);
-        setEditHistory(prev => [{
-          action,
-          actionLabel: TABS.find(t => t.key === action)?.label || action,
-          imageUrl,
-          resultUrl: url,
-          time: new Date().toISOString(),
-        }, ...prev].slice(0, 20));
         showToast('处理完成', 'success');
       }
     } catch {
@@ -300,39 +288,51 @@ function ImageEditorContent() {
         )}
 
         {/* 历史生成 */}
-        {editHistory.length > 0 && (
+        {!historyLoading && historyItems.length > 0 && (
           <GlassCard className="!p-4">
             <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
             <div className="grid grid-cols-3 gap-2">
-              {editHistory.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    setAction(item.action);
-                    setImageUrl(item.resultUrl);
-                    setResultUrl(null);
-                    setSaved(false);
-                  }}
-                  className="rounded-lg overflow-hidden relative group"
-                  style={{ border: '1px solid rgba(255,255,255,0.06)', aspectRatio: '1/1' }}
-                >
-                  <img
-                    src={item.resultUrl}
-                    alt={item.actionLabel}
-                    className="w-full h-full object-cover"
-                    style={{ background: 'rgba(0,0,0,0.3)' }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+              {historyItems.map((item) => {
+                const meta = item.metadata?.generatedImage;
+                const imgUrl = item.imageUrl || meta?.imageUrl;
+                const itemAction = meta?.action as EditAction || 'enhance';
+                const itemActionLabel = meta?.actionLabel || '画质增强';
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setAction(itemAction);
+                      setImageUrl(imgUrl || '');
+                      setResultUrl(null);
+                      setSaved(false);
                     }}
-                  />
-                  <div
-                    className="absolute inset-x-0 bottom-0 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}
+                    className="rounded-lg overflow-hidden relative group"
+                    style={{ border: '1px solid rgba(255,255,255,0.06)', aspectRatio: '1/1' }}
                   >
-                    <span style={{ color: '#E5E7EB', fontSize: 9 }}>{item.actionLabel}</span>
-                  </div>
-                </button>
-              ))}
+                    {imgUrl ? (
+                      <img
+                        src={imgUrl}
+                        alt={itemActionLabel}
+                        className="w-full h-full object-cover"
+                        style={{ background: 'rgba(0,0,0,0.3)' }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                        <ImageIcon size={24} color="#4B5563" />
+                      </div>
+                    )}
+                    <div
+                      className="absolute inset-x-0 bottom-0 px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}
+                    >
+                      <span style={{ color: '#E5E7EB', fontSize: 9 }}>{itemActionLabel}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </GlassCard>
         )}

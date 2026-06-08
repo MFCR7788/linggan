@@ -11,6 +11,7 @@ import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { generateImage, callDeepSeek, logAiUsage } from '@/lib/ai-services';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAdsCost, CREDIT_COSTS } from '@/lib/credit-costs';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -178,6 +179,17 @@ JSON:`;
     } catch (e: any) {
       console.warn('[ads/grid] logAiUsage 失败:', e.message);
     }
+
+    // 保存到历史生成
+    await saveWorkHistory(user.id, product, {
+      generatedAds: {
+        product,
+        cells: finalCells.map(c => ({ imageUrl: c.imageUrl, title: c.title, visualAngle: c.visualAngle })),
+        successCount,
+        failedCount,
+        creditsUsed,
+      },
+    });
 
     return createApiResponse(
       {

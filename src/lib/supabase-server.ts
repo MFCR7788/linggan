@@ -94,6 +94,44 @@ export function createSupabaseServerClient() {
   );
 }
 
+// 保存 AI 生成作品到 chat_messages（用于各 AI 工具页面的"历史生成"）
+export async function saveWorkHistory(
+  userId: string,
+  content: string,
+  metadata: Record<string, unknown> = {}
+): Promise<void> {
+  const supabase = createAdminClient();
+  try {
+    // 获取或创建"AI创作"会话
+    const { data: session } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('title', 'AI创作')
+      .maybeSingle();
+
+    const sessionId = session?.id || (await supabase
+      .from('chat_sessions')
+      .insert({ user_id: userId, title: 'AI创作' })
+      .select('id')
+      .single()
+    ).data?.id;
+
+    if (!sessionId) return;
+
+    await supabase.from('chat_messages').insert({
+      session_id: sessionId,
+      user_id: userId,
+      type: 'ai',
+      content,
+      content_type: 'text',
+      metadata: { source: 'ai_creation', ...metadata },
+    });
+  } catch (e) {
+    console.warn('[saveWorkHistory] 写入失败:', e);
+  }
+}
+
 function deriveJwtSecret(): string {
   const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-jwt-fallback';
   return createHash('sha256').update(`jwt:${salt}`).digest('hex');

@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/api-handler';
 import { generateCopywriting, researchTopic, logAiUsage } from '@/lib/ai-services';
 import { findIndustry, renderIndustryInstruction, COPYWRITING_TYPES } from '@/lib/preset-templates';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,12 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // 记录AI使用
     await logAiUsage(user.id, 'copywriting', 1000 * count);
+
+    // 保存到历史生成
+    await saveWorkHistory(user.id, inspirations.map((i: any) => i.title || i.originalText || '').filter(Boolean).join('\n') || userInstruction || typeLabel, {
+      generatedCopy: { content: result, type: typeLabel, style, count },
+      industry: industry || null,
+    });
 
     return createApiResponse({
       content: result,

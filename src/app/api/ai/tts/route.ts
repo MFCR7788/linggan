@@ -4,6 +4,7 @@ import { synthesizeWithCosyVoice } from '@/lib/ai-services';
 import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiTtsCost } from '@/lib/credit-costs';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 // 音色列表 — CosyVoice v2 预设
 const VOICE_MAP: Record<string, { id: string; label: string; language: string }> = {
@@ -135,6 +136,17 @@ export const POST = withAuth(async ({ request, user }) => {
     const mergedAudio = audioBuffers.length === 1
       ? audioBuffers[0]
       : Buffer.concat(audioBuffers);
+
+    // 保存到历史生成（不存 base64，仅元信息）
+    await saveWorkHistory(user.id, text.substring(0, 200), {
+      generatedAudio: {
+        voice: voiceConfig.label,
+        engine: 'cosyvoice',
+        textLength: text.length,
+      },
+      voice: voiceConfig.label,
+      creditsUsed: creditCost,
+    });
 
     return NextResponse.json({
       success: true,
