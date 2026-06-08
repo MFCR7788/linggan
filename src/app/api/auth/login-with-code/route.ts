@@ -1,7 +1,7 @@
 // 手机号 + 验证码 登录(走真实 Supabase Auth)
 // 流程:
 //   1. 校验入参,验证 verification_codes,标记 used
-//   2. 查找/创建 auth.users(phone + deterministic password)
+//   2. 查找/创建 auth.users — 4 级降级：SDK → SQL查找 → REST API → SQL直插
 //   3. 用 createSupabaseServerClient 调 signInWithPassword → set sb-access-token cookie
 //   4. 写 public.users(触发 init_user_credits 触发器,自动给 30 credits)
 //   5. 清除 dev_user_id cookie(已废弃)
@@ -14,7 +14,6 @@ import { createAdminClient, createPgPool } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
-// deterministic password = sha256(phone + AUTH_SALT).hex
 function derivePassword(phone: string): string {
   const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-default-salt-please-set-AUTH_SALT';
   return createHash('sha256').update(`${phone}|${salt}`).digest('hex').slice(0, 48);
@@ -28,102 +27,85 @@ function toAuthEmail(phone: string): string {
   return `${phone}@phone.lingji.app`;
 }
 
-/** 直连 Postgres 查 auth.users — 最快最可靠的方式 */
+/** 直连 Postgres 查 auth.users */
 async function findUserByEmail(email: string): Promise<string | null> {
   const pool = createPgPool();
   try {
     const result = await pool.query(
-      'SELECT id FROM auth.users WHERE email = $1 LIMIT 1',
+      'SELECT id FROM auth.users WHERE email = $1 AND deleted_at IS NULL LIMIT 1',
       [email]
     );
     return result.rows[0]?.id || null;
   } catch (e: any) {
-    console.error('[login] 直连 SQL 查用户失败:', e?.message || e);
+    console.error('[login] SQL 查用户失败:', e?.message || e);
     return null;
   } finally {
     await pool.end().catch(() => {});
   }
 }
 
-/** SDK 创建用户，返回 { userId, error }
- *  尝试两级：先最小参数创建，再补全 email_confirm + metadata */
-async function sdkCreateUser(
-  supabase: any, email: string, password: string, phone: string, username: string
-): Promise<{ userId: string | null; error: any }> {
-  // Level 1: 最小参数（email + password only），绕过可能的 GoTrue bug
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-  });
-  if (error || !data?.user) {
-    return { userId: null, error };
-  }
-
-  const userId = data.user.id;
-
-  // Level 2: 补充 email_confirm + metadata
-  const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-    email_confirm: true,
-    user_metadata: { phone, username, source: 'phone_code' },
-  });
-  if (updateError) {
-    console.warn('[login] 补充用户属性失败:', updateError.message);
-    // 用户已创建，属性可后续补，不阻塞登录流程
-  }
-
-  return { userId, error: null };
-}
-
-/** REST API 创建用户 — 绕过 SDK */
-async function restCreateUser(
+/**
+ * 最终兜底：直连 Postgres INSERT 到 auth.users（完全绕过 GoTrue）
+ * 用 PostgreSQL pgcrypto 的 crypt() 做 bcrypt 哈希（Supabase 默认启用 pgcrypto）
+ * INSERT 后立即用 SSR 客户端 signInWithPassword 验证密码可验证
+ */
+async function sqlCreateUser(
   email: string, password: string, phone: string, username: string
 ): Promise<string | null> {
+  const pool = createPgPool();
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) return null;
-
-    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
-        'Content-Type': 'application/json',
-        apikey: serviceRoleKey,
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        // 最小参数创建，绕过可能的 GoTrue bug
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const userId = data?.id || data?.user?.id;
-      if (userId) {
-        // 补充 email_confirm + metadata
-        try {
-          await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-            method: 'PUT',
-            headers: {
-              Authorization: `Bearer ${serviceRoleKey}`,
-              'Content-Type': 'application/json',
-              apikey: serviceRoleKey,
-            },
-            body: JSON.stringify({
-              email_confirm: true,
-              user_metadata: { phone, username, source: 'phone_code' },
-            }),
-          });
-        } catch {}
-      }
-      return userId;
+    // 先确认 pgcrypto 可用，不可用则尝试启用
+    try { await pool.query('SELECT gen_salt(\'bf\')'); } catch {
+      await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
     }
-    console.error(`[login] REST API HTTP ${res.status} — ${await res.text().catch(() => '')}`);
-    return null;
+
+    const meta = JSON.stringify({ phone, username, source: 'phone_code' });
+    const appMeta = JSON.stringify({ provider: 'email', providers: ['email'] });
+
+    const result = await pool.query(
+      `INSERT INTO auth.users (
+        id, instance_id, aud, role, email,
+        encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data,
+        created_at, updated_at,
+        confirmation_token, recovery_token,
+        email_change_token_new, is_super_admin
+      ) VALUES (
+        gen_random_uuid(),
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated',
+        'authenticated',
+        $1,
+        crypt($2, gen_salt('bf', 10)),
+        now(),
+        $3::jsonb,
+        $4::jsonb,
+        now(),
+        now(),
+        '',
+        '',
+        '',
+        false
+      )
+      ON CONFLICT (email) DO UPDATE SET
+        encrypted_password = EXCLUDED.encrypted_password,
+        email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
+        raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+        updated_at = now()
+      RETURNING id`,
+      [email, password, appMeta, meta]
+    );
+
+    const userId = result.rows[0]?.id || null;
+    if (userId) {
+      console.log(`[login] SQL 直插用户成功: ${userId}`);
+    }
+    return userId;
   } catch (e: any) {
-    console.error('[login] REST API 异常:', e?.message || e);
+    console.error('[login] SQL 直插用户失败:', e?.message || e);
     return null;
+  } finally {
+    await pool.end().catch(() => {});
   }
 }
 
@@ -160,88 +142,114 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '验证码无效或已过期' }, { status: 400 });
     }
 
-    // 标记验证码为已使用
     await supabase.from('verification_codes').update({ used: true }).eq('id', verification.id);
 
     const authEmail = toAuthEmail(phone);
     const deterministicPassword = derivePassword(phone);
+    const displayName = username || phone;
 
-    // ─── 2. 创建或查找用户 ───
+    // ─── 2. 创建/查找用户：4 级降级 ───
     let authUserId: string | null = null;
     let isNewUser = false;
-    let createError: any = null;
+    const errors: string[] = [];
 
-    // 2a. 先尝试 SDK createUser（新用户快路径，一次 API 调用搞定）
-    const created = await sdkCreateUser(supabase, authEmail, deterministicPassword, phone, username || phone);
-    if (created.userId) {
-      authUserId = created.userId;
-      isNewUser = true;
-      console.log(`[login] 新建用户: ${authUserId}`);
-    } else {
-      createError = created.error;
-      console.warn(`[login] SDK createUser 失败: code=${createError?.code} msg=${createError?.message}`);
+    // L1: SDK createUser
+    {
+      const { data, error } = await supabase.auth.admin.createUser({ email: authEmail, password: deterministicPassword });
+      if (!error && data?.user) {
+        authUserId = data.user.id;
+        isNewUser = true;
+        console.log(`[login] L1 SDK 创建成功: ${authUserId}`);
+      } else if (error) {
+        errors.push(`SDK: ${error.message} (${error.code})`);
+        console.warn(`[login] L1 SDK 失败: ${error.code} ${error.message}`);
+      }
+    }
 
-      // 2b. 失败 → 直连 Postgres 查是否已有此邮箱用户
+    // L2: SQL 查找已有用户
+    if (!authUserId) {
       authUserId = await findUserByEmail(authEmail);
       if (authUserId) {
-        console.log(`[login] SQL 找到已有用户: ${authUserId}`);
+        console.log(`[login] L2 SQL 找到用户: ${authUserId}`);
       }
     }
 
-    // 2c. SQL 也没找到 → REST API 兜底创建
+    // L3: REST API 创建
     if (!authUserId) {
-      authUserId = await restCreateUser(authEmail, deterministicPassword, phone, username || phone);
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (supabaseUrl && key) {
+          const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', apikey: key },
+            body: JSON.stringify({ email: authEmail, password: deterministicPassword }),
+          });
+          if (res.ok) {
+            const d = await res.json();
+            authUserId = d?.id || d?.user?.id || null;
+            if (authUserId) {
+              isNewUser = true;
+              console.log(`[login] L3 REST 创建成功: ${authUserId}`);
+            }
+          } else {
+            const body = await res.text().catch(() => '');
+            errors.push(`REST: HTTP ${res.status} ${body.substring(0, 100)}`);
+            console.warn(`[login] L3 REST 失败: ${res.status}`);
+          }
+        }
+      } catch (e: any) {
+        errors.push(`REST: ${e?.message}`);
+      }
+    }
+
+    // L4: SQL 直插 auth.users（完全绕过 GoTrue）
+    if (!authUserId) {
+      authUserId = await sqlCreateUser(authEmail, deterministicPassword, phone, displayName);
       if (authUserId) {
         isNewUser = true;
-        console.log(`[login] REST API 创建成功: ${authUserId}`);
+        console.log(`[login] L4 SQL 直插成功: ${authUserId}`);
       }
     }
 
-    // 2d. 全部失败 → 返回 Supabase 真实错误
     if (!authUserId) {
-      const errMsg = createError
-        ? `账号创建失败: ${createError.message} (${createError.code || createError.status || 'unknown'})`
-        : '账号创建失败，请稍后重试';
-      console.error('[login] 所有路径均失败:', authEmail, createError ? JSON.stringify(createError) : '');
-      return NextResponse.json({ success: false, error: errMsg }, { status: 500 });
+      console.error('[login] 4 级全部失败:', authEmail, errors);
+      return NextResponse.json({
+        success: false,
+        error: `账号创建失败: ${errors.join(' | ')}`,
+      }, { status: 500 });
     }
 
-    // ─── 3. 已有用户：确保 auth 状态正确 ───
-    if (!isNewUser) {
-      const { error: ensureErr } = await supabase.auth.admin.updateUserById(authUserId, {
+    // ─── 3. 已有用户补充属性，新用户补充 email_confirm + metadata ───
+    if (isNewUser) {
+      // 新用户：补全 email_confirm + metadata（L4 SQL 直插已在 INSERT 时设好，但 SDK/REST 路径可能漏）
+      const { error: updateError } = await supabase.auth.admin.updateUserById(authUserId, {
+        email_confirm: true,
+        user_metadata: { phone, username: displayName, source: 'phone_code' },
+      });
+      if (updateError) {
+        console.warn('[login] 补全用户属性失败:', updateError.message);
+      }
+    } else {
+      // 已有用户：确保密码正确 + email_confirm
+      await supabase.auth.admin.updateUserById(authUserId, {
         email_confirm: true,
         password: deterministicPassword,
-      });
-      if (ensureErr) {
-        console.warn('[login] ensureUserAuth 失败:', ensureErr.message);
-      }
+      }).catch((e) => console.warn('[login] ensureUserAuth 失败:', e));
 
-      // 老用户可能 email 格式不一致，迁移
+      // 老用户 email 格式迁移
       const { data: authUser } = await supabase.auth.admin.getUserById(authUserId);
       if (authUser?.user?.email !== authEmail) {
-        const { error: migrateErr } = await supabase.auth.admin.updateUserById(authUserId, {
-          email: authEmail,
-          email_confirm: true,
-          password: deterministicPassword,
-        });
-        if (migrateErr) {
-          console.error('[login] 老用户 email 迁移失败:', migrateErr);
-        } else {
-          console.log(`[login] 老用户已迁移: ${authUserId} → ${authEmail}`);
-        }
-      }
-
-      if (username) {
         await supabase.auth.admin.updateUserById(authUserId, {
-          user_metadata: { phone, username, source: 'phone_code' },
-        }).catch((e) => console.warn('[login] updateUserMetadata 失败:', e));
+          email: authEmail, email_confirm: true, password: deterministicPassword,
+        }).catch((e) => console.warn('[login] 老用户迁移失败:', e));
       }
     }
 
     // ─── 4. 写 public.users ───
-    await ensureUserProfile(authUserId, phone, username || phone, supabase);
+    await ensureUserProfile(authUserId, phone, displayName, supabase);
 
-    // ─── 5. SSR signInWithPassword → set cookie ───
+    // ─── 5. SSR signInWithPassword ───
     const cookieStore = cookies();
     const ssr = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -264,36 +272,37 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    let signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
+    let signInResult = await ssr.auth.signInWithPassword({
+      email: authEmail,
+      password: deterministicPassword,
+    });
+
     if (signInResult.error) {
-      console.warn(`[login] signIn 失败 (${signInResult.error.code}), 重置密码重试...`);
-      const { error: resetError } = await supabase.auth.admin.updateUserById(authUserId, {
+      console.warn(`[login] signIn 失败 (${signInResult.error.code}), 重置密码...`);
+      await supabase.auth.admin.updateUserById(authUserId, {
         email_confirm: true,
         password: deterministicPassword,
       });
-      if (resetError) {
-        console.error('[login] 密码重置失败:', JSON.stringify(resetError));
-        return NextResponse.json({ success: false, error: '登录失败，请稍后重试' }, { status: 500 });
-      }
-      signInResult = await ssr.auth.signInWithPassword({ email: authEmail, password: deterministicPassword });
+      signInResult = await ssr.auth.signInWithPassword({
+        email: authEmail,
+        password: deterministicPassword,
+      });
       if (signInResult.error) {
-        console.error(`[login] 重置密码后仍失败: ${signInResult.error.code} ${signInResult.error.message}`);
-        return NextResponse.json({ success: false, error: '登录失败，请稍后重试' }, { status: 500 });
+        console.error(`[login] 重置后仍失败: ${signInResult.error.code} ${signInResult.error.message}`);
+        return NextResponse.json({
+          success: false,
+          error: `登录失败: ${signInResult.error.message} (${signInResult.error.code})`,
+        }, { status: 500 });
       }
     }
 
-    // ─── 6. 清除 dev cookie ───
     cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
 
     return NextResponse.json({
       success: true,
       message: '登录成功',
       session: signInResult.data.session,
-      user: {
-        id: signInResult.data.user?.id,
-        phone,
-        username: username || phone,
-      },
+      user: { id: signInResult.data.user?.id, phone, username: displayName },
     });
   } catch (error: any) {
     console.error('[login] 未捕获错误:', error);
@@ -333,13 +342,13 @@ async function ensureUserProfile(userId: string, phone: string, username: string
   });
 
   if (!insertError) {
-    const defaultCategories = [
+    const cats = [
       { name: '灵感', icon: '💡', color: '#3B82F6', sort_order: 0, is_default: true },
       { name: '选题', icon: '📝', color: '#8B5CF6', sort_order: 1, is_default: true },
       { name: '文案', icon: '✍️', color: '#F43F5E', sort_order: 2, is_default: true },
       { name: '视频素材', icon: '🎬', color: '#10B981', sort_order: 3, is_default: true },
     ];
-    for (const cat of defaultCategories) {
+    for (const cat of cats) {
       await supabase.from('categories').insert({ user_id: userId, ...cat });
     }
   } else {
