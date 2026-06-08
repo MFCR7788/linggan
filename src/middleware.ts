@@ -90,6 +90,12 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
+    // 降级：GoTrue 故障时检查自定义 auth cookie
+    const lingjiUserId = request.cookies.get('lingji_auth_user_id')?.value;
+    if (lingjiUserId) {
+      return response;
+    }
+
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     return NextResponse.redirect(loginUrl);

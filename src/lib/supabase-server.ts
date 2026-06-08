@@ -3,6 +3,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import { Pool } from 'pg';
+import jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 
 // 简单的服务端客户端 - 用于 API routes（不需要 cookie 处理）
 export function createClient() {
@@ -92,6 +94,11 @@ export function createSupabaseServerClient() {
   );
 }
 
+function deriveJwtSecret(): string {
+  const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-jwt-fallback';
+  return createHash('sha256').update(`jwt:${salt}`).digest('hex');
+}
+
 // 获取当前用户
 export async function getCurrentUser() {
   // 生产环境: 跳过 dev 短路, 只信任真实 Supabase 会话
@@ -171,6 +178,25 @@ export async function getCurrentUser() {
     }
   } catch (e) {
     // 忽略 Supabase 会话错误
+  }
+
+  // 降级：GoTrue 故障时检查自定义 lingji_auth_token JWT
+  try {
+    const cookieStore = cookies();
+    const lingjiToken = cookieStore.get('lingji_auth_token')?.value;
+    if (lingjiToken) {
+      const secret = deriveJwtSecret();
+      const decoded = jwt.verify(lingjiToken, secret) as { sub: string; email: string; user_metadata: Record<string, unknown> };
+      if (decoded?.sub) {
+        return {
+          id: decoded.sub,
+          email: decoded.email || '',
+          user_metadata: decoded.user_metadata || {},
+        } as { id: string; email: string; user_metadata: Record<string, unknown> };
+      }
+    }
+  } catch {
+    // JWT 无效或过期，忽略
   }
 
   return null;

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
+import jwt from 'jsonwebtoken';
 import { createAdminClient } from '@/lib/supabase-server';
 import { grant } from '@/lib/credits';
 
@@ -16,6 +17,11 @@ function derivePassword(phone: string): string {
 
 function toAuthEmail(phone: string): string {
   return `${phone}@phone.lingji.app`;
+}
+
+function deriveJwtSecret(): string {
+  const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-jwt-fallback';
+  return createHash('sha256').update(`jwt:${salt}`).digest('hex');
 }
 
 /** 通过 RPC 创建用户（绕过 GoTrue，走 PostgREST → auth.users） */
@@ -184,37 +190,52 @@ export async function POST(request: NextRequest) {
       email: authEmail, password: deterministicPassword,
     });
 
-    if (signInResult.error) {
-      // 最后一次兜底：重置密码后重试
-      const { error: resetErr } = await supabase.auth.admin.updateUserById(authUserId, {
-        email_confirm: true, password: deterministicPassword,
-      });
-      if (resetErr) {
-        console.error('[login] 最终重置失败:', resetErr);
-        return NextResponse.json({ success: false, error: '登录失败: 无法重置密码' }, { status: 500 });
-      }
-      const retry = await ssr.auth.signInWithPassword({
-        email: authEmail, password: deterministicPassword,
-      });
-      if (retry.error) {
-        return NextResponse.json({ success: false, error: '登录失败: 密码重置后仍无法登录' }, { status: 500 });
-      }
+    if (!signInResult.error && signInResult.data?.session) {
+      // GoTrue 正常：使用 Supabase session
       cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
       return NextResponse.json({
         success: true,
         message: isNewUser ? '注册成功' : '登录成功',
-        session: retry.data.session,
-        user: { id: retry.data.user?.id, phone, username: displayName },
+        session: signInResult.data.session,
+        user: { id: signInResult.data.user?.id, phone, username: displayName },
       });
     }
 
+    // ── GoTrue 故障降级：自定义 JWT 认证 ──
+    console.warn('[login] GoTrue signIn 失败，降级使用自定义 JWT。错误:', signInResult.error?.code, signInResult.error?.message);
+
+    const jwtSecret = deriveJwtSecret();
+    const token = jwt.sign(
+      {
+        sub: authUserId,
+        email: authEmail,
+        user_metadata: { phone, username: displayName },
+        role: 'authenticated',
+      },
+      jwtSecret,
+      { expiresIn: '365d' }
+    );
+
+    cookieStore.set('lingji_auth_token', token, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+    cookieStore.set('lingji_auth_user_id', authUserId, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
     cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
 
     return NextResponse.json({
       success: true,
       message: isNewUser ? '注册成功' : '登录成功',
-      session: signInResult.data.session,
-      user: { id: signInResult.data.user?.id, phone, username: displayName },
+      user: { id: authUserId, phone, username: displayName },
     });
   } catch (error: any) {
     console.error('[login] 未捕获错误:', error);
