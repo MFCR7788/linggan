@@ -849,7 +849,7 @@ export async function getVideoTaskStatus(
     const taskStatus = data.output?.task_status;
 
     if (taskStatus === 'SUCCEEDED') {
-      const videoUrl = data.output?.video_url || data.output?.videos?.[0]?.url;
+      const videoUrl = data.output?.results?.video_url || data.output?.video_url || data.output?.videos?.[0]?.url;
       return { status: 'succeeded', videoUrl, message: '生成完成' };
     }
 

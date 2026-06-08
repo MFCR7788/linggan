@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# 防止并发部署相互覆盖 node_modules
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
