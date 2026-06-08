@@ -127,6 +127,19 @@ export async function saveWorkHistory(
       content_type: 'text',
       metadata: { source: 'ai_creation', ...metadata },
     });
+
+    // 只保留最近 20 条 AI 创作记录
+    const { data: allRecords } = await supabase
+      .from('chat_messages')
+      .select('id')
+      .eq('user_id', userId)
+      .contains('metadata', { source: 'ai_creation' })
+      .order('created_at', { ascending: false });
+
+    if (allRecords && allRecords.length > 20) {
+      const toDelete = allRecords.slice(20).map((r: { id: string }) => r.id);
+      await supabase.from('chat_messages').delete().in('id', toDelete);
+    }
   } catch (e) {
     console.warn('[saveWorkHistory] 写入失败:', e);
   }
