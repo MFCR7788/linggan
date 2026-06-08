@@ -27,6 +27,10 @@ const SCENES = [
   { key: 'hobby', icon: '✨', label: '兴趣展示', desc: '书画/手工/读书/健身' },
 ] as const;
 
+const FESTIVAL_MOODS = ['传统温馨', '现代简约', '浪漫粉色系', '喜庆红色系', '清新自然', '优雅高级', '复古怀旧', '梦幻童话'];
+const AESTHETIC_TONES = ['柔和粉色系', '高级灰调', '暖黄复古', '日系胶片', '莫兰迪色系', '冷调蓝调', '黑白极简', '清新绿调'];
+const HOBBY_STYLES = ['极简风', '日系', '手作感', '文艺清新', '科技感', '自然风', '复古质感', '暗调高级'];
+
 const LAYOUT_OPTIONS = [
   { value: 'center', label: '中心主图 — C位放核心大图，四周填充细节' },
   { value: 'split', label: '拼接长图 — 一张完整长图切9等分' },
@@ -486,22 +490,22 @@ function AdsContent() {
                 ))}
               </div>
             ) : (
-              <input
-                value={extra}
-                onChange={(e) => setExtra(e.target.value)}
-                placeholder={
-                  scene === 'festival' ? '例: 传统温馨 / 现代简约 / 浪漫粉色系...' :
-                  scene === 'aesthetic' ? '例: 柔和粉色系 / 高级灰调 / 暖黄复古...' :
-                  '例: 极简风 / 日系 / 手作感...'
-                }
-                maxLength={50}
-                className="w-full px-3 py-2.5 rounded-lg text-sm bg-transparent outline-none"
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#E5E7EB',
-                }}
-              />
+              <div className="grid grid-cols-3 gap-1.5">
+                {(scene === 'festival' ? FESTIVAL_MOODS : scene === 'aesthetic' ? AESTHETIC_TONES : HOBBY_STYLES).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setExtra(extra === opt ? '' : opt)}
+                    className="text-center py-2 px-1 rounded-lg text-xs transition-all"
+                    style={{
+                      background: extra === opt ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: extra === opt ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      color: extra === opt ? '#C4B5FD' : '#9CA3AF',
+                    }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
             )}
           </GlassCard>
         )}
