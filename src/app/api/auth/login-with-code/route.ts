@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
-import { createAdminClient, createPgPool } from '@/lib/supabase-server';
+import { createAdminClient } from '@/lib/supabase-server';
 import { grant } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
@@ -18,42 +18,26 @@ function toAuthEmail(phone: string): string {
   return `${phone}@phone.lingji.app`;
 }
 
-/** 直连 Postgres 创建用户（完全绕过 GoTrue） */
-async function sqlCreateUser(email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
-  let pool: any = null;
+/** 通过 RPC 创建用户（绕过 GoTrue，走 PostgREST → auth.users） */
+async function rpcCreateUser(supabase: any, email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
   try {
-    pool = createPgPool();
-    // 确保 pgcrypto 可用
-    await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
-    const appMeta = JSON.stringify({ provider: 'email', providers: ['email'] });
-    const userMeta = JSON.stringify({ phone, username, source: 'phone_code' });
-    const result = await pool.query(
-      `INSERT INTO auth.users (
-        id, instance_id, aud, role, email,
-        encrypted_password, email_confirmed_at,
-        raw_app_meta_data, raw_user_meta_data,
-        created_at, updated_at,
-        confirmation_token, recovery_token,
-        email_change_token_new, is_super_admin
-      ) VALUES (
-        gen_random_uuid(),
-        '00000000-0000-0000-0000-000000000000',
-        'authenticated', 'authenticated',
-        $1,
-        crypt($2, gen_salt('bf', 10)),
-        now(),
-        $3::jsonb, $4::jsonb,
-        now(), now(),
-        '', '', '', false
-      ) RETURNING id`,
-      [email, password, appMeta, userMeta]
-    );
-    return { id: result.rows[0]?.id };
+    const { data, error } = await supabase.rpc('create_user_via_sql', {
+      p_email: email,
+      p_password: password,
+      p_phone: phone,
+      p_username: username,
+    });
+    if (error) {
+      console.error('[login] RPC 创建用户失败:', error);
+      return { error: error.message || String(error) };
+    }
+    // RPC 返回的是 UUID 字符串
+    const id = typeof data === 'string' ? data : data?.id || data?.create_user_via_sql;
+    if (!id) return { error: 'RPC 未返回用户 ID' };
+    return { id };
   } catch (e: any) {
-    console.error('[login] SQL 直插失败:', e?.message || e);
+    console.error('[login] RPC 异常:', e?.message || e);
     return { error: e?.message || String(e) };
-  } finally {
-    if (pool) await pool.end().catch(() => {});
   }
 }
 
@@ -140,17 +124,17 @@ export async function POST(request: NextRequest) {
           if (list.users.length < 100) break;
         }
       } else {
-        // GoTrue 异常（unexpected_failure）→ SQL 直插兜底
+        // GoTrue 异常（unexpected_failure）→ RPC 兜底（通过 PostgREST 调 create_user_via_sql）
         console.warn('[login] GoTrue createUser 异常:', createError?.code, createError?.message);
-        const sqlResult = await sqlCreateUser(authEmail, deterministicPassword, phone, displayName);
-        if ('id' in sqlResult) {
-          authUserId = sqlResult.id;
+        const rpcResult = await rpcCreateUser(supabase, authEmail, deterministicPassword, phone, displayName);
+        if ('id' in rpcResult) {
+          authUserId = rpcResult.id;
           isNewUser = true;
-          console.log('[login] SQL 直插创建成功:', authUserId);
+          console.log('[login] RPC 创建用户成功:', authUserId);
         } else {
           return NextResponse.json({
             success: false,
-            error: `注册失败: GoTrue 创建失败且 SQL 直插不可用。SQL 错误: ${sqlResult.error}。请确保 Vercel 环境变量已配置 DATABASE_URL (Supabase Dashboard → Settings → Database → Connection string)。GoTrue 错误: ${createError?.message || 'unknown'} (${createError?.code || 'unknown'})`,
+            error: `注册失败: GoTrue 故障且 RPC 兜底也失败。请在 Supabase SQL Editor 确保已创建 create_user_via_sql 函数。RPC 错误: ${rpcResult.error}。GoTrue 错误: ${createError?.message || 'unknown'}`,
           }, { status: 500 });
         }
       }
