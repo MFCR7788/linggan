@@ -2,12 +2,11 @@
 // 由 GitHub Actions 每月 1 号 UTC 16:00（北京时间 0:00）触发
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
-import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = getCronSecret();
+  const expectedSecret = process.env['CRON_SECRET'];
   if (!expectedSecret) {
     return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
   }

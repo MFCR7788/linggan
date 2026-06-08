@@ -1,12 +1,12 @@
 // 后台定时热点检查 - 供外部定时服务调用
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { runHotspotCheck } from '@/lib/jobs/hotspot-checker';
-import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = getCronSecret();
+  // 使用动态 key 访问防止 Next.js build 时内联
+  const expectedSecret = process.env['CRON_SECRET'];
   if (!expectedSecret) {
     return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
   }

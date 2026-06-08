@@ -10,7 +10,6 @@ import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { grant, getBalance } from '@/lib/credits';
-import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +24,7 @@ export async function POST(request: NextRequest) {
 async function handleGrant(request: NextRequest) {
   // 安全校验
   const authHeader = request.headers.get('authorization') || '';
-  const expectedSecret = getCronSecret();
+  const expectedSecret = process.env['CRON_SECRET'];
   if (!expectedSecret) {
     return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
   }
