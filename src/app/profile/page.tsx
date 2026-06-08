@@ -110,6 +110,11 @@ function ProfileContent() {
 
   const handleLogout = async () => {
     try {
+      // 服务端清除 SSR httpOnly session cookies
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    try {
+      // 浏览器端清除 localStorage session
       await supabase.auth.signOut();
     } catch {}
     if (typeof window !== 'undefined') {
@@ -117,7 +122,8 @@ function ProfileContent() {
       document.cookie = 'dev_user_id=; path=/; max-age=0';
       document.cookie = 'dev_auth_secret=; path=/; max-age=0';
     }
-    router.push('/login');
+    // 强制完整刷新以清除 React Query 缓存，避免登录页瞬间检测到旧 user 数据跳回首页
+    window.location.href = '/login';
   };
 
   const displayName = user?.username || user?.phone || '创作者';

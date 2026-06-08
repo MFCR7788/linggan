@@ -772,8 +772,9 @@ function CaptureContent() {
             <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Sparkles size={28} color="white" />
             </div>
-            <p className="text-gray-300 text-sm">你好！我是你的灵感助手</p>
-            <p className="text-gray-500 text-xs mt-1">支持文字、图片、视频、语音、联网搜索</p>
+            <p className="text-gray-300 text-sm">你好！我是灵集AI，你的智能创作助手</p>
+            <p className="text-gray-500 text-xs mt-1">AI 文案 · 生图 · 视频 · 配音 · 热点 · 知识问答</p>
+            <p className="text-gray-600 text-xs mt-3 max-w-[280px] mx-auto leading-relaxed">从灵感采集到内容创作，一站式帮你高效产出优质内容</p>
           </div>
         )}
 

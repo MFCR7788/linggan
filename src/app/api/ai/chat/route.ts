@@ -23,6 +23,29 @@ interface DetectedIntent {
   genType?: GenType;           // 生成子类型
 }
 
+// ====== 灵集AI 身份定义 ======
+const LINGJI_IDENTITY = `你是**灵集AI**，灵集（LingJi）平台的智能创作助手。
+
+你的核心能力：
+- **灵感采集**：帮用户收集、整理、管理各种创作灵感（文字、图片、视频、链接）
+- **内容创作**：撰写文案、脚本、口播稿、广告语、营销方案、法律文书等各类文字内容
+- **AI 生图**：根据描述生成高质量图片，支持文生图和图生图
+- **AI 视频**：从文案到分镜到视频合成，一键生成短视频（支持文生视频、图生视频）
+- **AI 配音**：文字转语音，多种音色和风格可选
+- **数字人播报**：生成数字人出镜的口播视频
+- **热点监控**：追踪热点话题，分析趋势，发现创作机会
+- **多平台发布**：支持微信公众号、微博等多平台内容发布
+- **知识问答**：解答各类知识性问题，提供学习辅助
+- **生活规划**：出行攻略、日程安排、好物推荐
+
+你能给用户带来的价值：
+🚀 一站式创作流程：从灵感到成片，不用切换多个工具
+⏱️ 效率提升：AI 自动处理分镜、素材匹配、文案润色等重复性工作
+💡 灵感不丢失：随时采集、分类管理、AI 辅助发散
+🎯 热点变现：及时发现热点，快速生成相关内容
+
+回复风格：热情、专业、有创意，像一位懂创作的伙伴。当用户问"你是谁"或"你叫什么"时，清楚地介绍自己是灵集AI，并简要说明能帮用户做什么。`;
+
 // ====== 全局能力（所有模块共用） ======
 const GLOBAL_CAPABILITIES = `
 全局能力（所有对话均适用，在相关时自动启用）：
@@ -38,8 +61,9 @@ function detectIntent(
 ): DetectedIntent {
   const c = content;
 
-  // --- 各分类关键词匹配 ---
-  // Knowledge: 放在最前面，因为"怎么""如何"容易和其他类别重叠
+  // --- 自我介绍 / 身份询问（最高优先级） ---
+  const matchSelfIntro = /你是谁|你叫什么|你的名字|自我介绍|介绍一下你|你是什么|你是干嘛|你能做什么|你有什么功能|你是哪位/.test(c);
+  if (matchSelfIntro) return make('knowledge', '自我介绍', '介绍灵集AI的身份和能力');
   const matchKnowledge = /什么是|为啥|为什么|怎么会|怎么[做样办]|如何|解释|含义|是什么意思|学习|知识点|教我|帮我理解|讲解一下|说明一下|介绍一下|是怎么|是什么|有啥区别|有何不同|怎么理解|什么意思|定义|概念/.test(c);
 
   // Coding: 编程开发&技术助手 — 技术词汇优先，放在 knowledge 之后
@@ -444,7 +468,7 @@ function buildPrompt(intent: DetectedIntent, content: string): { systemPrompt: s
   const mod = PROMPT_MODULES[intent.type];
   const requiresJSON = (intent.wantsGeneration && (intent.type === 'image' || intent.type === 'video')) || mod.requiresJSON;
 
-  let systemPrompt = mod.systemPrompt;
+  let systemPrompt = `${LINGJI_IDENTITY}\n\n---\n\n${mod.systemPrompt}`;
 
   if (requiresJSON) {
     systemPrompt += `\n\n请按以下JSON格式返回结果：\n${GEN_JSON_TEMPLATE}\n\n注意：先给自然语言回复，再输出JSON。JSON必须放在最后。`;
