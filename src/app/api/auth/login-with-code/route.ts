@@ -45,20 +45,33 @@ async function findUserByEmail(email: string): Promise<string | null> {
   }
 }
 
-/** SDK 创建用户，返回 { userId, error } */
+/** SDK 创建用户，返回 { userId, error }
+ *  尝试两级：先最小参数创建，再补全 email_confirm + metadata */
 async function sdkCreateUser(
   supabase: any, email: string, password: string, phone: string, username: string
 ): Promise<{ userId: string | null; error: any }> {
+  // Level 1: 最小参数（email + password only），绕过可能的 GoTrue bug
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
+  });
+  if (error || !data?.user) {
+    return { userId: null, error };
+  }
+
+  const userId = data.user.id;
+
+  // Level 2: 补充 email_confirm + metadata
+  const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
     email_confirm: true,
     user_metadata: { phone, username, source: 'phone_code' },
   });
-  if (!error && data?.user) {
-    return { userId: data.user.id, error: null };
+  if (updateError) {
+    console.warn('[login] 补充用户属性失败:', updateError.message);
+    // 用户已创建，属性可后续补，不阻塞登录流程
   }
-  return { userId: null, error };
+
+  return { userId, error: null };
 }
 
 /** REST API 创建用户 — 绕过 SDK */
@@ -80,14 +93,31 @@ async function restCreateUser(
       body: JSON.stringify({
         email,
         password,
-        email_confirm: true,
-        user_metadata: { phone, username, source: 'phone_code' },
+        // 最小参数创建，绕过可能的 GoTrue bug
       }),
     });
 
     if (res.ok) {
       const data = await res.json();
-      return data?.id || data?.user?.id || null;
+      const userId = data?.id || data?.user?.id;
+      if (userId) {
+        // 补充 email_confirm + metadata
+        try {
+          await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${serviceRoleKey}`,
+              'Content-Type': 'application/json',
+              apikey: serviceRoleKey,
+            },
+            body: JSON.stringify({
+              email_confirm: true,
+              user_metadata: { phone, username, source: 'phone_code' },
+            }),
+          });
+        } catch {}
+      }
+      return userId;
     }
     console.error(`[login] REST API HTTP ${res.status} — ${await res.text().catch(() => '')}`);
     return null;
