@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy, FolderOpen } from 'lucide-react';
+import { Zap, Loader2, Download, Sparkles, AlertCircle, CheckCircle2, X, Plus, Trash2, Copy, FolderOpen, Upload, Image } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
@@ -14,7 +14,7 @@ import { useWorkflowSession } from '@/hooks/use-workflow-session';
 import { WorkflowSessionBar } from '@/components/WorkflowSessionBar';
 import { useAdsGrid, type GridCell } from '@/hooks/ai/use-ads-grid';
 import { useWorkHistory } from '@/hooks/use-work-history';
-import { useCreateInspiration } from '@/hooks/use-inspiration';
+import { useCreateInspiration, useInspirations } from '@/hooks/use-inspiration';
 
 const DEMO_SELLING_POINTS = ['轻便折叠', '避震舒适', '时尚颜值'];
 
@@ -48,6 +48,10 @@ function AdsContent() {
   const [sellingPoints, setSellingPoints] = useState<string[]>([...DEMO_SELLING_POINTS]);
   const [referenceImage, setReferenceImage] = useState<string>('');
   const [extra, setExtra] = useState<string>(''); // mood / tone / layoutType
+  const [uploadingRef, setUploadingRef] = useState(false);
+  const [showInspPicker, setShowInspPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { data: imageInspirations = [] } = useInspirations({ type: 'image', limit: 30 });
 
   // 接收 handoff（从生图页带过来）
   useEffect(() => {
@@ -120,6 +124,36 @@ function AdsContent() {
     } else {
       setSellingPoints(['', '', '']);
     }
+  };
+
+  // 上传本地图片作为参考图
+  const handleUploadRefImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingRef(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const json = await res.json();
+      if (json.success && json.data?.url) {
+        setReferenceImage(json.data.url);
+        setToast({ message: '参考图上传成功', type: 'success' });
+      } else {
+        setToast({ message: json.error || '上传失败', type: 'error' });
+      }
+    } catch {
+      setToast({ message: '上传失败', type: 'error' });
+    } finally {
+      setUploadingRef(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // 从灵感库选择参考图
+  const handlePickFromInspiration = (url: string) => {
+    setReferenceImage(url);
+    setShowInspPicker(false);
   };
 
   const addSellingPoint = () => {
@@ -497,9 +531,47 @@ function AdsContent() {
               </button>
             </div>
           ) : (
-            <p style={{ color: '#6B7280', fontSize: 11 }}>
-              可从其他 AI 工具页带入参考图，或手动粘贴图片 URL
-            </p>
+            <div className="flex flex-col gap-2">
+              <p style={{ color: '#6B7280', fontSize: 11 }}>
+                上传参考图可帮助 AI 更好地匹配视觉风格
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingRef}
+                  className="px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1.5"
+                  style={{
+                    background: 'rgba(59,130,246,0.15)',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    color: '#93C5FD',
+                  }}
+                >
+                  {uploadingRef ? (
+                    <><Loader2 size={11} className="animate-spin" /> 上传中...</>
+                  ) : (
+                    <><Upload size={11} /> 本地上传</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowInspPicker(true)}
+                  className="px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1.5"
+                  style={{
+                    background: 'rgba(139,92,246,0.15)',
+                    border: '1px solid rgba(139,92,246,0.3)',
+                    color: '#C4B5FD',
+                  }}
+                >
+                  <Image size={11} /> 灵感库选择
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadRefImage}
+              />
+            </div>
           )}
         </GlassCard>
 
@@ -692,6 +764,53 @@ function AdsContent() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 灵感库图片选择器 */}
+      {showInspPicker && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setShowInspPicker(false)}>
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} />
+          <div className="relative w-full sm:max-w-md mx-4 mb-4 sm:mb-0 p-4 rounded-2xl max-h-[70vh] flex flex-col"
+            style={{ background: "rgba(31,41,55,0.98)", border: "1px solid rgba(255,255,255,0.12)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }}>从灵感库选择图片</h3>
+              <button onClick={() => setShowInspPicker(false)} className="p-1 rounded" style={{ background: "rgba(255,255,255,0.08)" }}>
+                <X size={16} color="#9CA3AF" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {(imageInspirations as any[]).length === 0 ? (
+                <p style={{ color: "#6B7280", fontSize: 12, textAlign: "center", padding: "24px 0" }}>
+                  暂无图片灵感，可先到灵感库上传
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {(imageInspirations as any[]).map((item: any) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handlePickFromInspiration(item.media_urls?.[0] || '')}
+                      disabled={!item.media_urls?.[0]}
+                      className="aspect-square rounded-lg overflow-hidden transition-all"
+                      style={{
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        opacity: item.media_urls?.[0] ? 1 : 0.4,
+                      }}
+                    >
+                      {item.media_urls?.[0] ? (
+                        <img src={item.media_urls[0]} alt={item.title || ''} className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <span style={{ color: "#6B7280", fontSize: 10 }}>无图</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
