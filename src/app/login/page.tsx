@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Phone, Lock, User, MessageSquare, Sparkles, Mail, Smartphone } from "lucide-react";
+import { Phone, Lock, User, MessageSquare, Mail, Smartphone } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassInput } from "@/components/GlassInput";
@@ -158,16 +158,12 @@ function LoginContent() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative">
       {/* Logo */}
       <div className="flex flex-col items-center mb-8">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3"
-          style={{
-            background: "rgba(59,130,246,0.2)",
-            border: "1px solid rgba(59,130,246,0.5)",
-            boxShadow: "0 0 30px rgba(59,130,246,0.3)",
-          }}
-        >
-          <Sparkles size={32} color="#3B82F6" />
-        </div>
+        <img
+          src="/brand/logo-mark.svg"
+          alt="灵集"
+          className="w-20 h-20 mb-3"
+          style={{ filter: "drop-shadow(0 0 30px rgba(139,92,246,0.4))" }}
+        />
         <h1
           style={{
             color: "#FFFFFF",

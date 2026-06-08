@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="gradM" x1="120" y1="0" x2="120" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="45%" stop-color="#3B82F6"/>
+      <stop offset="75%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="glowM" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="240" height="240" rx="52" fill="#0F1D33"/>
+
+  <!-- 光晕 -->
+  <circle cx="120" cy="112" r="85" fill="url(#glowM)"/>
+
+  <!-- 中心菱形 -->
+  <g transform="translate(120,112)">
+    <ellipse cx="0" cy="0" rx="58" ry="58" fill="#8B5CF6" opacity="0.10"/>
+    <ellipse cx="0" cy="0" rx="42" ry="42" fill="#3B82F6" opacity="0.15"/>
+    <rect x="-22" y="-22" width="44" height="44" rx="10" fill="url(#gradM)" transform="rotate(45)"/>
+    <circle cx="0" cy="0" r="7" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+
+  <!-- 四角节点 -->
+  <g fill="url(#gradM)" opacity="0.55">
+    <!-- 左上 -->
+    <circle cx="44" cy="44" r="5"/>
+    <circle cx="34" cy="54" r="3.5"/>
+    <circle cx="54" cy="34" r="3.5"/>
+    <!-- 右上 -->
+    <circle cx="196" cy="44" r="5"/>
+    <circle cx="186" cy="54" r="3.5"/>
+    <circle cx="206" cy="34" r="3.5"/>
+    <!-- 左下 -->
+    <circle cx="44" cy="196" r="5"/>
+    <circle cx="34" cy="186" r="3.5"/>
+    <circle cx="54" cy="206" r="3.5"/>
+    <!-- 右下 -->
+    <circle cx="196" cy="196" r="5"/>
+    <circle cx="186" cy="186" r="3.5"/>
+    <circle cx="206" cy="206" r="3.5"/>
+  </g>
+
+  <!-- 连接线 -->
+  <g stroke="url(#gradM)" stroke-width="1.2" stroke-linecap="round" fill="none" opacity="0.18">
+    <line x1="44" y1="44" x2="105" y2="95"/>
+    <line x1="196" y1="44" x2="135" y2="95"/>
+    <line x1="44" y1="196" x2="105" y2="129"/>
+    <line x1="196" y1="196" x2="135" y2="129"/>
+  </g>
+</svg>

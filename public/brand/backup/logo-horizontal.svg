@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <defs>
+    <linearGradient id="hGrad" x1="60" y1="0" x2="60" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="45%" stop-color="#3B82F6"/>
+      <stop offset="75%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="hGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="textG" x1="190" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="40%" stop-color="#C4B5FD"/>
+      <stop offset="100%" stop-color="#E5E7EB"/>
+    </linearGradient>
+    <linearGradient id="tagG" x1="200" y1="0" x2="500" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- === 符号标记 === -->
+  <g transform="translate(60,100)">
+    <!-- 背景 -->
+    <rect x="-60" y="-60" width="120" height="120" rx="28" fill="#0F1D33" opacity="0.6"/>
+
+    <!-- 光晕 -->
+    <circle cx="0" cy="0" r="48" fill="url(#hGlow)"/>
+
+    <!-- 中心菱形 -->
+    <ellipse cx="0" cy="0" rx="32" ry="32" fill="#8B5CF6" opacity="0.10"/>
+    <ellipse cx="0" cy="0" rx="22" ry="22" fill="#3B82F6" opacity="0.15"/>
+    <rect x="-12" y="-12" width="24" height="24" rx="6" fill="url(#hGrad)" transform="rotate(45)"/>
+    <circle cx="0" cy="0" r="4.5" fill="#FFFFFF" opacity="0.9"/>
+
+    <!-- 四角节点 -->
+    <g fill="url(#hGrad)" opacity="0.55">
+      <circle cx="-26" cy="-26" r="3"/>
+      <circle cx="-32" cy="-20" r="2"/>
+      <circle cx="-20" cy="-32" r="2"/>
+      <circle cx="26" cy="-26" r="3"/>
+      <circle cx="20" cy="-32" r="2"/>
+      <circle cx="32" cy="-20" r="2"/>
+      <circle cx="-26" cy="26" r="3"/>
+      <circle cx="-32" cy="20" r="2"/>
+      <circle cx="-20" cy="32" r="2"/>
+      <circle cx="26" cy="26" r="3"/>
+      <circle cx="20" cy="32" r="2"/>
+      <circle cx="32" cy="20" r="2"/>
+    </g>
+
+    <!-- 连接线 -->
+    <g stroke="url(#hGrad)" stroke-width="0.8" stroke-linecap="round" fill="none" opacity="0.18">
+      <line x1="-26" y1="-26" x2="-6" y2="-6"/>
+      <line x1="26" y1="-26" x2="6" y2="-6"/>
+      <line x1="-26" y1="26" x2="-6" y2="6"/>
+      <line x1="26" y1="26" x2="6" y2="6"/>
+    </g>
+  </g>
+
+  <!-- === 文字 === -->
+  <text x="190" y="94" font-family="system-ui, -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif" font-size="56" font-weight="700" fill="url(#textG)" letter-spacing="10">灵集</text>
+
+  <!-- 副标题 -->
+  <text x="195" y="132" font-family="system-ui, -apple-system, 'PingFang SC', sans-serif" font-size="16" font-weight="500" fill="url(#tagG)" letter-spacing="5">AI 创作中心</text>
+
+  <!-- 底部装饰线 -->
+  <line x1="190" y1="150" x2="460" y2="150" stroke="url(#tagG)" stroke-width="1" opacity="0.25"/>
+</svg>

@@ -14,6 +14,26 @@ const fontFamily =
 export const metadata: Metadata = {
   title: "灵集 LingJi",
   description: "AI 灵感创作助手",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/brand/favicon.svg",
+    apple: "/brand/app-icon.svg",
+  },
+  openGraph: {
+    title: "灵集 LingJi - AI 灵感创作助手",
+    description: "AI 驱动的灵感收集与内容创作工具",
+    images: ["/brand/app-icon.svg"],
+  },
+  twitter: {
+    card: "summary",
+    title: "灵集 LingJi",
+    description: "AI 灵感创作助手",
+    images: ["/brand/app-icon.svg"],
+  },
+  appleWebApp: {
+    title: "灵集",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({

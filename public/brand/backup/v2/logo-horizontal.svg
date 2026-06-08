@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <defs>
+    <linearGradient id="barsH" x1="60" y1="0" x2="60" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="40%" stop-color="#8B5CF6"/>
+      <stop offset="70%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+    <linearGradient id="textG" x1="180" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="40%" stop-color="#C4B5FD"/>
+      <stop offset="100%" stop-color="#E5E7EB"/>
+    </linearGradient>
+    <linearGradient id="tagG" x1="190" y1="0" x2="500" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- === 符号 === -->
+  <g transform="translate(60,100)">
+    <!-- 三横 -->
+    <rect x="-40" y="-42" width="70" height="8" rx="4" fill="url(#barsH)"/>
+    <rect x="-46" y="-22" width="82" height="8" rx="4" fill="url(#barsH)" opacity="0.72"/>
+    <rect x="-52" y="-2"  width="94" height="8" rx="4" fill="url(#barsH)" opacity="0.44"/>
+
+    <!-- 星菱 -->
+    <g transform="translate(-5,26)">
+      <circle cx="0" cy="0" r="12" fill="#8B5CF6" opacity="0.15"/>
+      <rect x="-7" y="-7" width="14" height="14" rx="3" fill="url(#barsH)" transform="rotate(45)"/>
+      <circle cx="0" cy="0" r="3" fill="#FFFFFF" opacity="0.9"/>
+    </g>
+  </g>
+
+  <!-- === 文字 === -->
+  <text x="180" y="92" font-family="system-ui, -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif" font-size="56" font-weight="700" fill="url(#textG)" letter-spacing="10">灵集</text>
+
+  <text x="188" y="130" font-family="system-ui, -apple-system, 'PingFang SC', sans-serif" font-size="16" font-weight="500" fill="url(#tagG)" letter-spacing="5">AI 创作中心</text>
+
+  <line x1="188" y1="148" x2="460" y2="148" stroke="url(#tagG)" stroke-width="1" opacity="0.25"/>
+</svg>

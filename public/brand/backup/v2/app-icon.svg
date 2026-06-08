@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="50%" stop-color="#0F1D33"/>
+      <stop offset="100%" stop-color="#1A1040"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="40%" stop-color="#8B5CF6"/>
+      <stop offset="70%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#bg)"/>
+
+  <!--
+    三横一星：灵感于灵字
+    上三横 → 彐 (灵的上半)，也像内容层叠 (集)
+    下星菱 → 火 (灵的下半)，AI 灵感火花
+    总共 4 个元素，极简
+  -->
+  <g>
+    <!-- 三横 -->
+    <rect x="348" y="310" width="328" height="36" rx="18" fill="url(#bars)"/>
+    <rect x="320" y="420" width="384" height="36" rx="18" fill="url(#bars)" opacity="0.72"/>
+    <rect x="292" y="530" width="440" height="36" rx="18" fill="url(#bars)" opacity="0.44"/>
+
+    <!-- 星菱 (火) -->
+    <g transform="translate(512,656)">
+      <circle cx="0" cy="0" r="52" fill="#8B5CF6" opacity="0.15"/>
+      <rect x="-32" y="-32" width="64" height="64" rx="14" fill="url(#bars)" transform="rotate(45)"/>
+      <circle cx="0" cy="0" r="12" fill="#FFFFFF" opacity="0.9"/>
+    </g>
+  </g>
+</svg>

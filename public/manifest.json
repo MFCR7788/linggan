@@ -1,0 +1,22 @@
+{
+  "name": "灵集 - AI 灵感创作助手",
+  "short_name": "灵集",
+  "description": "AI 驱动的灵感收集与内容创作工具",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A1629",
+  "theme_color": "#0A1629",
+  "icons": [
+    {
+      "src": "/brand/app-icon.svg",
+      "sizes": "1024x1024",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml"
+    }
+  ]
+}

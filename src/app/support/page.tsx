@@ -16,6 +16,9 @@ export default function SupportPage() {
       lineHeight: 1.8,
     }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <img src="/brand/logo-mark.svg" alt="灵集" style={{ width: 48, height: 48, margin: '0 auto 12px' }} />
+        </div>
         <h1 style={{
           color: '#FFFFFF',
           fontSize: 28,
