@@ -6,6 +6,7 @@ import { withAuth } from '@/lib/api-handler';
 import { downloadVideo, concatVideos, getTempDir, cleanupTempDir } from '@/lib/ffmpeg-utils';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -57,6 +58,14 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const { data: urlData } = supabase.storage.from('lingji-media').getPublicUrl(storageName);
     const mergedUrl = urlData.publicUrl;
+
+    await saveWorkHistory(user.id, `数字人视频 · ${videoUrls.length} 段`, {
+      source_platform: 'ai_digital_human',
+      generatedVideo: {
+        videoUrl: mergedUrl,
+        segmentCount: videoUrls.length,
+      },
+    });
 
     return createApiResponse({ videoUrl: mergedUrl, segmentCount: videoUrls.length }, '视频合并完成');
   } catch (err: any) {

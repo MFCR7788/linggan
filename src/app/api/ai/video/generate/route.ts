@@ -7,6 +7,7 @@ import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniver
 import { QUALITY_TIERS, type VideoProvider } from '@/lib/video-models';
 import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
 import { calcAiVideoCost, CREDIT_COSTS } from '@/lib/credit-costs';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,35 +126,13 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // 保存生成记录
     const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const supabase = createAdminClient();
-    const { data: session } = await supabase
-      .from('chat_sessions')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('title', 'AI创作')
-      .maybeSingle();
-    const sessionId = session?.id || (await supabase
-      .from('chat_sessions')
-      .insert({ user_id: user.id, title: 'AI创作' })
-      .select('id')
-      .single()
-    ).data?.id;
-    if (sessionId) {
-      await supabase.from('chat_messages').insert({
-        session_id: sessionId,
-        user_id: user.id,
-        type: 'ai',
-        content: JSON.stringify({ batchId, segmentCount: segments.length, storyboard }),
-        content_type: 'text',
-        metadata: {
-          source: 'ai_creation',
-          batchId,
-          tier,
-          totalCost,
-          segments: segments.map((s) => ({ taskId: s.taskId, model: s.model, creditCost: s.creditCost })),
-        },
-      });
-    }
+    await saveWorkHistory(user.id, JSON.stringify({ batchId, segmentCount: segments.length, storyboard }), {
+      source_platform: 'ai_video',
+      batchId,
+      tier,
+      totalCost,
+      segments: segments.map((s) => ({ taskId: s.taskId, model: s.model, creditCost: s.creditCost })),
+    });
 
     return createApiResponse({ batchId, segments, creditsUsed: totalCost }, '视频任务已提交');
   } catch (error) {

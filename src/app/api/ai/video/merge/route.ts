@@ -15,6 +15,7 @@ import { readFileSync, statSync } from 'fs';
 import { recommendBgmAuto, type BgmStyle } from '@/lib/bgm-recommender';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
+import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -232,11 +233,24 @@ export const POST = withAuth(async ({ request, user }) => {
       return createApiError('视频上传存储失败，请重试', 500);
     }
 
-    // 5. 保存作品记录（自动保存）
+    // 5. 保存历史记录
     const totalDuration = (storyboard || []).reduce(
       (sum: number, s: FfmpegScene) => sum + (s.duration || 0),
       0
     );
+    await saveWorkHistory(user.id, `AI 视频 · ${totalDuration}秒`, {
+      source_platform: 'ai_video',
+      generatedVideo: {
+        videoUrl: publicUrl,
+        thumbnailUrl: thumbnailUrl || undefined,
+        duration: totalDuration,
+        segmentCount: videoUrls.length,
+        bgmStyle: actualBgmStyle,
+        stylePreset: stylePreset || '',
+      },
+    });
+
+    // 6. 保存作品记录（灵感库）
     try {
       await saveVideoWork(user.id, publicUrl, thumbnailUrl, {
         storyboard: (storyboard || []) as FfmpegScene[],
