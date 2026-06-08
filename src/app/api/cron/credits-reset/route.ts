@@ -24,9 +24,9 @@ export async function POST(request: NextRequest) {
 async function handleReset(request: NextRequest) {
   // 安全校验
   const authHeader = request.headers.get('authorization') || '';
-  const expectedSecret = process.env['CRON_SECRET'];
+  const expectedSecret = process.env['CRON_SECRET'] || process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!expectedSecret) {
-    return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
+    return createApiError('CRON_SECRET / SUPABASE_SERVICE_ROLE_KEY 未配置,拒绝执行', 500);
   }
   if (authHeader !== `Bearer ${expectedSecret}`) {
     return createApiError('未授权', 401);

@@ -5,10 +5,10 @@ import { runHotspotCheck } from '@/lib/jobs/hotspot-checker';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  // 使用动态 key 访问防止 Next.js build 时内联
-  const expectedSecret = process.env['CRON_SECRET'];
+  // CRON_SECRET 在 Vercel 运行时不可用，用 SUPABASE_SERVICE_ROLE_KEY 替代鉴权
+  const expectedSecret = process.env['CRON_SECRET'] || process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!expectedSecret) {
-    return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
+    return createApiError('CRON_SECRET / SUPABASE_SERVICE_ROLE_KEY 未配置,拒绝执行', 500);
   }
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret') || request.headers.get('authorization')?.replace('Bearer ', '');
