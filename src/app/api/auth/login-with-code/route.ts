@@ -1,10 +1,10 @@
 // 手机号 + 验证码 登录/注册
-// 策略：先尝试登录 → 成功则直接返回 → 失败则创建用户再登录
+// 策略：先登录 → 失败则创建 → GoTrue 异常时 SQL 直插 auth.users 兜底
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
-import { createAdminClient } from '@/lib/supabase-server';
+import { createAdminClient, createPgPool } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,16 +17,43 @@ function toAuthEmail(phone: string): string {
   return `${phone}@phone.lingji.app`;
 }
 
-/** 用 admin client 试登录，成功返回 user，失败返回 null */
-async function trySignIn(supabase: any, email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (!error && data?.user) {
-    return data.user;
+/** 直连 Postgres 创建用户（完全绕过 GoTrue） */
+async function sqlCreateUser(email: string, password: string, phone: string, username: string): Promise<string | null> {
+  let pool: any = null;
+  try {
+    pool = createPgPool();
+    // 确保 pgcrypto 可用
+    await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+    const appMeta = JSON.stringify({ provider: 'email', providers: ['email'] });
+    const userMeta = JSON.stringify({ phone, username, source: 'phone_code' });
+    const result = await pool.query(
+      `INSERT INTO auth.users (
+        id, instance_id, aud, role, email,
+        encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data,
+        created_at, updated_at,
+        confirmation_token, recovery_token,
+        email_change_token_new, is_super_admin
+      ) VALUES (
+        gen_random_uuid(),
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated',
+        $1,
+        crypt($2, gen_salt('bf', 10)),
+        now(),
+        $3::jsonb, $4::jsonb,
+        now(), now(),
+        '', '', '', false
+      ) RETURNING id`,
+      [email, password, appMeta, userMeta]
+    );
+    return result.rows[0]?.id || null;
+  } catch (e: any) {
+    console.error('[login] SQL 直插失败:', e?.message || e);
+    return null;
+  } finally {
+    if (pool) await pool.end().catch(() => {});
   }
-  if (error) {
-    console.log('[login] 尝试登录:', error.code, error.message);
-  }
-  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -44,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // 1. 验证 verification_codes
+    // 1. 验证码校验
     const { data: verification, error: queryError } = await supabase
       .from('verification_codes')
       .select('*')
@@ -67,12 +94,17 @@ export async function POST(request: NextRequest) {
     const deterministicPassword = derivePassword(phone);
     const displayName = username || phone;
 
-    // ─── 2. 先试登录：能登就是已有用户 ───
-    let user = await trySignIn(supabase, authEmail, deterministicPassword);
+    // ─── 2. 先尝试登录 ───
+    const { data: signInData } = await supabase.auth.signInWithPassword({
+      email: authEmail, password: deterministicPassword,
+    });
+    let authUserId: string | null = signInData?.user?.id || null;
     let isNewUser = false;
 
-    if (!user) {
-      // ─── 3. 不能登录 → 尝试创建新用户 ───
+    if (authUserId) {
+      console.log('[login] 已有用户直接登录:', authUserId);
+    } else {
+      // ─── 3. 登录失败，尝试创建 ───
       const { data: created, error: createError } = await supabase.auth.admin.createUser({
         email: authEmail,
         password: deterministicPassword,
@@ -80,57 +112,58 @@ export async function POST(request: NextRequest) {
 
       if (!createError && created?.user) {
         // 新用户创建成功
-        user = created.user;
+        authUserId = created.user.id;
         isNewUser = true;
         // 补充 email_confirm + metadata
-        await supabase.auth.admin.updateUserById(user.id, {
+        await supabase.auth.admin.updateUserById(authUserId, {
           email_confirm: true,
           user_metadata: { phone, username: displayName, source: 'phone_code' },
         }).catch(() => {});
-      } else if (createError?.code === 'email_exists' || String(createError?.message || '').includes('already')) {
-        // 用户已存在但密码对不上 → 重置密码
-        console.log('[login] 用户已存在，重置密码...');
-        // 先查出用户 ID
-        let existingId: string | null = null;
-        for (let page = 1; page <= 5 && !existingId; page++) {
-          const { data: listData } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
-          if (!listData?.users?.length) break;
-          const found = listData.users.find((u: any) =>
+      } else if (createError?.code === 'email_exists' || String(createError?.message || '').toLowerCase().includes('already')) {
+        // 用户已存在但密码不对 → listUsers 找到后重置
+        console.log('[login] 用户已存在，search listUsers...');
+        for (let page = 1; page <= 5; page++) {
+          const { data: list } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+          if (!list?.users?.length) break;
+          const found = list.users.find((u: any) =>
             u.email === authEmail || u.user_metadata?.phone === phone
           );
-          if (found) existingId = found.id;
-          if (listData.users.length < 100) break;
-        }
-        if (existingId) {
-          await supabase.auth.admin.updateUserById(existingId, {
-            email_confirm: true,
-            password: deterministicPassword,
-          });
-          // 重试登录
-          const retry = await trySignIn(supabase, authEmail, deterministicPassword);
-          if (retry) user = retry;
+          if (found) {
+            authUserId = found.id;
+            await supabase.auth.admin.updateUserById(authUserId, {
+              email_confirm: true, password: deterministicPassword,
+            });
+            break;
+          }
+          if (list.users.length < 100) break;
         }
       } else {
-        // 其他错误
-        console.error('[login] createUser 失败:', createError?.code, createError?.message);
-        return NextResponse.json({
-          success: false,
-          error: `注册失败: ${createError?.message || '未知错误'} (${createError?.code || 'unknown'})`,
-        }, { status: 500 });
+        // GoTrue 异常（unexpected_failure）→ SQL 直插兜底
+        console.warn('[login] GoTrue createUser 异常:', createError?.code, createError?.message);
+        authUserId = await sqlCreateUser(authEmail, deterministicPassword, phone, displayName);
+        if (authUserId) {
+          isNewUser = true;
+          console.log('[login] SQL 直插创建成功:', authUserId);
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: `注册失败: GoTrue 创建失败且 SQL 直插不可用。请确保 Vercel 环境变量已配置 DATABASE_URL。原始错误: ${createError?.message || 'unknown'} (${createError?.code || 'unknown'})`,
+          }, { status: 500 });
+        }
       }
     }
 
-    if (!user) {
+    if (!authUserId) {
       return NextResponse.json({
         success: false,
-        error: '登录失败，请稍后重试',
+        error: '登录失败：未找到用户且无法创建',
       }, { status: 500 });
     }
 
-    // ─── 4. 确保 public.users 存在 ───
-    await ensureUserProfile(user.id, phone, displayName, supabase);
+    // ─── 4. 确保 public.users ───
+    await ensureUserProfile(authUserId, phone, displayName, supabase);
 
-    // ─── 5. SSR signIn → 设置 cookie ───
+    // ─── 5. SSR session cookie ───
     const cookieStore = cookies();
     const ssr = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -154,16 +187,31 @@ export async function POST(request: NextRequest) {
     );
 
     const signInResult = await ssr.auth.signInWithPassword({
-      email: authEmail,
-      password: deterministicPassword,
+      email: authEmail, password: deterministicPassword,
     });
 
     if (signInResult.error) {
-      console.error('[login] 最终 signIn 失败:', signInResult.error.code, signInResult.error.message);
+      // 最后一次兜底：重置密码后重试
+      const { error: resetErr } = await supabase.auth.admin.updateUserById(authUserId, {
+        email_confirm: true, password: deterministicPassword,
+      });
+      if (resetErr) {
+        console.error('[login] 最终重置失败:', resetErr);
+        return NextResponse.json({ success: false, error: '登录失败: 无法重置密码' }, { status: 500 });
+      }
+      const retry = await ssr.auth.signInWithPassword({
+        email: authEmail, password: deterministicPassword,
+      });
+      if (retry.error) {
+        return NextResponse.json({ success: false, error: '登录失败: 密码重置后仍无法登录' }, { status: 500 });
+      }
+      cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
       return NextResponse.json({
-        success: false,
-        error: '登录失败，请稍后重试',
-      }, { status: 500 });
+        success: true,
+        message: isNewUser ? '注册成功' : '登录成功',
+        session: retry.data.session,
+        user: { id: retry.data.user?.id, phone, username: displayName },
+      });
     }
 
     cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
@@ -172,39 +220,26 @@ export async function POST(request: NextRequest) {
       success: true,
       message: isNewUser ? '注册成功' : '登录成功',
       session: signInResult.data.session,
-      user: {
-        id: signInResult.data.user?.id,
-        phone,
-        username: displayName,
-      },
+      user: { id: signInResult.data.user?.id, phone, username: displayName },
     });
   } catch (error: any) {
     console.error('[login] 未捕获错误:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || '登录失败，请重试' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message || '登录失败' }, { status: 500 });
   }
 }
 
 async function ensureUserProfile(userId: string, phone: string, username: string, supabase: any) {
-  const { data: existingUser } = await supabase
-    .from('users')
-    .select('id, username')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (existingUser) {
-    if (username && existingUser.username !== username) {
+  const { data: exist } = await supabase.from('users').select('id, username').eq('id', userId).maybeSingle();
+  if (exist) {
+    if (username && exist.username !== username) {
       await supabase.from('users').update({ username, updated_at: new Date().toISOString() }).eq('id', userId);
     }
     return;
   }
 
-  const { data: userByPhone } = await supabase.from('users').select('id').eq('phone', phone).maybeSingle();
-
-  if (userByPhone) {
-    await supabase.from('users').update({ id: userId, username, updated_at: new Date().toISOString() }).eq('id', userByPhone.id);
+  const { data: byPhone } = await supabase.from('users').select('id').eq('phone', phone).maybeSingle();
+  if (byPhone) {
+    await supabase.from('users').update({ id: userId, username, updated_at: new Date().toISOString() }).eq('id', byPhone.id);
     return;
   }
 
@@ -214,7 +249,6 @@ async function ensureUserProfile(userId: string, phone: string, username: string
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
-
   if (!error) {
     const cats = [
       { name: '灵感', icon: '💡', color: '#3B82F6', sort_order: 0, is_default: true },
