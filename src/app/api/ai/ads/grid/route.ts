@@ -222,21 +222,42 @@ JSON:`;
       if (!c.prompt) c.prompt = `${product}, ${c.visualAngle || ''}`;
     }
 
-    // 3) 分批并发调 generateImage（每批 3 张，LLM prompt 已优化故跳过）
-    const CONCURRENCY = 3;
+    // 3) 分批并发调 generateImage（每张最多重试 1 次，降低限流导致的失败）
+    const generateWithRetry = async (prompt: string, cellIndex: number): Promise<{ imageUrl?: string }> => {
+      try {
+        const r = await generateImage(prompt, { ratio: '1:1', n: 1, skipOptimize: true });
+        const result = Array.isArray(r) ? r[0] : r;
+        if (result?.imageUrl) return result;
+        throw new Error('generateImage 返回空 imageUrl');
+      } catch (firstErr: any) {
+        console.warn(`[ads/grid] 第 ${cellIndex + 1} 张首次失败:`, firstErr.message?.substring(0, 80));
+        // 重试前等待 3s，避免连续触发限流
+        await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const r = await generateImage(prompt, { ratio: '1:1', n: 1, skipOptimize: true, seed: Date.now() % 100000 });
+          const result = Array.isArray(r) ? r[0] : r;
+          if (result?.imageUrl) {
+            console.log(`[ads/grid] 第 ${cellIndex + 1} 张重试成功`);
+            return result;
+          }
+          throw new Error('重试仍无 imageUrl');
+        } catch (retryErr: any) {
+          console.error(`[ads/grid] 第 ${cellIndex + 1} 张重试也失败:`, retryErr.message?.substring(0, 80));
+          throw retryErr;
+        }
+      }
+    };
+
+    const CONCURRENCY = 2;
     const imageResults: PromiseSettledResult<{ imageUrl?: string }>[] = [];
     for (let batchStart = 0; batchStart < cells.length; batchStart += CONCURRENCY) {
       const batch = cells.slice(batchStart, batchStart + CONCURRENCY);
       const batchResults = await Promise.allSettled(
-        batch.map((c) =>
-          generateImage(c.prompt, { ratio: '1:1', n: 1, skipOptimize: true })
-            .then((r: any) => (Array.isArray(r) ? r[0] : r))
-        )
+        batch.map((c, bi) => generateWithRetry(c.prompt, batchStart + bi))
       );
       imageResults.push(...batchResults);
-      // 批次间稍作间隔，避免触发限流
       if (batchStart + CONCURRENCY < cells.length) {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 

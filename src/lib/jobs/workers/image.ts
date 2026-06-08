@@ -46,6 +46,7 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
     ratio: input.params?.ratio,
     seed: input.params?.seed,
     n,
+    skipOptimize: true,
   });
 
   // 3) 上报进度 80%
