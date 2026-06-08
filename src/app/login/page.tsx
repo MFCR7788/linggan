@@ -99,17 +99,17 @@ function LoginContent() {
         throw new Error(data.error);
       }
 
-      // 设置会话
-      if (data.session) {
-        // 保存用户信息到 localStorage(用于 useUser 乐观渲染)
-        localStorage.setItem('dev_user', JSON.stringify({
-          id: data.session.user.id,
-          phone: data.user?.phone || phone,
-          username: data.user?.username || phone,
-        }));
-
-        // 后端已 set sb-access-token cookie,硬导航跳首页
-        window.location.href = "/home";
+      // 设置会话（支持 Supabase session 和降级 JWT 两种模式）
+      if (data.success) {
+        const userId = data.session?.user?.id || data.user?.id;
+        if (userId) {
+          localStorage.setItem('dev_user', JSON.stringify({
+            id: userId,
+            phone: data.user?.phone || phone,
+            username: data.user?.username || phone,
+          }));
+          window.location.href = "/home";
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，请重试");
@@ -135,17 +135,17 @@ function LoginContent() {
         throw new Error(data.error);
       }
 
-      // 设置会话
-      if (data.session) {
-        // 保存用户信息到 localStorage(用于 useUser 乐观渲染)
-        localStorage.setItem('dev_user', JSON.stringify({
-          id: data.session.user.id,
-          phone: data.user?.phone || phone,
-          username: data.user?.username || phone,
-        }));
-
-        // 后端已 set sb-access-token cookie,硬导航跳首页
-        window.location.href = "/home";
+      // 设置会话（支持 Supabase session 和降级 JWT 两种模式）
+      if (data.success) {
+        const userId = data.session?.user?.id || data.user?.id;
+        if (userId) {
+          localStorage.setItem('dev_user', JSON.stringify({
+            id: userId,
+            phone: data.user?.phone || phone,
+            username: data.user?.username || phone,
+          }));
+          window.location.href = "/home";
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败，请重试");
