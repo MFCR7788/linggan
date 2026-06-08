@@ -78,52 +78,60 @@ export async function POST(request: NextRequest) {
     const deterministicPassword = derivePassword(phone);
 
     // 2. 创建或查找用户
-    //    策略：先尝试 createUser（新用户快速路径），任何失败都回退到 listUsers 查找
+    //    策略：先搜索已有用户 → 没找到才创建 → 创建失败再搜索 → 最后直接调 REST API 兜底
     let authUserId: string | null = null;
     let isNewUser = false;
 
-    const { data: created, error: createError } = await supabase.auth.admin.createUser({
-      email: authEmail,
-      password: deterministicPassword,
-      email_confirm: true,
-      user_metadata: {
-        phone,
-        username: username || phone,
-        source: 'phone_code',
-      },
-    });
+    // ── 2a. 先搜索：遍历 listUsers 查找已有用户 ──
+    authUserId = await findUserByPhone(supabase, authEmail, phone, e164);
+    if (authUserId) {
+      console.log(`[login] 找到已有用户: ${authUserId}`);
+    }
 
-    if (!createError && created?.user) {
-      // 新用户创建成功
-      authUserId = created.user.id;
-      isNewUser = true;
-      console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
-    } else {
-      // createUser 失败（最常见原因：邮箱已存在）→ 逐页扫描 listUsers 查找
-      if (createError) {
-        console.log(`[login] createUser 失败,回退 listUsers 查找... (code=${createError.code}, msg=${createError.message})`);
+    // ── 2b. 未找到 → 尝试创建新用户 ──
+    if (!authUserId) {
+      console.log('[login] 未找到已有用户，尝试创建...');
+      const { data: created, error: createError } = await supabase.auth.admin.createUser({
+        email: authEmail,
+        password: deterministicPassword,
+        email_confirm: true,
+        user_metadata: {
+          phone,
+          username: username || phone,
+          source: 'phone_code',
+        },
+      });
+
+      if (!createError && created?.user) {
+        authUserId = created.user.id;
+        isNewUser = true;
+        console.log(`[login] 新建 auth user: ${authUserId} (phone=${phone})`);
       } else {
-        console.log('[login] createUser 无错误但无 user 返回,回退 listUsers 查找...');
-      }
-      let existing: any = null;
-      const maxPages = 10;
-      for (let page = 1; page <= maxPages; page++) {
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-        if (listError) {
-          console.error(`[login] listUsers 第${page}页失败:`, listError);
-          break;
+        if (createError) {
+          console.warn(`[login] createUser 失败 (code=${createError?.code}, msg=${createError?.message}), 二次搜索...`);
         }
-        existing = listData?.users?.find(
-          (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
-        );
-        if (existing) { authUserId = existing.id; break; }
-        if (!listData?.users || listData.users.length < 200) break;
-      }
 
-      if (!authUserId) {
-        console.error('[login] createUser 失败且 listUsers 未找到:', authEmail, createError ? JSON.stringify(createError) : '');
-        return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
+        // ── 2c. createUser 失败 → 再搜一次（并发请求可能刚好创建了） ──
+        authUserId = await findUserByPhone(supabase, authEmail, phone, e164);
+        if (authUserId) {
+          console.log(`[login] 二次搜索找到用户: ${authUserId}`);
+        }
       }
+    }
+
+    // ── 2d. 最终兜底：直接调 GoTrue REST API 创建用户 ──
+    if (!authUserId) {
+      console.log('[login] SDK 路径均失败，尝试直接调 GoTrue REST API 创建...');
+      authUserId = await createUserViaRest(supabase, authEmail, deterministicPassword, phone, username || phone);
+      if (authUserId) {
+        isNewUser = true;
+        console.log(`[login] REST API 创建成功: ${authUserId}`);
+      }
+    }
+
+    if (!authUserId) {
+      console.error('[login] 所有路径均失败:', authEmail);
+      return NextResponse.json({ success: false, error: '账号创建失败,请稍后重试' }, { status: 500 });
     }
 
     // 3. 已存在用户：确保 email_confirm + 密码正确，迁移老用户 email
@@ -224,6 +232,92 @@ export async function POST(request: NextRequest) {
       { success: false, error: error.message || '登录失败,请重试' },
       { status: 500 }
     );
+  }
+}
+
+/** 多页扫描 listUsers 查找用户，失败自动重试下一页 */
+async function findUserByPhone(
+  supabase: any,
+  authEmail: string,
+  phone: string,
+  e164: string,
+): Promise<string | null> {
+  const maxPages = 10;
+  const perPage = 50; // 小页避免 Vercel 超时
+  for (let page = 1; page <= maxPages; page++) {
+    try {
+      const { data: listData, error: listError } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (listError) {
+        console.error(`[login] listUsers 第${page}页错误:`, listError?.message || listError);
+        // 不 break，继续下一页（瞬时故障不影响后续页）
+        continue;
+      }
+      if (!listData?.users || !Array.isArray(listData.users)) {
+        console.warn(`[login] listUsers 第${page}页返回非预期格式:`, typeof listData);
+        continue;
+      }
+      const found = listData.users.find(
+        (u: any) => u.email === authEmail || u.user_metadata?.phone === phone || u.phone === e164
+      );
+      if (found) return found.id;
+      // 最后一页不足 perPage 说明已到底
+      if (listData.users.length < perPage) break;
+    } catch (e: any) {
+      console.error(`[login] listUsers 第${page}页异常:`, e?.message || e);
+      // 继续下一页
+    }
+  }
+  return null;
+}
+
+/** 直接调 Supabase GoTrue Admin REST API 创建用户（绕过 SDK，最终兜底） */
+async function createUserViaRest(
+  supabase: any,
+  email: string,
+  password: string,
+  phone: string,
+  username: string,
+): Promise<string | null> {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('[login] REST API 缺少 SUPABASE_URL 或 SERVICE_ROLE_KEY');
+      return null;
+    }
+
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        'apikey': serviceRoleKey,
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { phone, username, source: 'phone_code' },
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data?.id || data?.user?.id || null;
+    }
+
+    const body = await res.text().catch(() => '');
+    console.error(`[login] REST API createUser 失败: HTTP ${res.status} — ${body.substring(0, 200)}`);
+
+    // 如果是 422 (already exists)，最后搜一次 listUsers
+    if (res.status === 422) {
+      return await findUserByPhone(supabase, email, phone, `+86${phone}`);
+    }
+
+    return null;
+  } catch (e: any) {
+    console.error('[login] REST API createUser 异常:', e?.message || e);
+    return null;
   }
 }
 
