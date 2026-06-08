@@ -47,6 +47,7 @@ function AdsContent() {
   const [product, setProduct] = useState('');
   const [sellingPoints, setSellingPoints] = useState<string[]>([...DEMO_SELLING_POINTS]);
   const [referenceImage, setReferenceImage] = useState<string>('');
+  const [referenceSource, setReferenceSource] = useState<'inspiration' | 'url' | 'upload' | 'handoff' | null>(null);
   const [referenceTab, setReferenceTab] = useState<'inspiration' | 'url' | 'upload'>('inspiration');
   const [referenceInput, setReferenceInput] = useState('');
   const [extra, setExtra] = useState<string>(''); // mood / tone / layoutType
@@ -68,6 +69,7 @@ function AdsContent() {
     }
     if (params.imageUrl) {
       setReferenceImage(params.imageUrl);
+      setReferenceSource('handoff');
     }
   }, []);
 
@@ -77,7 +79,7 @@ function AdsContent() {
     const h = session.accumulated_handoff as Record<string, string>;
     if (h.topic) setProduct(h.topic.substring(0, 30));
     else if (h.text) setProduct(h.text.substring(0, 30));
-    if (h.imageUrl) setReferenceImage(h.imageUrl);
+    if (h.imageUrl) { setReferenceImage(h.imageUrl); setReferenceSource('handoff'); }
   }, [session]);
 
   // ─── 生成 state ──────────────────────────────
@@ -139,6 +141,7 @@ function AdsContent() {
       const json = await res.json();
       if (json.success && json.data?.url) {
         setReferenceImage(json.data.url);
+        setReferenceSource('upload');
         setToast({ message: '参考图上传成功', type: 'success' });
       } else {
         setToast({ message: json.error || '上传失败', type: 'error' });
@@ -512,7 +515,7 @@ function AdsContent() {
             </p>
             {referenceImage && (
               <button
-                onClick={() => setReferenceImage('')}
+                onClick={() => { setReferenceImage(''); setReferenceSource(null); }}
                 className="text-xs flex items-center gap-1 px-2 py-0.5 rounded"
                 style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}
               >
@@ -532,7 +535,29 @@ function AdsContent() {
                 maxHeight: 160,
               }}
             >
-              <img src={referenceImage} alt="参考图" className="w-full h-full object-cover" />
+              <div className="relative w-full h-full">
+                <img src={referenceImage} alt="参考图" className="w-full h-full object-cover" />
+                {referenceSource && (
+                  <span
+                    className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded text-[10px] font-semibold"
+                    style={{
+                      background: referenceSource === 'handoff'
+                        ? 'rgba(34,197,94,0.85)'
+                        : referenceSource === 'upload'
+                        ? 'rgba(59,130,246,0.85)'
+                        : referenceSource === 'url'
+                        ? 'rgba(245,158,11,0.85)'
+                        : 'rgba(139,92,246,0.85)',
+                      color: '#fff',
+                    }}
+                  >
+                    {referenceSource === 'inspiration' && '📚 灵感库'}
+                    {referenceSource === 'url' && '🔗 URL 粘贴'}
+                    {referenceSource === 'upload' && '📤 本地上传'}
+                    {referenceSource === 'handoff' && '🔄 AI 工具传入'}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -571,7 +596,7 @@ function AdsContent() {
                     .map((item: any) => (
                       <button
                         key={item.id}
-                        onClick={() => setReferenceImage(item.media_urls![0])}
+                        onClick={() => { setReferenceImage(item.media_urls![0]); setReferenceSource('inspiration'); }}
                         className="aspect-square rounded-lg overflow-hidden transition-all"
                         style={{
                           background: 'rgba(255,255,255,0.05)',
@@ -604,7 +629,7 @@ function AdsContent() {
                   style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
                 />
                 <button
-                  onClick={() => { if (referenceInput.trim()) { setReferenceImage(referenceInput.trim()); setReferenceInput(''); } }}
+                  onClick={() => { if (referenceInput.trim()) { setReferenceImage(referenceInput.trim()); setReferenceSource('url'); setReferenceInput(''); } }}
                   className="px-3 py-1.5 rounded-lg text-xs"
                   style={{ background: 'rgba(139,92,246,0.2)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.3)' }}
                 >
