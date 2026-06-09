@@ -14,7 +14,7 @@ import { LoadingSpinner } from '@/components/loading-spinner';
 import { ErrorState } from '@/components/error-state';
 import { EmptyState } from '@/components/empty-state';
 import { useToast } from '@/components/Toast';
-import { useSkills, useInstallSkill, useUninstallSkill, useSkill } from '@/hooks/use-skills';
+import { useSkills, useInstallSkill, useUninstallSkill, useSkill, useInstalledSkillIds } from '@/hooks/use-skills';
 import { apiClient } from '@/lib/api-client';
 import type { SkillDefinition } from '@/lib/assistant/types';
 
@@ -40,6 +40,9 @@ function SkillsContent() {
 
   // 创建技能弹窗
   const [showCreate, setShowCreate] = useState(false);
+  const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai');
+  const [aiDescription, setAiDescription] = useState('');
+  const [generating, setGenerating] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: '',
     displayName: '',
@@ -50,6 +53,43 @@ function SkillsContent() {
     visibility: 'private' as 'private' | 'public',
   });
   const [creating, setCreating] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!aiDescription.trim()) {
+      showToast('请描述你想要的技能', 'error');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const resp = await apiClient.post<{
+        name: string; displayName: string; description: string;
+        category: string; tags: string[]; promptTemplate: string;
+      }>('/assistant/skills', {
+        action: 'generate',
+        description: aiDescription.trim(),
+      });
+      if (resp.success && resp.data) {
+        const d = resp.data;
+        setCreateForm({
+          name: d.name || '',
+          displayName: d.displayName || '',
+          description: d.description || '',
+          category: d.category || '',
+          tags: Array.isArray(d.tags) ? d.tags.join(', ') : '',
+          promptTemplate: d.promptTemplate || '',
+          visibility: 'private',
+        });
+        setCreateMode('manual');
+        showToast('AI 已生成技能，请检查并保存', 'success');
+      } else {
+        showToast(resp.error || '生成失败，请重试', 'error');
+      }
+    } catch {
+      showToast('网络错误', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleCreate = async () => {
     const { name, displayName, description, promptTemplate, tags, category, visibility } = createForm;
@@ -73,6 +113,8 @@ function SkillsContent() {
         showToast('技能创建成功', 'success');
         setShowCreate(false);
         setCreateForm({ name: '', displayName: '', description: '', category: '', tags: '', promptTemplate: '', visibility: 'private' });
+        setAiDescription('');
+        setCreateMode('ai');
         refetch();
       } else {
         showToast(resp.error || '创建失败', 'error');
@@ -89,6 +131,8 @@ function SkillsContent() {
     category: tab === 'installed' ? undefined : (category || undefined),
     query: searchQuery || undefined,
   });
+
+  const { data: installedIds } = useInstalledSkillIds();
 
   const { data: skillDetail } = useSkill(detailId ?? undefined);
   const installSkill = useInstallSkill();
@@ -243,7 +287,9 @@ function SkillsContent() {
           />
         ) : (
           <div className="space-y-2">
-            {skills.map((skill: SkillDefinition) => (
+            {skills.map((skill: SkillDefinition) => {
+              const isInstalled = installedIds?.has(skill.id);
+              return (
               <GlassCard key={skill.id} className="!p-3">
                 <div className="flex items-start gap-3">
                   <span className="text-xl flex-shrink-0 mt-0.5">
@@ -260,6 +306,11 @@ function SkillsContent() {
                       </span>
                       {skill.visibility === 'official' && (
                         <span style={{ color: '#F59E0B', fontSize: 9 }}>⭐ 官方</span>
+                      )}
+                      {tab === 'hub' && isInstalled && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ADE80' }}>
+                          已安装
+                        </span>
                       )}
                       <span style={{ color: '#6B7280', fontSize: 10 }}>v{skill.version}</span>
                     </div>
@@ -313,7 +364,7 @@ function SkillsContent() {
                         style={{ transform: detailId === skill.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
                       />
                     </button>
-                    {tab === 'installed' ? (
+                    {(tab === 'installed' || isInstalled) ? (
                       <button
                         onClick={() => handleUninstall(skill.id)}
                         className="p-1.5 rounded-lg hover:bg-red-500/10"
@@ -338,7 +389,8 @@ function SkillsContent() {
                   </div>
                 </div>
               </GlassCard>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -361,119 +413,183 @@ function SkillsContent() {
                 </button>
               </div>
 
-              {/* name */}
-              <div>
-                <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>英文标识 *</label>
-                <input
-                  value={createForm.name}
-                  onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="例: my-awesome-skill"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                />
-              </div>
-
-              {/* displayName */}
-              <div>
-                <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>显示名称 *</label>
-                <input
-                  value={createForm.displayName}
-                  onChange={e => setCreateForm(f => ({ ...f, displayName: e.target.value }))}
-                  placeholder="例: 小红书文案优化"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                />
-              </div>
-
-              {/* description */}
-              <div>
-                <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>简介</label>
-                <input
-                  value={createForm.description}
-                  onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="一句话描述这个技能做什么"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                />
-              </div>
-
-              {/* category + visibility */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>分类</label>
-                  <select
-                    value={createForm.category}
-                    onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                  >
-                    <option value="" style={{ background: '#0F172A' }}>选择分类</option>
-                    {CATEGORIES.filter(c => c.value).map(c => (
-                      <option key={c.value} value={c.value} style={{ background: '#0F172A' }}>{c.icon} {c.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>可见性</label>
-                  <select
-                    value={createForm.visibility}
-                    onChange={e => setCreateForm(f => ({ ...f, visibility: e.target.value as 'private' | 'public' }))}
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                  >
-                    <option value="private" style={{ background: '#0F172A' }}>🔒 私有</option>
-                    <option value="public" style={{ background: '#0F172A' }}>🌐 公开</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* tags */}
-              <div>
-                <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>标签（逗号分隔）</label>
-                <input
-                  value={createForm.tags}
-                  onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
-                  placeholder="例: 小红书, 文案, 社交媒体"
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                />
-              </div>
-
-              {/* promptTemplate */}
-              <div>
-                <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>Prompt 模板 *</label>
-                <textarea
-                  value={createForm.promptTemplate}
-                  onChange={e => setCreateForm(f => ({ ...f, promptTemplate: e.target.value }))}
-                  placeholder="编写技能的核心指令，这将是注入到 AI System Prompt 中的内容..."
-                  rows={8}
-                  className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
-                />
-              </div>
-
-              {/* actions */}
-              <div className="flex gap-2 pt-1">
+              {/* 模式切换 */}
+              <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
                 <button
-                  onClick={() => setShowCreate(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm"
-                  style={{ background: 'rgba(255,255,255,0.06)', color: '#9CA3AF' }}
+                  onClick={() => setCreateMode('ai')}
+                  className="flex-1 py-2 text-sm transition-colors"
+                  style={{
+                    background: createMode === 'ai' ? 'rgba(34,211,238,0.2)' : 'transparent',
+                    color: createMode === 'ai' ? '#67E8F9' : '#9CA3AF',
+                  }}
                 >
-                  取消
+                  AI 生成
                 </button>
                 <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="flex-1 py-2.5 rounded-xl text-sm flex items-center justify-center gap-1"
-                  style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.3), rgba(59,130,246,0.3))', color: '#FFFFFF' }}
+                  onClick={() => setCreateMode('manual')}
+                  className="flex-1 py-2 text-sm transition-colors"
+                  style={{
+                    background: createMode === 'manual' ? 'rgba(34,211,238,0.2)' : 'transparent',
+                    color: createMode === 'manual' ? '#67E8F9' : '#9CA3AF',
+                  }}
                 >
-                  {creating ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    '创建技能'
-                  )}
+                  手动编辑
                 </button>
               </div>
+
+              {/* AI 生成模式 */}
+              {createMode === 'ai' && (
+                <div className="space-y-3">
+                  <p style={{ color: '#9CA3AF', fontSize: 12 }}>
+                    用自然语言描述你想要的技能，AI 会自动生成完整的技能定义。
+                  </p>
+                  <textarea
+                    value={aiDescription}
+                    onChange={e => setAiDescription(e.target.value)}
+                    placeholder={'例如：\n"帮我写小红书爆款文案，包括标题、正文和话题标签"\n"分析热点新闻，挖掘创作角度"\n"为我的产品生成 SEO 友好的推广标题"'}
+                    rows={6}
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                  />
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || !aiDescription.trim()}
+                    className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
+                    style={{
+                      background: generating ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, rgba(34,211,238,0.3), rgba(59,130,246,0.3))',
+                      color: generating ? '#6B7280' : '#FFFFFF',
+                    }}
+                  >
+                    {generating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        AI 生成中...
+                      </>
+                    ) : (
+                      '生成技能'
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* 手动编辑模式 */}
+              {createMode === 'manual' && (
+                <>
+                  {/* name */}
+                  <div>
+                    <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>英文标识 *</label>
+                    <input
+                      value={createForm.name}
+                      onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="例: my-awesome-skill"
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                    />
+                  </div>
+
+                  {/* displayName */}
+                  <div>
+                    <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>显示名称 *</label>
+                    <input
+                      value={createForm.displayName}
+                      onChange={e => setCreateForm(f => ({ ...f, displayName: e.target.value }))}
+                      placeholder="例: 小红书文案优化"
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                    />
+                  </div>
+
+                  {/* description */}
+                  <div>
+                    <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>简介</label>
+                    <input
+                      value={createForm.description}
+                      onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                      placeholder="一句话描述这个技能做什么"
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                    />
+                  </div>
+
+                  {/* category + visibility */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>分类</label>
+                      <select
+                        value={createForm.category}
+                        onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                      >
+                        <option value="" style={{ background: '#0F172A' }}>选择分类</option>
+                        {CATEGORIES.filter(c => c.value).map(c => (
+                          <option key={c.value} value={c.value} style={{ background: '#0F172A' }}>{c.icon} {c.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>可见性</label>
+                      <select
+                        value={createForm.visibility}
+                        onChange={e => setCreateForm(f => ({ ...f, visibility: e.target.value as 'private' | 'public' }))}
+                        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                      >
+                        <option value="private" style={{ background: '#0F172A' }}>🔒 私有</option>
+                        <option value="public" style={{ background: '#0F172A' }}>🌐 公开</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* tags */}
+                  <div>
+                    <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>标签（逗号分隔）</label>
+                    <input
+                      value={createForm.tags}
+                      onChange={e => setCreateForm(f => ({ ...f, tags: e.target.value }))}
+                      placeholder="例: 小红书, 文案, 社交媒体"
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                    />
+                  </div>
+
+                  {/* promptTemplate */}
+                  <div>
+                    <label style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4, display: 'block' }}>Prompt 模板 *</label>
+                    <textarea
+                      value={createForm.promptTemplate}
+                      onChange={e => setCreateForm(f => ({ ...f, promptTemplate: e.target.value }))}
+                      placeholder="编写技能的核心指令，这将是注入到 AI System Prompt 中的内容..."
+                      rows={8}
+                      className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB' }}
+                    />
+                  </div>
+
+                  {/* actions */}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setCreateMode('ai'); }}
+                      className="flex-1 py-2.5 rounded-xl text-sm"
+                      style={{ background: 'rgba(255,255,255,0.06)', color: '#9CA3AF' }}
+                    >
+                      返回 AI 生成
+                    </button>
+                    <button
+                      onClick={handleCreate}
+                      disabled={creating}
+                      className="flex-1 py-2.5 rounded-xl text-sm flex items-center justify-center gap-1"
+                      style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.3), rgba(59,130,246,0.3))', color: '#FFFFFF' }}
+                    >
+                      {creating ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        '保存技能'
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </>

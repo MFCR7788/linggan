@@ -74,6 +74,21 @@ export function useInstallSkill() {
   });
 }
 
+// ====== 已安装技能 ID 集合（用于市场 tab 标记） ======
+
+export function useInstalledSkillIds() {
+  return useQuery({
+    queryKey: ['skills', 'installed', 'ids'],
+    queryFn: async () => {
+      const resp = await apiClient.get<SkillDefinition[]>(
+        '/assistant/skills?action=installed'
+      );
+      if (!resp.success) throw new Error(resp.error);
+      return new Set((resp.data ?? []).map(s => s.id));
+    },
+  });
+}
+
 // ====== 卸载技能 ======
 
 export function useUninstallSkill() {
