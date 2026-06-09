@@ -34,14 +34,29 @@ async function clearSession(request: NextRequest) {
     }
   );
 
-  await supabase.auth.signOut();
+  // 尝试服务端签退（可能因网络等原因失败）
+  try {
+    await supabase.auth.signOut();
+  } catch (e: any) {
+    console.warn('[logout] supabase.auth.signOut() 失败,继续清除 cookie:', e.message);
+  }
 
-  // 额外清除 dev 相关 cookie
+  // 开发模式 cookie
   cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
   cookieStore.set('dev_auth_secret', '', { path: '/', maxAge: 0 });
 
-  // 清除客户端 localStorage session 对应的 cookie（如果有的话）
-  cookieStore.set('sb-fibzvsstxxkdcflvtdzu-auth-token', '', { path: '/', maxAge: 0 });
+  // 清除所有可能的 Supabase auth cookie（含 PKCE 变体）
+  const ref = 'fibzvsstxxkdcflvtdzu';
+  for (const name of [
+    `sb-${ref}-auth-token`,
+    `sb-${ref}-auth-token.0`,
+    `sb-${ref}-auth-token.1`,
+    `sb-${ref}-auth-token-code-verifier`,
+  ]) {
+    cookieStore.set(name, '', { path: '/', maxAge: 0 });
+    // 也尝试清除 secure cookie（生产环境可能设了 secure flag）
+    cookieStore.set(name, '', { path: '/', maxAge: 0, secure: true });
+  }
 }
 
 // 导航式登出：浏览器直接跳转此 URL，Set-Cookie 头被正确处理
