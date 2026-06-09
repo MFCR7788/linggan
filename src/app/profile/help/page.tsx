@@ -7,7 +7,7 @@ import {
   BookOpen, TrendingUp, Calendar, MessageCircle, Send,
   HelpCircle, Lightbulb, Settings, ExternalLink, CheckCircle2,
   Loader2, Sparkles, Globe, Layers, Zap, Bot, Bell, Grid3x3, BarChart3,
-  Wand2, Wallet,
+  Wand2, Wallet, Brain, Search,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -327,6 +327,99 @@ const features: FeatureEntry[] = [
   },
 ];
 
+// ─── AI 创作合伙人功能介绍 ──────────────────────────────────
+
+interface AssistantCapability {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  color: string;
+  details: string[];
+}
+
+const assistantCapabilities: AssistantCapability[] = [
+  {
+    icon: <Brain size={20} />,
+    title: '持久记忆系统',
+    desc: '助手会记住你的身份、偏好、创作风格和常用工作流，越用越懂你。',
+    color: '#A855F7',
+    details: [
+      '自动从对话中提取重要信息（偏好、习惯、个人信息等）',
+      '支持 profile / preference / fact / workflow / general 五类记忆',
+      '记忆使用 <memory-context> 标签隔离，防止干扰 AI 判断',
+      '每次对话后自动分析是否产生新记忆',
+      '可查看、编辑、删除已存储的记忆',
+    ],
+  },
+  {
+    icon: <Layers size={20} />,
+    title: '灵感库语义搜索',
+    desc: '在你的私人灵感库中通过语义匹配找到与当前话题最相关的内容。',
+    color: '#3B82F6',
+    details: [
+      '基于 1536 维向量 embedding 的语义相似度搜索',
+      '优先匹配你的灵感库（priority = 1，最优先）',
+      '支持跨类型的灵感内容检索（文字、图片描述、AI 摘要）',
+      '结合 pgvector 余弦距离算法，精准定位相关内容',
+      '搜索结果作为上下文注入 AI 对话，提升回复质量',
+    ],
+  },
+  {
+    icon: <BookOpen size={20} />,
+    title: '公共知识库',
+    desc: '访问灵集平台共享的创作知识库，获取最佳实践和行业知识。',
+    color: '#22C55E',
+    details: [
+      '平台级共享知识，所有用户都可以受益',
+      '包含创作技巧、行业规范、热门话题分析等',
+      '向量搜索自动匹配最相关的知识条目',
+      '持续更新，知识库内容由运营团队维护',
+      'priority = 2，仅次于个人灵感库',
+    ],
+  },
+  {
+    icon: <Globe size={20} />,
+    title: '联网搜索回退',
+    desc: '当灵感库和知识库都没有相关内容时，自动联网搜索最新信息。',
+    color: '#F59E0B',
+    details: [
+      'priority = 9，仅在知识库无结果时作为最后手段',
+      '基于 DeepSeek 联网搜索能力，获取实时信息',
+      '搜索结果最多 3 条，每条 200 字以内',
+      '自动标注信息来源，透明可追溯',
+      '避免 AI 说"我不知道"或给出过时信息',
+    ],
+  },
+  {
+    icon: <Wand2 size={20} />,
+    title: '技能系统（Skills Hub）',
+    desc: '像安装 App 一样安装 AI 技能，扩展助手的专业能力。',
+    color: '#EC4899',
+    details: [
+      '技能商店：浏览、搜索、安装各类创作技能',
+      'Progressive Disclosure：元数据 → 完整 prompt → 关联文件，按需加载',
+      '支持技能匹配：AI 自动判断用户意图并推荐合适技能',
+      '可创建私有技能、分享公开技能、安装官方技能',
+      '安装的技能在对话中自动可用，AI 会根据情况调用',
+      '技能支持参数模板（{{placeholder}}），灵活适配不同场景',
+    ],
+  },
+  {
+    icon: <Search size={20} />,
+    title: '多源上下文检索',
+    desc: '每次对话同时检索记忆+灵感+知识+搜索，给 AI 最完整的上下文。',
+    color: '#06B6D4',
+    details: [
+      'ContextPipeline 并行执行多源检索，减少等待时间',
+      '检索优先级：灵感库 → 公共知识库 → 联网搜索',
+      '记忆上下文单独注入，与知识检索并行',
+      '收集到足够结果（默认 3 条）即停止后续检索',
+      '所有上下文使用标签隔离（memory-context / knowledge-context）',
+      '自动去重，避免重复信息干扰 AI 判断',
+    ],
+  },
+];
+
 // ─── 常见问题 ──────────────────────────────────────────────
 
 interface FAQEntry {
@@ -478,6 +571,22 @@ const faqs: FAQEntry[] = [
   {
     q: '改密码后会退出所有设备吗？',
     a: '会。出于安全考虑，Supabase 在密码修改后会让该用户的所有 refresh_token 立即失效，相当于强制所有设备重新登录。\n\n如果只是想在某些设备上退出、不想改密码，可以用「退出所有设备」按钮（仅当前可用，调用 listSessions + 逐个 signOut）。\n\n退出后本设备也需用新密码（或保持原密码）重新登录。',
+  },
+  {
+    q: 'AI 助手能记住关于我的什么信息？',
+    a: '助手会自动从对话中学习你的偏好和习惯，包括：\n\n• 个人信息（profile）：身份、职业、领域等\n• 偏好（preference）：喜欢的风格、平台、工具等\n• 事实（fact）：你提到的重要事实和背景\n• 工作流（workflow）：你常用的创作流程和习惯\n\n所有记忆仅你可见，存储在加密的 Supabase 数据库中。你可以随时在「记忆管理」页面查看、编辑或删除任何记忆条目。',
+  },
+  {
+    q: '我的灵感库会被其他用户看到吗？',
+    a: '不会。灵感库搜索使用 Supabase RLS（行级安全）策略，每个用户只能搜索自己的 content_items。AI 助手调用的是 search_inspirations RPC 函数，该函数内部强制按 user_id 过滤，无法越权访问他人数据。\n\n公共知识库是平台级共享的，但那是由运营团队维护的通用创作知识，不包含任何用户的私人灵感。',
+  },
+  {
+    q: '技能系统怎么使用？',
+    a: '技能系统就像 AI 的「App Store」：\n\n1. 在「AI 助手」页面浏览技能 Hub\n2. 点击「安装」将技能添加到你的助手\n3. 对话时 AI 会自动判断用户意图并匹配合适的技能\n4. 你也可以手动指定使用某个技能\n\n技能采用 Progressive Disclosure 设计：浏览时只看简介，点进去看完整 prompt，需要时才加载关联文件，节省上下文窗口。',
+  },
+  {
+    q: '联网搜索什么时候会触发？',
+    a: '联网搜索是最后一道防线（priority=9）。流程如下：\n\n1. 先搜你的私人灵感库（priority=1）\n2. 再搜公共知识库（priority=2）\n3. 如果前面收集到的结果不足 3 条，才自动触发联网搜索\n\n这意味着大多数常见创作问题都会在你的灵感和知识库中找到答案，只有全新话题才会联网搜索，消耗更少的资源同时获得最新信息。',
   },
 ];
 
@@ -738,7 +847,7 @@ function FeedbackForm() {
 
 // ─── 主页面 ────────────────────────────────────────────────
 
-type HelpTab = 'features' | 'guides' | 'faq' | 'feedback';
+type HelpTab = 'features' | 'guides' | 'faq' | 'assistant' | 'feedback';
 
 function HelpContent() {
   const router = useRouter();
@@ -750,6 +859,7 @@ function HelpContent() {
     { key: 'features', label: '功能介绍', icon: <Sparkles size={14} /> },
     { key: 'guides', label: '操作指南', icon: <Lightbulb size={14} /> },
     { key: 'faq', label: '常见问题', icon: <HelpCircle size={14} /> },
+    { key: 'assistant', label: 'AI 合伙人', icon: <Brain size={14} /> },
     { key: 'feedback', label: '意见反馈', icon: <Send size={14} /> },
   ];
 
@@ -923,6 +1033,92 @@ function HelpContent() {
                 </GlassCard>
               );
             })}
+          </>
+        )}
+
+        {/* ─── AI 合伙人 ───────────────────────────────── */}
+        {activeTab === 'assistant' && (
+          <>
+            <div style={{ color: '#E5E7EB', fontSize: 14, marginBottom: 4 }}>
+              灵集 AI 不仅是工具，更是懂你的<strong style={{ color: '#A855F7' }}>创作合伙人</strong>。
+              拥有记忆、知识检索和技能扩展能力，越用越聪明。
+            </div>
+
+            {/* 能力概览 */}
+            <GlassCard className="!p-4" style={{
+              background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(59,130,246,0.1))',
+              border: '1px solid rgba(168,85,247,0.2)',
+            }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(168,85,247,0.2)' }}>
+                  <Bot size={16} color="#A855F7" />
+                </div>
+                <span style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 700 }}>核心能力架构</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  { icon: <Brain size={14} />, label: '记忆系统', sub: '记住偏好' },
+                  { icon: <Search size={14} />, label: '知识检索', sub: '灵感+公共+联网' },
+                  { icon: <Wand2 size={14} />, label: '技能扩展', sub: '安装即用' },
+                ].map((item) => (
+                  <div key={item.label} className="p-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <div className="flex justify-center mb-1">
+                      <span style={{ color: '#A855F7' }}>{item.icon}</span>
+                    </div>
+                    <p style={{ color: '#FFFFFF', fontSize: 11, fontWeight: 600 }}>{item.label}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 10 }}>{item.sub}</p>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
+            {/* 各项能力详情 */}
+            {assistantCapabilities.map((cap) => (
+              <GlassCard key={cap.title} className="!p-4">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${cap.color}20`, border: `1px solid ${cap.color}33` }}
+                  >
+                    <span style={{ color: cap.color }}>{cap.icon}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{cap.title}</h3>
+                    <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>{cap.desc}</p>
+                    <div className="space-y-1.5">
+                      {cap.details.map((d, i) => (
+                        <div key={i} className="flex items-start gap-1.5">
+                          <span style={{ color: cap.color, fontSize: 11, flexShrink: 0 }}>▸</span>
+                          <span style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5 }}>{d}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </GlassCard>
+            ))}
+
+            {/* 使用提示 */}
+            <GlassCard className="!p-4" style={{ border: '1px solid rgba(34,197,94,0.3)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Zap size={16} color="#22C55E" />
+                <span style={{ color: '#22C55E', fontSize: 13, fontWeight: 600 }}>使用提示</span>
+              </div>
+              <div className="space-y-1">
+                {[
+                  '新功能灰度发布中，部分用户可能暂不可用',
+                  '记忆系统会在对话中自动工作，无需手动操作',
+                  '灵感库内容越丰富，语义匹配效果越好',
+                  '技能 Hub 可在「AI 助手」页面浏览和安装',
+                  '所有数据均通过 RLS 策略隔离，保护你的隐私',
+                ].map((tip, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <CheckCircle2 size={11} style={{ color: '#22C55E', marginTop: 3, flexShrink: 0 }} />
+                    <span style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5 }}>{tip}</span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
           </>
         )}
 
