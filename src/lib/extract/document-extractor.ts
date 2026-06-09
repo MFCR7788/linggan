@@ -3,8 +3,6 @@
 // 服务端从 storage 拉字节流 → 转 Buffer → 走对应解析器
 
 import mammoth from 'mammoth';
-// @ts-expect-error pdf-parse 缺少 TS 类型
-import pdfParse from 'pdf-parse';
 
 export const MAX_EXTRACTED_CHARS = 50000;
 
@@ -38,6 +36,8 @@ async function fetchAsBuffer(url: string): Promise<Buffer> {
 
 async function extractPdf(buffer: Buffer): Promise<string> {
   try {
+    // @ts-expect-error pdf-parse 缺少 TS 类型
+    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(buffer);
     return data.text || '';
   } catch (e: any) {

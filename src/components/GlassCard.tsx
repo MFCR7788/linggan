@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, memo } from "react";
 
 interface GlassCardProps {
   children: ReactNode;
@@ -9,7 +9,7 @@ interface GlassCardProps {
   style?: React.CSSProperties;
 }
 
-export function GlassCard({ children, className = "", onClick, hover = false, active = false, style }: GlassCardProps) {
+export const GlassCard = memo(function GlassCard({ children, className = "", onClick, hover = false, active = false, style }: GlassCardProps) {
   return (
     <div
       onClick={onClick}
@@ -26,7 +26,7 @@ export function GlassCard({ children, className = "", onClick, hover = false, ac
       {children}
     </div>
   );
-}
+});
 
 interface GlassBadgeProps {
   children: ReactNode;
@@ -35,7 +35,7 @@ interface GlassBadgeProps {
   style?: React.CSSProperties;
 }
 
-export function GlassBadge({ children, color = "default", className = "", style }: GlassBadgeProps) {
+export const GlassBadge = memo(function GlassBadge({ children, color = "default", className = "", style }: GlassBadgeProps) {
   const colors = {
     default: "rgba(255,255,255,0.15)",
     primary: "rgba(59,130,246,0.4)",
@@ -63,4 +63,4 @@ export function GlassBadge({ children, color = "default", className = "", style 
       {children}
     </span>
   );
-}
+});

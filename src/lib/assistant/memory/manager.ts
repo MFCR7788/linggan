@@ -55,7 +55,7 @@ export class MemoryManager {
           parts.push(block);
         }
       } catch (e) {
-        console.debug(`Memory provider '${p.name}' prefetch 失败:`, e);
+        console.warn(`Memory provider '${p.name}' prefetch 失败:`, e);
       }
     }
     const raw = parts.join('\n\n');

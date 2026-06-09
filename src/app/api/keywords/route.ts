@@ -44,17 +44,13 @@ export const POST = withAuth(async ({ request, user }) => {
 
   const supabase = createAdminClient();
 
-  console.time('[Keywords] 总耗时');
-
   // 检查是否已存在
-  console.time('[Keywords] 查重');
   const { data: existing } = await supabase
     .from('monitor_keywords')
     .select('id')
     .eq('user_id', user.id)
     .eq('keyword', keyword.trim())
     .maybeSingle();
-  console.timeEnd('[Keywords] 查重');
 
   if (existing) {
     return createApiError('该关键词已存在', 409);
@@ -84,13 +80,11 @@ export const POST = withAuth(async ({ request, user }) => {
   };
   if (category) insertData.category = category;
 
-  console.time('[Keywords] 插入关键词');
   const { data: newKeyword, error } = await supabase
     .from('monitor_keywords')
     .insert(insertData)
     .select()
     .single();
-  console.timeEnd('[Keywords] 插入关键词');
 
   if (error) {
     console.error('创建关键词失败:', error);
@@ -103,26 +97,22 @@ export const POST = withAuth(async ({ request, user }) => {
     const normalizedKw = keyword.trim().toLowerCase();
 
     // 找到同关键词（忽略大小写）的其他用户的 monitor_keyword 及其热点
-    console.time('[Keywords] 查兄弟关键词');
     const { data: siblingKeywords } = await supabase
       .from('monitor_keywords')
       .select('id')
       .neq('user_id', user.id)
       .ilike('keyword', normalizedKw);
-    console.timeEnd('[Keywords] 查兄弟关键词');
 
     if (siblingKeywords && siblingKeywords.length > 0) {
       const siblingIds = siblingKeywords.map((k: any) => k.id);
 
       // 获取这些关键词关联的已抓取热点（去重：按 original_url 或 platform+title）
-      console.time('[Keywords] 查已有热点');
       const { data: existingHotspots } = await supabase
         .from('hot_items')
         .select('platform, original_url, title, original_content, author, ai_summary, relevance_reason, key_points, creation_suggestions, view_count, like_count, comment_count, share_count, relevance_score, importance_level, credibility_level, credibility_score, published_at, captured_at')
         .in('monitor_keyword_id', siblingIds)
         .order('captured_at', { ascending: false })
         .limit(50);
-      console.timeEnd('[Keywords] 查已有热点');
 
       if (existingHotspots && existingHotspots.length > 0) {
         // 去重：同一个 URL 或 平台+标题 只复制一份
@@ -131,14 +121,12 @@ export const POST = withAuth(async ({ request, user }) => {
 
         // 一次性查出新用户已有的所有热点 URL，避免循环内逐条查询
         const urlsToCheck = [...new Set(existingHotspots.map((h: any) => h.original_url).filter(Boolean))];
-        console.time('[Keywords] 查用户已有URL');
         const { data: userExisting } = await supabase
           .from('hot_items')
           .select('original_url')
           .eq('user_id', user.id)
           .in('original_url', urlsToCheck.length > 0 ? urlsToCheck : ['__none__']);
         const userUrlSet = new Set((userExisting || []).map((h: any) => h.original_url));
-        console.timeEnd('[Keywords] 查用户已有URL');
 
         for (const h of existingHotspots) {
           const urlKey = h.original_url || '';
@@ -178,11 +166,9 @@ export const POST = withAuth(async ({ request, user }) => {
         }
 
         if (toInsert.length > 0) {
-          console.time('[Keywords] 批量插入热点');
           const { error: copyError } = await supabase
             .from('hot_items')
             .insert(toInsert);
-          console.timeEnd('[Keywords] 批量插入热点');
           if (!copyError) {
             inheritedCount = toInsert.length;
             console.log(`[Keywords] 新用户 ${user.id.slice(0, 8)} 继承 ${inheritedCount} 条已有热点`);
@@ -196,8 +182,6 @@ export const POST = withAuth(async ({ request, user }) => {
     console.error('[Keywords] 复用热点异常:', copyErr);
     // 不影响关键词创建，静默处理
   }
-  console.timeEnd('[Keywords] 总耗时');
-
   return createApiResponse(
     { ...newKeyword, inheritedHotspots: inheritedCount },
     inheritedCount > 0 ? `关键词添加成功，继承 ${inheritedCount} 条已有热点` : '关键词添加成功'

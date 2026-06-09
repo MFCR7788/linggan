@@ -218,34 +218,35 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError('创建灵感失败: ' + error.message, 500);
   }
 
-  // 如果有标签，创建标签关联
+  // 如果有标签，创建标签关联（批量操作避免 N+1）
   if (tags && Array.isArray(tags) && tags.length > 0) {
-    for (const tagName of tags) {
-      // 查找或创建标签
-      const { data: existingTag } = await supabase
+    const tagNames = [...new Set(tags.map((t: string) => t.trim()).filter(Boolean))];
+    if (tagNames.length > 0) {
+      // 1. 一次查询找出所有已存在的标签
+      const { data: existingTags } = await supabase
         .from('tags')
-        .select('id')
+        .select('id, name')
         .eq('user_id', user.id)
-        .eq('name', tagName)
-        .single();
+        .in('name', tagNames);
 
-      let tagId: string | undefined;
-      if (existingTag) {
-        tagId = existingTag.id;
-      } else {
-        const { data: newTag } = await supabase
+      const existingMap = new Map((existingTags || []).map((t: any) => [t.name, t.id]));
+
+      // 2. 批量插入新标签
+      const newNames = tagNames.filter(n => !existingMap.has(n));
+      if (newNames.length > 0) {
+        const { data: createdTags } = await supabase
           .from('tags')
-          .insert({ user_id: user.id, name: tagName })
-          .select()
-          .single();
-        tagId = newTag?.id;
+          .insert(newNames.map(name => ({ user_id: user.id, name })))
+          .select('id, name');
+        (createdTags || []).forEach((t: any) => existingMap.set(t.name, t.id));
       }
 
-      if (tagId) {
-        await supabase
-          .from('content_tags')
-          .insert({ content_id: data.id, tag_id: tagId })
-          .select();
+      // 3. 批量插入 content_tags 关联
+      const contentTagRows = tagNames
+        .map(name => ({ content_id: data.id, tag_id: existingMap.get(name) }))
+        .filter(r => r.tag_id);
+      if (contentTagRows.length > 0) {
+        await supabase.from('content_tags').insert(contentTagRows);
       }
     }
   }

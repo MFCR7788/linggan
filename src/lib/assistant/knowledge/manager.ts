@@ -35,27 +35,45 @@ export class KnowledgeManager {
       userId,
     };
 
-    for (const provider of sorted) {
-      try {
-        if (!(await provider.isAvailable())) continue;
+    // 分离 web-search 和其他 provider，非 web 的可并行
+    const webProviders = sorted.filter(p => p.name === 'web-search');
+    const localProviders = sorted.filter(p => p.name !== 'web-search');
 
-        const providerResults = await provider.search(query, embedding, opts);
-        if (providerResults.length > 0) {
-          results.push(...providerResults);
-          sources.push(provider.name);
+    // 并行执行本地 provider（灵感库 + 公共知识）
+    const localResults = await Promise.allSettled(
+      localProviders.map(async (provider) => {
+        if (!(await provider.isAvailable())) return [];
+        try {
+          return await provider.search(query, embedding, opts);
+        } catch (e) {
+          console.warn(`Knowledge provider '${provider.name}' 搜索失败:`, e);
+          return [];
         }
+      })
+    );
 
-        // 非联网搜索 Provider 收集到足够结果就停止
-        if (provider.name !== 'web-search' && results.length >= minResults) {
-          break;
-        }
+    for (let i = 0; i < localProviders.length; i++) {
+      const r = localResults[i];
+      if (r.status === 'fulfilled' && r.value.length > 0) {
+        results.push(...r.value);
+        sources.push(localProviders[i].name);
+      }
+    }
 
-        // 标记是否走到了联网搜索
-        if (provider.name === 'web-search') {
+    // 本地结果不够才走联网搜索
+    if (results.length < minResults) {
+      for (const provider of webProviders) {
+        try {
+          if (!(await provider.isAvailable())) continue;
+          const providerResults = await provider.search(query, embedding, opts);
+          if (providerResults.length > 0) {
+            results.push(...providerResults);
+            sources.push(provider.name);
+          }
           fellBackToWeb = true;
+        } catch (e) {
+          console.warn(`Knowledge provider '${provider.name}' 搜索失败:`, e);
         }
-      } catch (e) {
-        console.warn(`Knowledge provider '${provider.name}' 搜索失败:`, e);
       }
     }
 

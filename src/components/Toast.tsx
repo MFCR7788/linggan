@@ -101,6 +101,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* 全局 Toast 层 */}
       <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
         style={{
           position: 'fixed',
           top: 80,

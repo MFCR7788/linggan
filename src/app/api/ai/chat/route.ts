@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callDeepSeek, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
+import { callDeepSeek, callDeepSeekStream, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { extractTextFromBuffer } from '@/lib/extract/document-extractor';
@@ -151,13 +151,33 @@ export const POST = withAuth(async ({ request, user }) => {
   const modelErrors: string[] = [];
   try {
     const body = await request.json();
-    const { content = '', images = [], videos = [], documents = [], searchResults, session_id, model: selectedModel } = body;
+    const { content = '', images = [], videos = [], documents = [], searchResults, session_id, model: selectedModel, stream: useStream } = body;
 
     if (!content && images.length === 0 && videos.length === 0 && documents.length === 0) {
       return NextResponse.json({
         success: false,
         error: '内容不能为空'
       }, { status: 400 });
+    }
+
+    // 基础 prompt 注入检测
+    if (content && typeof content === 'string') {
+      const lower = content.toLowerCase();
+      const injectionPatterns = [
+        /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
+        /system\s*:\s*you\s+are\s+now/i,
+        /pretend\s+you\s+are\s+(a\s+)?(different|another)/i,
+        /you\s+are\s+now\s+(DAN|jailbroken|unrestricted)/i,
+        /forget\s+(all\s+)?your\s+(training|programming|rules)/i,
+        /<\|im_start\|>/i,
+        /<\|im_end\|>/i,
+      ];
+      if (injectionPatterns.some(p => p.test(lower))) {
+        return NextResponse.json({
+          success: false,
+          error: '检测到异常输入模式，请重新描述您的需求'
+        }, { status: 400 });
+      }
     }
 
     const hasImages = images.length > 0;
@@ -690,6 +710,110 @@ ${forecastText}
     let analysis: any = null;
     let modelUsed = '';
     const genMaxTokens = isGeneration ? 4096 : 1000;
+
+    // ====== Streaming 模式（仅纯文本） ======
+    if (useStream && !isMultimodal) {
+      const supabase = createAdminClient();
+      const encoder = new TextEncoder();
+      let fullContent = '';
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of callDeepSeekStream(userPrompt, { temperature: 0.7, maxTokens: genMaxTokens })) {
+              fullContent += chunk;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`));
+            }
+
+            // 解析完整响应
+            const parsed = extractJSON(fullContent);
+            if (parsed) {
+              analysis = parsed;
+              modelUsed = 'deepseek-stream';
+            } else {
+              const cleaned = fullContent.replace(/```[\s\S]*?```/g, '').trim();
+              analysis = {
+                response: cleaned || fullContent,
+                summary: (cleaned || fullContent).substring(0, 50),
+                tags: [],
+                suggestions: [],
+                intent: intent.label,
+              };
+              modelUsed = 'deepseek-stream';
+            }
+
+            // 保存 assistant 消息到 DB
+            if (session_id) {
+              try {
+                const assistantContent = analysis.response || fullContent;
+                await supabase.from('chat_messages').insert({
+                  user_id: user.id,
+                  session_id,
+                  type: 'assistant',
+                  content: assistantContent,
+                  metadata: { model: modelUsed, intent: intent.type },
+                });
+              } catch (e) { console.warn('保存 streaming 消息失败:', e); }
+            }
+
+            // 异步提取记忆
+            if (session_id) {
+              const userMsg = content || '';
+              const assistantMsg = analysis.response || '';
+              extractMemories(userMsg, assistantMsg).then(async (extracted) => {
+                if (extracted.length > 0) {
+                  try {
+                    const builtinMem = new BuiltinMemoryProvider();
+                    await builtinMem.initialize(user.id);
+                    for (const mem of extracted) {
+                      let embedding: number[] | undefined;
+                      try { embedding = await generateEmbedding(mem.value); } catch { /* skip */ }
+                      await builtinMem.save({
+                        userId: user.id,
+                        category: mem.category,
+                        key: mem.key,
+                        value: mem.value,
+                        importance: mem.importance,
+                        sourceSessionId: session_id,
+                        embedding,
+                      });
+                    }
+                    console.log(`[Memory] 提取 ${extracted.length} 条记忆`);
+                  } catch (e) { console.warn('[Memory] 保存失败:', e); }
+                }
+              }).catch(e => console.warn('[Memory] 提取失败:', e));
+            }
+
+            // 发送最终结果
+            if (!analysis.intent) analysis.intent = intent.label;
+            if (analysis.response) analysis.response = stripMarkdown(analysis.response);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              done: true,
+              response: analysis.response,
+              summary: analysis.summary,
+              tags: analysis.tags || [],
+              suggestions: analysis.suggestions || [],
+              _model: modelUsed,
+              _intent: intent.type,
+              _context: contextStats,
+            })}\n\n`));
+            controller.close();
+          } catch (e) {
+            const errMsg = e instanceof Error ? e.message : String(e);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`));
+            controller.close();
+          }
+        },
+      });
+
+      return new NextResponse(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
 
     const tryModel = async (name: string, fn: () => Promise<string>): Promise<boolean> => {
       try {
