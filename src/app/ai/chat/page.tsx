@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Send, Plus, Trash2, MessageSquare, Sparkles,
   ChevronRight, Brain, Search, Globe, Cpu,
-  Hash, Lightbulb, PanelLeftClose, PanelLeft,
+  Hash, Lightbulb, PanelLeftClose, PanelLeft, Puzzle,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components';
 import { TopNav } from '@/components/TopNav';
@@ -19,6 +19,7 @@ import {
   useDeleteSession, useSendMessage,
   type ChatMessage,
 } from '@/hooks/use-chat';
+import { useSkills } from '@/hooks/use-skills';
 
 // ====== 模型选项 ======
 const MODELS = [
@@ -106,6 +107,49 @@ function ChatContent() {
     _model?: string;
     timestamp: string;
   }>>([]);
+
+  // 斜杠指令自动补全
+  const OFFICIAL_COMMANDS = [
+    { command: '/xiaohongshu', label: '小红书文案优化', desc: '高互动率标题和正文', cat: 'writing' },
+    { command: '/douyin', label: '抖音脚本创作', desc: '3秒钩子和口播脚本', cat: 'social' },
+    { command: '/wechat', label: '公众号排版助手', desc: '排版和阅读体验优化', cat: 'writing' },
+    { command: '/seo', label: 'SEO 标题生成', desc: '搜索友好标题策略', cat: 'writing' },
+    { command: '/remix', label: '多平台改写', desc: '一稿多平台适配', cat: 'social' },
+    { command: '/hotspot', label: '热点追踪分析', desc: '事件脉络和创作角度', cat: 'analysis' },
+    { command: '/draw', label: 'AI 绘画提示词', desc: '5层 prompt 结构', cat: 'image' },
+    { command: '/storyboard', label: '视频分镜脚本', desc: '分镜表和拍摄法则', cat: 'video' },
+  ];
+  const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
+    show: false, filter: '', index: 0, pos: 0,
+  });
+  const { data: installedSkills } = useSkills({ action: 'installed' });
+
+  // 合并可用指令：官方 + 用户已安装（去重）
+  const availableCommands = useMemo(() => {
+    const seen = new Set(OFFICIAL_COMMANDS.map(c => c.command));
+    const list = [...OFFICIAL_COMMANDS];
+    if (installedSkills) {
+      for (const s of installedSkills) {
+        const cmd = `/${s.name}`;
+        if (!seen.has(cmd)) {
+          seen.add(cmd);
+          list.push({ command: cmd, label: s.displayName, desc: s.description?.slice(0, 20) || '', cat: s.category || '' });
+        }
+      }
+    }
+    return list;
+  }, [installedSkills]);
+
+  // 过滤匹配的指令
+  const filteredCommands = useMemo(() => {
+    if (!slashMenu.show) return [];
+    const f = slashMenu.filter.toLowerCase();
+    if (!f) return availableCommands;
+    return availableCommands.filter(c =>
+      c.command.toLowerCase().includes(f) ||
+      c.label.toLowerCase().includes(f)
+    );
+  }, [availableCommands, slashMenu]);
 
   const { data: sessions, isLoading: sessionsLoading } = useChatSessions();
   const { data: sessionDetail, isLoading: msgsLoading } = useChatSession(activeSessionId ?? undefined);
@@ -211,10 +255,43 @@ function ChatContent() {
 
   // 键盘发送
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 斜杠菜单导航
+    if (slashMenu.show && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashMenu(prev => ({ ...prev, index: Math.min(prev.index + 1, filteredCommands.length - 1) }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashMenu(prev => ({ ...prev, index: Math.max(prev.index - 1, 0) }));
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        selectSlashCommand(filteredCommands[slashMenu.index]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // 选中斜杠指令
+  const selectSlashCommand = (cmd: typeof availableCommands[0]) => {
+    const before = input.substring(0, slashMenu.pos);
+    const after = input.substring(inputRef.current?.selectionStart || slashMenu.pos + 1);
+    setInput(before + cmd.command + ' ' + after);
+    setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   // 新建会话
@@ -489,16 +566,64 @@ function ChatContent() {
 
           {/* 输入区域 */}
           <div
-            className="px-4 py-3"
+            className="px-4 py-3 relative"
             style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
           >
+            {/* 斜杠指令下拉 */}
+            {slashMenu.show && (
+              <div
+                className="absolute bottom-full left-4 right-4 mb-2 rounded-xl overflow-hidden z-50 max-h-[260px] overflow-y-auto"
+                style={{ background: 'rgba(15,23,42,0.98)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)' }}
+              >
+                {filteredCommands.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p style={{ color: '#6B7280', fontSize: 12 }}>没有匹配的技能指令</p>
+                  </div>
+                ) : (
+                  filteredCommands.map((cmd, i) => (
+                    <button
+                      key={cmd.command}
+                      onClick={() => selectSlashCommand(cmd)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors"
+                      style={{ background: i === slashMenu.index ? 'rgba(59,130,246,0.1)' : 'transparent' }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'rgba(59,130,246,0.15)' }}
+                      >
+                        <Puzzle size={14} color="#93C5FD" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600 }}>{cmd.command}</p>
+                        <p style={{ color: '#6B7280', fontSize: 11 }} className="truncate">{cmd.label} — {cmd.desc}</p>
+                      </div>
+                      <span style={{ color: '#4B5563', fontSize: 9 }}>Tab</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setInput(val);
+                  // 检测斜杠指令
+                  const cursor = e.target.selectionStart || 0;
+                  const textBefore = val.substring(0, cursor);
+                  const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
+                  if (slashMatch) {
+                    const slashPos = textBefore.lastIndexOf('/');
+                    setSlashMenu({ show: true, filter: slashMatch[1], index: 0, pos: slashPos });
+                  } else {
+                    setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+                  }
+                }}
                 onKeyDown={handleKeyDown}
-                placeholder="输入消息，Enter 发送，Shift+Enter 换行..."
+                placeholder="输入消息，输入 / 选择技能指令..."
                 rows={1}
                 className="flex-1 px-4 py-2.5 rounded-xl resize-none outline-none text-sm"
                 style={{
