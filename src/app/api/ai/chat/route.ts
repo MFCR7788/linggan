@@ -190,7 +190,12 @@ export const POST = withAuth(async ({ request, user }) => {
           .eq('user_id', user.id)
           .order('created_at', { ascending: true });
         if (prevMessages) {
-          historyMessages = prevMessages.map(m => ({
+          // 限制最近 20 轮对话（40 条消息），防止超长会话撑爆上下文窗口
+          const MAX_HISTORY = 40;
+          const trimmed = prevMessages.length > MAX_HISTORY
+            ? prevMessages.slice(-MAX_HISTORY)
+            : prevMessages;
+          historyMessages = trimmed.map(m => ({
             role: m.type === 'user' ? 'user' as const : 'assistant' as const,
             content: m.content,
           }));
