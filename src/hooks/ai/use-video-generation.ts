@@ -105,6 +105,15 @@ export function useVideoGeneration() {
   const [mergedVideoUrl, setMergedVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ─── First-frame batch generation ──────────────────
+  const [generatingFirstFrames, setGeneratingFirstFrames] = useState(false);
+  const [firstFramesProgress, setFirstFramesProgress] = useState('');
+  const [sceneFrames, setSceneFrames] = useState<Record<number, { imageUrl: string; prompt: string; size?: string }>>({});
+
+  // ─── HyperFrames generation ─────────────────────────
+  const [hyperframesGenerating, setHyperframesGenerating] = useState(false);
+  const [hyperframesVideoUrl, setHyperframesVideoUrl] = useState<string | null>(null);
+
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const segmentsRef = useRef<SegmentState[]>([]);
 
@@ -462,6 +471,92 @@ export function useVideoGeneration() {
     }
   }, [cancelPolling]);
 
+  // ─── HyperFrames generation ─────────────────────────
+  const generateHyperFrames = useCallback(async (params: {
+    script: string;
+    topic?: string;
+    style?: 'product' | 'social' | 'slide';
+    duration?: number;
+  }): Promise<{ videoUrl: string }> => {
+    setHyperframesGenerating(true);
+    setHyperframesVideoUrl(null);
+    setError(null);
+
+    try {
+      const res = await apiClient.post<{
+        videoUrl: string;
+        duration: number;
+        creditsUsed: number;
+      }>('/ai/video/hyperframes', {
+        script: params.script,
+        topic: params.topic,
+        style: params.style || 'product',
+        duration: params.duration,
+      });
+
+      if (!res.success) throw new Error(res.error || '动态图形生成失败');
+
+      const videoUrl = res.data!.videoUrl;
+      setHyperframesVideoUrl(videoUrl);
+      return { videoUrl };
+    } catch (e: any) {
+      setError(e.message || '生成失败');
+      throw e;
+    } finally {
+      setHyperframesGenerating(false);
+    }
+  }, []);
+
+  // ─── First-frame batch generation ──────────────────
+  const generateFirstFramesBatch = useCallback(async (params: {
+    storyboard: StoryboardScene[];
+    ratio?: string;
+    sceneIndices?: number[];
+  }): Promise<{
+    sceneFrames: Record<number, { imageUrl: string; prompt: string; size?: string }>;
+    failed: number[];
+  }> => {
+    setGeneratingFirstFrames(true);
+    setFirstFramesProgress('');
+    setError(null);
+
+    try {
+      const targetLabel = params.sceneIndices?.length
+        ? `${params.sceneIndices.length} 张`
+        : `${params.storyboard.length} 张`;
+      setFirstFramesProgress(`正在生成首帧 ${targetLabel}...`);
+
+      const res = await apiClient.post<{
+        sceneFrames: Record<number, { imageUrl: string; prompt: string; size?: string }>;
+        failed: number[];
+        creditsUsed: number;
+        creditsRefunded: number;
+      }>('/ai/video/generate-first-frames', {
+        storyboard: params.storyboard,
+        ratio: params.ratio || '16:9',
+        sceneIndices: params.sceneIndices,
+      });
+
+      if (!res.success) throw new Error(res.error || '首帧生成失败');
+
+      const { sceneFrames: newFrames, failed } = res.data!;
+
+      setSceneFrames((prev) => ({ ...prev, ...newFrames }));
+
+      if (failed.length > 0) {
+        setFirstFramesProgress(`${Object.keys(newFrames).length} 张成功，${failed.length} 张失败已退点`);
+      }
+
+      return { sceneFrames: newFrames, failed };
+    } catch (e: any) {
+      setError(e.message || '首帧生成失败');
+      throw e;
+    } finally {
+      setGeneratingFirstFrames(false);
+      setFirstFramesProgress('');
+    }
+  }, []);
+
   // ─── Merge video ───────────────────────────────────
   const mergeVideo = useCallback(async (params: MergeParams): Promise<{ videoUrl: string }> => {
     setMerging(true);
@@ -497,5 +592,10 @@ export function useVideoGeneration() {
     phase, storyboard, segments, mergedVideoUrl,
     error, setError,
     setPhase, setStoryboard, setSegments, setMergedVideoUrl,
+    // First-frame batch
+    generateFirstFramesBatch, generatingFirstFrames, firstFramesProgress,
+    sceneFrames, setSceneFrames,
+    // HyperFrames
+    generateHyperFrames, hyperframesGenerating, hyperframesVideoUrl,
   };
 }

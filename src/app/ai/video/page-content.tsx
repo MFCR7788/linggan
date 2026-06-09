@@ -130,8 +130,69 @@ function AIVideoContent() {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
 
   // ─── Step 3: 首帧生成 ─────────────────────────────────
-  const [sceneFrames, setSceneFrames] = useState<Record<number, string>>({});
-  const [generatingFrames, setGeneratingFrames] = useState<Set<number>>(new Set());
+  const [generatingFrameIndices, setGeneratingFrameIndices] = useState<Set<number>>(new Set());
+
+  // ─── HyperFrames 动态图形 ────────────────────────────
+  const [hfScript, setHfScript] = useState('');
+  const [hfStyle, setHfStyle] = useState<'product' | 'social' | 'slide'>('product');
+  const [hfGenerating, setHfGenerating] = useState(false);
+  const [hfVideoUrl, setHfVideoUrl] = useState<string | null>(null);
+  const [hfError, setHfError] = useState<string | null>(null);
+
+  const handleHyperFramesGenerate = async () => {
+    if (!hfScript.trim()) {
+      setToast({ message: '请输入脚本内容', type: 'error' });
+      return;
+    }
+    setHfGenerating(true);
+    setHfError(null);
+    setHfVideoUrl(null);
+    try {
+      const { videoUrl } = await generateHyperFrames({
+        script: hfScript.trim(),
+        style: hfStyle,
+      });
+      setHfVideoUrl(videoUrl);
+      setToast({ message: '动态图形视频生成完成', type: 'success' });
+    } catch (e: any) {
+      setHfError(e.message || '生成失败');
+      setToast({ message: e.message || '生成失败', type: 'error' });
+    } finally {
+      setHfGenerating(false);
+    }
+  };
+
+  const handleHfDownload = () => {
+    if (!hfVideoUrl) return;
+    const a = document.createElement('a');
+    a.href = hfVideoUrl;
+    a.download = `hyperframes_${Date.now()}.mp4`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleHfSave = async () => {
+    if (!hfVideoUrl) return;
+    try {
+      const res = await apiClient.post('/inspiration', {
+        type: 'video',
+        title: (hfScript || '动态图形').substring(0, 40),
+        original_text: hfScript,
+        media_urls: [hfVideoUrl],
+        source_platform: 'ai_hyperframes',
+        tags: ['AI生成', '动态图形'],
+      });
+      if (res.success) {
+        setToast({ message: '已保存到作品', type: 'success' });
+      } else {
+        setToast({ message: res.error || '保存失败', type: 'error' });
+      }
+    } catch {
+      setToast({ message: '保存失败', type: 'error' });
+    }
+  };
 
   useEffect(() => {
     if (editingSceneIndex !== null && editInputRef.current) {
@@ -152,7 +213,7 @@ function AIVideoContent() {
   const [genError, setGenError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const { generateStoryboard: genStoryboard, submitSegments: submitSegs, mergeVideo: mergeVid, cancelPolling, phase: hookPhase, segments: hookSegs, storyboard: hookStoryboard, mergedVideoUrl: hookMergedVideoUrl, error: hookError } = useVideoGeneration();
+  const { generateStoryboard: genStoryboard, submitSegments: submitSegs, mergeVideo: mergeVid, cancelPolling, phase: hookPhase, segments: hookSegs, storyboard: hookStoryboard, mergedVideoUrl: hookMergedVideoUrl, error: hookError, generateFirstFramesBatch, generatingFirstFrames, firstFramesProgress, sceneFrames, setSceneFrames, generateHyperFrames, hyperframesGenerating, hyperframesVideoUrl } = useVideoGeneration();
 
   // ─── 合并状态(Step 3 完成后用户点"合并") ───────────
   const [mergePhase, setMergePhase] = useState<'idle' | 'merging' | 'done' | 'error'>('idle');
@@ -301,13 +362,19 @@ function AIVideoContent() {
     const lastFrame = multiFrameMode && lastFrameUrl.trim() ? lastFrameUrl.trim() : undefined;
 
     try {
+      // 转换 sceneFrames 为纯 URL 映射
+      const sceneFrameUrls: Record<number, string> = {};
+      for (const [k, v] of Object.entries(sceneFrames)) {
+        if (v?.imageUrl) sceneFrameUrls[Number(k)] = v.imageUrl;
+      }
+
       // submitSegs handles POST + polling internally via the hook
       await submitSegs({
         storyboard,
         inspirations: selectedData,
         qualityTier,
         firstFrameUrl: firstFrameUrl || undefined,
-        sceneFrames,
+        sceneFrames: sceneFrameUrls,
         lastFrameUrl: lastFrame,
         extraFrameUrls,
         multiFrameMode,
@@ -407,32 +474,19 @@ function AIVideoContent() {
     setIsAutoSubtitling(false);
   };
 
-  // ─── 首帧生成：为单个分镜生成首帧图片 ──────────────
+  // ─── 首帧批量生成包装 ──────────────────────────────
 
-  const generateSceneFrame = async (sceneIndex: number, visualPrompt: string) => {
-    setGeneratingFrames((prev) => new Set(prev).add(sceneIndex));
+  const handleGenerateFrames = async (indices?: number[]) => {
+    const targetIndices = indices || storyboard.map((s) => s.index).filter((i) => !sceneFrames[i]);
+    if (targetIndices.length === 0) return;
+    setGeneratingFrameIndices(new Set(targetIndices));
     try {
-      const res = await apiClient.post<{ imageUrl: string } | { imageUrl: string }[]>('/ai/image', {
-        prompt: visualPrompt,
-        ratio: '16:9',
-        n: 1,
-      });
-      if (res.success && res.data) {
-        const url = Array.isArray(res.data) ? res.data[0]?.imageUrl : res.data.imageUrl;
-        if (url) {
-          setSceneFrames((prev) => ({ ...prev, [sceneIndex]: url }));
-        }
-      } else {
-        setToast({ message: `段${sceneIndex + 1} 首帧生成失败: ${res.error || '未知错误'}`, type: 'error' });
-      }
+      await generateFirstFramesBatch({ storyboard, sceneIndices: indices });
     } catch {
-      setToast({ message: `段${sceneIndex + 1} 首帧生成失败`, type: 'error' });
+      // error handled by hook
+    } finally {
+      setGeneratingFrameIndices(new Set());
     }
-    setGeneratingFrames((prev) => {
-      const next = new Set(prev);
-      next.delete(sceneIndex);
-      return next;
-    });
   };
 
   // ─── Step 4 完成后:合并视频 + BGM + 字幕 ───────────
@@ -950,6 +1004,118 @@ function AIVideoContent() {
       <PrimaryButton fullWidth size="lg" onClick={handleGenerateStoryboardV2} disabled={isGenerating || selectedInspirations.size === 0}>
         <Sparkles size={16} /> {isGenerating ? '生成中...' : 'AI 生成分镜'}
       </PrimaryButton>
+
+      {/* 动态图形 · HyperFrames Beta */}
+      <div className="mt-6 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12, textAlign: 'center', letterSpacing: 2 }}>
+          ── 或 ──
+        </p>
+      </div>
+
+      <GlassCard>
+        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+          <span style={{ color: '#A78BFA' }}>动态图形</span> · 文字动画视频
+          <span style={{
+            background: 'rgba(168,85,247,0.2)',
+            color: '#C4B5FD',
+            fontSize: 9,
+            fontWeight: 700,
+            padding: '2px 6px',
+            borderRadius: 6,
+            marginLeft: 8,
+            verticalAlign: 'middle',
+          }}>Beta</span>
+        </p>
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12, lineHeight: 1.5 }}>
+          输入脚本，AI 自动生成 HTML+GSAP 动画并渲染为竖屏视频。适合产品介绍、社交媒体、知识讲解。
+        </p>
+
+        {/* 风格选择 */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {([
+            { key: 'product' as const, label: '产品展示', icon: '✨', desc: '卖点弹入 + CTA' },
+            { key: 'social' as const, label: '社交媒体', icon: '🔥', desc: '大字报 · 快节奏' },
+            { key: 'slide' as const, label: '知识讲解', icon: '📚', desc: '逐页幻灯片' },
+          ]).map(({ key, label, icon, desc }) => (
+            <button
+              key={key}
+              onClick={() => setHfStyle(key)}
+              className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
+              style={{
+                background: hfStyle === key ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)',
+                border: hfStyle === key ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{icon}</span>
+              <span style={{ color: hfStyle === key ? '#C4B5FD' : '#E5E7EB', fontSize: 11, fontWeight: 600 }}>{label}</span>
+              <span style={{ color: '#9CA3AF', fontSize: 9 }}>{desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* 脚本输入 */}
+        <textarea
+          value={hfScript}
+          onChange={(e) => setHfScript(e.target.value)}
+          placeholder={'输入你的脚本内容，例如：\n\n"XX 品牌新品发布，主打轻薄续航卖点，\n目标用户是年轻白领女性，限时优惠中..."\n\nAI 会自动拆分为分镜并生成动画'}
+          rows={4}
+          className="w-full px-3 py-2.5 rounded-xl bg-transparent text-xs outline-none resize-none mb-3"
+          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+        />
+
+        {/* 生成按钮 */}
+        {!hfVideoUrl ? (
+          <button
+            onClick={handleHyperFramesGenerate}
+            disabled={hfGenerating || !hfScript.trim()}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
+            style={{
+              background: hfGenerating ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, #8B5CF6, #A855F7)',
+              color: '#FFFFFF',
+              opacity: (!hfScript.trim() || hfGenerating) ? 0.6 : 1,
+              boxShadow: '0 4px 20px rgba(139,92,246,0.3)',
+            }}
+          >
+            {hfGenerating ? (
+              <><Loader2 size={14} className="animate-spin" /> 渲染中...约 2 分钟</>
+            ) : (
+              <><Wand2 size={14} /> 生成动态图形 · {CREDIT_COSTS.ai_hyperframes.perVideo} 灵力</>
+            )}
+          </button>
+        ) : (
+          /* 生成完成 */
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-2 rounded-lg"
+              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+              <CheckCircle2 size={14} color="#22C55E" />
+              <span style={{ color: '#86EFAC', fontSize: 12 }}>生成完成</span>
+            </div>
+            <video src={hfVideoUrl} controls playsInline
+              className="w-full rounded-xl" style={{ background: '#000', maxHeight: 320 }} />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={handleHfDownload}
+                className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
+                <Download size={12} /> 下载
+              </button>
+              <button onClick={handleHfSave}
+                className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
+                style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#86EFAC' }}>
+                <FolderOpen size={12} /> 保存作品
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 错误提示 */}
+        {hfError && (
+          <div className="flex items-center gap-2 mt-2 p-2 rounded-lg"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <XCircle size={12} color="#EF4444" />
+            <span style={{ color: '#FCA5A5', fontSize: 11 }}>{hfError}</span>
+          </div>
+        )}
+      </GlassCard>
     </>
   );
 
@@ -1159,20 +1325,14 @@ function AIVideoContent() {
           </p>
           {storyboard.length > 0 && (
             <button
-              onClick={() => {
-                storyboard.forEach((scene) => {
-                  if (!sceneFrames[scene.index] && !generatingFrames.has(scene.index)) {
-                    generateSceneFrame(scene.index, scene.visualPrompt);
-                  }
-                });
-              }}
-              disabled={generatingFrames.size > 0}
+              onClick={() => handleGenerateFrames()}
+              disabled={generatingFrameIndices.size > 0}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
               style={{
                 background: 'rgba(245,158,11,0.15)',
                 border: '1px solid rgba(245,158,11,0.3)',
                 color: '#FCD34D',
-                opacity: generatingFrames.size > 0 ? 0.5 : 1,
+                opacity: generatingFrameIndices.size > 0 ? 0.5 : 1,
               }}
             >
               <Sparkles size={11} /> 全部生成
@@ -1182,10 +1342,16 @@ function AIVideoContent() {
         <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12 }}>
           首帧将作为图生视频的起始画面，不满意可重新生成
         </p>
+        {generatingFrameIndices.size > 0 && (
+          <p style={{ color: '#FCD34D', fontSize: 11, marginBottom: 12 }}>
+            <Loader2 size={11} className="inline animate-spin mr-1" />
+            正在生成首帧 {generatingFrameIndices.size} 张...
+          </p>
+        )}
         <div className="space-y-3">
           {storyboard.map((scene) => {
             const hasFrame = !!sceneFrames[scene.index];
-            const isGenerating = generatingFrames.has(scene.index);
+            const isGenerating = generatingFrameIndices.has(scene.index);
             return (
               <div key={scene.index}
                 className="p-3 rounded-xl"
@@ -1209,7 +1375,7 @@ function AIVideoContent() {
                 {hasFrame && (
                   <div className="mb-2 rounded-lg overflow-hidden"
                     style={{ border: '1px solid rgba(245,158,11,0.3)', aspectRatio: '16/9', maxHeight: 180 }}>
-                    <img src={sceneFrames[scene.index]} alt={`段${scene.index + 1} 首帧`}
+                    <img src={sceneFrames[scene.index]?.imageUrl} alt={`段${scene.index + 1} 首帧`}
                       className="w-full h-full object-cover" />
                   </div>
                 )}
@@ -1225,7 +1391,7 @@ function AIVideoContent() {
 
                 {/* 操作按钮 */}
                 <button
-                  onClick={() => generateSceneFrame(scene.index, scene.visualPrompt)}
+                  onClick={() => handleGenerateFrames([scene.index])}
                   disabled={isGenerating}
                   className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-xs transition-all"
                   style={{

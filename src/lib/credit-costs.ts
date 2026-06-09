@@ -72,6 +72,12 @@ export const CREDIT_COSTS = {
     perCall: 1,  // 单次 LLM 调用:分析/改写/提炼/加标点/字幕优化等
   },
 
+  // ─── HyperFrames 动态图形 ─────────────────────────────
+  // HTML+GSAP → Chrome 渲染 → 视频, 15 credits 覆盖 LLM+渲染+上传
+  ai_hyperframes: {
+    perVideo: 15,
+  },
+
   // ─── 视频后期 ────────────────────────────────────────
   ai_video_post: {
     merge: 5,       // FFmpeg 视频拼接 + BGM + 字幕
