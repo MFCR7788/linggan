@@ -1,6 +1,6 @@
 import { Home, BookOpen, Sparkles, TrendingUp, User, Plus } from "lucide-react";
 
-export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "ai-ads" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "schedule" | "profile-help" | "profile-settings" | "profile-integrations" | "profile-memory" | "profile-skills" | "schedule-detail";
+export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "ai-ads" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "agent" | "schedule" | "profile-help" | "profile-settings" | "profile-integrations" | "profile-memory" | "profile-skills" | "schedule-detail";
 
 interface BottomNavProps {
   activePage: PageKey;
@@ -10,7 +10,7 @@ interface BottomNavProps {
 const items = [
   { key: "home" as PageKey, label: "首页", Icon: Home },
   { key: "inspiration" as PageKey, label: "灵感库", Icon: BookOpen },
-  { key: "capture" as PageKey, label: "", Icon: Plus, isCapture: true },
+  { key: "agent" as PageKey, label: "", Icon: Plus, isCapture: true },
   { key: "ai" as PageKey, label: "AI创作", Icon: Sparkles },
   { key: "profile" as PageKey, label: "我的", Icon: User },
 ];

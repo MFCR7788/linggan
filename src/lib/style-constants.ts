@@ -74,6 +74,7 @@ export const PAGE_ROUTES: Record<string, string> = {
   profile: '/profile',
   notification: '/notification',
   capture: '/capture',
+  agent: '/agent',
   schedule: '/schedule',
   login: '/login',
   'ai-tts': '/ai/tts',

@@ -2047,3 +2047,192 @@ export async function getAvatarVideoStatus(videoId: string): Promise<{
     return { status: 'failed', error: e?.message || '网络错误' };
   }
 }
+
+// ====== Function Calling / Agent Tools 支持 ======
+
+interface ToolCallDelta {
+  index: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+/**
+ * 非流式 function calling — 发送带 tools 的请求到 DashScope
+ * 返回可能包含 tool_calls 或纯文本内容
+ */
+export async function callDeepSeekWithTools(
+  messages: ChatMessage[],
+  tools: Record<string, unknown>[],
+  options: ChatOptions = {}
+): Promise<{
+  message: {
+    role: 'assistant';
+    content: string | null;
+    tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+  };
+}> {
+  const apiKey = getDashScopeApiKey();
+  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
+
+  const body: Record<string, unknown> = {
+    model: options.model || 'deepseek-v3',
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 4096,
+    tools,
+    tool_choice: 'auto',
+  };
+
+  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  }, 120000);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DashScope tools call failed (${response.status}): ${error.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const choice = data?.choices?.[0];
+  const msg = choice?.message;
+
+  if (!msg) {
+    throw new Error(`DashScope tools unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+
+  return { message: msg };
+}
+
+/**
+ * 流式 function calling — 解析 SSE delta 中的 text 和 tool_calls
+ * 流式返回时可能返回 text delta 或 tool_call delta（不会同时）
+ */
+export async function* callDeepSeekStreamWithTools(
+  messages: ChatMessage[],
+  tools: Record<string, unknown>[],
+  options: ChatOptions = {}
+): AsyncGenerator<
+  | { type: 'text'; content: string }
+  | { type: 'tool_calls'; calls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> },
+  string,
+  unknown
+> {
+  const apiKey = getDashScopeApiKey();
+  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
+
+  const body: Record<string, unknown> = {
+    model: options.model || 'deepseek-v3',
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 4096,
+    tools,
+    tool_choice: 'auto',
+    stream: true,
+  };
+
+  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  }, 180000);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DeepSeek stream with tools failed: ${error.substring(0, 200)}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+  // 累积 tool_calls（流式时逐步到达）
+  const toolCallsMap = new Map<number, ToolCallDelta>();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (jsonStr === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const delta = parsed?.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          // 文本 delta
+          if (delta.content) {
+            fullContent += delta.content;
+            yield { type: 'text', content: delta.content };
+          }
+
+          // tool_call delta
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              const existing = toolCallsMap.get(idx) || { index: idx, id: undefined, function: undefined };
+              if (tc.id) existing.id = tc.id;
+              if (tc.function) {
+                if (!existing.function) existing.function = {};
+                if (tc.function.name) existing.function.name = (existing.function.name || '') + tc.function.name;
+                if (tc.function.arguments) existing.function.arguments = (existing.function.arguments || '') + tc.function.arguments;
+              }
+              toolCallsMap.set(idx, existing);
+            }
+          }
+        } catch { /* skip unparseable lines */ }
+      }
+    }
+
+    // 流结束后处理 buffer 残余
+    if (buffer.trim()) {
+      const trimmed = buffer.trim();
+      if (trimmed.startsWith('data:') && trimmed.slice(5).trim() !== '[DONE]') {
+        try {
+          const parsed = JSON.parse(trimmed.slice(5).trim());
+          const delta = parsed?.choices?.[0]?.delta;
+          if (delta?.content) {
+            fullContent += delta.content;
+            yield { type: 'text', content: delta.content };
+          }
+        } catch { /* skip */ }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // 如果有累积的 tool_calls，在最后 yield 出来
+  if (toolCallsMap.size > 0) {
+    const calls = Array.from(toolCallsMap.values())
+      .sort((a, b) => a.index - b.index)
+      .map((tc) => ({
+        id: tc.id || `call_${tc.index}`,
+        type: 'function' as const,
+        function: {
+          name: tc.function?.name || '',
+          arguments: tc.function?.arguments || '{}',
+        },
+      }));
+    yield { type: 'tool_calls', calls };
+  }
+
+  return fullContent;
+}

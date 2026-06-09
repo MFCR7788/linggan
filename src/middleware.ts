@@ -6,6 +6,7 @@ const protectedPaths = [
   '/home',
   '/ai',
   '/capture',
+  '/agent',
   '/hotspot',
   '/inspiration',
   '/schedule',
