@@ -28,6 +28,9 @@ export interface Message {
     suggestions?: string[];
   }>;
   timestamp: Date;
+  intent?: string;
+  _context?: { memoriesUsed?: number; inspirationsUsed?: number; knowledgeUsed?: number; webSearchUsed?: boolean; skillsMatched?: number };
+  _model?: string;
 }
 
 export interface AttachedFile {

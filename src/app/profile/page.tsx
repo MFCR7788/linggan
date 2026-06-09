@@ -109,7 +109,6 @@ function ProfileContent() {
       case 'profile-integrations': router.push('/profile/integrations'); break;
       case 'profile-memory': router.push('/profile/memory'); break;
       case 'profile-skills': router.push('/profile/skills'); break;
-      case 'ai-chat': router.push('/ai/chat'); break;
       case 'ai-ads': router.push('/ai/ads'); break;
       default: router.push('/home'); break;
     }

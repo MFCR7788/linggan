@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Mic, Image as ImageIcon, Video, Send, Sparkles, X,
   Clipboard, Check, Share2, Edit3, Trash, Volume2, RefreshCw,
   BookmarkPlus, Globe, Loader2, PenLine, ChevronDown,
-  Plus, History, FileText, Cpu, Maximize2, Minimize2, SquarePen
+  Plus, History, FileText, Cpu, Maximize2, Minimize2, SquarePen, Puzzle,
+  Hash, Brain, Lightbulb, Search
 } from "lucide-react";
 import { TopNav } from "@/components/TopNav";
 import { ProtectedRoute } from "@/components";
@@ -16,6 +17,7 @@ import { REWRITE_STYLES } from "./types";
 import { useSessionManager, useMessageActions, useVoiceRecording, useFileUpload } from "./hooks";
 import { ActionBtn, UserActions, AiActions, FloatingPlayer } from "./components";
 import { useToast } from "@/components/Toast";
+import { useSkills } from "@/hooks/use-skills";
 
 function formatScheduleTime(isoStr: string): string {
   const d = new Date(isoStr);
@@ -77,6 +79,61 @@ function CaptureContent() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // ====== 斜杠指令系统 ======
+  const OFFICIAL_COMMANDS = [
+    { command: '/xiaohongshu', label: '小红书文案优化', desc: '高互动率标题和正文', cat: 'writing' },
+    { command: '/douyin', label: '抖音脚本创作', desc: '3秒钩子和口播脚本', cat: 'social' },
+    { command: '/wechat', label: '公众号排版助手', desc: '排版和阅读体验优化', cat: 'writing' },
+    { command: '/seo', label: 'SEO 标题生成', desc: '搜索友好标题策略', cat: 'writing' },
+    { command: '/remix', label: '多平台改写', desc: '一稿多平台适配', cat: 'social' },
+    { command: '/hotspot', label: '热点追踪分析', desc: '事件脉络和创作角度', cat: 'analysis' },
+    { command: '/draw', label: 'AI 绘画提示词', desc: '5层 prompt 结构', cat: 'image' },
+    { command: '/storyboard', label: '视频分镜脚本', desc: '分镜表和拍摄法则', cat: 'video' },
+  ];
+  const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
+    show: false, filter: '', index: 0, pos: 0,
+  });
+  const { data: installedSkills } = useSkills({ action: 'installed' });
+  const availableCommands = useMemo(() => {
+    const seen = new Set(OFFICIAL_COMMANDS.map(c => c.command));
+    const list = [...OFFICIAL_COMMANDS];
+    if (installedSkills) {
+      for (const s of installedSkills) {
+        const cmd = `/${s.name}`;
+        if (!seen.has(cmd)) {
+          seen.add(cmd);
+          list.push({ command: cmd, label: s.displayName, desc: s.description?.slice(0, 20) || '', cat: s.category || '' });
+        }
+      }
+    }
+    return list;
+  }, [installedSkills]);
+  const filteredCommands = useMemo(() => {
+    if (!slashMenu.show) return [];
+    const f = slashMenu.filter.toLowerCase();
+    if (!f) return availableCommands;
+    return availableCommands.filter(c =>
+      c.command.toLowerCase().includes(f) ||
+      c.label.toLowerCase().includes(f)
+    );
+  }, [availableCommands, slashMenu]);
+
+  const selectSlashCommand = (cmd: typeof availableCommands[0]) => {
+    const ta = textareaRef.current;
+    const cursorPos = ta?.selectionStart || slashMenu.pos + 1;
+    const before = inputText.substring(0, slashMenu.pos);
+    const after = inputText.substring(cursorPos);
+    setInputText(before + cmd.command + ' ' + after);
+    setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+    setTimeout(() => ta?.focus(), 0);
+    // 将光标定位到插入文本之后
+    const newPos = slashMenu.pos + cmd.command.length + 1;
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (ta) { ta.selectionStart = newPos; ta.selectionEnd = newPos; }
+    }, 50);
+  };
 
   // 按住说话:recording 录音中,willCancel 上滑到取消区松手即取消
   const [holdState, setHoldState] = useState<'idle' | 'recording' | 'willCancel'>('idle');
@@ -471,6 +528,9 @@ function CaptureContent() {
         schedule: data.schedule || undefined,
         schedules: scheduleData,
         linkFetchFailed,  // SPA/反爬 抓不到正文时显示"建议贴正文"提示
+        intent: data.intent || data._intent,
+        _context: data._context,
+        _model: data._model,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
@@ -841,6 +901,55 @@ function CaptureContent() {
                             粘贴全文获得更精准的分析
                           </button>
                         </span>
+                      </div>
+                    )}
+                    {/* 意图 + 上下文 */}
+                    {msg.type === 'ai' && (
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                        {msg.intent && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                            <Hash size={9} />
+                            {msg.intent === 'writing' ? '文案创作' :
+                             msg.intent === 'knowledge' ? '知识问答' :
+                             msg.intent === 'image' ? '图片生成' :
+                             msg.intent === 'video' ? '视频生成' :
+                             msg.intent === 'coding' ? '编程' :
+                             msg.intent === 'creative' ? '创意策划' :
+                             msg.intent}
+                          </span>
+                        )}
+                        {msg._context && ((msg._context.memoriesUsed ?? 0) > 0 || (msg._context.inspirationsUsed ?? 0) > 0 || (msg._context.knowledgeUsed ?? 0) > 0) ? (
+                          <>
+                            {(msg._context.memoriesUsed ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                <Brain size={10} />记忆
+                              </span>
+                            )}
+                            {(msg._context.inspirationsUsed ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                <Lightbulb size={10} />{msg._context.inspirationsUsed}
+                              </span>
+                            )}
+                            {(msg._context.knowledgeUsed ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                <Search size={10} />{msg._context.knowledgeUsed}
+                              </span>
+                            )}
+                          </>
+                        ) : null}
+                        {msg._context?.webSearchUsed && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
+                            <Globe size={10} />联网
+                          </span>
+                        )}
+                        {(msg._context?.skillsMatched ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.2)' }}>
+                            <Puzzle size={10} />技能
+                          </span>
+                        )}
+                        {msg._model && (
+                          <span style={{ color: '#6B7280', fontSize: 10 }}>{msg._model}</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1236,7 +1345,7 @@ function CaptureContent() {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 relative">
             {attachedFiles.length > 0 && (
               <div className="flex gap-2 overflow-x-auto">
                 {attachedFiles.map(af => (
@@ -1256,6 +1365,39 @@ function CaptureContent() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+            {/* 斜杠指令下拉 */}
+            {slashMenu.show && (
+              <div
+                className="absolute bottom-full left-3 right-3 mb-2 rounded-xl overflow-hidden z-50 max-h-[260px] overflow-y-auto"
+                style={{ background: 'rgba(15,23,42,0.98)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)' }}
+              >
+                {filteredCommands.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p style={{ color: '#6B7280', fontSize: 12 }}>没有匹配的技能指令</p>
+                  </div>
+                ) : (
+                  filteredCommands.map((cmd, i) => (
+                    <button
+                      key={cmd.command}
+                      onClick={() => selectSlashCommand(cmd)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors"
+                      style={{ background: i === slashMenu.index ? 'rgba(59,130,246,0.1)' : 'transparent' }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'rgba(59,130,246,0.15)' }}
+                      >
+                        <Puzzle size={14} color="#93C5FD" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600 }}>{cmd.command}</p>
+                        <p style={{ color: '#6B7280', fontSize: 11 }} className="truncate">{cmd.label} — {cmd.desc}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
               </div>
             )}
             <div className="flex items-end gap-1.5">
@@ -1316,8 +1458,46 @@ function CaptureContent() {
                 <textarea
                   ref={textareaRef}
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInputText(val);
+                    // 检测斜杠指令
+                    const cursor = e.target.selectionStart || 0;
+                    const textBefore = val.substring(0, cursor);
+                    const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
+                    if (slashMatch) {
+                      const slashPos = textBefore.lastIndexOf('/');
+                      setSlashMenu({ show: true, filter: slashMatch[1], index: 0, pos: slashPos });
+                    } else {
+                      setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // 斜杠菜单导航
+                    if (slashMenu.show && filteredCommands.length > 0) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setSlashMenu(prev => ({ ...prev, index: Math.min(prev.index + 1, filteredCommands.length - 1) }));
+                        return;
+                      }
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setSlashMenu(prev => ({ ...prev, index: Math.max(prev.index - 1, 0) }));
+                        return;
+                      }
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        selectSlashCommand(filteredCommands[slashMenu.index]);
+                        return;
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+                        return;
+                      }
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+                  }}
                   onPaste={async (e) => {
                     const items = e.clipboardData?.items;
                     if (!items) return;
@@ -1334,7 +1514,7 @@ function CaptureContent() {
                       }
                     }
                   }}
-                  placeholder={attachedFiles.length > 0 ? "添加描述..." : "输入消息..."}
+                  placeholder={attachedFiles.length > 0 ? "添加描述..." : "输入消息，输入 / 选择技能指令..."}
                   className="w-full px-3.5 py-2 bg-gray-800 rounded-2xl text-white placeholder-gray-500 resize-none outline-none text-sm leading-relaxed"
                   rows={1}
                   style={{ minHeight: '40px', maxHeight: '160px' }}
