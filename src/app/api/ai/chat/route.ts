@@ -428,28 +428,74 @@ export const POST = withAuth(async ({ request, user }) => {
       console.warn('[V2] 上下文检索失败:', e);
     }
 
-    // ====== V2.0: 技能上下文（已安装 + 官方技能） ======
+    // ====== V2.0: 技能匹配（精准匹配 1 个，支持 /技能名 指定） ======
     let skillsBlock = '';
     let skillsMatched = 0;
     try {
       const hub = new SkillsHub({ userId: user.id });
       await hub.initialize();
-      const installedIds = await hub.registry.getInstalledSkillIds(user.id);
-      const allSkills = hub.registry.getAll();
-      const activeSkills = allSkills.filter(
-        s => installedIds.includes(s.id) || s.visibility === 'official'
-      );
-      if (activeSkills.length > 0) {
+
+      // 斜杠指令别名 — 让用户用简短名称强制指定技能
+      const SLASH_ALIASES: Record<string, string> = {
+        xiaohongshu: 'xiaohongshu-optimizer',
+        douyin: 'douyin-script',
+        wechat: 'wechat-formatter',
+        seo: 'seo-title-gen',
+        remix: 'cross-platform',
+        hotspot: 'hotspot-analyzer',
+        draw: 'ai-image-prompt',
+        storyboard: 'video-storyboard',
+      };
+
+      let targetSkill: import('@/lib/assistant/types').SkillDefinition | null = null;
+
+      // 1. 检测 /技能名 斜杠指令
+      const slashMatch = effectiveContent.match(/^\/(\S+)/);
+      if (slashMatch) {
+        const cmd = slashMatch[1].toLowerCase();
+        // 先查别名，再查原始 name
+        const resolvedName = SLASH_ALIASES[cmd] || cmd;
+        const allSkills = hub.registry.getAll();
+        targetSkill = allSkills.find(
+          s => s.name.toLowerCase() === resolvedName
+        ) ?? null;
+        if (targetSkill) {
+          console.log(`[技能] 斜杠指令 /${cmd} → ${targetSkill.displayName}`);
+        }
+      }
+
+      // 2. 无斜杠指令 → 语义匹配最相关的 1 个技能
+      if (!targetSkill) {
+        const matches = hub.matchSkills(effectiveContent, 1);
+        if (matches.length > 0 && matches[0].score >= 0.2) {
+          targetSkill = matches[0].skill;
+          console.log(`[技能] 自动匹配: ${targetSkill.displayName} (score=${matches[0].score.toFixed(2)})`);
+        }
+      }
+
+      // 3. 构建技能块（仅注入匹配到的 1 个技能，完整 prompt）
+      if (targetSkill) {
         skillsBlock = [
-          '<available-skills>',
-          '以下是你可以使用的专业技能。根据用户的需求，自动选择并应用最相关的技能指令来完成任务：',
+          `<active-skill id="${targetSkill.name}" name="${targetSkill.displayName}">`,
+          '请严格遵循以下技能指令来完成用户的请求：',
           '',
-          ...activeSkills.map(s =>
-            `<skill id="${s.name}" name="${s.displayName}">\n${s.promptTemplate.slice(0, 1000)}\n</skill>`
-          ),
-          '</available-skills>',
+          targetSkill.promptTemplate,
+          '</active-skill>',
         ].join('\n');
-        skillsMatched = activeSkills.length;
+        skillsMatched = 1;
+
+        // 构建可用指令列表供 AI 向用户建议
+        const allInstalled = hub.registry.getAll().filter(
+          s => hub.installedSkillIds.includes(s.id) || s.visibility === 'official'
+        );
+        if (allInstalled.length > 0) {
+          const cmdList = allInstalled.map(s => {
+            const alias = Object.entries(SLASH_ALIASES).find(([, v]) => v === s.name)?.[0];
+            return alias ? `/${alias}` : `/${s.name}`;
+          }).join(' ');
+          skillsBlock += `\n\n<available-commands>\n用户可用的技能指令：${cmdList}\n在对话中可以向用户建议使用这些指令来精准激活技能。\n</available-commands>`;
+        }
+
         if (contextStats) contextStats.skillsMatched = skillsMatched;
       }
     } catch (e) {
