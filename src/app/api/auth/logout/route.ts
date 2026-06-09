@@ -54,8 +54,13 @@ async function clearSession(request: NextRequest) {
     `sb-${ref}-auth-token-code-verifier`,
   ]) {
     cookieStore.set(name, '', { path: '/', maxAge: 0 });
-    // 也尝试清除 secure cookie（生产环境可能设了 secure flag）
     cookieStore.set(name, '', { path: '/', maxAge: 0, secure: true });
+  }
+
+  // 清除 GoTrue 降级 JWT cookie（login-with-code 在 GoTrue 故障时设置的）
+  for (const name of ['lingji_auth_token', 'lingji_auth_user_id']) {
+    cookieStore.set(name, '', { path: '/', maxAge: 0 });
+    cookieStore.set(name, '', { path: '/', maxAge: 0, httpOnly: true, secure: true });
   }
 }
 
