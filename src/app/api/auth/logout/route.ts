@@ -48,7 +48,10 @@ async function clearSession(request: NextRequest) {
 export async function GET(request: NextRequest) {
   await clearSession(request);
   const redirect = request.nextUrl.searchParams.get('redirect') || '/login';
-  return NextResponse.redirect(new URL(redirect, request.url));
+  // 用 x-forwarded-host/x-forwarded-proto 构造正确的外部 URL，避免反代后重定向到 localhost
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+  const proto = request.headers.get('x-forwarded-proto') || 'https';
+  return NextResponse.redirect(new URL(redirect, `${proto}://${host}`));
 }
 
 // fetch 式登出：兼容旧调用方式（fetch 不处理 Set-Cookie，建议前端用导航方式）
