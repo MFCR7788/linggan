@@ -13,7 +13,7 @@ import { useUser } from '@/hooks/use-user';
 import { ProtectedRoute } from '@/components';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { supabase } from '@/lib/supabase';
+
 
 interface UserStats {
   inspirationCount: number;
@@ -108,22 +108,16 @@ function ProfileContent() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      // 服务端清除 SSR httpOnly session cookies
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {}
-    try {
-      // 浏览器端清除 localStorage session
-      await supabase.auth.signOut();
-    } catch {}
+  const handleLogout = () => {
+    // 先清除客户端本地状态
     if (typeof window !== 'undefined') {
       localStorage.removeItem('dev_user');
       document.cookie = 'dev_user_id=; path=/; max-age=0';
       document.cookie = 'dev_auth_secret=; path=/; max-age=0';
     }
-    // 强制完整刷新以清除 React Query 缓存，避免登录页瞬间检测到旧 user 数据跳回首页
-    window.location.href = '/login';
+    // 导航到服务端 logout 端点：由服务端清除 httpOnly Supabase cookie
+    // 使用页面导航而非 fetch，确保浏览器正确处理 Set-Cookie 响应头
+    window.location.href = '/api/auth/logout?redirect=/login';
   };
 
   const displayName = user?.username || user?.phone || '创作者';
