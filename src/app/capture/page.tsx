@@ -18,6 +18,7 @@ import { useSessionManager, useMessageActions, useVoiceRecording, useFileUpload 
 import { ActionBtn, UserActions, AiActions, FloatingPlayer } from "./components";
 import { useToast } from "@/components/Toast";
 import { useSkills } from "@/hooks/use-skills";
+import { apiClient } from "@/lib/api-client";
 
 function formatScheduleTime(isoStr: string): string {
   const d = new Date(isoStr);
@@ -222,13 +223,11 @@ function CaptureContent() {
         const videoFormData = new FormData();
         videoFormData.append('file', file);
         videoFormData.append('type', 'video');
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: videoFormData });
-        const uploadData = await uploadRes.json();
+        const uploadData: any = await apiClient.upload('/upload', videoFormData);
         const videoUrl = uploadData.data?.url || '';
 
         const chatBody: any = { content: '请分析这个视频内容，描述你看到了什么，给出有价值的见解。', videos: videoUrl ? [videoUrl] : [], session_id: currentSessionId, model: selectedModel };
-        const chatRes = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatBody) });
-        const chatData = await chatRes.json();
+        const chatData: any = await apiClient.post('/ai/chat', chatBody);
 
         const aiMsg: Message = {
           id: (Date.now() + 1).toString(),
@@ -260,8 +259,7 @@ function CaptureContent() {
 
     const timer = setInterval(async () => {
       try {
-        const res = await fetch(`/api/ai/chat?action=video_status&taskId=${taskId}`);
-        const data = await res.json();
+        const data: any = await apiClient.get(`/ai/chat?action=video_status&taskId=${taskId}`);
         if (!data.success) return;
 
         setMessages(prev => prev.map(m => {
@@ -306,11 +304,7 @@ function CaptureContent() {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMsg.content, images: imgUrls, session_id: currentSessionId, model: selectedModel }),
-      });
-      const data = await res.json();
+      const data: any = await apiClient.post('/ai/chat', { content: userMsg.content, images: imgUrls, session_id: currentSessionId, model: selectedModel });
       const aiContent = data.response || '已生成';
 
       const aiMsg: Message = {
@@ -389,12 +383,7 @@ function CaptureContent() {
     setIsRewriting(true);
 
     try {
-      const res = await fetch('/api/ai/rewrite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text, style }),
-      });
-      const data = await res.json();
+      const data: any = await apiClient.post('/ai/rewrite', { content: text, style });
       if (data.success && data.response) {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -479,11 +468,7 @@ function CaptureContent() {
         .trim();
       if (!searchQuery || searchQuery.length < 2) searchQuery = text;
       try {
-        const searchRes = await fetch('/api/ai/search', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: searchQuery }),
-        });
-        const searchData = await searchRes.json();
+        const searchData: any = await apiClient.post('/ai/search', { query: searchQuery });
         if (searchData.success && searchData.results.length > 0) searchResults = searchData.results;
       } catch { /* ignore */ } finally {
         setIsSearching(false);
@@ -492,11 +477,7 @@ function CaptureContent() {
 
     // 调用 AI
     try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: contentText, images: uploadedImages.map(img => img.url), documents: uploadedDocs.map(d => d.url), searchResults, session_id: currentSessionId, model: selectedModel }),
-      });
-      const data = await res.json();
+      const data: any = await apiClient.post('/ai/chat', { content: contentText, images: uploadedImages.map(img => img.url), documents: uploadedDocs.map(d => d.url), searchResults, session_id: currentSessionId, model: selectedModel });
       const aiContent = data.response || data.summary || data.title || '已收到';
       const linkFetchFailed = !!data.linkFetchFailed;  // 后端 SPA/反爬 抓不到正文
 
@@ -506,12 +487,7 @@ function CaptureContent() {
       if (!scheduleData) {
         // AI 可能没返回日程结构（如 life 意图），把 AI 分析也传给 extract-schedule 以提取详细信息
         try {
-          const extractRes = await fetch('/api/ai/extract-schedule', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, aiResponse: aiContent }),
-          });
-          const extractData = await extractRes.json();
+          const extractData: any = await apiClient.post('/ai/extract-schedule', { text, aiResponse: aiContent });
           if (extractData.success && extractData.schedules?.length > 0) {
             scheduleData = extractData.schedules;
           }
@@ -622,12 +598,7 @@ function CaptureContent() {
         const userMsg = messages.find(m => m.type === 'user' && m.id < msg.id && !messages.some(mm => mm.type === 'ai' && mm.id > m.id && mm.id < msg.id));
         if (userMsg) {
           try {
-            const extractRes = await fetch('/api/ai/extract-schedule', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: userMsg.content, aiResponse: result.content }),
-            });
-            const extractData = await extractRes.json();
+            const extractData: any = await apiClient.post('/ai/extract-schedule', { text: userMsg.content, aiResponse: result.content });
             if (extractData.success && extractData.schedules?.length > 0) {
               schedules = extractData.schedules;
             }

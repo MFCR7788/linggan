@@ -1,7 +1,7 @@
 // AI Services — 百炼 DashScope 统一（DeepSeek / Qwen / Wan / CosyVoice）
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
-import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken, getHappyHorseApiKey, getHeyGenApiKey, getDoubaoEndpointId, getEnv } from './runtime-config';
+import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken, getHappyHorseApiKey, getHeyGenApiKey, getDoubaoEndpointId, getOpenRouterApiKey, getEnv } from './runtime-config';
 
 // 通用 fetch 超时包装
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
@@ -13,6 +13,38 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   } finally {
     clearTimeout(timer);
   }
+}
+
+// DashScope chat completions 共享调用 — 消除 callDeepSeek/callQwen/callDoubaoChat 重复代码
+const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+
+async function dashScopeChat(
+  body: Record<string, unknown>,
+  timeoutMs = 90000
+): Promise<{ choices: { message: { content: string } }[] }> {
+  const apiKey = getDashScopeApiKey();
+  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
+
+  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  }, timeoutMs);
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DashScope chat failed (${response.status}): ${error.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') {
+    throw new Error(`DashScope unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
+  return data;
 }
 
 // ====== Types ======
@@ -61,11 +93,6 @@ export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) {
-    throw new Error('DASHSCOPE_API_KEY is not configured');
-  }
-
   const body: Record<string, unknown> = {
     model: options.model || 'deepseek-v3',
     messages: [
@@ -77,27 +104,8 @@ export async function callDeepSeek(
   };
   if (options.enableSearch) body.enable_search = true;
 
-  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, 90000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('DeepSeek API error:', error);
-    throw new Error(`DeepSeek API call failed: ${error.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    throw new Error(`DeepSeek returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-  }
-  return content;
+  const data = await dashScopeChat(body);
+  return data.choices[0].message.content;
 }
 
 // DeepSeek 流式输出（异步生成器，逐块 yield 文本）
@@ -200,47 +208,20 @@ export async function callQwen(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) {
-    throw new Error('DASHSCOPE_API_KEY is not configured');
-  }
-
-  // 验证并规范化模型名称
   const validQwenModels = ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-vl-plus', 'qwen-vl-max', 'qwen3.7-max'];
   let modelName = options.model || 'qwen-plus';
-  
-  // 如果模型名称不在有效列表中，使用默认值
   if (!validQwenModels.includes(modelName)) {
     console.warn(`Invalid model name "${modelName}", falling back to "qwen-plus"`);
     modelName = 'qwen-plus';
   }
 
-  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: modelName,
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2000,
-    }),
-  }, 90000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('DashScope API error:', error);
-    throw new Error('DashScope API call failed');
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    throw new Error(`DashScope returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-  }
-  return content;
+  const data = await dashScopeChat({
+    model: modelName,
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+  });
+  return data.choices[0].message.content;
 }
 
 // ====== 百炼 Qwen API（替代原 Doubao/ARK） ======
@@ -257,23 +238,42 @@ export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) {
-    throw new Error('DASHSCOPE_API_KEY is not configured');
-  }
-
   const rawModel = options.model || getDoubaoEndpointId() || 'doubao-seed-2.0-241215';
   const model = mapDoubaoModel(rawModel);
 
-  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+  const data = await dashScopeChat({
+    model,
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+  }, 120000);
+  return data.choices[0].message.content;
+}
+
+// ====== OpenRouter — 第二供应商，作为 DashScope 的兜底 ======
+
+export async function callOpenRouter(
+  prompt: string,
+  options: ChatOptions = {}
+): Promise<string> {
+  const apiKey = getOpenRouterApiKey();
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
+
+  const model = options.model || 'anthropic/claude-sonnet-4';
+  const response = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://ai.zjsifan.com',
+      'X-Title': '灵集 LingJi',
     },
     body: JSON.stringify({
       model,
-      messages,
+      messages: [
+        { role: 'system', content: '你是一个专业的中文内容创作助手。' },
+        { role: 'user', content: prompt },
+      ],
       temperature: options.temperature ?? 0.7,
       max_tokens: options.maxTokens ?? 2000,
     }),
@@ -281,14 +281,13 @@ export async function callDoubaoChat(
 
   if (!response.ok) {
     const error = await response.text();
-    console.error('Qwen (百炼) API error:', error);
-    throw new Error(`Qwen API call failed: ${error.substring(0, 200)}`);
+    throw new Error(`OpenRouter API error (${response.status}): ${error.substring(0, 200)}`);
   }
 
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string') {
-    throw new Error(`Qwen returned unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+    throw new Error(`OpenRouter unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
   }
   return content;
 }

@@ -117,6 +117,38 @@ class ApiClient {
       body: data ? JSON.stringify(data) : undefined,
     });
   }
+
+  /** 文件上传（FormData，不设置 Content-Type 让浏览器自动处理） */
+  public async upload<T>(
+    endpoint: string,
+    formData: FormData
+  ): Promise<ApiResponse<T>> {
+    syncDevAuthCookie();
+    const url = `${this.baseUrl}${endpoint}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { ...getDevUserIdHeader() },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || `上传失败: ${response.status}`,
+          code: data.code,
+          data: data.data,
+        };
+      }
+      return data;
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "网络请求失败",
+      };
+    }
+  }
 }
 
 export const apiClient = new ApiClient();

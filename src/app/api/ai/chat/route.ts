@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callDeepSeek, callDeepSeekStream, callDoubaoChat, callQwen, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
+import { callDeepSeek, callDeepSeekStream, callDoubaoChat, callQwen, callOpenRouter, generateImage, submitVideoTask, callDoubaoVision, getVideoTaskStatus, fetchWeather } from '@/lib/ai-services';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
-import { extractTextFromBuffer } from '@/lib/extract/document-extractor';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
+import { isLinkInput, normalizeUrl, analyzeLink, extractDocuments, type LinkContext } from '@/lib/assistant/chat-helpers';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
 import { detectIntent, buildPrompt, LINGJI_IDENTITY, GEN_JSON_TEMPLATE } from '@/lib/assistant';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
@@ -14,6 +14,7 @@ import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provid
 import { WebSearchProvider } from '@/lib/assistant/knowledge/web-search-provider';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { extractMemories } from '@/lib/assistant/memory/extractor';
+import { compressHistory, buildCompressedMessages } from '@/lib/assistant/context-compressor';
 import { SkillsHub } from '@/lib/assistant/skills/hub';
 import type { DetectedIntent, IntentType, GenType } from '@/lib/assistant';
 
@@ -198,8 +199,9 @@ export const POST = withAuth(async ({ request, user }) => {
       throw e;
     }
 
-    // 加载历史消息作为上下文
+    // 加载历史消息作为上下文，长对话自动压缩
     let historyMessages: { role: 'user' | 'assistant'; content: string }[] = [];
+    let historySummary = '';
     if (session_id) {
       try {
         const supabase = createAdminClient();
@@ -210,15 +212,20 @@ export const POST = withAuth(async ({ request, user }) => {
           .eq('user_id', user.id)
           .order('created_at', { ascending: true });
         if (prevMessages) {
-          // 限制最近 20 轮对话（40 条消息），防止超长会话撑爆上下文窗口
           const MAX_HISTORY = 40;
-          const trimmed = prevMessages.length > MAX_HISTORY
-            ? prevMessages.slice(-MAX_HISTORY)
-            : prevMessages;
-          historyMessages = trimmed.map(m => ({
+          const allMessages = prevMessages.map(m => ({
             role: m.type === 'user' ? 'user' as const : 'assistant' as const,
             content: m.content,
           }));
+
+          // 超过阈值时压缩较早的消息
+          const { compressedSummary, recentMessages, wasCompressed } = await compressHistory(allMessages);
+          if (wasCompressed) {
+            historySummary = compressedSummary;
+          }
+          historyMessages = recentMessages.length > MAX_HISTORY
+            ? recentMessages.slice(-MAX_HISTORY)
+            : recentMessages;
         }
       } catch (e) {
         console.warn('加载历史消息失败:', e);
@@ -226,115 +233,16 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     // ====== Layer 1: 链接检测与路由 ======
-    const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
-    const isLink = !hasImages && !hasVideos && !hasDocuments && (
-      urlPattern.test(content.trim()) || content.trim().startsWith('http') || content.trim().startsWith('www.')
-    );
-
-    let linkContext: {
-      linkType: 'article' | 'image' | 'video';
-      title: string;
-      extractedContent: string;
-      mediaUrl?: string;
-      tags: string[];
-      sourceUrl: string;
-      sourcePlatform: string;
-      transcript?: string;
-    } | null = null;
-
-    if (isLink) {
-      const normalizedUrl = content.trim().startsWith('http') ? content.trim() : `https://${content.trim()}`;
-      const hostname = normalizedUrl.replace('https://', '').replace('http://', '').split('/')[0];
-      const platformMap: Record<string, string> = {
-        weibo: '微博', zhihu: '知乎', xiaohongshu: '小红书',
-        douyin: '抖音', bilibili: 'B站',
-      };
-      const sourcePlatform = Object.entries(platformMap).find(([k]) => hostname.includes(k))?.[1] || hostname;
-
-      try {
-        const linkRes = await fetch(new URL('/api/ai/analyze-link', request.url).toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: normalizedUrl }),
-        });
-        const linkData = await linkRes.json();
-
-        linkContext = {
-          linkType: linkData.linkType || 'article',
-          title: linkData.title || '链接内容',
-          extractedContent: linkData.summary || linkData.keyPoints?.join('；') || '',
-          mediaUrl: linkData.mediaUrl,
-          tags: linkData.tags || [],
-          sourceUrl: normalizedUrl,
-          sourcePlatform,
-          transcript: linkData.transcript || undefined,
-        };
-        console.log(`[链接] 类型=${linkContext.linkType} 平台=${sourcePlatform}`);
-      } catch (e) {
-        console.warn('链接分析失败，降级为文本处理:', e);
-      }
-    }
+    const isLink = !hasImages && !hasVideos && !hasDocuments && isLinkInput(content);
+    const linkContext: LinkContext | null = isLink
+      ? await analyzeLink(request.url, normalizeUrl(content))
+      : null;
 
     // ====== 文档附件抽取 ======
-    let documentContext: string[] = [];
-    if (hasDocuments) {
-      const supabase = createAdminClient();
-      const mimeMap: Record<string, string> = {
-        pdf: 'application/pdf',
-        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        txt: 'text/plain',
-        md: 'text/markdown',
-      };
-      for (const docUrl of documents) {
-        try {
-          // 校验 URL 格式和来源
-          if (typeof docUrl !== 'string' || docUrl.length > 500) {
-            console.warn(`无效的文档 URL: ${docUrl}`);
-            continue;
-          }
-          // 从 Supabase 公网 URL 中提取 bucket 和路径，并校验所属用户
-          const url = new URL(docUrl as string);
-          // 只允许从自身 Supabase storage 域名下载
-          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-          if (supabaseUrl && !url.hostname.includes(new URL(supabaseUrl).hostname)) {
-            console.warn(`拒绝非 Supabase storage 域名: ${url.hostname}`);
-            continue;
-          }
-          const parts = url.pathname.split('/').filter(Boolean);
-          // pathname 格式: /storage/v1/object/public/<bucket>/<path>
-          const publicIdx = parts.indexOf('public');
-          if (publicIdx === -1 || publicIdx + 2 >= parts.length) {
-            console.warn(`无法解析文档 URL: ${docUrl}`);
-            continue;
-          }
-          const bucket = parts[publicIdx + 1];
-          const storagePath = parts.slice(publicIdx + 2).join('/');
-          // 校验路径必须属于当前用户
-          if (!storagePath.startsWith(`${user.id}/`)) {
-            console.warn(`拒绝访问其他用户的文件: ${storagePath} (user: ${user.id})`);
-            continue;
-          }
-          const ext = storagePath.split('.').pop()?.toLowerCase() || '';
-          const mimeType = mimeMap[ext];
-          if (!mimeType) continue;
-
-          const { data, error } = await supabase.storage.from(bucket).download(storagePath);
-          if (error || !data) {
-            console.warn(`文档下载失败 (${docUrl}):`, error);
-            continue;
-          }
-          const arrayBuffer = await data.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const result = await extractTextFromBuffer(buffer, mimeType);
-          if (result.text) {
-            const label = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : ext.toUpperCase();
-            documentContext.push(`[${label} 文档内容]\n${result.text}`);
-          }
-        } catch (e) {
-          console.warn(`文档抽取失败 (${docUrl}):`, e);
-        }
-      }
-    }
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const documentContext: string[] = hasDocuments && supabaseUrl
+      ? await extractDocuments(documents, user.id, supabaseUrl)
+      : [];
 
     // ====== 意图检测 ======
     let intent: DetectedIntent;
@@ -532,7 +440,8 @@ export const POST = withAuth(async ({ request, user }) => {
     const { systemPrompt: baseSystemPrompt, userPrompt: baseUserPrompt, requiresJSON } = buildPrompt(intent, effectiveContent);
 
     // V2.0: 注入记忆和知识上下文到 System Prompt
-    const systemPrompt = [memoryBlock, knowledgeBlock, skillsBlock, baseSystemPrompt]
+    const summaryBlock = historySummary ? `<conversation-summary>\n${historySummary}\n</conversation-summary>` : '';
+    const systemPrompt = [summaryBlock, memoryBlock, knowledgeBlock, skillsBlock, baseSystemPrompt]
       .filter(Boolean)
       .join('\n\n---\n\n');
 
@@ -851,7 +760,7 @@ ${forecastText}
 
     if (selectedModel && selectedModel !== 'auto') {
       // 手动指定模型，先验证模型名称
-      const validModels = ['deepseek', 'doubao', 'qwen-plus', 'qwen-vl-plus', 'qwen-turbo', 'qwen-max', 'qwen3.7-max'];
+      const validModels = ['deepseek', 'doubao', 'qwen-plus', 'qwen-vl-plus', 'qwen-turbo', 'qwen-max', 'qwen3.7-max', 'openrouter'];
       const normalizedModel = validModels.includes(selectedModel) ? selectedModel : 'qwen-plus';
       
       // 手动指定模型
@@ -863,6 +772,7 @@ ${forecastText}
         'qwen-turbo': () => callQwen(messages, { model: 'qwen-turbo', temperature: 0.7, maxTokens: genMaxTokens }),
         'qwen-max': () => callQwen(messages, { model: 'qwen-max', temperature: 0.7, maxTokens: genMaxTokens }),
         'qwen3.7-max': () => callQwen(messages, { model: 'qwen3.7-max', temperature: 0.7, maxTokens: genMaxTokens }),
+        'openrouter': () => callOpenRouter(messages[messages.length - 1].content as string, { temperature: 0.7, maxTokens: genMaxTokens }),
       };
       const fallback = () => callQwen(messages, { model: 'qwen-plus', temperature: 0.7, maxTokens: genMaxTokens });
 
@@ -889,11 +799,15 @@ ${forecastText}
             maxTokens: genMaxTokens,
           }));
         if (!ok) {
-          await tryModel('doubao', () =>
+          const ok2 = await tryModel('doubao', () =>
             callDoubaoChat(messages, {
               temperature: 0.7,
               maxTokens: genMaxTokens,
             }));
+          if (!ok2) {
+            await tryModel('openrouter', () =>
+              callOpenRouter(messages[messages.length - 1].content as string, { temperature: 0.7, maxTokens: genMaxTokens }));
+          }
         }
       }
     }

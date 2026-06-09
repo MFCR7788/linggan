@@ -67,4 +67,8 @@ export function getDoubaoEndpointId(): string | undefined {
   return getEnv('DOUBAO_ENDPOINT_ID');
 }
 
+export function getOpenRouterApiKey(): string | undefined {
+  return getEnv('OPENROUTER_API_KEY');
+}
+
 export { getEnv };
