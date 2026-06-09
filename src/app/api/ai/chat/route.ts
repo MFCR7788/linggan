@@ -14,6 +14,7 @@ import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provid
 import { WebSearchProvider } from '@/lib/assistant/knowledge/web-search-provider';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { extractMemories } from '@/lib/assistant/memory/extractor';
+import { SkillsHub } from '@/lib/assistant/skills/hub';
 import type { DetectedIntent, IntentType, GenType } from '@/lib/assistant';
 
 // ====== 去除 Markdown 格式 ======
@@ -389,7 +390,7 @@ export const POST = withAuth(async ({ request, user }) => {
     // ====== V2.0: 多源上下文检索（记忆 + 知识库） ======
     let memoryBlock = '';
     let knowledgeBlock = '';
-    let contextStats: { memoriesUsed: number; inspirationsUsed: number; knowledgeUsed: number; webSearchUsed: boolean } | null = null;
+    let contextStats: { memoriesUsed: number; inspirationsUsed: number; knowledgeUsed: number; webSearchUsed: boolean; skillsMatched: number } | null = null;
     try {
       const ctxEmbedding = await generateEmbedding(effectiveContent || ' ').catch(() => [] as number[]);
       if (ctxEmbedding.length > 0) {
@@ -420,10 +421,39 @@ export const POST = withAuth(async ({ request, user }) => {
           inspirationsUsed: allKnowledge.filter(r => r.source === '你的灵感库').length,
           knowledgeUsed: allKnowledge.filter(r => r.source !== '你的灵感库' && r.source !== '联网搜索').length,
           webSearchUsed: kResult.fellBackToWeb,
+          skillsMatched: 0,
         };
       }
     } catch (e) {
       console.warn('[V2] 上下文检索失败:', e);
+    }
+
+    // ====== V2.0: 技能上下文（已安装 + 官方技能） ======
+    let skillsBlock = '';
+    let skillsMatched = 0;
+    try {
+      const hub = new SkillsHub({ userId: user.id });
+      await hub.initialize();
+      const installedIds = await hub.registry.getInstalledSkillIds(user.id);
+      const allSkills = hub.registry.getAll();
+      const activeSkills = allSkills.filter(
+        s => installedIds.includes(s.id) || s.visibility === 'official'
+      );
+      if (activeSkills.length > 0) {
+        skillsBlock = [
+          '<available-skills>',
+          '以下是你可以使用的专业技能。根据用户的需求，自动选择并应用最相关的技能指令来完成任务：',
+          '',
+          ...activeSkills.map(s =>
+            `<skill id="${s.name}" name="${s.displayName}">\n${s.promptTemplate.slice(0, 1000)}\n</skill>`
+          ),
+          '</available-skills>',
+        ].join('\n');
+        skillsMatched = activeSkills.length;
+        if (contextStats) contextStats.skillsMatched = skillsMatched;
+      }
+    } catch (e) {
+      console.warn('[V2] 技能加载失败:', e);
     }
 
     // ====== 构造 Prompt ======
@@ -431,7 +461,7 @@ export const POST = withAuth(async ({ request, user }) => {
     const { systemPrompt: baseSystemPrompt, userPrompt: baseUserPrompt, requiresJSON } = buildPrompt(intent, effectiveContent);
 
     // V2.0: 注入记忆和知识上下文到 System Prompt
-    const systemPrompt = [memoryBlock, knowledgeBlock, baseSystemPrompt]
+    const systemPrompt = [memoryBlock, knowledgeBlock, skillsBlock, baseSystemPrompt]
       .filter(Boolean)
       .join('\n\n---\n\n');
 

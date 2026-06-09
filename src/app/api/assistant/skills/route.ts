@@ -110,7 +110,7 @@ export const POST = withAuth(async ({ request, user }) => {
           promptTemplate,
           version,
           authorId: user.id,
-          visibility: 'private',
+          visibility: body.visibility === 'public' ? 'public' : 'private',
         });
         if (!skill) return createApiError('创建失败', 500);
         return createApiResponse(skill);
