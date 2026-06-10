@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useInputHistory } from '@/hooks/use-input-history';
 import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
-import { SkillRecommendCards, useSkillRecommendations } from './SkillRecommendCards';
+import { useSkillRecommendations } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
 import { ChoiceCards, type ChoiceSelection } from './ChoiceCards';
 import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
@@ -17,6 +17,7 @@ import { useFileUpload } from '@/hooks/use-file-upload';
 import { useAgentSessions } from '@/hooks/use-agent-sessions';
 import type { AttachedFile } from '@/hooks/use-file-upload';
 import type { AgentSession } from '@/hooks/use-agent-sessions';
+import { ACCOUNT_TYPE_PRESETS, type RecommendationCombo, type AccountTypePreset } from '@/lib/account-presets';
 
 interface UIMessage {
   id: string;
@@ -63,6 +64,11 @@ export function AgentChatView() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [scheduledItems, setScheduledItems] = useState<Set<string>>(new Set());
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+
+  // 账号类型选择 + 流程引导
+  const [selectedAccountType, setSelectedAccountType] = useState<AccountTypePreset | null>(null);
+  const [activeFlow, setActiveFlow] = useState<{ combo: RecommendationCombo; currentStep: number } | null>(null);
+  const [accountSearch, setAccountSearch] = useState('');
 
   // 斜杠指令
   const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
@@ -654,6 +660,8 @@ export function AgentChatView() {
     switchSession(session.id);
     setIsLoadingMessages(true);
     setMessages([]);
+    setActiveFlow(null);
+    setSelectedAccountType(null);
     const msgs = await loadMessages(session.id);
     const uiMsgs: UIMessage[] = msgs.map((m: any) => {
       const meta = m.metadata || {};
@@ -690,6 +698,9 @@ export function AgentChatView() {
     createSession();
     setMessages([]);
     setChoiceSelections(new Map());
+    setSelectedAccountType(null);
+    setActiveFlow(null);
+    setAccountSearch('');
     setShowSessionList(false);
   };
 
@@ -697,6 +708,30 @@ export function AgentChatView() {
     e.stopPropagation();
     deleteSession(sessionId);
     if (currentSessionId === sessionId) setMessages([]);
+  };
+
+  // 账号类型 → 组合推荐 → 流程引导
+  const handleStartCombo = async (combo: RecommendationCombo) => {
+    const session = await createSession(combo.title);
+    if (!session) return;
+
+    setActiveFlow({ combo, currentStep: 0 });
+    setSelectedAccountType(null);
+    setAccountSearch('');
+
+    const stepsText = combo.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n');
+    const kickoffMsg = `我要开始「${combo.emoji} ${combo.title}」创作流程。\n\n完整流程：\n${stepsText}\n\n请从第1步「${combo.steps[0].label}」开始引导我。先告诉我这个流程的整体目标，然后告诉我第1步需要准备什么。`;
+
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: kickoffMsg,
+      toolCalls: [],
+      timestamp: new Date(),
+    };
+    setMessages([userMsg]);
+
+    await doStream(kickoffMsg, [], [], [], [], session.id);
   };
 
   return (
@@ -883,17 +918,126 @@ export function AgentChatView() {
               今天你有什么灵感，发送给我！
             </p>
 
-            {/* 技能推荐卡片 */}
+            {/* 账号类型选择 / 推荐组合 */}
             <div className="w-full max-w-sm">
-              <SkillRecommendCards
-                recommendations={skillRecs.recommendations}
-                onSelect={(skill) => { setInput(skill.displayName.replace(/[^\w一-鿿]/g, ' ').trim()); inputRef.current?.focus(); }}
-              />
+              {!selectedAccountType ? (
+                <>
+                  {/* 搜索 */}
+                  <div className="relative mb-3">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      value={accountSearch}
+                      onChange={(e) => setAccountSearch(e.target.value)}
+                      placeholder="搜索账号类型..."
+                      className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+                  {/* 账号类型网格 */}
+                  <div className="grid grid-cols-2 gap-2 max-h-[340px] overflow-y-auto pr-0.5">
+                    {ACCOUNT_TYPE_PRESETS.filter(p =>
+                      !accountSearch || p.label.includes(accountSearch) || p.desc.includes(accountSearch)
+                    ).map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => setSelectedAccountType(preset)}
+                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-blue-500/30 transition-all text-left"
+                      >
+                        <span className="text-2xl">{preset.emoji}</span>
+                        <span className="text-sm font-medium text-white">{preset.label}</span>
+                        <span className="text-[10px] text-gray-400 leading-tight text-center line-clamp-2">{preset.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 选中账号类型 + 返回 */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button
+                      onClick={() => { setSelectedAccountType(null); setAccountSearch(''); }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 flex-shrink-0"
+                    >
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <span className="text-2xl">{selectedAccountType.emoji}</span>
+                    <span className="text-sm font-semibold text-white">{selectedAccountType.label}</span>
+                    <span className="text-[10px] text-gray-500">{selectedAccountType.audience}</span>
+                  </div>
+                  {/* 推荐组合列表 */}
+                  <div className="space-y-2 max-h-[340px] overflow-y-auto pr-0.5">
+                    {selectedAccountType.combos.map((combo) => (
+                      <button
+                        key={combo.id}
+                        onClick={() => handleStartCombo(combo)}
+                        className="w-full p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-blue-500/30 transition-all text-left"
+                      >
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-lg">{combo.emoji}</span>
+                          <span className="text-sm font-semibold text-white">{combo.title}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mb-2">{combo.desc}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {combo.steps.map((step, i) => (
+                            <span key={i} className="inline-flex items-center gap-0.5">
+                              {i > 0 && <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-gray-400 border border-white/5">
+                                {step.label}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* 快捷能力标签 */}
-            <div className="mt-4 w-full max-w-sm">
-              <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
+            {/* 快捷能力标签 — 未选账号类型时显示 */}
+            {!selectedAccountType && (
+              <div className="mt-4 w-full max-w-sm">
+                <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 流程引导头部 */}
+        {activeFlow && messages.length > 0 && (
+          <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-lg">{activeFlow.combo.emoji}</span>
+              <span className="text-sm font-semibold text-white">{activeFlow.combo.title}</span>
+              <button
+                onClick={() => setActiveFlow(null)}
+                className="ml-auto text-[10px] text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-white/5"
+              >
+                退出流程
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              {activeFlow.combo.steps.map((step, i) => (
+                <div key={i} className="flex items-center gap-1 flex-1 min-w-0">
+                  {i > 0 && <div className="flex-1 h-px bg-white/10 min-w-[8px]" />}
+                  <div
+                    className={`flex flex-col items-center gap-0.5 ${i === activeFlow.currentStep ? 'text-blue-300' : i < activeFlow.currentStep ? 'text-green-300/60' : 'text-gray-600'}`}
+                    title={step.label}
+                  >
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                      i === activeFlow.currentStep ? 'bg-blue-500 text-white' :
+                      i < activeFlow.currentStep ? 'bg-green-500/20 text-green-300' :
+                      'bg-white/5 text-gray-500'
+                    }`}>
+                      {i < activeFlow.currentStep ? '✓' : i + 1}
+                    </span>
+                    <span className="text-[9px] text-center leading-tight max-w-[48px] truncate">{step.label}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
