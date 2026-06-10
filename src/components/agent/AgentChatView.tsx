@@ -17,13 +17,16 @@ interface UIMessage {
   content: string;
   toolCalls: ToolCallRecord[];
   attachments?: { url: string; name: string; type: 'image' | 'document' }[];
+  generatedImages?: string[];
+  generatedVideo?: { taskId: string; status: string; videoUrl?: string };
+  generatedAudio?: string; // base64 data URL
   timestamp: Date;
 }
 
 interface ToolCallRecord {
   tool: string;
   params: Record<string, unknown>;
-  result?: { success: boolean; output: string; error?: string };
+  result?: { success: boolean; output: string; data?: unknown; error?: string };
 }
 
 export function AgentChatView() {
@@ -152,6 +155,7 @@ export function AgentChatView() {
           case 'tool_result': {
             setCurrentTool('');
             setStatusText('');
+            const resultData = event.result.data as Record<string, unknown> | undefined;
             setMessages((prev) =>
               prev.map((m) => {
                 if (m.id !== assistantId) return m;
@@ -160,7 +164,28 @@ export function AgentChatView() {
                 if (last && last.tool === event.tool) {
                   last.result = event.result;
                 }
-                return { ...m, toolCalls };
+
+                // 提取生成媒体
+                let generatedImages = m.generatedImages;
+                let generatedAudio = m.generatedAudio;
+                let generatedVideo = m.generatedVideo;
+
+                if (resultData) {
+                  if (event.tool === 'generate_image' && Array.isArray(resultData.imageUrls)) {
+                    generatedImages = [...(m.generatedImages || []), ...resultData.imageUrls as string[]];
+                  }
+                  if (event.tool === 'synthesize_speech' && typeof resultData.audioBase64 === 'string') {
+                    generatedAudio = `data:audio/mpeg;base64,${resultData.audioBase64}`;
+                  }
+                  if (event.tool === 'generate_video' && typeof resultData.taskId === 'string') {
+                    generatedVideo = {
+                      taskId: resultData.taskId as string,
+                      status: (resultData.status as string) || 'queued',
+                    };
+                  }
+                }
+
+                return { ...m, toolCalls, generatedImages, generatedAudio, generatedVideo };
               })
             );
             break;
@@ -301,6 +326,9 @@ export function AgentChatView() {
             content={msg.content}
             toolCalls={msg.toolCalls.length > 0 ? msg.toolCalls : undefined}
             attachments={msg.attachments}
+            generatedImages={msg.generatedImages}
+            generatedVideo={msg.generatedVideo}
+            generatedAudio={msg.generatedAudio}
             timestamp={msg.timestamp}
           />
         ))}
