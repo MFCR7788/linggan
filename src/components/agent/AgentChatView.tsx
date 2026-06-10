@@ -20,6 +20,23 @@ import type { AgentSession } from '@/hooks/use-agent-sessions';
 import { ACCOUNT_TYPE_PRESETS, type RecommendationCombo, type AccountTypePreset } from '@/lib/account-presets';
 import { scheduleNotification } from '@/lib/notification-service';
 
+// 工具名 → 流程步骤入口 映射（用于自动推进步骤）
+const TOOL_TO_ENTRY: Record<string, string> = {
+  search_inspirations: '/inspiration',
+  save_to_inspiration: '/inspiration',
+  generate_copywriting: '/ai/copywriting',
+  summarize: '/ai/copywriting',
+  search_knowledge: '/ai/copywriting',
+  search_memory: '/ai/copywriting',
+  generate_image: '/ai/image',
+  edit_image: '/ai/image-editor',
+  generate_grid_images: '/ai/ads',
+  generate_digital_human: '/ai/digital-human',
+  generate_video: '/ai/video',
+  synthesize_speech: '/ai/tts',
+  get_hotspot: '/hotspot',
+};
+
 interface UIMessage {
   id: string;
   type: 'user' | 'assistant';
@@ -253,6 +270,22 @@ export function AgentChatView() {
             setCurrentTool('');
             setStatusText('');
             const resultData = event.result.data as Record<string, unknown> | undefined;
+
+            // 流程自动推进：工具成功 → 匹配当前步骤入口 → 步进
+            if (event.result.success && activeFlow) {
+              const expectedEntry = TOOL_TO_ENTRY[event.tool];
+              if (expectedEntry) {
+                const curStepEntry = activeFlow.combo.steps[activeFlow.currentStep]?.entry;
+                if (expectedEntry === curStepEntry && activeFlow.currentStep < activeFlow.combo.steps.length - 1) {
+                  setActiveFlow(prev => {
+                    if (!prev) return null;
+                    const next = { ...prev, currentStep: prev.currentStep + 1 };
+                    sessionMgr.updateMetadata(currentSessionId!, { comboId: prev.combo.id, currentStep: next.currentStep });
+                    return next;
+                  });
+                }
+              }
+            }
             setMessages((prev) =>
               prev.map((m) => {
                 if (m.id !== assistantId) return m;
@@ -715,8 +748,21 @@ export function AgentChatView() {
     switchSession(session.id);
     setIsLoadingMessages(true);
     setMessages([]);
-    setActiveFlow(null);
     setSelectedAccountType(null);
+
+    // 从会话元数据恢复流程状态
+    const meta = session.metadata as { comboId?: string; currentStep?: number } | undefined;
+    if (meta?.comboId) {
+      const combos = ACCOUNT_TYPE_PRESETS.flatMap(p => p.combos);
+      const combo = combos.find(c => c.id === meta.comboId);
+      if (combo) {
+        setActiveFlow({ combo, currentStep: meta.currentStep || 0 });
+      } else {
+        setActiveFlow(null);
+      }
+    } else {
+      setActiveFlow(null);
+    }
     const msgs = await loadMessages(session.id);
     const uiMsgs: UIMessage[] = msgs.map((m: any) => {
       const meta = m.metadata || {};
@@ -767,7 +813,8 @@ export function AgentChatView() {
 
   // 账号类型 → 组合推荐 → 流程引导
   const handleStartCombo = async (combo: RecommendationCombo) => {
-    const session = await createSession(combo.title);
+    const flowMeta = { comboId: combo.id, currentStep: 0 };
+    const session = await createSession(combo.title, flowMeta);
     if (!session) return;
 
     setActiveFlow({ combo, currentStep: 0 });
@@ -941,6 +988,51 @@ export function AgentChatView() {
         )}
       </div>
 
+      {/* 流程引导头部 — 始终可见（非滚动区域） */}
+      {activeFlow && messages.length > 0 && (
+        <div className="px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">{activeFlow.combo.emoji}</span>
+            <span className="text-sm font-semibold text-white">{activeFlow.combo.title}</span>
+            <span className="text-[10px] text-gray-500">第 {activeFlow.currentStep + 1}/{activeFlow.combo.steps.length} 步</span>
+            <button
+              onClick={async () => {
+                setActiveFlow(null);
+                if (currentSessionId) {
+                  sessionMgr.updateMetadata(currentSessionId, {});
+                }
+              }}
+              className="ml-auto w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-colors"
+              title="删除流程"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            {activeFlow.combo.steps.map((step, i) => (
+              <div key={i} className="flex items-center gap-1 flex-1 min-w-0">
+                {i > 0 && <div className="flex-1 h-px bg-white/10 min-w-[8px]" />}
+                <div
+                  className={`flex flex-col items-center gap-0.5 ${i === activeFlow.currentStep ? 'text-blue-300' : i < activeFlow.currentStep ? 'text-green-300/60' : 'text-gray-600'}`}
+                  title={step.label}
+                >
+                  <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
+                    i === activeFlow.currentStep ? 'bg-blue-500 text-white' :
+                    i < activeFlow.currentStep ? 'bg-green-500/20 text-green-300' :
+                    'bg-white/5 text-gray-500'
+                  }`}>
+                    {i < activeFlow.currentStep ? '✓' : i + 1}
+                  </span>
+                  <span className="text-[8px] text-center leading-tight max-w-[44px] truncate">{step.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 消息列表 — pb-32 给固定输入框留空间 */}
       <div className="flex-1 overflow-y-auto py-4 space-y-1 pb-32">
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
@@ -1046,42 +1138,6 @@ export function AgentChatView() {
             <p className="text-lg text-blue-300 mt-2">
               今天你有什么灵感，发送给我！
             </p>
-          </div>
-        )}
-
-        {/* 流程引导头部 */}
-        {activeFlow && messages.length > 0 && (
-          <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className="text-lg">{activeFlow.combo.emoji}</span>
-              <span className="text-sm font-semibold text-white">{activeFlow.combo.title}</span>
-              <button
-                onClick={() => setActiveFlow(null)}
-                className="ml-auto text-[10px] text-gray-500 hover:text-gray-300 px-2 py-0.5 rounded hover:bg-white/5"
-              >
-                退出流程
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              {activeFlow.combo.steps.map((step, i) => (
-                <div key={i} className="flex items-center gap-1 flex-1 min-w-0">
-                  {i > 0 && <div className="flex-1 h-px bg-white/10 min-w-[8px]" />}
-                  <div
-                    className={`flex flex-col items-center gap-0.5 ${i === activeFlow.currentStep ? 'text-blue-300' : i < activeFlow.currentStep ? 'text-green-300/60' : 'text-gray-600'}`}
-                    title={step.label}
-                  >
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                      i === activeFlow.currentStep ? 'bg-blue-500 text-white' :
-                      i < activeFlow.currentStep ? 'bg-green-500/20 text-green-300' :
-                      'bg-white/5 text-gray-500'
-                    }`}>
-                      {i < activeFlow.currentStep ? '✓' : i + 1}
-                    </span>
-                    <span className="text-[9px] text-center leading-tight max-w-[48px] truncate">{step.label}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

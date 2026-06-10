@@ -9,6 +9,7 @@ export interface AgentSession {
   title: string;
   created_at: string;
   updated_at: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AgentSessionMessage {
@@ -56,13 +57,13 @@ export function useAgentSessions() {
     }
   }, []);
 
-  const createSession = useCallback(async (title?: string): Promise<AgentSession | null> => {
+  const createSession = useCallback(async (title?: string, metadata?: Record<string, unknown>): Promise<AgentSession | null> => {
     try {
       syncDevAuthCookie();
       const res = await fetch('/api/chat/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create_session', title: title || '新对话' }),
+        body: JSON.stringify({ action: 'create_session', title: title || '新对话', metadata: metadata || {} }),
       });
       const data = await res.json();
       const session = data.data as AgentSession;
@@ -109,10 +110,24 @@ export function useAgentSessions() {
     }
   }, []);
 
+  const updateMetadata = useCallback(async (sessionId: string, metadata: Record<string, unknown>) => {
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, metadata } : s));
+    try {
+      syncDevAuthCookie();
+      await fetch('/api/chat/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_metadata', session_id: sessionId, metadata }),
+      });
+    } catch (e) {
+      console.error('更新会话元数据失败:', e);
+    }
+  }, []);
+
   return {
     sessions, currentSessionId, setCurrentSessionId,
     showSessionList, setShowSessionList, isLoading,
     loadSessions, loadMessages, createSession,
-    switchSession, deleteSession, updateTitle,
+    switchSession, deleteSession, updateTitle, updateMetadata,
   };
 }

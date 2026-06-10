@@ -109,7 +109,7 @@ export const GET = withAuth(async ({ request, user }) => {
   // 获取会话列表
   const { data: sessions } = await supabase
     .from('chat_sessions')
-    .select('id, title, created_at, updated_at')
+    .select('id, title, created_at, updated_at, metadata')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
     .limit(20);
@@ -129,7 +129,7 @@ export const POST = withAuth(async ({ request, user }) => {
   if (action === 'create_session') {
     const { data, error } = await supabase
       .from('chat_sessions')
-      .insert({ user_id: user.id, title: body.title || '新对话' })
+      .insert({ user_id: user.id, title: body.title || '新对话', metadata: body.metadata || {} })
       .select()
       .single();
     if (error) return createApiError('创建失败', 500);
@@ -179,6 +179,13 @@ export const POST = withAuth(async ({ request, user }) => {
     const { session_id, title } = body;
     if (!session_id || !title) return createApiError('参数不足', 400);
     await supabase.from('chat_sessions').update({ title }).eq('id', session_id).eq('user_id', user.id);
+    return createApiResponse({ success: true });
+  }
+
+  if (action === 'update_metadata') {
+    const { session_id, metadata } = body;
+    if (!session_id || !metadata) return createApiError('参数不足', 400);
+    await supabase.from('chat_sessions').update({ metadata }).eq('id', session_id).eq('user_id', user.id);
     return createApiResponse({ success: true });
   }
 
