@@ -742,7 +742,7 @@ export function AgentChatView() {
                         if (e.key === 'Enter') saveEditTitle();
                         if (e.key === 'Escape') setEditingTitle(null);
                       }}
-                      onBlur={saveEditTitle}
+                      onBlur={() => setTimeout(saveEditTitle, 150)}
                       onClick={(e) => e.stopPropagation()}
                       className="bg-gray-600 text-white text-sm rounded px-1.5 py-0.5 outline-none flex-1 min-w-0"
                     />
@@ -759,9 +759,9 @@ export function AgentChatView() {
                   )}
                   {editingTitle !== s.id && (
                     <button
-                      onClick={(e) => {
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // 防止按钮卸载时焦点丢失
                         e.stopPropagation();
-                        e.preventDefault();
                         startEditTitle(s.id, s.title);
                       }}
                       className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
