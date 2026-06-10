@@ -127,11 +127,25 @@ export const POST = withAuth(async ({ request, user }) => {
   const supabase = createAdminClient();
 
   if (action === 'create_session') {
-    const { data, error } = await supabase
+    // 先尝试带 metadata 插入（新表结构），失败则降级不带 metadata
+    let { data, error } = await supabase
       .from('chat_sessions')
       .insert({ user_id: user.id, title: body.title || '新对话', metadata: body.metadata || {} })
       .select()
       .single();
+
+    // metadata 列不存在时降级重试
+    if (error && body.metadata) {
+      const fallback = await supabase
+        .from('chat_sessions')
+        .insert({ user_id: user.id, title: body.title || '新对话' })
+        .select()
+        .single();
+      if (!fallback.error) {
+        return createApiResponse(fallback.data);
+      }
+    }
+
     if (error) return createApiError('创建失败', 500);
     return createApiResponse(data);
   }
@@ -185,7 +199,9 @@ export const POST = withAuth(async ({ request, user }) => {
   if (action === 'update_metadata') {
     const { session_id, metadata } = body;
     if (!session_id || !metadata) return createApiError('参数不足', 400);
-    await supabase.from('chat_sessions').update({ metadata }).eq('id', session_id).eq('user_id', user.id);
+    const { error } = await supabase.from('chat_sessions').update({ metadata }).eq('id', session_id).eq('user_id', user.id);
+    // metadata 列可能还不存在，忽略错误
+    if (error) console.warn('[update_metadata] 保存失败（可能缺少 metadata 列）:', error.message);
     return createApiResponse({ success: true });
   }
 

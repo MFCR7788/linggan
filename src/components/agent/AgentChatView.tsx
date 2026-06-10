@@ -1134,10 +1134,6 @@ export function AgentChatView() {
               )}
             </div>
 
-            {/* 引导语 — 账号类型下方 */}
-            <p className="text-lg text-blue-300 mt-2">
-              今天你有什么灵感，发送给我！
-            </p>
           </div>
         )}
 
@@ -1263,6 +1259,12 @@ export function AgentChatView() {
 
       {/* 输入区域 — 固定置底 */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 pt-2 pb-3 z-10" style={{ maxWidth: 480, margin: '0 auto' }}>
+        {/* 引导语 — 欢迎状态下底部显示 */}
+        {messages.length === 0 && (
+          <p className="text-center text-sm text-blue-300 mb-2">
+            今天你有什么灵感，发送给我！
+          </p>
+        )}
         {/* 快捷能力标签 — 输入框上方 */}
         <div className="mb-2">
           <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
