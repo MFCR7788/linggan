@@ -60,6 +60,9 @@ src/
 │   ├── ai/                # AI 子模块 (chat, vision, image, video, tts, digital-human, avatar, content, storyboard, weather, usage)
 │   ├── jobs/              # AI 任务队列 (queue, task-worker, hotspot-checker + workers/)
 │   ├── platforms/         # 多平台集成 (微信公众号/微博 OAuth, 加密存储, 发布)
+│   ├── agent/             # 对话 Agent 引擎 (conversational loop, SSE streaming, tool calling)
+│   ├── assistant/         # AI 创作助手 (RAG pipeline, memory/知识库, intent 检测, context compressor)
+│   ├── hyperframes/       # 视频关键帧 prompt 生成
 │   ├── search/            # 联网搜索聚合器 (百度/点评 + Google/Bing)
 │   ├── upload/            # 上传 (客户端压缩, 校验, 配额)
 │   ├── captcha/           # 验证码 (SVG + 文字点选)
@@ -76,6 +79,7 @@ src/
 │   ├── preset-keywords.ts # AI 创作预设关键词
 │   ├── preset-templates.ts # AI 创作预设模板
 │   ├── text-utils.ts      # 文本处理工具
+│   ├── logger.ts           # 结构化 JSON 日志 (生产环境仅 warn/error)
 │   ├── migrate.ts         # 数据库迁移辅助
 │   ├── handoff-url.ts     # 跨页面内容流转 (URL query 传参)
 │   └── style-constants.ts # 共享样式常量 (emoji, 平台色, 路由映射, 视频风格预设)
@@ -133,6 +137,7 @@ export const GET = withAuth(async ({ request, user, params }) => {
   - 可选 `DEV_AUTH_SECRET` 保护 dev auth 入口，否则仅限 localhost
 - **生产部署前必须删除** `middleware.ts` 和 `supabase-server.ts` 中的 dev auth 快捷路径
 - `AUTH_SALT` 首次上线后不可变更 (用于手机号登录的 deterministic password)
+- Middleware 有 GoTrue 降级机制：Supabase Auth 故障时回退检查 `lingji_auth_user_id` cookie (由 `lingji_auth` API 设置)，保证可用性
 
 ### 环境变量
 
@@ -188,6 +193,28 @@ export const GET = withAuth(async ({ request, user, params }) => {
 - `WorkflowSession` 记录当前步骤、进度、handoff 数据
 - 内容跨步骤流转通过 `handoff` (Record<string, string>) 和 URL query params (`buildHandoffUrl`)
 - API: `/api/workflow/sessions/`
+
+### 对话 Agent (`src/lib/agent/`)
+
+全自主对话 Agent 引擎，支持多轮工具调用循环：
+- `loop.ts` — Agent 主循环 (think → act → observe → repeat)，支持 maxSteps 和超时
+- `stream.ts` — SSE 流式输出到前端，实时展示思考/工具调用/回复
+- `sse-client.ts` — 前端 SSE 消费端，支持 abort 和重连
+- `tools/` — 可注册的工具函数 (搜索、读取灵感、查询热点等)
+- API 入口: `/api/ai/agent/chat/`
+
+### AI 创作助手 (`src/lib/assistant/`)
+
+RAG 增强的 AI 创作助手 pipeline：
+- `pipeline.ts` — 主 pipeline 编排 (context retrieval → intent detection → generation)
+- `intent.ts` — 用户意图分类（创作/查询/分析/闲聊）
+- `context/` — 上下文构建器（用户 profile、灵感库、最近作品）
+- `memory/` — 对话记忆管理（短期摘要 + 长期向量记忆）
+- `knowledge/` — 知识库检索（向量搜索 + RRF 融合）
+- `skills/` — 可注册的技能模块
+- `context-compressor.ts` — 上下文压缩，控制 token 成本
+- `embedding.ts` — embedding 生成（本地或 API）
+- API 入口: `/api/assistant/*`
 
 ### Supabase 客户端层级
 

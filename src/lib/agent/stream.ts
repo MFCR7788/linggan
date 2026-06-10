@@ -1,21 +1,35 @@
 // Agent SSE Stream — 流式多轮执行
 // 通过 SSE 实时推送文字 delta + 工具调用状态
+// V2: 通过 ModelRouter 解耦模型调用，通过 ContextEngine 实现真实 token 计数
 
 import type { ChatMessage } from '@/lib/ai/types';
 import type { ToolRegistry } from './tools/registry';
-import type { AgentConfig, AgentEvent, ToolResult, ToolCallRequest } from './types';
-import { callDeepSeekStreamWithTools, callDeepSeek } from '@/lib/ai-services';
+import type { AgentConfig, AgentEvent, ToolResult, ToolCallRequest, AgentLoopOptions } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
-import { compressHistory } from '@/lib/assistant/context-compressor';
+import { ContextEngine } from './context-engine';
+import { executeWithTimeout } from './tool-timeout';
+import { defaultModelRouter } from '@/lib/providers/model-router';
 
 export async function* agentStreamLoop(
   messages: ChatMessage[],
   registry: ToolRegistry,
   context: { userId: string; sessionId?: string; signal?: AbortSignal },
-  config: AgentConfig = DEFAULT_AGENT_CONFIG
+  config: AgentConfig = DEFAULT_AGENT_CONFIG,
+  options: AgentLoopOptions = {}
 ): AsyncGenerator<AgentEvent, string, unknown> {
+  const modelRouter = options.modelRouter ?? defaultModelRouter;
+  const ctxEngine = options.contextEngine ?? new ContextEngine();
+  const hooks = options.hooks;
+  const toolTimeout = options.toolTimeoutMs ?? 120_000;
+
   const toolsUsed = new Set<string>();
   const toolCallHistory = new Map<string, number>();
+
+  // agent:start
+  if (hooks) {
+    await hooks.emit('agent:start', { userId: context.userId, sessionId: context.sessionId, config: { ...config } });
+  }
+
   let iteration = 0;
   const maxIter = config.maxIterations || 10;
   let finalContent = '';
@@ -23,34 +37,54 @@ export async function* agentStreamLoop(
   while (iteration < maxIter) {
     if (context.signal?.aborted) {
       finalContent = '执行已取消。';
-      yield { type: 'done', response: finalContent, toolsUsed: [...toolsUsed] };
+      if (hooks) {
+        await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: iteration, toolsUsed: [...toolsUsed] });
+      }
+      yield { type: 'done', response: finalContent, toolsUsed: [...toolsUsed], tokensUsed: ctxEngine.sessionTotalTokens };
       return finalContent;
     }
 
     yield { type: 'thinking', message: iteration === 0 ? '思考中...' : '继续思考...' };
 
+    // pre_llm_call
+    if (hooks) {
+      await hooks.emit('pre_llm_call', { userId: context.userId, sessionId: context.sessionId, messages });
+    }
+
     const openaiTools = registry.toOpenAITools();
     let hasToolCalls = false;
-    let hasTextContent = false;
 
-    // 流式 LLM 调用
-    for await (const chunk of callDeepSeekStreamWithTools(messages, openaiTools, {
+    for await (const chunk of modelRouter.chatStreamWithTools(messages, openaiTools, {
       model: config.model,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
     })) {
       if (chunk.type === 'text') {
-        hasTextContent = true;
         finalContent += chunk.content;
         yield { type: 'delta', content: chunk.content };
       } else if (chunk.type === 'tool_calls') {
         hasToolCalls = true;
-        // tool_calls 在流结束时才完整 — 执行它们
-        for (const tc of chunk.calls) {
-          yield { type: 'tool_call', tool: tc.function.name, params: parseArgs(tc) };
 
-          const result: ToolResult = await executeTool(tc, registry, context, toolCallHistory);
+        for (const tc of chunk.calls) {
+          const toolArgs = parseArgs(tc);
+          yield { type: 'tool_call', tool: tc.function.name, params: toolArgs };
+
+          const toolStartTime = Date.now();
+          if (hooks) {
+            await hooks.emit('pre_tool_call', { userId: context.userId, sessionId: context.sessionId, toolName: tc.function.name, toolArgs });
+          }
+
+          const result = await executeToolCall(
+            tc, registry,
+            { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+            toolCallHistory,
+            toolTimeout
+          );
           toolsUsed.add(tc.function.name);
+
+          if (hooks) {
+            await hooks.emit('post_tool_call', { userId: context.userId, sessionId: context.sessionId, toolName: tc.function.name, toolArgs, toolResult: result, toolDuration: Date.now() - toolStartTime });
+          }
 
           yield {
             type: 'tool_result',
@@ -62,7 +96,6 @@ export async function* agentStreamLoop(
             },
           };
 
-          // 将工具调用+结果注入历史
           messages.push({
             role: 'assistant',
             content: null,
@@ -80,33 +113,26 @@ export async function* agentStreamLoop(
       }
     }
 
-    // 如果本轮返回了文本且无 tool calls → 完成
     if (!hasToolCalls) {
+      if (hooks) {
+        await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: iteration + 1, toolsUsed: [...toolsUsed] });
+      }
       yield {
         type: 'done',
         response: finalContent,
         summary: finalContent.substring(0, 50),
         toolsUsed: [...toolsUsed],
+        tokensUsed: ctxEngine.sessionTotalTokens,
+        model: config.model,
       };
       return finalContent;
     }
 
-    // 如果有 tool calls 但无文本 — 继续下一轮
-
-    // 压缩检查
-    if (iteration >= 3 && messages.length > 20) {
-      const { compressedSummary, recentMessages } = await compressHistory(
-        messages.filter((m) => m.role !== 'system') as Array<{ role: 'user' | 'assistant'; content: string }>
-      );
-      if (compressedSummary) {
-        const systemMsg = messages.find((m) => m.role === 'system');
-        messages.length = 0;
-        if (systemMsg) messages.push(systemMsg);
-        messages.push({ role: 'user', content: `[对话历史摘要]\n${compressedSummary}` } as ChatMessage);
-        for (const rm of recentMessages) {
-          messages.push(rm as ChatMessage);
-        }
-      }
+    // 上下文压缩
+    if (iteration >= 3 && ctxEngine.shouldCompress(messages)) {
+      const compressed = await ctxEngine.compress(messages);
+      messages.length = 0;
+      for (const m of compressed) messages.push(m);
     }
 
     iteration++;
@@ -121,13 +147,10 @@ export async function* agentStreamLoop(
   } as ChatMessage);
 
   try {
-    const finalText = await callDeepSeek(
-      messages.map((m) => {
-        const c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-        return `${m.role}: ${c}`;
-      }).join('\n\n'),
-      { temperature: config.temperature, maxTokens: config.maxTokens }
-    );
+    const finalText = await modelRouter.chat(messages, {
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+    });
     finalContent = finalText;
     yield { type: 'delta', content: finalText };
   } catch {
@@ -135,11 +158,16 @@ export async function* agentStreamLoop(
     yield { type: 'delta', content: finalContent };
   }
 
+  if (hooks) {
+    await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: maxIter, toolsUsed: [...toolsUsed] });
+  }
   yield {
     type: 'done',
     response: finalContent,
     summary: finalContent.substring(0, 50),
     toolsUsed: [...toolsUsed],
+    tokensUsed: ctxEngine.sessionTotalTokens,
+    model: config.model,
   };
   return finalContent;
 }
@@ -152,16 +180,16 @@ function parseArgs(tc: ToolCallRequest): Record<string, unknown> {
   }
 }
 
-async function executeTool(
+async function executeToolCall(
   tc: ToolCallRequest,
   registry: ToolRegistry,
   context: { userId: string; sessionId?: string; signal?: AbortSignal },
-  history: Map<string, number>
+  history: Map<string, number>,
+  timeoutMs: number
 ): Promise<ToolResult> {
   const toolName = tc.function.name;
   const args = parseArgs(tc);
 
-  // 防死循环
   const hash = `${toolName}:${JSON.stringify(args)}`;
   const count = (history.get(hash) || 0) + 1;
   history.set(hash, count);
@@ -169,9 +197,15 @@ async function executeTool(
     return { success: false, output: '', error: '该工具已重复调用多次，请尝试其他方法。' };
   }
 
-  return registry.execute(toolName, args, {
-    userId: context.userId,
-    sessionId: context.sessionId,
-    signal: context.signal,
-  });
+  const tool = registry.get(toolName);
+  if (!tool) {
+    return { success: false, output: '', error: `未找到工具: ${toolName}` };
+  }
+
+  return executeWithTimeout(
+    tool.handler,
+    args,
+    { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+    { timeoutMs, isLongRunning: tool.isLongRunning }
+  );
 }

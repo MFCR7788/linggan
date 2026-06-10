@@ -16,6 +16,8 @@ interface SkillRow {
   parameter_schema: Record<string, unknown> | null;
   linked_files: Record<string, string[]> | null;
   linked_content: Record<string, string> | null;
+  bound_tools: string[] | null;
+  required_tools: string[] | null;
   version: string;
   author_id: string | null;
   visibility: 'private' | 'public' | 'official';
@@ -267,6 +269,8 @@ function mapSkill(row: SkillRow): SkillDefinition {
     parameterSchema: row.parameter_schema || undefined,
     linkedFiles: row.linked_files || undefined,
     linkedContent: row.linked_content || undefined,
+    boundTools: row.bound_tools || undefined,
+    requiredTools: row.required_tools || undefined,
     version: row.version,
     authorId: row.author_id || undefined,
     visibility: row.visibility,

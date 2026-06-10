@@ -1,7 +1,24 @@
 // AI Services — 百炼 DashScope 统一（DeepSeek / Qwen / Wan / CosyVoice）
+// 底层 API 实现已拆分到 src/lib/providers/builtin/*
+// 此文件保留 thin wrapper 以保持向后兼容
 
 import { STYLE_PRESETS, LANGUAGE_OPTIONS } from './style-constants';
-import { getDashScopeApiKey, getVolcTtsAppId, getVolcTtsAccessToken, getHappyHorseApiKey, getHeyGenApiKey, getDoubaoEndpointId, getOpenRouterApiKey, getEnv } from './runtime-config';
+import { getDashScopeApiKey, getHappyHorseApiKey, getHeyGenApiKey, getEnv } from './runtime-config';
+import {
+  callDeepSeek as _callDeepSeek,
+  callDeepSeekStream as _callDeepSeekStream,
+  callQwen as _callQwen,
+  callDoubaoChat as _callDoubaoChat,
+  callDeepSeekWithTools as _callDeepSeekWithTools,
+  callDeepSeekStreamWithTools as _callDeepSeekStreamWithTools,
+} from './providers/builtin/dashscope';
+import { callOpenRouter as _callOpenRouterImpl } from './providers/builtin/openrouter';
+import {
+  cloneVoiceUpload as _cloneVoiceUpload,
+  cloneVoiceStatus as _cloneVoiceStatus,
+  synthesizeWithClonedVoice as _synthesizeWithClonedVoice,
+} from './providers/builtin/volcengine';
+export type { VoiceCloneStatus, VoiceCloneUploadResult, VoiceCloneStatusResult } from './providers/builtin/volcengine';
 
 // 通用 fetch 超时包装
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
@@ -15,37 +32,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// DashScope chat completions 共享调用 — 消除 callDeepSeek/callQwen/callDoubaoChat 重复代码
 const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-
-async function dashScopeChat(
-  body: Record<string, unknown>,
-  timeoutMs = 90000
-): Promise<{ choices: { message: { content: string } }[] }> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
-
-  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, timeoutMs);
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DashScope chat failed (${response.status}): ${error.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    throw new Error(`DashScope unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-  }
-  return data;
-}
 
 // ====== Types ======
 
@@ -93,19 +80,7 @@ export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const body: Record<string, unknown> = {
-    model: options.model || 'deepseek-v3',
-    messages: [
-      { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
-      { role: 'user', content: prompt },
-    ],
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2000,
-  };
-  if (options.enableSearch) body.enable_search = true;
-
-  const data = await dashScopeChat(body);
-  return data.choices[0].message.content;
+  return _callDeepSeek(prompt, options);
 }
 
 // DeepSeek 流式输出（异步生成器，逐块 yield 文本）
@@ -113,93 +88,7 @@ export async function* callDeepSeekStream(
   prompt: string,
   options: ChatOptions = {}
 ): AsyncGenerator<string, string, unknown> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) {
-    throw new Error('DASHSCOPE_API_KEY is not configured');
-  }
-
-  const body: Record<string, unknown> = {
-    model: options.model || 'deepseek-v3',
-    messages: [
-      { role: 'system', content: '你是一个专业的内容创作助手，帮助用户总结、分析和创作内容。' },
-      { role: 'user', content: prompt },
-    ],
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2000,
-    stream: true,
-  };
-  if (options.enableSearch) body.enable_search = true;
-
-  const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, 120000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DeepSeek stream failed: ${error.substring(0, 200)}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
-
-  const decoder = new TextDecoder();
-  let fullContent = '';
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        if (jsonStr === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const delta = parsed?.choices?.[0]?.delta?.content;
-          if (delta) {
-            fullContent += delta;
-            yield delta;
-          }
-        } catch {
-          // 跳过无法解析的行
-        }
-      }
-    }
-
-    // 处理流结束后 buffer 中剩余的完整行
-    if (buffer.trim()) {
-      const trimmed = buffer.trim();
-      if (trimmed.startsWith('data:')) {
-        const jsonStr = trimmed.slice(5).trim();
-        if (jsonStr !== '[DONE]') {
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed?.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullContent += delta;
-              yield delta;
-            }
-          } catch { /* skip */ }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return fullContent;
+  return yield* _callDeepSeekStream(prompt, options);
 }
 
 // ====== 通义千问 / DashScope API ======
@@ -208,46 +97,16 @@ export async function callQwen(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const validQwenModels = ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-vl-plus', 'qwen-vl-max', 'qwen3.7-max'];
-  let modelName = options.model || 'qwen-plus';
-  if (!validQwenModels.includes(modelName)) {
-    console.warn(`Invalid model name "${modelName}", falling back to "qwen-plus"`);
-    modelName = 'qwen-plus';
-  }
-
-  const data = await dashScopeChat({
-    model: modelName,
-    messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2000,
-  });
-  return data.choices[0].message.content;
+  return _callQwen(messages, options);
 }
 
 // ====== 百炼 Qwen API（替代原 Doubao/ARK） ======
-
-function mapDoubaoModel(model: string): string {
-  // 视觉模型 → qwen-vl
-  if (model.includes('vision') || model.includes('vl')) return 'qwen-vl-plus';
-  // 其他 doubao 模型 → qwen-plus
-  if (model.includes('doubao')) return 'qwen-plus';
-  return model;
-}
 
 export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const rawModel = options.model || getDoubaoEndpointId() || 'doubao-seed-2.0-241215';
-  const model = mapDoubaoModel(rawModel);
-
-  const data = await dashScopeChat({
-    model,
-    messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2000,
-  }, 120000);
-  return data.choices[0].message.content;
+  return _callDoubaoChat(messages, options);
 }
 
 // ====== OpenRouter — 第二供应商，作为 DashScope 的兜底 ======
@@ -256,40 +115,7 @@ export async function callOpenRouter(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured');
-
-  const model = options.model || 'anthropic/claude-sonnet-4';
-  const response = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://ai.zjsifan.com',
-      'X-Title': '灵集 LingJi',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: '你是一个专业的中文内容创作助手。' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2000,
-    }),
-  }, 120000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenRouter API error (${response.status}): ${error.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    throw new Error(`OpenRouter unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-  }
-  return content;
+  return _callOpenRouterImpl(prompt, options);
 }
 
 // ====== 百炼 Qwen-VL Vision API ======
@@ -1567,180 +1393,30 @@ function parseWeatherResponse(city: string, data: any): WeatherData | null {
 }
 
 // ====== 火山引擎 TTS 声音复刻 (Voice Cloning) ======
-// V1 接口: https://openspeech.bytedance.com/api/v1/mega_tts/audio/upload
-// 鉴权: Authorization: Bearer;{token}, Resource-Id: seed-icl-1.0 (V1) / seed-icl-2.0 (V2)
-// 价格: 训练 ¥99 一次性, 合成按字符数计费 ~¥0.0001/字
-// 限制: 单文件 ≤ 10MB, 同一 speaker_id 最多 10 次上传
+// 底层实现已迁移到 src/lib/providers/builtin/volcengine.ts
 
-const VOLC_TTS_HOST = 'openspeech.bytedance.com';
-
-export type VoiceCloneStatus = 'NotFound' | 'Training' | 'Success' | 'Failed' | 'Active';
-
-export interface VoiceCloneUploadResult {
-  ok: boolean;
-  speakerId: string;
-  status: VoiceCloneStatus;
-  error?: string;
-}
-
-export interface VoiceCloneStatusResult {
-  speakerId: string;
-  status: VoiceCloneStatus;
-  error?: string;
-}
-
-/** 上传音频做声音复刻(训练阶段,通常 1-5 分钟) */
 export async function cloneVoiceUpload(params: {
   audioBase64: string;
   audioFormat: 'wav' | 'mp3' | 'm4a' | 'ogg' | 'aac' | 'pcm';
   speakerId: string;
-  demoText: string; // 4-80 字, 用于和音频对比校验
-  language?: 0 | 1 | 2 | 3 | 4 | 5; // 0=cn, 1=en, 2=ja, 3=es, 4=id, 5=pt
-  modelType?: 1 | 2 | 3 | 4 | 5; // 1=ICL 1.0, 2=DiT 标准, 4=ICL V2
-}): Promise<VoiceCloneUploadResult> {
-  const appid = getVolcTtsAppId();
-  const accessToken = getVolcTtsAccessToken();
-  if (!appid || !accessToken) {
-    return { ok: false, speakerId: params.speakerId, status: 'Failed', error: 'TTS 服务未配置(VOLC_TTS_APP_ID / VOLC_TTS_ACCESS_TOKEN)' };
-  }
-
-  const modelType = params.modelType ?? 1; // 默认 ICL 1.0
-  const resourceId = modelType >= 4 ? 'seed-icl-2.0' : 'seed-icl-1.0';
-
-  const body = {
-    appid,
-    speaker_id: params.speakerId,
-    audios: [
-      {
-        audio_bytes: params.audioBase64,
-        audio_format: params.audioFormat,
-      },
-    ],
-    source: 2,
-    language: params.language ?? 0,
-    model_type: modelType,
-    text: params.demoText,
-  };
-
-  try {
-    const response = await fetch(`https://${VOLC_TTS_HOST}/api/v1/mega_tts/audio/upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer; ${accessToken}`,
-        'Resource-Id': resourceId,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json();
-    // 火山 V1 返回格式: { status_code, status, message, ... }
-    if (!response.ok || (data.status_code !== undefined && data.status_code !== 0 && data.status_code !== 20000000)) {
-      return {
-        ok: false,
-        speakerId: params.speakerId,
-        status: 'Failed',
-        error: data.message || `上传失败 (HTTP ${response.status})`,
-      };
-    }
-    return {
-      ok: true,
-      speakerId: params.speakerId,
-      status: data.status || 'NotFound',
-    };
-  } catch (e: any) {
-    return {
-      ok: false,
-      speakerId: params.speakerId,
-      status: 'Failed',
-      error: e?.message || '网络错误',
-    };
-  }
+  demoText: string;
+  language?: 0 | 1 | 2 | 3 | 4 | 5;
+  modelType?: 1 | 2 | 3 | 4 | 5;
+}): Promise<import('./providers/builtin/volcengine').VoiceCloneUploadResult> {
+  return _cloneVoiceUpload(params);
 }
 
-/** 查询声音复刻训练状态 */
-export async function cloneVoiceStatus(speakerId: string): Promise<VoiceCloneStatusResult> {
-  const appid = getVolcTtsAppId();
-  const accessToken = getVolcTtsAccessToken();
-  if (!appid || !accessToken) {
-    return { speakerId, status: 'NotFound', error: 'TTS 服务未配置' };
-  }
-
-  try {
-    const response = await fetch(`https://${VOLC_TTS_HOST}/api/v1/mega_tts/status`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer; ${accessToken}`,
-        'Resource-Id': 'seed-icl-1.0',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ appid, speaker_id: speakerId }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      return { speakerId, status: 'NotFound', error: `查询失败 (HTTP ${response.status})` };
-    }
-    return {
-      speakerId,
-      status: data.status || 'NotFound',
-      error: data.message,
-    };
-  } catch (e: any) {
-    return { speakerId, status: 'NotFound', error: e?.message || '网络错误' };
-  }
+export async function cloneVoiceStatus(speakerId: string): Promise<import('./providers/builtin/volcengine').VoiceCloneStatusResult> {
+  return _cloneVoiceStatus(speakerId);
 }
 
-/** 用克隆的 voice_id 合成语音(让数字人用自己声音说) */
 export async function synthesizeWithClonedVoice(params: {
   text: string;
   speakerId: string;
   speed?: number;
   pitch?: number;
 }): Promise<Buffer | null> {
-  const appid = getVolcTtsAppId();
-  const accessToken = getVolcTtsAccessToken();
-  if (!appid || !accessToken) return null;
-
-  const speedRatio = Math.min(Math.max(params.speed ?? 1.15, 0.5), 2.0);
-  const pitchRatio = Math.min(Math.max(params.pitch ?? 1.0, 0.5), 2.0);
-
-  const body = {
-    app: { appid, token: accessToken, cluster: 'volcano_tts' },
-    user: { uid: 'lingji' },
-    audio: {
-      voice_type: params.speakerId, // 克隆的 speaker_id 直接当 voice_type 用
-      encoding: 'mp3',
-      rate: 24000,
-      speed_ratio: speedRatio,
-      pitch_ratio: pitchRatio,
-      volume_ratio: 1.0,
-    },
-    request: {
-      reqid: `tts_clone_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      text: params.text,
-      text_type: 'plain',
-      operation: 'query',
-    },
-  };
-
-  try {
-    const response = await fetch(`https://${VOLC_TTS_HOST}/api/v1/tts`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer; ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-    const data: any = await response.json();
-    if (data.data && data.data.audio) {
-      return Buffer.from(data.data.audio, 'base64');
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return _synthesizeWithClonedVoice(params);
 }
 
 // ====== 阿里 CosyVoice v2 TTS(中文 SOTA) ======
@@ -2049,17 +1725,8 @@ export async function getAvatarVideoStatus(videoId: string): Promise<{
 }
 
 // ====== Function Calling / Agent Tools 支持 ======
+// 底层实现已迁移到 src/lib/providers/builtin/dashscope.ts
 
-interface ToolCallDelta {
-  index: number;
-  id?: string;
-  function?: { name?: string; arguments?: string };
-}
-
-/**
- * 非流式 function calling — 发送带 tools 的请求到 DashScope
- * 返回可能包含 tool_calls 或纯文本内容
- */
 export async function callDeepSeekWithTools(
   messages: ChatMessage[],
   tools: Record<string, unknown>[],
@@ -2071,47 +1738,9 @@ export async function callDeepSeekWithTools(
     tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
   };
 }> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
-
-  const body: Record<string, unknown> = {
-    model: options.model || 'deepseek-v3',
-    messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 4096,
-    tools,
-    tool_choice: 'auto',
-  };
-
-  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, 120000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DashScope tools call failed (${response.status}): ${error.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const choice = data?.choices?.[0];
-  const msg = choice?.message;
-
-  if (!msg) {
-    throw new Error(`DashScope tools unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-  }
-
-  return { message: msg };
+  return _callDeepSeekWithTools(messages, tools, options);
 }
 
-/**
- * 流式 function calling — 解析 SSE delta 中的 text 和 tool_calls
- * 流式返回时可能返回 text delta 或 tool_call delta（不会同时）
- */
 export async function* callDeepSeekStreamWithTools(
   messages: ChatMessage[],
   tools: Record<string, unknown>[],
@@ -2122,117 +1751,5 @@ export async function* callDeepSeekStreamWithTools(
   string,
   unknown
 > {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
-
-  const body: Record<string, unknown> = {
-    model: options.model || 'deepseek-v3',
-    messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 4096,
-    tools,
-    tool_choice: 'auto',
-    stream: true,
-  };
-
-  const response = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, 180000);
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`DeepSeek stream with tools failed: ${error.substring(0, 200)}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
-
-  const decoder = new TextDecoder();
-  let fullContent = '';
-  let buffer = '';
-  // 累积 tool_calls（流式时逐步到达）
-  const toolCallsMap = new Map<number, ToolCallDelta>();
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        if (jsonStr === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const delta = parsed?.choices?.[0]?.delta;
-          if (!delta) continue;
-
-          // 文本 delta
-          if (delta.content) {
-            fullContent += delta.content;
-            yield { type: 'text', content: delta.content };
-          }
-
-          // tool_call delta
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index ?? 0;
-              const existing = toolCallsMap.get(idx) || { index: idx, id: undefined, function: undefined };
-              if (tc.id) existing.id = tc.id;
-              if (tc.function) {
-                if (!existing.function) existing.function = {};
-                if (tc.function.name) existing.function.name = (existing.function.name || '') + tc.function.name;
-                if (tc.function.arguments) existing.function.arguments = (existing.function.arguments || '') + tc.function.arguments;
-              }
-              toolCallsMap.set(idx, existing);
-            }
-          }
-        } catch { /* skip unparseable lines */ }
-      }
-    }
-
-    // 流结束后处理 buffer 残余
-    if (buffer.trim()) {
-      const trimmed = buffer.trim();
-      if (trimmed.startsWith('data:') && trimmed.slice(5).trim() !== '[DONE]') {
-        try {
-          const parsed = JSON.parse(trimmed.slice(5).trim());
-          const delta = parsed?.choices?.[0]?.delta;
-          if (delta?.content) {
-            fullContent += delta.content;
-            yield { type: 'text', content: delta.content };
-          }
-        } catch { /* skip */ }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  // 如果有累积的 tool_calls，在最后 yield 出来
-  if (toolCallsMap.size > 0) {
-    const calls = Array.from(toolCallsMap.values())
-      .sort((a, b) => a.index - b.index)
-      .map((tc) => ({
-        id: tc.id || `call_${tc.index}`,
-        type: 'function' as const,
-        function: {
-          name: tc.function?.name || '',
-          arguments: tc.function?.arguments || '{}',
-        },
-      }));
-    yield { type: 'tool_calls', calls };
-  }
-
-  return fullContent;
+  return yield* _callDeepSeekStreamWithTools(messages, tools, options);
 }

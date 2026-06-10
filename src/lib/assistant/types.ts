@@ -79,6 +79,10 @@ export interface SkillDefinition {
   parameterSchema?: Record<string, unknown>;
   linkedFiles?: Record<string, string[]>;
   linkedContent?: Record<string, string>;
+  /** 绑定的工具名称列表（技能匹配后自动注册这些工具） */
+  boundTools?: string[];
+  /** 必须可用的工具（不可用时技能不激活） */
+  requiredTools?: string[];
   version: string;
   authorId?: string;
   visibility: 'private' | 'public' | 'official';

@@ -1,12 +1,14 @@
 // Agent Loop — ReAct 模式多轮执行
 // Reasoning + Acting: 模型决定调用工具 → 执行 → 结果注入 → 继续 → 最终输出
+// V2: 通过 ModelRouter 解耦模型调用，通过 ContextEngine 实现真实 token 计数
 
 import type { ChatMessage } from '@/lib/ai/types';
 import type { ToolRegistry } from './tools/registry';
-import type { AgentConfig, ToolResult } from './types';
-import { callDeepSeekWithTools, callDeepSeek } from '@/lib/ai-services';
+import type { AgentConfig, AgentLoopOptions } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
-import { compressHistory } from '@/lib/assistant/context-compressor';
+import { ContextEngine } from './context-engine';
+import { executeWithTimeout } from './tool-timeout';
+import { defaultModelRouter } from '@/lib/providers/model-router';
 
 interface AgentLoopResult {
   content: string;
@@ -19,43 +21,77 @@ export async function agentLoop(
   messages: ChatMessage[],
   registry: ToolRegistry,
   context: { userId: string; sessionId?: string; signal?: AbortSignal },
-  config: AgentConfig = DEFAULT_AGENT_CONFIG
+  config: AgentConfig = DEFAULT_AGENT_CONFIG,
+  options: AgentLoopOptions = {}
 ): Promise<AgentLoopResult> {
+  const modelRouter = options.modelRouter ?? defaultModelRouter;
+  const ctxEngine = options.contextEngine ?? new ContextEngine();
+  const hooks = options.hooks;
+  const toolTimeout = options.toolTimeoutMs ?? 120_000;
+
+  // agent:start
+  if (hooks) {
+    await hooks.emit('agent:start', { userId: context.userId, sessionId: context.sessionId, config: { ...config } });
+  }
+
   const toolsUsed = new Set<string>();
-  const toolCallHistory = new Map<string, number>(); // toolName+paramsHash → count
-  let totalTokens = 0;
+  const toolCallHistory = new Map<string, number>();
   let iteration = 0;
   const maxIter = config.maxIterations || 10;
 
   while (iteration < maxIter) {
     if (context.signal?.aborted) {
-      return { content: '执行已取消。', iterations: iteration, toolsUsed: [...toolsUsed], totalTokensUsed: totalTokens };
+      if (hooks) {
+        await hooks.emit('agent:end', {
+          userId: context.userId, sessionId: context.sessionId,
+          response: '执行已取消。', iterations: iteration,
+          toolsUsed: [...toolsUsed],
+        });
+      }
+      return {
+        content: '执行已取消。',
+        iterations: iteration,
+        toolsUsed: [...toolsUsed],
+        totalTokensUsed: ctxEngine.sessionTotalTokens,
+      };
+    }
+
+    // pre_llm_call hook
+    if (hooks) {
+      await hooks.emit('pre_llm_call', { userId: context.userId, sessionId: context.sessionId, messages });
     }
 
     const openaiTools = registry.toOpenAITools();
-    const response = await callDeepSeekWithTools(messages, openaiTools, {
+    const response = await modelRouter.chatWithTools(messages, openaiTools, {
       model: config.model,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
     });
 
-    totalTokens++;
+    // 从 API 响应更新真实 token 计数
+    ctxEngine.updateFromResponse(response.usage);
 
     const msg = response.message;
 
     // 模型返回文本（不再调用工具）
     if (msg.content && !msg.tool_calls?.length) {
+      if (hooks) {
+        await hooks.emit('agent:end', {
+          userId: context.userId, sessionId: context.sessionId,
+          response: msg.content, iterations: iteration + 1,
+          toolsUsed: [...toolsUsed],
+        });
+      }
       return {
         content: msg.content,
         iterations: iteration + 1,
         toolsUsed: [...toolsUsed],
-        totalTokensUsed: totalTokens,
+        totalTokensUsed: ctxEngine.sessionTotalTokens,
       };
     }
 
     // 模型请求调用工具
     if (msg.tool_calls?.length) {
-      // 将 assistant 消息（带 tool_calls）加入历史
       messages.push({
         role: 'assistant',
         content: msg.content || null,
@@ -72,7 +108,7 @@ export async function agentLoop(
           toolArgs = {};
         }
 
-        // 防同参数死循环：同一工具+参数连续 3 次 → 跳过
+        // 防同参数死循环
         const hash = `${toolName}:${JSON.stringify(toolArgs)}`;
         const count = (toolCallHistory.get(hash) || 0) + 1;
         toolCallHistory.set(hash, count);
@@ -85,16 +121,37 @@ export async function agentLoop(
           continue;
         }
 
-        // 执行工具
-        const result: ToolResult = await registry.execute(toolName, toolArgs, {
-          userId: context.userId,
-          sessionId: context.sessionId,
-          signal: context.signal,
-        });
+        // pre_tool_call hook
+        const toolStartTime = Date.now();
+        if (hooks) {
+          await hooks.emit('pre_tool_call', {
+            userId: context.userId, sessionId: context.sessionId,
+            toolName, toolArgs,
+          });
+        }
+
+        // 执行工具（带超时）
+        const tool = registry.get(toolName);
+        const result = tool
+          ? await executeWithTimeout(
+              tool.handler,
+              toolArgs,
+              { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+              { timeoutMs: toolTimeout, isLongRunning: tool.isLongRunning }
+            )
+          : { success: false, output: '', error: `未找到工具: ${toolName}` };
 
         toolsUsed.add(toolName);
 
-        // 截断输出防止 context 溢出
+        // post_tool_call hook
+        if (hooks) {
+          await hooks.emit('post_tool_call', {
+            userId: context.userId, sessionId: context.sessionId,
+            toolName, toolArgs, toolResult: result,
+            toolDuration: Date.now() - toolStartTime,
+          });
+        }
+
         const truncatedOutput = result.success
           ? (result.output.length > 2000 ? result.output.substring(0, 2000) + '\n...(内容已截断)' : result.output)
           : `工具执行失败: ${result.error || '未知错误'}`;
@@ -106,29 +163,27 @@ export async function agentLoop(
         } as unknown as ChatMessage);
       }
 
-      // 多轮后触发压缩
-      if (iteration >= 3 && messages.length > 20) {
-        const { compressedSummary, recentMessages } = await compressHistory(
-          messages.filter((m) => m.role !== 'system') as Array<{ role: 'user' | 'assistant'; content: string }>
-        );
-        if (compressedSummary) {
-          // 保留 system prompt，替换其余为压缩版本
-          const systemMsg = messages.find((m) => m.role === 'system');
-          messages.length = 0;
-          if (systemMsg) messages.push(systemMsg);
-          messages.push({ role: 'user', content: `[对话历史摘要]\n${compressedSummary}` } as ChatMessage);
-          for (const rm of recentMessages) {
-            messages.push(rm as ChatMessage);
-          }
-        }
+      // 上下文压缩（使用 ContextEngine）
+      if (iteration >= 3 && ctxEngine.shouldCompress(messages)) {
+        const compressed = await ctxEngine.compress(messages);
+        messages.length = 0;
+        for (const m of compressed) messages.push(m);
       }
     } else {
-      // 没有 tool_calls 也没有 content — 异常情况
+      // 没有 tool_calls 也没有 content — 异常
+      if (hooks) {
+        await hooks.emit('agent:end', {
+          userId: context.userId, sessionId: context.sessionId,
+          response: msg.content || '无法处理该请求，请换个方式提问。',
+          iterations: iteration + 1,
+          toolsUsed: [...toolsUsed],
+        });
+      }
       return {
         content: msg.content || '无法处理该请求，请换个方式提问。',
         iterations: iteration + 1,
         toolsUsed: [...toolsUsed],
-        totalTokensUsed: totalTokens,
+        totalTokensUsed: ctxEngine.sessionTotalTokens,
       };
     }
 
@@ -142,22 +197,37 @@ export async function agentLoop(
   } as ChatMessage);
 
   try {
-    const finalContent = await callDeepSeek(messages.map((m) => {
-      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-      return `${m.role}: ${content}`;
-    }).join('\n\n'), { temperature: config.temperature, maxTokens: config.maxTokens });
+    const finalContent = await modelRouter.chat(messages, {
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+    });
+    if (hooks) {
+      await hooks.emit('agent:end', {
+        userId: context.userId, sessionId: context.sessionId,
+        response: finalContent, iterations: maxIter,
+        toolsUsed: [...toolsUsed],
+      });
+    }
     return {
       content: finalContent,
       iterations: maxIter,
       toolsUsed: [...toolsUsed],
-      totalTokensUsed: totalTokens + 1,
+      totalTokensUsed: ctxEngine.sessionTotalTokens,
     };
   } catch {
+    if (hooks) {
+      await hooks.emit('agent:end', {
+        userId: context.userId, sessionId: context.sessionId,
+        response: '已达到最大思考步骤。请简化问题后重试。',
+        iterations: maxIter,
+        toolsUsed: [...toolsUsed],
+      });
+    }
     return {
       content: '已达到最大思考步骤。请简化问题后重试。',
       iterations: maxIter,
       toolsUsed: [...toolsUsed],
-      totalTokensUsed: totalTokens,
+      totalTokensUsed: ctxEngine.sessionTotalTokens,
     };
   }
 }

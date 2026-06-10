@@ -84,6 +84,27 @@ export type StreamChunk =
   | { type: 'text'; content: string }
   | { type: 'tool_calls'; calls: ToolCallRequest[] };
 
+// ====== Token 计数 ======
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+// ====== Agent 循环选项 (依赖注入) ======
+
+export interface AgentLoopOptions {
+  /** 自定义 model router（默认 defaultModelRouter） */
+  modelRouter?: import('@/lib/providers/model-router').ModelRouter;
+  /** 自定义 context engine（默认新建 ContextEngine） */
+  contextEngine?: import('@/lib/agent/context-engine').ContextEngine;
+  /** Hook 管理器 */
+  hooks?: import('@/lib/hooks/manager').HookManager;
+  /** 工具调用超时 ms（默认 120000） */
+  toolTimeoutMs?: number;
+}
+
 // ====== Agent 消息类型 ======
 
 export interface AgentMessage extends ChatMessage {

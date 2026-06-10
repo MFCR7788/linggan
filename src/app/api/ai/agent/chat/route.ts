@@ -1,5 +1,6 @@
 // Agent Chat API — 流式多轮 Agent（统一模式：引导式对话 + 工具调用）
 // POST /api/ai/agent/chat → SSE 响应
+// V2: 使用 ContextAssembler 统一组装上下文
 
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
@@ -20,7 +21,7 @@ import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provid
 import { SkillsHub } from '@/lib/assistant/skills/hub';
 import { compressHistory } from '@/lib/assistant/context-compressor';
 import { extractDocuments } from '@/lib/assistant/chat-helpers';
-import type { KnowledgeResult } from '@/lib/assistant/types';
+import { ContextAssembler, MemorySource, KnowledgeSource, SkillSource } from '@/lib/context';
 
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
@@ -71,9 +72,9 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     const supabase = createAdminClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
     // 提取文档内容
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     let documentTexts: string[] = [];
     if (documents.length > 0 && supabaseUrl) {
       documentTexts = await extractDocuments(documents, user.id, supabaseUrl);
@@ -110,9 +111,11 @@ export const POST = withAuth(async ({ request, user }) => {
       if (compressedSummary) summaryBlock = `[对话历史摘要]\n${compressedSummary}`;
     }
 
-    // 并行获取记忆、知识、技能
-    const embedding = await generateEmbedding(effectiveContent).catch(() => [] as number[]);
+    // 初始化工具注册表
+    const registry = new ToolRegistry();
+    registerAllBuiltinTools(registry);
 
+    // 初始化记忆/知识/技能
     const memoryManager = new MemoryManager();
     memoryManager.addProvider(new BuiltinMemoryProvider());
     await memoryManager.initialize(user.id);
@@ -124,49 +127,34 @@ export const POST = withAuth(async ({ request, user }) => {
     const skillsHub = new SkillsHub({ userId: user.id });
     await skillsHub.initialize();
 
-    const [memoryBlock, knowledgeResults, skillMatches] = await Promise.all([
-      memoryManager.prefetchAll(effectiveContent, embedding).catch(() => ''),
-      knowledgeManager.search(effectiveContent, embedding, user.id, 3).catch(() => ({ results: [] as KnowledgeResult[], sources: [], fellBackToWeb: false })),
-      skillsHub.matchSkills(effectiveContent, 1),
-    ]);
+    // === V2: 使用 ContextAssembler 统一组装上下文 ===
+    const assembler = new ContextAssembler(AGENT_SYSTEM_PROMPT);
+    assembler.registerSource(new MemorySource(memoryManager));
+    assembler.registerSource(new KnowledgeSource(knowledgeManager));
+    assembler.registerSource(new SkillSource(skillsHub, registry));
 
-    const skillsBlock = skillMatches.length > 0 ? skillsHub.buildSkillsPromptBlock() : '';
-
-    // 构建统一的 system prompt
-    let systemPrompt = AGENT_SYSTEM_PROMPT;
-
-    if (summaryBlock) systemPrompt += `\n\n${summaryBlock}`;
-    if (memoryBlock) systemPrompt += `\n\n## 用户记忆\n${memoryBlock}`;
-    if (knowledgeResults.results && knowledgeResults.results.length > 0) {
-      const kbBlock = knowledgeResults.results
-        .map((r: { title: string; content: string }) => `- ${r.title}: ${r.content.substring(0, 500)}`)
-        .join('\n');
-      systemPrompt += `\n\n## 知识库\n${kbBlock}`;
-    }
-    if (skillsBlock) systemPrompt += `\n\n${skillsBlock}`;
+    const assembled = await assembler.assemble({
+      userId: user.id,
+      sessionId: sessionId || undefined,
+      userMessage: content,
+      images,
+      documents,
+      historyMessages: historyMessages.length > 0 ? historyMessages : undefined,
+      summaryBlock: summaryBlock || undefined,
+    });
 
     const agentConfig = {
       ...DEFAULT_CONFIG,
       ...(selectedModel ? { model: selectedModel } : {}),
     };
 
-    // 构建 messages
-    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
-    for (const hm of historyMessages) messages.push(hm);
-
-    let userContent = content;
-    if (images.length > 0) userContent += `\n\n[用户上传了 ${images.length} 张图片，AI 可以通过 analyze_image 工具分析这些图片: ${images.join(', ')}]`;
+    // 补充文档内容到 user message
     if (documentTexts.length > 0) {
-      userContent += `\n\n[用户上传了文档，以下是文档内容]\n\n${documentTexts.join('\n\n---\n\n')}`;
-    } else if (documents.length > 0) {
-      userContent += `\n\n[用户上传了 ${documents.length} 个文档（未能抽取文本内容）: ${documents.join(', ')}]`;
+      const lastMsg = assembled.messages[assembled.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'user') {
+        lastMsg.content += `\n\n[文档内容]\n\n${documentTexts.join('\n\n---\n\n')}`;
+      }
     }
-    if (!userContent.trim()) userContent = '请分析上传的文件';
-    messages.push({ role: 'user', content: userContent });
-
-    // 初始化全部工具
-    const registry = new ToolRegistry();
-    registerAllBuiltinTools(registry);
 
     // SSE 流
     const encoder = new TextEncoder();
@@ -184,7 +172,7 @@ export const POST = withAuth(async ({ request, user }) => {
         try {
           let finalContent = '';
 
-          for await (const event of agentStreamLoop(messages, registry, {
+          for await (const event of agentStreamLoop(assembled.messages, registry, {
             userId: user.id,
             sessionId: sessionId || undefined,
             signal: abortController.signal,
