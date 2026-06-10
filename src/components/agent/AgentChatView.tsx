@@ -9,7 +9,7 @@ import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { SkillRecommendCards, useSkillRecommendations } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
-import { ChoiceCards } from './ChoiceCards';
+import { ChoiceCards, type ChoiceSelection } from './ChoiceCards';
 import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
@@ -48,6 +48,7 @@ export function AgentChatView() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
+  const [choiceSelections, setChoiceSelections] = useState<Map<number, ChoiceSelection>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -456,17 +457,27 @@ export function AgentChatView() {
     } catch { /* 静默失败 */ }
   }, []);
 
-  const handleChoiceSubmit = useCallback(async (selected: ChoiceOption[]) => {
+  const handleChoiceSubmit = useCallback(async () => {
     if (isStreaming || choiceSubmitting) return;
-    setChoiceSubmitting(true);
 
-    const labels = selected.map(o => o.label).join('、');
-    // 找最后一条用户消息作为上下文
+    // 收集所有 block 的选择
+    const parts: string[] = [];
+    for (const sel of choiceSelections.values()) {
+      for (const opt of sel.options) {
+        parts.push(opt.label);
+      }
+      if (sel.customInput.trim()) {
+        parts.push(sel.customInput.trim());
+      }
+    }
+    if (parts.length === 0) return;
+
+    setChoiceSubmitting(true);
+    const labels = parts.join('、');
     const lastUserMsg = [...messages].reverse().find(m => m.type === 'user');
     const context = lastUserMsg?.content || '';
     const choiceText = `我的选择：${labels}${context ? `\n\n原始需求：${context}` : ''}`;
 
-    // 构造上下文信息发送
     const userMsg: UIMessage = {
       id: crypto.randomUUID(),
       type: 'user',
@@ -476,10 +487,11 @@ export function AgentChatView() {
     };
 
     setMessages(prev => [...prev, userMsg]);
+    setChoiceSelections(new Map());
 
     await doStream(choiceText, [], [], [], [], currentSessionId);
     setChoiceSubmitting(false);
-  }, [isStreaming, choiceSubmitting, messages, currentSessionId, doStream]);
+  }, [isStreaming, choiceSubmitting, choiceSelections, messages, currentSessionId, doStream]);
 
   // 会话操作
   const handleSwitchSession = (session: AgentSession) => {
@@ -506,6 +518,7 @@ export function AgentChatView() {
   const handleNewSession = () => {
     createSession();
     setMessages([]);
+    setChoiceSelections(new Map());
     setShowSessionList(false);
   };
 
@@ -653,16 +666,52 @@ export function AgentChatView() {
           if (!lastMsg || lastMsg.type !== 'assistant' || isStreaming) return null;
           const { choices } = parseChoices(lastMsg.content);
           if (choices.length === 0) return null;
+
+          const hasAnySelection = Array.from(choiceSelections.values()).some(
+            s => s.options.length > 0 || s.customInput.trim()
+          );
+
           return (
             <div className="px-4">
               {choices.map((block, i) => (
                 <ChoiceCards
                   key={i}
                   block={block}
-                  onSelect={handleChoiceSubmit}
-                  submitting={choiceSubmitting}
+                  onChange={(sel) => {
+                    setChoiceSelections(prev => {
+                      const next = new Map(prev);
+                      next.set(i, sel);
+                      return next;
+                    });
+                  }}
                 />
               ))}
+
+              {/* 统一发送选择按钮 — 最下方 */}
+              <button
+                onClick={handleChoiceSubmit}
+                disabled={!hasAnySelection || choiceSubmitting}
+                className="w-full mt-3 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                style={{
+                  background: hasAnySelection
+                    ? 'linear-gradient(135deg, #3B82F6, #8B5CF6)'
+                    : 'rgba(255,255,255,0.08)',
+                  color: hasAnySelection ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
+                  opacity: choiceSubmitting ? 0.6 : 1,
+                  cursor: hasAnySelection ? 'pointer' : 'default',
+                }}
+              >
+                {choiceSubmitting ? (
+                  <>处理中...</>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    发送选择
+                  </>
+                )}
+              </button>
             </div>
           );
         })()}
