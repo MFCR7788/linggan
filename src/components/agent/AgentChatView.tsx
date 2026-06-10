@@ -18,6 +18,7 @@ import { useAgentSessions } from '@/hooks/use-agent-sessions';
 import type { AttachedFile } from '@/hooks/use-file-upload';
 import type { AgentSession } from '@/hooks/use-agent-sessions';
 import { ACCOUNT_TYPE_PRESETS, type RecommendationCombo, type AccountTypePreset } from '@/lib/account-presets';
+import { scheduleNotification } from '@/lib/notification-service';
 
 interface UIMessage {
   id: string;
@@ -579,9 +580,57 @@ export function AgentChatView() {
     }
   }, []);
 
-  const addToSchedule = useCallback(async (msg: UIMessage, scheduleIndex?: number) => {
+  // 保存后立即调度通知提醒
+  const scheduleReminder = (schedule: { id: string; title: string; scheduled_at: string; description?: string; remind_before?: number }) => {
+    const scheduledAt = new Date(schedule.scheduled_at);
+    if (isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) return;
+    const id = Math.abs(schedule.id.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)) % 2147483647;
+    scheduleNotification({
+      id,
+      title: schedule.title,
+      body: schedule.description || `${scheduledAt.toLocaleString('zh-CN')} 开始`,
+      scheduledAt,
+      remindBeforeMinutes: schedule.remind_before || 30,
+    });
+  };
+
+  const addToSchedule = useCallback(async (msg: UIMessage, scheduleIndex?: number, editedData?: { title: string; scheduled_at: string; description?: string; location?: string }) => {
     const list = msg.schedules;
     if (!list || list.length === 0) return;
+
+    // 单条编辑模式：使用编辑后的数据
+    if (scheduleIndex !== undefined && editedData) {
+      const s = list[scheduleIndex];
+      const merged = { ...s, ...editedData };
+      setSchedulingId(msg.id);
+      try {
+        const baseUrl = window.location.origin;
+        const res = await fetch(`${baseUrl}/api/schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: merged.title,
+            description: merged.description || undefined,
+            scheduled_at: merged.scheduled_at,
+            location: merged.location || undefined,
+            color: '#8B5CF6',
+            remind_before: 30,
+            suggestions: s.suggestions?.length ? s.suggestions : undefined,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data?.id) {
+            scheduleReminder(data.data);
+          }
+          setScheduledItems(prev => { const next = new Set(prev); next.add(`${msg.id}-${scheduleIndex}`); return next; });
+        }
+      } catch { /* ignore */ }
+      setTimeout(() => setSchedulingId(null), 2000);
+      return;
+    }
+
+    // 批量添加模式
     const itemsToAdd = scheduleIndex !== undefined
       ? [list[scheduleIndex]]
       : list.filter((_, i) => !scheduledItems.has(`${msg.id}-${i}`));
@@ -590,7 +639,7 @@ export function AgentChatView() {
     try {
       const baseUrl = window.location.origin;
       for (const s of itemsToAdd) {
-        await fetch(`${baseUrl}/api/schedule`, {
+        const res = await fetch(`${baseUrl}/api/schedule`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -603,6 +652,12 @@ export function AgentChatView() {
             suggestions: s.suggestions?.length ? s.suggestions : undefined,
           }),
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data?.id) {
+            scheduleReminder(data.data);
+          }
+        }
       }
       setScheduledItems(prev => {
         const next = new Set(prev);
@@ -903,23 +958,13 @@ export function AgentChatView() {
               你好！我是灵集AI，你的智能创作助手
             </h2>
 
-            {/* 能力标签 */}
-            <p className="text-sm text-white/50 mb-1">
-              AI 文案 · 生图 · 视频 · 配音 · 热点 · 知识问答
-            </p>
-
             {/* 副标题 */}
-            <p className="text-xs text-white mb-1">
+            <p className="text-xs text-white mb-4">
               从灵感采集到内容创作，一站式帮你高效产出优质内容
             </p>
 
-            {/* 引导语 */}
-            <p className="text-lg text-blue-300 mb-6">
-              今天你有什么灵感，发送给我！
-            </p>
-
             {/* 账号类型选择 / 推荐组合 */}
-            <div className="w-full max-w-sm">
+            <div className="w-full max-w-sm mb-4">
               {!selectedAccountType ? (
                 <>
                   {/* 搜索 */}
@@ -997,12 +1042,10 @@ export function AgentChatView() {
               )}
             </div>
 
-            {/* 快捷能力标签 — 未选账号类型时显示 */}
-            {!selectedAccountType && (
-              <div className="mt-4 w-full max-w-sm">
-                <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
-              </div>
-            )}
+            {/* 引导语 — 账号类型下方 */}
+            <p className="text-lg text-blue-300 mt-2">
+              今天你有什么灵感，发送给我！
+            </p>
           </div>
         )}
 
@@ -1068,7 +1111,7 @@ export function AgentChatView() {
               schedules={msg.schedules}
               scheduledItems={scheduledItems}
               schedulingId={schedulingId}
-              onAddSchedule={(idx) => addToSchedule(msg, idx)}
+              onAddSchedule={(idx, edited) => addToSchedule(msg, idx, edited)}
               onAddAllSchedules={() => addToSchedule(msg)}
               messageId={msg.id}
               timestamp={msg.timestamp}
@@ -1163,7 +1206,11 @@ export function AgentChatView() {
       )}
 
       {/* 输入区域 — 固定置底 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 py-3 z-10" style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 pt-2 pb-3 z-10" style={{ maxWidth: 480, margin: '0 auto' }}>
+        {/* 快捷能力标签 — 输入框上方 */}
+        <div className="mb-2">
+          <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
+        </div>
         <div className="relative">
         {isRecording ? (
           <div className="flex flex-col gap-2">

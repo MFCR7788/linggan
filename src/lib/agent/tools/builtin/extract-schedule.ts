@@ -15,17 +15,24 @@ export const extractScheduleTool: ToolDefinition = {
     const text = params.text as string;
 
     try {
-      const prompt = `请从以下文本中提取日程信息，以JSON数组格式返回。每个日程包含以下字段：
+      const now = new Date();
+      const todayStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      const nowIso = now.toISOString();
+
+      const prompt = `当前日期时间：${todayStr} (${nowIso})
+
+请从以下文本中提取日程信息，以JSON数组格式返回。每个日程包含以下字段：
 - title: 日程标题
-- scheduled_at: ISO 8601 格式的日期时间（如 "2026-06-12T15:00:00"）
+- scheduled_at: ISO 8601 格式的日期时间（如 "${now.toISOString().substring(0, 10)}T15:00:00"）
 - description: 日程描述（可选）
 - location: 地点（可选）
 
 注意：
-1. 识别相对时间（如"明天下午3点"→转换为具体日期时间，假设当前日期为今天）
-2. 识别多个日程（如"下周一到周三每天下午开会"）
-3. 如果没有明确的日程信息，返回空数组 []
-4. 只返回JSON数组，不要其他文字
+1. 识别相对时间（如"明天下午3点"→根据当前日期转换为具体日期时间）
+2. 如果文本中没有指定年份，默认使用当前年份 ${now.getFullYear()}
+3. 识别多个日程（如"下周一到周三每天下午开会"）
+4. 如果没有明确的日程信息，返回空数组 []
+5. 只返回JSON数组，不要其他文字
 
 文本内容：
 ${text}`;

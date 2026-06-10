@@ -16,7 +16,7 @@ interface AgentMessageProps {
   schedules?: Array<{ title: string; scheduled_at: string; description?: string; location?: string; suggestions?: string[] }>;
   scheduledItems?: Set<string>;
   schedulingId?: string | null;
-  onAddSchedule?: (index: number) => void;
+  onAddSchedule?: (index: number, edited?: { title: string; scheduled_at: string; description?: string; location?: string }) => void;
   onAddAllSchedules?: () => void;
   messageId?: string;
   timestamp?: Date;
@@ -40,6 +40,7 @@ export function AgentMessage({
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<{ index: number; title: string; scheduled_at: string; description: string; location: string } | null>(null);
   const isUser = type === 'user';
 
   const toggleTool = (index: number) => {
@@ -210,7 +211,18 @@ export function AgentMessage({
                   )}
                   {onAddSchedule && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); onAddSchedule(idx); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const d = new Date(s.scheduled_at);
+                        const localDT = isNaN(d.getTime()) ? '' : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().substring(0, 16);
+                        setEditingSchedule({
+                          index: idx,
+                          title: s.title || '',
+                          scheduled_at: localDT,
+                          description: s.description || '',
+                          location: s.location || '',
+                        });
+                      }}
                       disabled={scheduledItems?.has(`${messageId}-${idx}`) || schedulingId !== null}
                       className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80 disabled:opacity-50"
                       style={{ background: scheduledItems?.has(`${messageId}-${idx}`) ? 'rgba(16,185,129,0.5)' : 'rgba(139,92,246,0.4)' }}
@@ -358,6 +370,96 @@ export function AgentMessage({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* 日程编辑弹窗 */}
+      {editingSchedule && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setEditingSchedule(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{ background: 'rgba(30,41,59,0.98)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 700 }}>编辑日程</h3>
+              <button onClick={() => setEditingSchedule(null)} className="p-1 rounded-full hover:bg-white/10">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="日程标题"
+                value={editingSchedule.title}
+                onChange={e => setEditingSchedule(prev => prev ? { ...prev, title: e.target.value } : null)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-gray-200 outline-none"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              <input
+                type="datetime-local"
+                value={editingSchedule.scheduled_at}
+                onChange={e => setEditingSchedule(prev => prev ? { ...prev, scheduled_at: e.target.value } : null)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-gray-200 outline-none"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', colorScheme: 'dark' }}
+              />
+              <input
+                type="text"
+                placeholder="描述（可选）"
+                value={editingSchedule.description}
+                onChange={e => setEditingSchedule(prev => prev ? { ...prev, description: e.target.value } : null)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-gray-200 outline-none"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              <input
+                type="text"
+                placeholder="地点（可选）"
+                value={editingSchedule.location}
+                onChange={e => setEditingSchedule(prev => prev ? { ...prev, location: e.target.value } : null)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-gray-200 outline-none"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditingSchedule(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-white/5"
+                style={{ background: 'rgba(255,255,255,0.06)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  if (!editingSchedule.title.trim() || !editingSchedule.scheduled_at) return;
+                  const d = new Date(editingSchedule.scheduled_at);
+                  const isoStr = d.toISOString();
+                  onAddSchedule?.(editingSchedule.index, {
+                    title: editingSchedule.title.trim(),
+                    scheduled_at: isoStr,
+                    description: editingSchedule.description.trim() || undefined,
+                    location: editingSchedule.location.trim() || undefined,
+                  });
+                  setEditingSchedule(null);
+                }}
+                disabled={!editingSchedule.title.trim() || !editingSchedule.scheduled_at}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                style={{
+                  background: !editingSchedule.title.trim() || !editingSchedule.scheduled_at
+                    ? 'rgba(139,92,246,0.3)'
+                    : 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                  color: '#FFFFFF',
+                }}
+              >
+                保存日程
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
