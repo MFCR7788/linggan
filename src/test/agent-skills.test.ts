@@ -188,3 +188,60 @@ describe('Skill ↔ Tool Bridge', () => {
     expect(session.activeSkillIds.size).toBe(0);
   });
 });
+
+// ChoiceCards parseChoices 测试
+import { parseChoices } from '@/lib/agent/choice-parser';
+
+describe('parseChoices', () => {
+  it('解析多选 choices', () => {
+    const text = '请选择：\n<choices multi="true">\n选项A: 描述A\n选项B: 描述B\n选项C\n</choices>\n还有其他需求吗？';
+    const { choices, cleanedText } = parseChoices(text);
+
+    expect(choices.length).toBe(1);
+    expect(choices[0].multi).toBe(true);
+    expect(choices[0].options.length).toBe(3);
+    expect(choices[0].options[0].label).toBe('选项A');
+    expect(choices[0].options[0].description).toBe('描述A');
+    expect(choices[0].options[2].label).toBe('选项C');
+    expect(choices[0].options[2].description).toBeUndefined();
+
+    // 清理后的文本不包含 choices 标签
+    expect(cleanedText).not.toContain('<choices');
+    expect(cleanedText).toContain('还有其他需求吗？');
+  });
+
+  it('解析单选的 choices（multi="false"）', () => {
+    const text = '<choices multi="false">日系: 简约风|复古: 工业风</choices>';
+    const { choices } = parseChoices(text);
+
+    expect(choices[0].multi).toBe(false);
+    expect(choices[0].options.length).toBe(2);
+  });
+
+  it('默认多选（无 multi 属性）', () => {
+    const text = '<choices>选项1|选项2|选项3</choices>';
+    const { choices } = parseChoices(text);
+
+    expect(choices[0].multi).toBe(true);
+    expect(choices[0].options.length).toBe(3);
+  });
+
+  it('无 choices 标签时返回空数组', () => {
+    const text = '这是一个普通消息，没有选项标签。';
+    const { choices, cleanedText } = parseChoices(text);
+
+    expect(choices.length).toBe(0);
+    expect(cleanedText).toBe(text);
+  });
+
+  it('多个 choices 块分别解析', () => {
+    const text = '<choices multi="false">A|B</choices> 中间文字 <choices multi="true">C|D|E</choices>';
+    const { choices } = parseChoices(text);
+
+    expect(choices.length).toBe(2);
+    expect(choices[0].multi).toBe(false);
+    expect(choices[0].options.length).toBe(2);
+    expect(choices[1].multi).toBe(true);
+    expect(choices[1].options.length).toBe(3);
+  });
+});

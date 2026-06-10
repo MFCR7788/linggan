@@ -9,6 +9,8 @@ import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { SkillRecommendCards, useSkillRecommendations } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
+import { ChoiceCards } from './ChoiceCards';
+import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
 import { useFileUpload } from '@/hooks/use-file-upload';
@@ -45,6 +47,7 @@ export function AgentChatView() {
   const [showTools, setShowTools] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [choiceSubmitting, setChoiceSubmitting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -453,6 +456,31 @@ export function AgentChatView() {
     } catch { /* 静默失败 */ }
   }, []);
 
+  const handleChoiceSubmit = useCallback(async (selected: ChoiceOption[]) => {
+    if (isStreaming || choiceSubmitting) return;
+    setChoiceSubmitting(true);
+
+    const labels = selected.map(o => o.label).join('、');
+    // 找最后一条用户消息作为上下文
+    const lastUserMsg = [...messages].reverse().find(m => m.type === 'user');
+    const context = lastUserMsg?.content || '';
+    const choiceText = `我的选择：${labels}${context ? `\n\n原始需求：${context}` : ''}`;
+
+    // 构造上下文信息发送
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: choiceText,
+      toolCalls: [],
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+
+    await doStream(choiceText, [], [], [], [], currentSessionId);
+    setChoiceSubmitting(false);
+  }, [isStreaming, choiceSubmitting, messages, currentSessionId, doStream]);
+
   // 会话操作
   const handleSwitchSession = (session: AgentSession) => {
     switchSession(session.id);
@@ -593,25 +621,51 @@ export function AgentChatView() {
           </div>
         )}
 
-        {messages.map((msg) => (
-          <AgentMessage
-            key={msg.id}
-            type={msg.type}
-            content={msg.content}
-            toolCalls={msg.toolCalls.length > 0 ? msg.toolCalls : undefined}
-            attachments={msg.attachments}
-            generatedImages={msg.generatedImages}
-            generatedVideo={msg.generatedVideo}
-            generatedAudio={msg.generatedAudio}
-            timestamp={msg.timestamp}
-            onCopy={() => handleCopy(msg)}
-            onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
-            onDelete={() => handleDelete(msg)}
-            onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
-            isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id}
-            isRegenerating={regeneratingId === msg.id}
-          />
-        ))}
+        {messages.map((msg) => {
+          // 对 assistant 消息，始终清理 choices 标签，避免显示原始 XML
+          const cleaned = msg.type === 'assistant' ? parseChoices(msg.content).cleanedText : msg.content;
+          const displayContent = cleaned || msg.content;
+
+          return (
+            <AgentMessage
+              key={msg.id}
+              type={msg.type}
+              content={displayContent}
+              toolCalls={msg.toolCalls.length > 0 ? msg.toolCalls : undefined}
+              attachments={msg.attachments}
+              generatedImages={msg.generatedImages}
+              generatedVideo={msg.generatedVideo}
+              generatedAudio={msg.generatedAudio}
+              timestamp={msg.timestamp}
+              onCopy={() => handleCopy(msg)}
+              onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
+              onDelete={() => handleDelete(msg)}
+              onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
+              isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id}
+              isRegenerating={regeneratingId === msg.id}
+            />
+          );
+        })}
+
+        {/* 交互式选项卡片 — 最后一条 assistant 消息包含 choices 时显示 */}
+        {(() => {
+          const lastMsg = messages[messages.length - 1];
+          if (!lastMsg || lastMsg.type !== 'assistant' || isStreaming) return null;
+          const { choices } = parseChoices(lastMsg.content);
+          if (choices.length === 0) return null;
+          return (
+            <div className="px-4">
+              {choices.map((block, i) => (
+                <ChoiceCards
+                  key={i}
+                  block={block}
+                  onSelect={handleChoiceSubmit}
+                  submitting={choiceSubmitting}
+                />
+              ))}
+            </div>
+          );
+        })()}
 
         {/* 思考指示器 */}
         {isStreaming && (statusText === 'executing' || statusText === 'thinking' || statusText) && (
