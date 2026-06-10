@@ -658,7 +658,7 @@ export function AgentChatView() {
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {editingTitle ? (
+            {editingTitle === currentSessionId ? (
               <input
                 autoFocus
                 value={editTitleValue}
@@ -727,13 +727,51 @@ export function AgentChatView() {
               ) : sessions.map(s => (
                 <div
                   key={s.id}
-                  onClick={() => handleSwitchSession(s)}
-                  className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-700/50 text-sm ${s.id === currentSessionId ? 'bg-gray-700/30 text-white' : 'text-gray-400'}`}
+                  onClick={() => { if (editingTitle !== s.id) handleSwitchSession(s); }}
+                  className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-700/50 text-sm ${s.id === currentSessionId ? 'bg-gray-700/30 text-white' : 'text-gray-400'}`}
                 >
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
-                  <span className="truncate flex-1">{s.title}</span>
+                  {editingTitle === s.id ? (
+                    <input
+                      autoFocus
+                      value={editTitleValue}
+                      onChange={(e) => setEditTitleValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEditTitle();
+                        if (e.key === 'Escape') setEditingTitle(null);
+                      }}
+                      onBlur={saveEditTitle}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-gray-600 text-white text-sm rounded px-1.5 py-0.5 outline-none flex-1 min-w-0"
+                    />
+                  ) : (
+                    <span
+                      className="truncate flex-1"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        startEditTitle(s.id, s.title);
+                      }}
+                      title="双击修改名称"
+                    >{s.title}</span>
+                  )}
+                  {editingTitle !== s.id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        startEditTitle(s.id, s.title);
+                      }}
+                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="修改名称"
+                    >
+                      <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={(e) => handleDeleteSession(e, s.id)}
                     className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0"
