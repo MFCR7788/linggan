@@ -39,17 +39,6 @@ interface ScheduleItem {
   suggestions?: string[];
 }
 
-const AVAILABLE_MODELS = [
-  { id: 'deepseek-v3', name: 'DeepSeek V3', provider: 'DashScope', costLabel: '极低价', costColor: '#10B981' },
-  { id: 'deepseek-r1', name: 'DeepSeek R1', provider: 'DashScope', costLabel: '低价', costColor: '#10B981' },
-  { id: 'qwen-plus', name: 'Qwen Plus', provider: 'DashScope', costLabel: '低价', costColor: '#10B981' },
-  { id: 'qwen-max', name: 'Qwen Max', provider: 'DashScope', costLabel: '中价', costColor: '#F59E0B' },
-  { id: 'doubao-pro-32k', name: '豆包 Pro 32K', provider: '火山引擎', costLabel: '低价', costColor: '#10B981' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenRouter', costLabel: '低价', costColor: '#10B981' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenRouter', costLabel: '高价', costColor: '#EF4444' },
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'OpenRouter', costLabel: '高价', costColor: '#EF4444' },
-];
-
 interface ToolCallRecord {
   tool: string;
   params: Record<string, unknown>;
@@ -72,11 +61,8 @@ export function AgentChatView() {
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('deepseek-v3');
-  const [showModelPicker, setShowModelPicker] = useState(false);
   const [scheduledItems, setScheduledItems] = useState<Set<string>>(new Set());
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
-  const [availableModelIds, setAvailableModelIds] = useState<Set<string> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -137,25 +123,6 @@ export function AgentChatView() {
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [input]);
-
-  // 获取可用模型列表
-  useEffect(() => {
-    fetch('/api/ai/agent/models')
-      .then(r => r.json())
-      .then(d => {
-        if (d.success && Array.isArray(d.data)) {
-          setAvailableModelIds(new Set(d.data.map((m: { id: string }) => m.id)));
-          // 当前选中的模型不可用时回退到第一个可用
-          if (d.data.length > 0) {
-            const ids = d.data.map((m: { id: string }) => m.id);
-            if (!ids.includes(selectedModel)) {
-              setSelectedModel(ids[0]);
-            }
-          }
-        }
-      })
-      .catch(() => setAvailableModelIds(null)); // 获取失败不阻塞，显示全部
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 加载会话列表
   useEffect(() => {
@@ -218,7 +185,6 @@ export function AgentChatView() {
         images: uploadedImages.length > 0 ? uploadedImages : undefined,
         documents: uploadedDocs.length > 0 ? uploadedDocs : undefined,
         session_id: sessionId || undefined,
-        model: selectedModel,
       })) {
         switch (event.type) {
           case 'thinking':
@@ -314,7 +280,7 @@ export function AgentChatView() {
       setIsStreaming(false);
       sseClientRef.current = null;
     }
-  }, [selectedModel]);
+  }, []);
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
@@ -685,59 +651,6 @@ export function AgentChatView() {
 
         {/* 会话选择器 — 居中 */}
         <div className="flex-1 flex justify-center items-center gap-2">
-          {/* 模型选择器 */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelPicker(!showModelPicker)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
-              title="切换模型"
-            >
-              {availableModelIds === null ? (
-                <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <span className="text-[11px] text-gray-400 truncate max-w-[80px]">
-                  {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || selectedModel}
-                </span>
-              )}
-              <svg className="w-3 h-3 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {showModelPicker && (() => {
-              const visibleModels = availableModelIds
-                ? AVAILABLE_MODELS.filter(m => availableModelIds.has(m.id))
-                : AVAILABLE_MODELS;
-              return (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setShowModelPicker(false)} />
-                  <div className="absolute top-10 left-0 z-30 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-80 overflow-y-auto">
-                    {visibleModels.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => { setSelectedModel(m.id); setShowModelPicker(false); }}
-                        className={`flex items-center gap-2 w-full px-3 py-2 hover:bg-gray-700/50 text-sm ${m.id === selectedModel ? 'bg-gray-700/30 text-white' : 'text-gray-400'}`}
-                      >
-                        <div className="flex-1 text-left">
-                          <div className="text-xs">{m.name}</div>
-                          <div className="text-[10px] text-gray-500">{m.provider}</div>
-                        </div>
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
-                          style={{ background: `${m.costColor}20`, color: m.costColor }}
-                        >
-                          {m.costLabel}
-                        </span>
-                      </button>
-                    ))}
-                    {visibleModels.length === 0 && (
-                      <div className="p-3 text-center text-xs text-gray-500">暂无可用的 Agent 模型</div>
-                    )}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-
           <button
             onClick={() => setShowSessionList(!showSessionList)}
             className="flex items-center gap-1.5 max-w-[200px]"
