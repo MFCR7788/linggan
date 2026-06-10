@@ -8,7 +8,7 @@ import { AgentChatView } from '@/components/agent/AgentChatView';
 export default function AgentPage() {
   return (
     <ProtectedRoute>
-      <div className="flex flex-col h-full bg-[#0A1629]">
+      <div className="flex flex-col h-screen bg-[#0A1629]">
         <AgentChatView />
       </div>
     </ProtectedRoute>

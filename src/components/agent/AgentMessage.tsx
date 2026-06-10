@@ -9,10 +9,11 @@ interface AgentMessageProps {
   type: 'user' | 'assistant';
   content: string;
   toolCalls?: Array<{ tool: string; params: Record<string, unknown>; result?: { success: boolean; output: string; error?: string } }>;
+  attachments?: Array<{ url: string; name: string; type: 'image' | 'document' }>;
   timestamp?: Date;
 }
 
-export function AgentMessage({ type, content, toolCalls = [], timestamp }: AgentMessageProps) {
+export function AgentMessage({ type, content, toolCalls = [], attachments, timestamp }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const isUser = type === 'user';
 
@@ -28,6 +29,26 @@ export function AgentMessage({ type, content, toolCalls = [], timestamp }: Agent
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 px-4`}>
       <div className={`max-w-[85%] ${isUser ? 'order-1' : 'order-1'}`}>
+        {/* 附件预览（仅用户消息） */}
+        {isUser && attachments && attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2 justify-end">
+            {attachments.map((att, i) => (
+              <div key={i} className="overflow-hidden rounded-lg">
+                {att.type === 'image' ? (
+                  <img src={att.url} alt={att.name} className="w-20 h-20 object-cover rounded-lg border border-white/10" loading="lazy" />
+                ) : (
+                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 hover:bg-blue-500/30 transition-colors">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="truncate max-w-[120px]">{att.name}</span>
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 消息气泡 */}
         <div
           className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${

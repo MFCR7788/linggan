@@ -56,5 +56,5 @@ export type { DisclosureLevel, SkillsHubOptions } from './skills/hub';
 
 // Agent
 export { ToolRegistry, registerAllBuiltinTools, agentLoop, agentStreamLoop } from '../agent';
-export { CONVERSATIONAL_SYSTEM_PROMPT, CONVERSATIONAL_CONFIG, CONVERSATIONAL_TOOLS, isConversationalQuery } from '../agent';
+export { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '../agent';
 export type { ToolDefinition, ToolContext, ToolResult, AgentEvent, AgentConfig, ToolCallRequest } from '../agent';

@@ -1,21 +1,15 @@
-// Agent Chat API — 流式多轮 Agent + 小白友好对话
+// Agent Chat API — 流式多轮 Agent（统一模式：引导式对话 + 工具调用）
 // POST /api/ai/agent/chat → SSE 响应
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
 import { createAdminClient } from '@/lib/supabase-server';
 import { ToolRegistry, registerAllBuiltinTools } from '@/lib/agent/tools';
 import { agentStreamLoop } from '@/lib/agent/stream';
-import {
-  CONVERSATIONAL_SYSTEM_PROMPT,
-  CONVERSATIONAL_CONFIG,
-  CONVERSATIONAL_TOOLS,
-  isConversationalQuery,
-} from '@/lib/agent/conversational';
-import { DEFAULT_AGENT_CONFIG } from '@/lib/agent/types';
-import type { AgentConfig, AgentEvent } from '@/lib/agent/types';
+import { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '@/lib/agent/conversational';
+import type { AgentEvent } from '@/lib/agent/types';
 import type { ChatMessage } from '@/lib/ai/types';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
@@ -24,11 +18,10 @@ import { KnowledgeManager } from '@/lib/assistant/knowledge/manager';
 import { InspirationKnowledgeProvider } from '@/lib/assistant/knowledge/inspiration-provider';
 import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provider';
 import { SkillsHub } from '@/lib/assistant/skills/hub';
-import { compressHistory, buildCompressedMessages } from '@/lib/assistant/context-compressor';
-import { LINGJI_IDENTITY } from '@/lib/assistant';
+import { compressHistory } from '@/lib/assistant/context-compressor';
+import { extractDocuments } from '@/lib/assistant/chat-helpers';
 import type { KnowledgeResult } from '@/lib/assistant/types';
 
-// Prompt 注入检测
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
   /system\s*:\s*you\s+are\s+now/i,
@@ -47,18 +40,13 @@ export const POST = withAuth(async ({ request, user }) => {
       images = [],
       documents = [],
       session_id: sessionId,
-      conversational: conversationalOverride,
       model: selectedModel,
     } = body;
 
     if (!content && images.length === 0 && documents.length === 0) {
-      return NextResponse.json(
-        { success: false, error: '内容不能为空' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: '内容不能为空' }, { status: 400 });
     }
 
-    // Prompt 注入检测
     if (content && typeof content === 'string') {
       const lower = content.toLowerCase();
       if (INJECTION_PATTERNS.some((p) => p.test(lower))) {
@@ -69,43 +57,36 @@ export const POST = withAuth(async ({ request, user }) => {
       }
     }
 
-    // 积分检查
     const creditCost = CREDIT_COSTS.ai_text.perCall;
     try {
-      await consume(user.id, creditCost, 'ai_chat', 'Agent 对话', {
-        contentLen: content.length,
-      });
+      await consume(user.id, creditCost, 'ai_chat', 'Agent 对话', { contentLen: content.length });
     } catch (e) {
       if (e instanceof InsufficientCreditsError) {
         return NextResponse.json(
-          {
-            success: false,
-            error: `余额不足: 需要 ${creditCost} 灵力，当前 ${e.available} 灵力`,
-            code: 'INSUFFICIENT_CREDITS',
-            data: { required: creditCost, available: e.available },
-          },
+          { success: false, error: `余额不足: 需要 ${creditCost} 灵力，当前 ${e.available} 灵力`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
           { status: 402 }
         );
       }
       throw e;
     }
 
-    // 确定对话模式
-    const isConversational =
-      conversationalOverride !== undefined
-        ? conversationalOverride === true
-        : isConversationalQuery(content);
-
-    // 并行：加载历史 + 记忆 + 知识 + 技能
     const supabase = createAdminClient();
-    const effectiveContent = [content, ...documents].filter(Boolean).join('\n');
+
+    // 提取文档内容
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    let documentTexts: string[] = [];
+    if (documents.length > 0 && supabaseUrl) {
+      documentTexts = await extractDocuments(documents, user.id, supabaseUrl);
+    }
+
+    const effectiveContent = [content, ...documentTexts].filter(Boolean).join('\n');
 
     // 历史消息
     let historyMessages: ChatMessage[] = [];
     if (sessionId) {
       const { data: msgs } = await supabase
         .from('chat_messages')
-        .select('type, content, metadata')
+        .select('type, content')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true })
         .limit(40);
@@ -126,13 +107,11 @@ export const POST = withAuth(async ({ request, user }) => {
         historyMessages as Array<{ role: 'user' | 'assistant'; content: string }>
       );
       historyMessages = recentMessages as ChatMessage[];
-      if (compressedSummary) {
-        summaryBlock = `[对话历史摘要]\n${compressedSummary}`;
-      }
+      if (compressedSummary) summaryBlock = `[对话历史摘要]\n${compressedSummary}`;
     }
 
     // 并行获取记忆、知识、技能
-    const embedding = await generateEmbedding(effectiveContent).catch(() => []);
+    const embedding = await generateEmbedding(effectiveContent).catch(() => [] as number[]);
 
     const memoryManager = new MemoryManager();
     memoryManager.addProvider(new BuiltinMemoryProvider());
@@ -153,77 +132,43 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const skillsBlock = skillMatches.length > 0 ? skillsHub.buildSkillsPromptBlock() : '';
 
-    // 构建 system prompt
-    let systemPrompt: string;
-    let agentConfig: AgentConfig;
+    // 构建统一的 system prompt
+    let systemPrompt = AGENT_SYSTEM_PROMPT;
 
-    if (isConversational) {
-      systemPrompt = CONVERSATIONAL_SYSTEM_PROMPT;
-      agentConfig = { ...CONVERSATIONAL_CONFIG };
-      if (selectedModel) agentConfig.model = selectedModel;
-    } else {
-      systemPrompt = `${LINGJI_IDENTITY}
-
-## 工具使用说明
-你可以调用工具来完成用户的请求。当需要获取实时信息、生成内容、或执行操作时，主动调用合适的工具。
-在给出最终回答前，确保所有 tool_calls 都有对应的 tool 结果。
-如果工具执行失败，尝试其他方法或告知用户。
-
-${summaryBlock}${memoryBlock}`;
-
-      agentConfig = { ...DEFAULT_AGENT_CONFIG };
-      if (selectedModel) agentConfig.model = selectedModel;
-    }
-
-    // 注入记忆/知识/技能
-    if (memoryBlock) {
-      systemPrompt += `\n\n## 用户记忆\n${memoryBlock}`;
-    }
+    if (summaryBlock) systemPrompt += `\n\n${summaryBlock}`;
+    if (memoryBlock) systemPrompt += `\n\n## 用户记忆\n${memoryBlock}`;
     if (knowledgeResults.results && knowledgeResults.results.length > 0) {
       const kbBlock = knowledgeResults.results
         .map((r: { title: string; content: string }) => `- ${r.title}: ${r.content.substring(0, 500)}`)
         .join('\n');
       systemPrompt += `\n\n## 知识库\n${kbBlock}`;
     }
-    if (skillsBlock) {
-      systemPrompt += `\n\n${skillsBlock}`;
-    }
+    if (skillsBlock) systemPrompt += `\n\n${skillsBlock}`;
+
+    const agentConfig = {
+      ...DEFAULT_CONFIG,
+      ...(selectedModel ? { model: selectedModel } : {}),
+    };
 
     // 构建 messages
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-    ];
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+    for (const hm of historyMessages) messages.push(hm);
 
-    for (const hm of historyMessages) {
-      messages.push(hm);
-    }
-
-    // 用户消息（带附件信息）
     let userContent = content;
-    if (images.length > 0) {
-      userContent += `\n\n[用户上传了 ${images.length} 张图片: ${images.join(', ')}]`;
+    if (images.length > 0) userContent += `\n\n[用户上传了 ${images.length} 张图片，AI 可以通过 analyze_image 工具分析这些图片: ${images.join(', ')}]`;
+    if (documentTexts.length > 0) {
+      userContent += `\n\n[用户上传了文档，以下是文档内容]\n\n${documentTexts.join('\n\n---\n\n')}`;
+    } else if (documents.length > 0) {
+      userContent += `\n\n[用户上传了 ${documents.length} 个文档（未能抽取文本内容）: ${documents.join(', ')}]`;
     }
-    if (documents.length > 0) {
-      userContent += `\n\n[用户上传了 ${documents.length} 个文档: ${documents.join(', ')}]`;
-    }
+    if (!userContent.trim()) userContent = '请分析上传的文件';
     messages.push({ role: 'user', content: userContent });
 
-    // 初始化工具注册表
+    // 初始化全部工具
     const registry = new ToolRegistry();
+    registerAllBuiltinTools(registry);
 
-    if (isConversational) {
-      // 对话模式只保留安全工具
-      const fullRegistry = new ToolRegistry();
-      registerAllBuiltinTools(fullRegistry);
-      for (const name of CONVERSATIONAL_TOOLS) {
-        const tool = fullRegistry.get(name);
-        if (tool) registry.register(tool);
-      }
-    } else {
-      registerAllBuiltinTools(registry);
-    }
-
-    // 创建 SSE 流
+    // SSE 流
     const encoder = new TextEncoder();
     let aborted = false;
 
@@ -233,69 +178,37 @@ ${summaryBlock}${memoryBlock}`;
 
         const sendEvent = (event: AgentEvent) => {
           if (aborted) return;
-          try {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
-            );
-          } catch { /* stream closed */ }
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)); } catch { /* closed */ }
         };
 
         try {
           let finalContent = '';
 
-          for await (const event of agentStreamLoop(
-            messages,
-            registry,
-            {
-              userId: user.id,
-              sessionId: sessionId || undefined,
-              signal: abortController.signal,
-            },
-            agentConfig
-          )) {
+          for await (const event of agentStreamLoop(messages, registry, {
+            userId: user.id,
+            sessionId: sessionId || undefined,
+            signal: abortController.signal,
+          }, agentConfig)) {
             sendEvent(event);
-            if (event.type === 'done') {
-              finalContent = event.response;
-            }
+            if (event.type === 'done') finalContent = event.response;
           }
 
-          // 后台保存 assistant 消息
           if (sessionId && finalContent) {
             try {
               await supabase.from('chat_messages').insert({
-                user_id: user.id,
-                session_id: sessionId,
-                type: 'assistant',
-                content: finalContent,
-                metadata: {
-                  model: agentConfig.model,
-                  conversational: isConversational,
-                  intent: 'agent',
-                },
+                user_id: user.id, session_id: sessionId, type: 'assistant',
+                content: finalContent, metadata: { model: agentConfig.model, intent: 'agent' },
               });
-            } catch (e) {
-              console.warn('保存 Agent 消息失败:', e);
-            }
-
-            // 更新会话模式标记
-            try {
-              await supabase
-                .from('chat_sessions')
-                .update({ is_agent_conversation: isConversational })
-                .eq('id', sessionId);
-            } catch { /* non-critical */ }
+            } catch (e) { console.warn('保存 Agent 消息失败:', e); }
           }
 
           controller.close();
         } catch (e) {
-          const errMsg = e instanceof Error ? e.message : String(e);
-          sendEvent({ type: 'error', message: errMsg });
+          sendEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });
           controller.close();
         }
       },
-      cancel() {
-        aborted = true;
-      },
+      cancel() { aborted = true; },
     });
 
     return new NextResponse(stream, {
