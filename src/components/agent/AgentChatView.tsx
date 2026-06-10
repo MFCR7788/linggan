@@ -63,6 +63,46 @@ export function AgentChatView() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [scheduledItems, setScheduledItems] = useState<Set<string>>(new Set());
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+
+  // 斜杠指令
+  const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
+    show: false, filter: '', index: 0, pos: 0,
+  });
+
+  const OFFICIAL_COMMANDS = [
+    { command: '/xiaohongshu', label: '小红书文案优化', desc: '高互动率标题和正文', cat: 'writing' },
+    { command: '/douyin', label: '抖音脚本创作', desc: '3秒钩子和口播脚本', cat: 'social' },
+    { command: '/wechat', label: '公众号排版助手', desc: '排版和阅读体验优化', cat: 'writing' },
+    { command: '/seo', label: 'SEO 标题生成', desc: '搜索友好标题策略', cat: 'writing' },
+    { command: '/remix', label: '多平台改写', desc: '一稿多平台适配', cat: 'social' },
+    { command: '/hotspot', label: '热点追踪分析', desc: '事件脉络和创作角度', cat: 'analysis' },
+    { command: '/draw', label: 'AI 绘画提示词', desc: '5层 prompt 结构', cat: 'image' },
+    { command: '/storyboard', label: '视频分镜脚本', desc: '分镜表和拍摄法则', cat: 'video' },
+  ];
+
+  const filteredCommands = (() => {
+    if (!slashMenu.show) return [];
+    const f = slashMenu.filter.toLowerCase();
+    if (!f) return OFFICIAL_COMMANDS;
+    return OFFICIAL_COMMANDS.filter(c =>
+      c.command.toLowerCase().includes(f) || c.label.toLowerCase().includes(f)
+    );
+  })();
+
+  const selectSlashCommand = (cmd: typeof OFFICIAL_COMMANDS[0]) => {
+    const ta = inputRef.current;
+    const cursorPos = ta?.selectionStart || slashMenu.pos + 1;
+    const before = input.substring(0, slashMenu.pos);
+    const after = input.substring(cursorPos);
+    setInput(before + cmd.command + ' ' + after);
+    setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+    setTimeout(() => ta?.focus(), 0);
+    const newPos = slashMenu.pos + cmd.command.length + 1;
+    setTimeout(() => {
+      const ta = inputRef.current;
+      if (ta) { ta.selectionStart = newPos; ta.selectionEnd = newPos; }
+    }, 50);
+  };
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -341,6 +381,30 @@ export function AgentChatView() {
   }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession, doStream]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 斜杠菜单导航
+    if (slashMenu.show && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashMenu(prev => ({ ...prev, index: Math.min(prev.index + 1, filteredCommands.length - 1) }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashMenu(prev => ({ ...prev, index: Math.max(prev.index - 1, 0) }));
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        selectSlashCommand(filteredCommands[slashMenu.index]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+        return;
+      }
+    }
+
     const mod = e.metaKey || e.ctrlKey;
 
     // Undo: Ctrl+Z / Cmd+Z（无 Shift）
@@ -810,8 +874,13 @@ export function AgentChatView() {
             </p>
 
             {/* 副标题 */}
-            <p className="text-xs text-white/30 mb-6">
+            <p className="text-xs text-white mb-1">
               从灵感采集到内容创作，一站式帮你高效产出优质内容
+            </p>
+
+            {/* 引导语 */}
+            <p className="text-lg text-blue-300 mb-6">
+              今天你有什么灵感，发送给我！
             </p>
 
             {/* 技能推荐卡片 */}
@@ -951,6 +1020,7 @@ export function AgentChatView() {
 
       {/* 输入区域 — 固定置底 */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 py-3 z-10" style={{ maxWidth: 480, margin: '0 auto' }}>
+        <div className="relative">
         {isRecording ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -1018,6 +1088,42 @@ export function AgentChatView() {
               </div>
             )}
 
+            {/* 斜杠指令下拉 */}
+            {slashMenu.show && (
+              <div
+                className="absolute bottom-full left-4 right-4 mb-2 rounded-xl overflow-hidden z-50 max-h-[260px] overflow-y-auto"
+                style={{ background: 'rgba(15,23,42,0.98)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)' }}
+              >
+                {filteredCommands.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-xs text-gray-500">没有匹配的技能指令</p>
+                  </div>
+                ) : (
+                  filteredCommands.map((cmd, i) => (
+                    <button
+                      key={cmd.command}
+                      onClick={() => selectSlashCommand(cmd)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors"
+                      style={{ background: i === slashMenu.index ? 'rgba(59,130,246,0.1)' : 'transparent' }}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'rgba(59,130,246,0.15)' }}
+                      >
+                        <svg className="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-200">{cmd.command}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{cmd.label} — {cmd.desc}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
             {/* 输入框 */}
             <div className="flex items-end gap-1.5">
               {/* 工具按钮 */}
@@ -1062,11 +1168,22 @@ export function AgentChatView() {
                   ref={inputRef}
                   value={input}
                   onChange={(e) => {
-                    setInput(e.target.value);
+                    const val = e.target.value;
+                    setInput(val);
                     // 粘贴后跳过实时校验，延迟重置标记
                     if (isPastingRef.current) {
                       isPastingRef.current = false;
                       return;
+                    }
+                    // 检测斜杠指令
+                    const cursor = e.target.selectionStart || 0;
+                    const textBefore = val.substring(0, cursor);
+                    const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
+                    if (slashMatch) {
+                      const slashPos = textBefore.lastIndexOf('/');
+                      setSlashMenu({ show: true, filter: slashMatch[1], index: 0, pos: slashPos });
+                    } else {
+                      setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
                     }
                     // 去抖 150ms — 预留给搜索/API 调用等重操作
                     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -1126,6 +1243,7 @@ export function AgentChatView() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
