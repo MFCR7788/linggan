@@ -1,6 +1,27 @@
 import type { ToolDefinition } from '../../types';
 import { callDeepSeek } from '@/lib/ai-services';
 
+/** 修复 LLM 返回 JSON 的常见语法问题（尾部逗号、未转义换行等） */
+function repairJson(raw: string): string {
+  let s = raw.trim();
+  // 去掉尾部逗号（最常见的 LLM JSON 错误）: ,] 和 ,}
+  s = s.replace(/,(\s*[\]}])/g, '$1');
+  // 去掉字符串值内的未转义换行
+  s = s.replace(/(?<=": ")([^"]*?)\n([^"]*?)(?=")/g, '$1\\n$2');
+  // 去掉 JSON 前的非 [ 字符
+  const start = s.indexOf('[');
+  if (start > 0) s = s.substring(start);
+  // 找到匹配的 ]
+  let depth = 0;
+  let end = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '[') depth++;
+    else if (s[i] === ']') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  if (end > 0 && end < s.length) s = s.substring(0, end);
+  return s;
+}
+
 export const generateGridImagesTool: ToolDefinition = {
   name: 'generate_grid_images',
   description: '生成朋友圈九宫格配图。适用于产品展示、活动宣传、品牌推广等场景，自动生成9张风格统一的配图。',
@@ -47,7 +68,23 @@ ${keywords ? `补充关键词：${keywords}` : ''}
       const jsonMatch = result.match(/\[[\s\S]*\]/);
 
       if (jsonMatch) {
-        const cells = JSON.parse(jsonMatch[0]);
+        let cells: unknown[];
+        try {
+          cells = JSON.parse(jsonMatch[0]);
+        } catch {
+          // LLM 返回的 JSON 常有尾部逗号等问题，尝试修复后再解析
+          try {
+            const repaired = repairJson(jsonMatch[0]);
+            cells = JSON.parse(repaired);
+          } catch (e2) {
+            return {
+              success: false,
+              output: '',
+              error: `九宫格 JSON 解析失败: ${e2 instanceof Error ? e2.message : String(e2)}`,
+            };
+          }
+        }
+
         if (!Array.isArray(cells) || cells.length === 0) {
           return { success: false, output: '九宫格方案生成失败，请重试。' };
         }

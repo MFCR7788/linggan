@@ -13,6 +13,12 @@ interface AgentMessageProps {
   generatedImages?: string[];
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
+  schedules?: Array<{ title: string; scheduled_at: string; description?: string; location?: string; suggestions?: string[] }>;
+  scheduledItems?: Set<string>;
+  schedulingId?: string | null;
+  onAddSchedule?: (index: number) => void;
+  onAddAllSchedules?: () => void;
+  messageId?: string;
   timestamp?: Date;
   // 操作按钮
   onCopy?: () => void;
@@ -27,7 +33,9 @@ interface AgentMessageProps {
 
 export function AgentMessage({
   type, content, toolCalls = [], attachments,
-  generatedImages, generatedVideo, generatedAudio, timestamp,
+  generatedImages, generatedVideo, generatedAudio,
+  schedules, scheduledItems, schedulingId, onAddSchedule, onAddAllSchedules, messageId,
+  timestamp,
   onCopy, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
@@ -134,6 +142,109 @@ export function AgentMessage({
               <span className="text-xs text-white/50">语音合成</span>
             </div>
             <audio src={generatedAudio} controls className="w-full h-8" />
+          </div>
+        )}
+
+        {/* 日程卡片 */}
+        {!isUser && schedules && schedules.length > 0 && (
+          <div className="mt-2">
+            {schedules.length > 1 && (
+              <p className="text-[11px] font-semibold mb-1.5" style={{ color: '#A78BFA' }}>
+                识别到 {schedules.length} 条日程
+              </p>
+            )}
+            <div className="space-y-2">
+              {schedules.map((s, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl p-3"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(99,102,241,0.08))',
+                    border: '1px solid rgba(139,92,246,0.25)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span style={{ fontSize: 14 }}>📅</span>
+                    <span style={{ color: '#C4B5FD', fontSize: 12, fontWeight: 600 }}>
+                      {formatScheduleTime(s.scheduled_at)}
+                    </span>
+                    <span style={{
+                      color: (() => {
+                        try { return new Date(s.scheduled_at) < new Date() ? '#EF4444' : '#10B981'; }
+                        catch { return '#9CA3AF'; }
+                      })(),
+                      fontSize: 10,
+                    }}>
+                      {(() => {
+                        try {
+                          const d = new Date(s.scheduled_at);
+                          const now = new Date();
+                          if (d.toDateString() === now.toDateString()) return '(今天)';
+                          if (new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString() === d.toDateString()) return '(明天)';
+                          return '';
+                        } catch { return ''; }
+                      })()}
+                    </span>
+                  </div>
+                  <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+                    {s.title}
+                  </p>
+                  {s.description && (
+                    <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 2, lineHeight: 1.4 }}>
+                      {s.description}
+                    </p>
+                  )}
+                  {s.location && (
+                    <p style={{ color: '#6EE7B7', fontSize: 11 }}>
+                      📍 {s.location}
+                    </p>
+                  )}
+                  {s.suggestions && s.suggestions.length > 0 && (
+                    <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(139,92,246,0.15)' }}>
+                      {s.suggestions.map((si, i) => (
+                        <p key={i} style={{ color: '#A78BFA', fontSize: 10, lineHeight: 1.5 }}>
+                          {i + 1}. {si}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {onAddSchedule && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAddSchedule(idx); }}
+                      disabled={scheduledItems?.has(`${messageId}-${idx}`) || schedulingId !== null}
+                      className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80 disabled:opacity-50"
+                      style={{ background: scheduledItems?.has(`${messageId}-${idx}`) ? 'rgba(16,185,129,0.5)' : 'rgba(139,92,246,0.4)' }}
+                    >
+                      {scheduledItems?.has(`${messageId}-${idx}`) ? (
+                        <>✅ 已添加</>
+                      ) : (
+                        <>📅 添加到日程</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {schedules.length > 1 && onAddAllSchedules && (() => {
+              const allCount = schedules.length;
+              const addedCount = schedules.filter((_, i) => scheduledItems?.has(`${messageId}-${i}`)).length;
+              const remaining = allCount - addedCount;
+              const allDone = remaining === 0 && !schedulingId;
+              return (
+                <button
+                  onClick={onAddAllSchedules}
+                  disabled={allDone || schedulingId !== null}
+                  className="mt-2 w-full py-1.5 rounded-lg text-white text-xs font-medium flex items-center justify-center gap-1 transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{ background: allDone ? 'rgba(16,185,129,0.5)' : 'rgba(139,92,246,0.4)' }}
+                >
+                  {allDone ? (
+                    <>✅ 已全部添加</>
+                  ) : (
+                    <>📅 添加全部日程 ({remaining}/{allCount}条)</>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         )}
 
@@ -253,6 +364,19 @@ export function AgentMessage({
   );
 }
 
+// ====== 日程时间格式化 ======
+
+function formatScheduleTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  const now = new Date();
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const isToday = d.toDateString() === now.toDateString();
+  const isTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toDateString() === d.toDateString();
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const dateLabel = isToday ? '今天' : isTomorrow ? '明天' : `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+  return `${dateLabel} ${time}`;
+}
+
 // ====== 小图标按钮 ======
 
 function ActionBtn({ icon: Icon, tooltip, onClick, className = '' }: {
@@ -358,4 +482,12 @@ const TOOL_LABELS: Record<string, string> = {
   get_hotspot: '获取热点',
   summarize: '总结内容',
   synthesize_speech: '语音合成',
+  extract_schedule: '提取日程',
+  generate_copywriting: '生成文案',
+  extract_links: '提取链接',
+  save_inspiration: '保存灵感',
+  generate_digital_human: '生成数字人',
+  edit_image: '编辑图片',
+  generate_grid_images: '生成组图',
+  publish_content: '发布内容',
 };

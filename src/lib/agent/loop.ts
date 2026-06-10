@@ -105,7 +105,12 @@ export async function agentLoop(
         try {
           toolArgs = JSON.parse(tc.function.arguments);
         } catch {
-          toolArgs = {};
+          try {
+            const repaired = tc.function.arguments.replace(/,(\s*[\]}])/g, '$1');
+            toolArgs = JSON.parse(repaired);
+          } catch {
+            toolArgs = {};
+          }
         }
 
         // 防同参数死循环

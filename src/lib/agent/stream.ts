@@ -178,7 +178,12 @@ function parseArgs(tc: ToolCallRequest): Record<string, unknown> {
   try {
     return JSON.parse(tc.function.arguments);
   } catch {
-    return {};
+    try {
+      const repaired = tc.function.arguments.replace(/,(\s*[\]}])/g, '$1');
+      return JSON.parse(repaired);
+    } catch {
+      return {};
+    }
   }
 }
 

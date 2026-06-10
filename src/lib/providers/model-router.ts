@@ -27,8 +27,26 @@ export class ModelRouter {
     this.defaultProviderName = defaultProviderName;
   }
 
-  /** 解析模型 → provider + api key */
+  /** 解析模型 → provider + api key（搜索所有 provider 找到匹配模型） */
   resolveModel(modelId?: string): ResolvedModel {
+    // 搜索所有可用 provider 中匹配的模型
+    if (modelId) {
+      for (const provider of this.registry.listAvailable()) {
+        const matched = provider.models.find((m) => m.id === modelId);
+        if (matched) {
+          const apiKey = this.registry.getApiKey(provider);
+          return {
+            provider,
+            model: modelId,
+            apiKey,
+            baseUrl: provider.baseUrl,
+            headers: { ...provider.defaultHeaders, Authorization: `Bearer ${apiKey}` },
+          };
+        }
+      }
+    }
+
+    // 回退到默认 provider
     const provider = this.registry.get(this.defaultProviderName);
     if (!provider) throw new Error(`Provider "${this.defaultProviderName}" not registered`);
 

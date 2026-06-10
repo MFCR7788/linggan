@@ -204,9 +204,15 @@ JSON:`;
     let parsed: { cells?: Array<{ visualAngle: string; title: string; prompt: string }> };
     try {
       parsed = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      await refund(user.id, creditCost, 'ai_ads', '9 宫格角度 JSON 解析失败全退', { product: product.substring(0, 50) });
-      return createApiError('AI 返回 JSON 解析失败', 500);
+    } catch {
+      // LLM 返回的 JSON 常有尾部逗号等问题，尝试修复
+      try {
+        const repaired = jsonMatch[0].replace(/,(\s*[\]}])/g, '$1');
+        parsed = JSON.parse(repaired);
+      } catch (e2) {
+        await refund(user.id, creditCost, 'ai_ads', '9 宫格角度 JSON 解析失败全退', { product: product.substring(0, 50) });
+        return createApiError('AI 返回 JSON 解析失败', 500);
+      }
     }
     const cells = parsed.cells || [];
     if (cells.length !== GRID_SIZE) {

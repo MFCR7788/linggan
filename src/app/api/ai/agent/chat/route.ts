@@ -227,6 +227,7 @@ export const POST = withAuth(async ({ request, user }) => {
               const generatedImages: string[] = [];
               let generatedVideo: { taskId: string; status: string; videoUrl?: string } | null = null;
               let generatedAudio: string | null = null;
+              let schedules: Array<{ title: string; scheduled_at: string; description?: string; location?: string; suggestions?: string[] }> | null = null;
               const toolCallsMeta = completedToolCalls.map(tc => ({
                 tool: tc.tool,
                 params: tc.params,
@@ -245,6 +246,9 @@ export const POST = withAuth(async ({ request, user }) => {
                 if (tc.tool === 'synthesize_speech' && d.audioBase64) {
                   generatedAudio = `data:audio/mpeg;base64,${d.audioBase64}`;
                 }
+                if (tc.tool === 'extract_schedule' && Array.isArray(d.schedules)) {
+                  schedules = d.schedules as Array<{ title: string; scheduled_at: string; description?: string; location?: string; suggestions?: string[] }>;
+                }
               }
 
               await supabase.from('chat_messages').insert({
@@ -256,6 +260,7 @@ export const POST = withAuth(async ({ request, user }) => {
                   ...(generatedImages.length > 0 ? { generatedImages } : {}),
                   ...(generatedVideo ? { generatedVideo } : {}),
                   ...(generatedAudio ? { generatedAudio } : {}),
+                  ...(schedules ? { schedules } : {}),
                 },
               });
             } catch (e) { console.warn('保存 Agent 消息失败:', e); }
