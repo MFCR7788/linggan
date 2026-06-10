@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useInputHistory } from '@/hooks/use-input-history';
 import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
+import { SkillRecommendCards, useSkillRecommendations } from './SkillRecommendCards';
+import { CapabilityTags } from './CapabilityTags';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
 import { useFileUpload } from '@/hooks/use-file-upload';
@@ -79,6 +81,9 @@ export function AgentChatView() {
 
   // 输入历史（undo/redo 最多 50 步）
   const inputHistory = useInputHistory(input, setInput);
+
+  // 技能推荐
+  const skillRecs = useSkillRecommendations();
 
   // 会话管理
   const sessionMgr = useAgentSessions();
@@ -235,6 +240,10 @@ export function AgentChatView() {
             );
             setStatusText('');
             setCurrentTool('');
+            break;
+
+          case 'skills_matched':
+            skillRecs.processEvent(event as any);
             break;
         }
       }
@@ -427,6 +436,23 @@ export function AgentChatView() {
     setMessages(prev => prev.filter(m => m.id !== msg.id));
   }, []);
 
+  const handleSaveToInspiration = useCallback(async (msg: UIMessage) => {
+    const text = msg.content;
+    if (!text) return;
+    try {
+      const baseUrl = window.location.origin;
+      const res = await fetch(`${baseUrl}/api/inspiration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: text.substring(0, 50), content: text, type: 'text', tags: ['Agent生成'] }),
+      });
+      if (res.ok) {
+        setCopiedId('saved_' + msg.id);
+        setTimeout(() => setCopiedId(null), 1500);
+      }
+    } catch { /* 静默失败 */ }
+  }, []);
+
   // 会话操作
   const handleSwitchSession = (session: AgentSession) => {
     switchSession(session.id);
@@ -558,6 +584,12 @@ export function AgentChatView() {
             <div className="text-4xl mb-4">✨</div>
             <p className="text-sm mb-2">跟我说说你想创作什么吧</p>
             <p className="text-xs">我会引导你完成创作，也能直接搜索、生图、查天气</p>
+            <div className="mt-4 w-full max-w-sm">
+              <SkillRecommendCards
+                recommendations={skillRecs.recommendations}
+                onSelect={(skill) => { setInput(skill.displayName.replace(/[^\w一-鿿]/g, ' ').trim()); inputRef.current?.focus(); }}
+              />
+            </div>
           </div>
         )}
 
@@ -575,7 +607,8 @@ export function AgentChatView() {
             onCopy={() => handleCopy(msg)}
             onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
             onDelete={() => handleDelete(msg)}
-            isCopied={copiedId === msg.id}
+            onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
+            isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id}
             isRegenerating={regeneratingId === msg.id}
           />
         ))}
@@ -669,6 +702,11 @@ export function AgentChatView() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* 能力标签 */}
+            {!isStreaming && messages.length === 0 && (
+              <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
             )}
 
             {/* 输入框 */}

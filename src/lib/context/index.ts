@@ -6,3 +6,4 @@ export type { ContextInput, ContextChunk, ContextSource, AssembledContext } from
 export { MemorySource } from './sources/memory-source';
 export { KnowledgeSource } from './sources/knowledge-source';
 export { SkillSource } from './sources/skill-source';
+export { ComboSkillSource } from './sources/combo-skill-source';

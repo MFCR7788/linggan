@@ -21,7 +21,8 @@ import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provid
 import { SkillsHub } from '@/lib/assistant/skills/hub';
 import { compressHistory } from '@/lib/assistant/context-compressor';
 import { extractDocuments } from '@/lib/assistant/chat-helpers';
-import { ContextAssembler, MemorySource, KnowledgeSource, SkillSource } from '@/lib/context';
+import { ContextAssembler, MemorySource, KnowledgeSource, SkillSource, ComboSkillSource } from '@/lib/context';
+import { agentSkillMatcher, getAllComboSkills } from '@/lib/agent/skills';
 
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
@@ -127,10 +128,17 @@ export const POST = withAuth(async ({ request, user }) => {
     const skillsHub = new SkillsHub({ userId: user.id });
     await skillsHub.initialize();
 
+    // 加载 combo 技能到 Agent 技能匹配器（首次加载后缓存）
+    if (agentSkillMatcher.getAllSkills().length === 0) {
+      const comboSKills = getAllComboSkills();
+      agentSkillMatcher.loadSkills(comboSKills);
+    }
+
     // === V2: 使用 ContextAssembler 统一组装上下文 ===
     const assembler = new ContextAssembler(AGENT_SYSTEM_PROMPT);
     assembler.registerSource(new MemorySource(memoryManager));
     assembler.registerSource(new KnowledgeSource(knowledgeManager));
+    assembler.registerSource(new ComboSkillSource(agentSkillMatcher));
     assembler.registerSource(new SkillSource(skillsHub, registry));
 
     const assembled = await assembler.assemble({
@@ -172,6 +180,17 @@ export const POST = withAuth(async ({ request, user }) => {
         try {
           let finalContent = '';
           const completedToolCalls: Array<{ tool: string; params: Record<string, unknown>; result: { success: boolean; output: string; data?: unknown; error?: string } }> = [];
+
+          // 发送技能匹配结果
+          if (assembled.skillsUsed.length > 0) {
+            const skillRecs = assembled.skillsUsed.map((name) => {
+              const skill = agentSkillMatcher.getAllSkills().find(s => s.name === name);
+              return { name, displayName: skill?.displayName || name, score: 1 };
+            });
+            if (skillRecs.length > 0) {
+              sendEvent({ type: 'skills_matched', recommendations: skillRecs });
+            }
+          }
 
           // 保存用户消息
           if (sessionId) {

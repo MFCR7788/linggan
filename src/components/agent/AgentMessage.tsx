@@ -18,6 +18,7 @@ interface AgentMessageProps {
   onCopy?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  onSaveToInspiration?: () => void;
   isCopied?: boolean;
   isRegenerating?: boolean;
 }
@@ -25,7 +26,7 @@ interface AgentMessageProps {
 export function AgentMessage({
   type, content, toolCalls = [], attachments,
   generatedImages, generatedVideo, generatedAudio, timestamp,
-  onCopy, onRegenerate, onDelete, isCopied, isRegenerating,
+  onCopy, onRegenerate, onDelete, onSaveToInspiration, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -183,6 +184,13 @@ export function AgentMessage({
               className={isRegenerating ? 'animate-spin' : ''}
               onClick={onRegenerate || (() => {})}
             />
+            {onSaveToInspiration && (
+              <ActionBtn
+                icon={isCopied ? CheckIcon : BookmarkIcon}
+                tooltip="保存到灵感"
+                onClick={onSaveToInspiration}
+              />
+            )}
             <ActionBtn
               icon={TrashIcon}
               tooltip="删除"
@@ -277,6 +285,14 @@ function RefreshIcon({ size }: { size: number }) {
       <polyline points="23 4 23 10 17 10" />
       <polyline points="1 20 1 14 7 14" />
       <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+    </svg>
+  );
+}
+
+function BookmarkIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
     </svg>
   );
 }

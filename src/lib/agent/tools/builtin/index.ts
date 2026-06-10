@@ -11,9 +11,18 @@ import { searchInspirationsTool } from './search-inspirations';
 import { getHotspotTool } from './get-hotspot';
 import { summarizeTool } from './summarize';
 import { synthesizeSpeechTool } from './synthesize-speech';
+import { generateCopywritingTool } from './copywriting';
+import { extractScheduleTool } from './extract-schedule';
+import { analyzeLinkTool } from './analyze-link';
+import { saveToInspirationTool } from './save-inspiration';
+import { generateDigitalHumanTool } from './digital-human';
+import { editImageTool } from './edit-image';
+import { generateGridImagesTool } from './grid-images';
+import { publishContentTool } from './publish';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
+    // 原有 12 个工具
     webSearchTool,
     generateImageTool,
     generateVideoTool,
@@ -26,9 +35,20 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     getHotspotTool,
     summarizeTool,
     synthesizeSpeechTool,
+    // 新增 8 个工具
+    generateCopywritingTool,
+    extractScheduleTool,
+    analyzeLinkTool,
+    saveToInspirationTool,
+    generateDigitalHumanTool,
+    editImageTool,
+    generateGridImagesTool,
+    publishContentTool,
   ]);
 }
 
 export { webSearchTool, generateImageTool, generateVideoTool, getWeatherTool, analyzeImageTool };
 export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirationsTool };
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
+export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
+export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool };
