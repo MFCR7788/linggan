@@ -126,7 +126,7 @@ function HomeContent() {
       <TopNav
         title={
           <div className="flex items-center gap-2">
-            <img src="/brand/logo-mark.svg" alt="灵集" className="w-7 h-7" />
+            <img src="/brand/logo-mark.png" alt="灵集" className="w-7 h-7" />
             <span style={{ color: "#E5E7EB", fontWeight: 700, fontSize: 18 }}>灵集</span>
           </div>
         }

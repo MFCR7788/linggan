@@ -159,7 +159,7 @@ function LoginContent() {
       {/* Logo */}
       <div className="flex flex-col items-center mb-8">
         <img
-          src="/brand/logo-mark.svg"
+          src="/brand/logo-mark.png"
           alt="灵集"
           className="w-20 h-20 mb-3"
           style={{ filter: "drop-shadow(0 0 30px rgba(139,92,246,0.4))" }}

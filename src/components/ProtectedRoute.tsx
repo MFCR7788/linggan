@@ -25,7 +25,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <img src="/brand/logo-mark.svg" alt="灵集" className="w-12 h-12 opacity-40" />
+        <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 opacity-40" />
         <LoadingSpinner text="加载中..." />
       </div>
     );
@@ -40,7 +40,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
-        <img src="/brand/logo-mark.svg" alt="灵集" className="w-10 h-10 mb-2 opacity-50" />
+        <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10 mb-2 opacity-50" />
         <AlertCircle size={40} color="#EF4444" />
         <p style={{ color: "#FCA5A5", fontSize: 14, textAlign: "center" }}>加载用户信息失败</p>
         <button

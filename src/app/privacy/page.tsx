@@ -41,7 +41,7 @@ export default function PrivacyPage() {
     <div className="flex flex-col min-h-screen">
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-3 mb-2">
-          <img src="/brand/logo-mark.svg" alt="灵集" className="w-10 h-10" />
+          <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10" />
           <h1 style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 700 }}>隐私政策</h1>
         </div>
         <p style={{ color: '#9CA3AF', fontSize: 13 }}>

@@ -49,6 +49,9 @@ export function AgentChatView() {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
   const [choiceSelections, setChoiceSelections] = useState<Map<number, ChoiceSelection>>(new Map());
+  const [editingTitle, setEditingTitle] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -457,6 +460,39 @@ export function AgentChatView() {
     } catch { /* 静默失败 */ }
   }, []);
 
+  const handleSpeak = useCallback(async (msg: UIMessage) => {
+    const text = msg.content;
+    if (!text) return;
+    try {
+      const baseUrl = window.location.origin;
+      const res = await fetch(`${baseUrl}/api/ai/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'default' }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.audioBase64) {
+        const audio = new Audio(`data:audio/mpeg;base64,${data.data.audioBase64}`);
+        audio.play();
+      }
+    } catch { /* 静默失败 */ }
+  }, []);
+
+  const handleShare = useCallback(async (msg: UIMessage) => {
+    const text = msg.content || '';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: '灵集 AI 生成内容', text: text.substring(0, 200) });
+      } catch { /* 用户取消 */ }
+    } else {
+      // 降级：复制内容
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedId('shared_' + msg.id);
+        setTimeout(() => setCopiedId(null), 1500);
+      }).catch(() => {});
+    }
+  }, []);
+
   const handleChoiceSubmit = useCallback(async () => {
     if (isStreaming || choiceSubmitting) return;
 
@@ -494,25 +530,39 @@ export function AgentChatView() {
   }, [isStreaming, choiceSubmitting, choiceSelections, messages, currentSessionId, doStream]);
 
   // 会话操作
-  const handleSwitchSession = (session: AgentSession) => {
+  const handleSwitchSession = async (session: AgentSession) => {
     switchSession(session.id);
-    loadMessages(session.id).then(msgs => {
-      const uiMsgs: UIMessage[] = msgs.map((m: any) => {
-        const meta = m.metadata || {};
-        return {
-          id: m.id,
-          type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-          content: m.content || '',
-          toolCalls: Array.isArray(meta.toolCalls) ? meta.toolCalls : [],
-          attachments: Array.isArray(m.attachments) && m.attachments.length > 0 ? m.attachments : undefined,
-          generatedImages: Array.isArray(meta.generatedImages) ? meta.generatedImages : undefined,
-          generatedVideo: meta.generatedVideo || undefined,
-          generatedAudio: meta.generatedAudio || undefined,
-          timestamp: new Date(m.created_at),
-        };
-      });
-      setMessages(uiMsgs);
+    setIsLoadingMessages(true);
+    setMessages([]);
+    const msgs = await loadMessages(session.id);
+    const uiMsgs: UIMessage[] = msgs.map((m: any) => {
+      const meta = m.metadata || {};
+      return {
+        id: m.id,
+        type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content || '',
+        toolCalls: Array.isArray(meta.toolCalls) ? meta.toolCalls : [],
+        attachments: Array.isArray(m.attachments) && m.attachments.length > 0 ? m.attachments : undefined,
+        generatedImages: Array.isArray(meta.generatedImages) ? meta.generatedImages : undefined,
+        generatedVideo: meta.generatedVideo || undefined,
+        generatedAudio: meta.generatedAudio || undefined,
+        timestamp: new Date(m.created_at),
+      };
     });
+    setMessages(uiMsgs);
+    setIsLoadingMessages(false);
+  };
+
+  const startEditTitle = (sessionId: string, currentTitle: string) => {
+    setEditingTitle(sessionId);
+    setEditTitleValue(currentTitle);
+  };
+
+  const saveEditTitle = async () => {
+    if (editingTitle && editTitleValue.trim()) {
+      await sessionMgr.updateTitle(editingTitle, editTitleValue.trim());
+    }
+    setEditingTitle(null);
   };
 
   const handleNewSession = () => {
@@ -551,11 +601,35 @@ export function AgentChatView() {
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="truncate text-sm text-white">
-              {currentSessionId
-                ? sessions.find(s => s.id === currentSessionId)?.title || '对话助手'
-                : '对话助手'}
-            </span>
+            {editingTitle ? (
+              <input
+                autoFocus
+                value={editTitleValue}
+                onChange={(e) => setEditTitleValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEditTitle();
+                  if (e.key === 'Escape') setEditingTitle(null);
+                }}
+                onBlur={saveEditTitle}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-gray-700 text-white text-sm rounded px-1.5 py-0.5 outline-none max-w-[140px]"
+              />
+            ) : (
+              <span
+                className="truncate text-sm text-white"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  const sid = currentSessionId;
+                  const title = sessions.find(s => s.id === sid)?.title || '对话助手';
+                  if (sid) startEditTitle(sid, title);
+                }}
+                title="双击修改名称"
+              >
+                {currentSessionId
+                  ? sessions.find(s => s.id === currentSessionId)?.title || '对话助手'
+                  : '对话助手'}
+              </span>
+            )}
             <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -620,17 +694,51 @@ export function AgentChatView() {
 
       {/* 消息列表 — pb-32 给固定输入框留空间 */}
       <div className="flex-1 overflow-y-auto py-4 space-y-1 pb-32">
-        {messages.length === 0 && !isLoadingSessions && (
-          <div className="flex flex-col items-center justify-center h-full text-white/30 px-8 text-center">
-            <div className="text-4xl mb-4">✨</div>
-            <p className="text-sm mb-2">跟我说说你想创作什么吧</p>
-            <p className="text-xs">我会引导你完成创作，也能直接搜索、生图、查天气</p>
-            <div className="mt-4 w-full max-w-sm">
+        {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
+          <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+            {/* Logo */}
+            <img
+              src="/brand/logo-mark.png"
+              alt="灵集"
+              className="w-20 h-20 mb-5"
+              style={{ filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.5))' }}
+            />
+
+            {/* 欢迎语 */}
+            <h2 className="text-lg font-semibold text-white mb-2">
+              你好！我是灵集AI，你的智能创作助手
+            </h2>
+
+            {/* 能力标签 */}
+            <p className="text-sm text-white/50 mb-1">
+              AI 文案 · 生图 · 视频 · 配音 · 热点 · 知识问答
+            </p>
+
+            {/* 副标题 */}
+            <p className="text-xs text-white/30 mb-6">
+              从灵感采集到内容创作，一站式帮你高效产出优质内容
+            </p>
+
+            {/* 技能推荐卡片 */}
+            <div className="w-full max-w-sm">
               <SkillRecommendCards
                 recommendations={skillRecs.recommendations}
                 onSelect={(skill) => { setInput(skill.displayName.replace(/[^\w一-鿿]/g, ' ').trim()); inputRef.current?.focus(); }}
               />
             </div>
+
+            {/* 快捷能力标签 */}
+            <div className="mt-4 w-full max-w-sm">
+              <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
+            </div>
+          </div>
+        )}
+
+        {/* 加载消息中 */}
+        {isLoadingMessages && (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="ml-3 text-sm text-gray-400">加载消息中...</span>
           </div>
         )}
 
@@ -654,7 +762,9 @@ export function AgentChatView() {
               onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
               onDelete={() => handleDelete(msg)}
               onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
-              isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id}
+              onSpeak={msg.type === 'assistant' ? () => handleSpeak(msg) : undefined}
+              onShare={msg.type === 'assistant' ? () => handleShare(msg) : undefined}
+              isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id || copiedId === 'shared_' + msg.id}
               isRegenerating={regeneratingId === msg.id}
             />
           );
@@ -805,11 +915,6 @@ export function AgentChatView() {
                   </div>
                 ))}
               </div>
-            )}
-
-            {/* 能力标签 */}
-            {!isStreaming && messages.length === 0 && (
-              <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
             )}
 
             {/* 输入框 */}

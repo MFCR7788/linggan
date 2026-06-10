@@ -19,6 +19,8 @@ interface AgentMessageProps {
   onRegenerate?: () => void;
   onDelete?: () => void;
   onSaveToInspiration?: () => void;
+  onSpeak?: () => void;
+  onShare?: () => void;
   isCopied?: boolean;
   isRegenerating?: boolean;
 }
@@ -26,7 +28,7 @@ interface AgentMessageProps {
 export function AgentMessage({
   type, content, toolCalls = [], attachments,
   generatedImages, generatedVideo, generatedAudio, timestamp,
-  onCopy, onRegenerate, onDelete, onSaveToInspiration, isCopied, isRegenerating,
+  onCopy, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -170,7 +172,7 @@ export function AgentMessage({
           </div>
         )}
 
-        {/* 操作按钮 — AI 消息始终可见，用户消息 hover 显示 */}
+        {/* 操作按钮 — AI 消息始终可见 */}
         {!isUser && onCopy && (
           <div className="flex items-center gap-0.5 mt-1.5 opacity-70 hover:opacity-100 transition-opacity duration-150">
             <ActionBtn
@@ -178,6 +180,20 @@ export function AgentMessage({
               tooltip="复制"
               onClick={onCopy}
             />
+            {onSpeak && (
+              <ActionBtn
+                icon={VolumeIcon}
+                tooltip="语音播报"
+                onClick={onSpeak}
+              />
+            )}
+            {onShare && (
+              <ActionBtn
+                icon={ShareIcon}
+                tooltip="分享"
+                onClick={onShare}
+              />
+            )}
             <ActionBtn
               icon={RefreshIcon}
               tooltip="重新生成"
@@ -293,6 +309,27 @@ function BookmarkIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+function VolumeIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
+    </svg>
+  );
+}
+
+function ShareIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
     </svg>
   );
 }
