@@ -658,7 +658,7 @@ ${forecastText}
                 await supabase.from('chat_messages').insert({
                   user_id: user.id,
                   session_id,
-                  type: 'assistant',
+                  type: 'ai',
                   content: assistantContent,
                   metadata: { model: modelUsed, intent: intent.type },
                 });

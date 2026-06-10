@@ -248,7 +248,7 @@ export const POST = withAuth(async ({ request, user }) => {
               }
 
               await supabase.from('chat_messages').insert({
-                user_id: user.id, session_id: sessionId, type: 'assistant',
+                user_id: user.id, session_id: sessionId, type: 'ai',
                 content: finalContent,
                 metadata: {
                   model: agentConfig.model, intent: 'agent',
