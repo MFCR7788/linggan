@@ -131,6 +131,7 @@ export function AgentChatView() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
   const assistantMsgRef = useRef<string>('');
+  const activeFlowRef = useRef(activeFlow);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressHandledRef = useRef(false);
   const sessionLoadedRef = useRef(false);
@@ -176,9 +177,15 @@ export function AgentChatView() {
     switchSession, deleteSession,
   } = sessionMgr;
 
+  const currentSessionRef = useRef(currentSessionId);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 同步 ref 以便 doStream 闭包中读到最新值
+  useEffect(() => { activeFlowRef.current = activeFlow; }, [activeFlow]);
+  useEffect(() => { currentSessionRef.current = currentSessionId; }, [currentSessionId]);
 
   // 自动调整输入框高度
   useEffect(() => {
@@ -272,15 +279,18 @@ export function AgentChatView() {
             const resultData = event.result.data as Record<string, unknown> | undefined;
 
             // 流程自动推进：工具成功 → 匹配当前步骤入口 → 步进
-            if (event.result.success && activeFlow) {
+            // 使用 ref 避免 doStream 闭包捕获过期 state
+            const flow = activeFlowRef.current;
+            const sid = currentSessionRef.current;
+            if (event.result.success && flow) {
               const expectedEntry = TOOL_TO_ENTRY[event.tool];
               if (expectedEntry) {
-                const curStepEntry = activeFlow.combo.steps[activeFlow.currentStep]?.entry;
-                if (expectedEntry === curStepEntry && activeFlow.currentStep < activeFlow.combo.steps.length - 1) {
+                const curStepEntry = flow.combo.steps[flow.currentStep]?.entry;
+                if (expectedEntry === curStepEntry && flow.currentStep < flow.combo.steps.length - 1) {
                   setActiveFlow(prev => {
                     if (!prev) return null;
                     const next = { ...prev, currentStep: prev.currentStep + 1 };
-                    sessionMgr.updateMetadata(currentSessionId!, { comboId: prev.combo.id, currentStep: next.currentStep });
+                    sessionMgr.updateMetadata(sid!, { comboId: prev.combo.id, currentStep: next.currentStep });
                     return next;
                   });
                 }
@@ -302,10 +312,16 @@ export function AgentChatView() {
                   if (event.tool === 'generate_image' && Array.isArray(resultData.imageUrls)) {
                     generatedImages = [...(m.generatedImages || []), ...resultData.imageUrls as string[]];
                   }
+                  if (event.tool === 'edit_image' && typeof resultData.resultUrl === 'string') {
+                    generatedImages = [...(m.generatedImages || []), resultData.resultUrl as string];
+                  }
                   if (event.tool === 'synthesize_speech' && typeof resultData.audioBase64 === 'string') {
                     generatedAudio = `data:audio/mpeg;base64,${resultData.audioBase64}`;
                   }
-                  if (event.tool === 'generate_video' && typeof resultData.taskId === 'string') {
+                  if (event.tool === 'synthesize_speech' && typeof resultData.audioUrl === 'string') {
+                    generatedAudio = resultData.audioUrl as string;
+                  }
+                  if ((event.tool === 'generate_video' || event.tool === 'generate_digital_human') && typeof resultData.taskId === 'string') {
                     generatedVideo = { taskId: resultData.taskId as string, status: (resultData.status as string) || 'queued' };
                   }
                   if (event.tool === 'extract_schedule' && Array.isArray(resultData.schedules)) {
