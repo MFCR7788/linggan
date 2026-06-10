@@ -33,6 +33,7 @@ export async function* agentStreamLoop(
   let iteration = 0;
   const maxIter = config.maxIterations || 10;
   let finalContent = '';
+  const allToolResults: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> = [];
 
   while (iteration < maxIter) {
     if (context.signal?.aborted) {
@@ -40,7 +41,7 @@ export async function* agentStreamLoop(
       if (hooks) {
         await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: iteration, toolsUsed: [...toolsUsed] });
       }
-      yield { type: 'done', response: finalContent, toolsUsed: [...toolsUsed], tokensUsed: ctxEngine.sessionTotalTokens };
+      yield { type: 'done', response: finalContent, toolsUsed: [...toolsUsed], tokensUsed: ctxEngine.sessionTotalTokens, toolResults: allToolResults };
       return finalContent;
     }
 
@@ -86,15 +87,14 @@ export async function* agentStreamLoop(
             await hooks.emit('post_tool_call', { userId: context.userId, sessionId: context.sessionId, toolName: tc.function.name, toolArgs, toolResult: result, toolDuration: Date.now() - toolStartTime });
           }
 
-          yield {
-            type: 'tool_result',
-            tool: tc.function.name,
-            result: {
-              success: result.success,
-              output: result.output.length > 500 ? result.output.substring(0, 500) + '...' : result.output,
-              error: result.error,
-            },
+          const sseResult: ToolResult = {
+            success: result.success,
+            output: result.output.length > 500 ? result.output.substring(0, 500) + '...' : result.output,
+            data: result.data,
+            error: result.error,
           };
+          allToolResults.push({ tool: tc.function.name, params: toolArgs, result: sseResult });
+          yield { type: 'tool_result', tool: tc.function.name, result: sseResult };
 
           messages.push({
             role: 'assistant',
@@ -124,6 +124,7 @@ export async function* agentStreamLoop(
         toolsUsed: [...toolsUsed],
         tokensUsed: ctxEngine.sessionTotalTokens,
         model: config.model,
+        toolResults: allToolResults,
       };
       return finalContent;
     }
@@ -168,6 +169,7 @@ export async function* agentStreamLoop(
     toolsUsed: [...toolsUsed],
     tokensUsed: ctxEngine.sessionTotalTokens,
     model: config.model,
+    toolResults: allToolResults,
   };
   return finalContent;
 }

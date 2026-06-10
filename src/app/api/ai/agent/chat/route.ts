@@ -171,6 +171,19 @@ export const POST = withAuth(async ({ request, user }) => {
 
         try {
           let finalContent = '';
+          const completedToolCalls: Array<{ tool: string; params: Record<string, unknown>; result: { success: boolean; output: string; data?: unknown; error?: string } }> = [];
+
+          // 保存用户消息
+          if (sessionId) {
+            try {
+              await supabase.from('chat_messages').insert({
+                user_id: user.id, session_id: sessionId, type: 'user',
+                content: effectiveContent,
+                attachments: images.map((url: string, i: number) => ({ url, name: `图片 ${i + 1}`, type: 'image' })),
+                metadata: { images, documents },
+              });
+            } catch (e) { console.warn('保存用户消息失败:', e); }
+          }
 
           for await (const event of agentStreamLoop(assembled.messages, registry, {
             userId: user.id,
@@ -178,14 +191,51 @@ export const POST = withAuth(async ({ request, user }) => {
             signal: abortController.signal,
           }, agentConfig)) {
             sendEvent(event);
+            if (event.type === 'tool_call') {
+              completedToolCalls.push({ tool: event.tool, params: event.params, result: { success: true, output: '' } });
+            }
+            if (event.type === 'tool_result') {
+              const last = completedToolCalls.filter(t => t.tool === event.tool).pop();
+              if (last) last.result = event.result;
+            }
             if (event.type === 'done') finalContent = event.response;
           }
 
           if (sessionId && finalContent) {
             try {
+              const generatedImages: string[] = [];
+              let generatedVideo: { taskId: string; status: string; videoUrl?: string } | null = null;
+              let generatedAudio: string | null = null;
+              const toolCallsMeta = completedToolCalls.map(tc => ({
+                tool: tc.tool,
+                params: tc.params,
+                result: { success: tc.result.success, output: tc.result.output.substring(0, 500) },
+              }));
+
+              for (const tc of completedToolCalls) {
+                const d = tc.result.data as Record<string, unknown> | undefined;
+                if (!d) continue;
+                if (tc.tool === 'generate_image' && Array.isArray(d.imageUrls)) {
+                  generatedImages.push(...(d.imageUrls as string[]));
+                }
+                if (tc.tool === 'generate_video' && d.taskId) {
+                  generatedVideo = { taskId: d.taskId as string, status: (d.status as string) || 'queued' };
+                }
+                if (tc.tool === 'synthesize_speech' && d.audioBase64) {
+                  generatedAudio = `data:audio/mpeg;base64,${d.audioBase64}`;
+                }
+              }
+
               await supabase.from('chat_messages').insert({
                 user_id: user.id, session_id: sessionId, type: 'assistant',
-                content: finalContent, metadata: { model: agentConfig.model, intent: 'agent' },
+                content: finalContent,
+                metadata: {
+                  model: agentConfig.model, intent: 'agent',
+                  toolCalls: toolCallsMeta,
+                  ...(generatedImages.length > 0 ? { generatedImages } : {}),
+                  ...(generatedVideo ? { generatedVideo } : {}),
+                  ...(generatedAudio ? { generatedAudio } : {}),
+                },
               });
             } catch (e) { console.warn('保存 Agent 消息失败:', e); }
           }

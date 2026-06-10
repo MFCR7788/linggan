@@ -1,8 +1,9 @@
 'use client';
 
-// Agent 消息气泡 — 显示文字 + 工具调用卡片 + 生成媒体预览
+// Agent 消息气泡 — 格式化文字 + 工具调用卡片 + 生成媒体预览 + 操作按钮
 
 import { useState } from 'react';
+import FormattedText from '@/components/FormattedText';
 
 interface AgentMessageProps {
   type: 'user' | 'assistant';
@@ -13,9 +14,19 @@ interface AgentMessageProps {
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
   timestamp?: Date;
+  // 操作按钮
+  onCopy?: () => void;
+  onRegenerate?: () => void;
+  onDelete?: () => void;
+  isCopied?: boolean;
+  isRegenerating?: boolean;
 }
 
-export function AgentMessage({ type, content, toolCalls = [], attachments, generatedImages, generatedVideo, generatedAudio, timestamp }: AgentMessageProps) {
+export function AgentMessage({
+  type, content, toolCalls = [], attachments,
+  generatedImages, generatedVideo, generatedAudio, timestamp,
+  onCopy, onRegenerate, onDelete, isCopied, isRegenerating,
+}: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const isUser = type === 'user';
@@ -30,15 +41,22 @@ export function AgentMessage({ type, content, toolCalls = [], attachments, gener
   };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 px-4`}>
-      <div className={`max-w-[85%] ${isUser ? 'order-1' : 'order-1'}`}>
+    <div className="group relative mb-4 px-4">
+      <div>
         {/* 附件预览（用户上传的图片/文档） */}
         {isUser && attachments && attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2 justify-end">
+          <div className="flex flex-wrap gap-2 mb-2">
             {attachments.map((att, i) => (
               <div key={i} className="overflow-hidden rounded-lg">
                 {att.type === 'image' ? (
                   <img src={att.url} alt={att.name} className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxSrc(att.url)} />
+                ) : att.type === 'video' ? (
+                  <div className="w-20 h-20 rounded-lg border border-white/10 bg-purple-500/10 flex flex-col items-center justify-center gap-1">
+                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-[9px] text-gray-400">{att.name.length > 6 ? att.name.slice(0, 6) + '..' : att.name}</span>
+                  </div>
                 ) : (
                   <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 hover:bg-blue-500/30 transition-colors">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,15 +70,18 @@ export function AgentMessage({ type, content, toolCalls = [], attachments, gener
           </div>
         )}
 
-        {/* 消息气泡 */}
+        {/* 消息气泡 — AI 消息使用 FormattedText */}
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-            isUser
+          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser
               ? 'bg-blue-500 text-white rounded-br-md'
               : 'bg-white/10 text-white/90 rounded-bl-md'
           }`}
         >
-          {content || (toolCalls.length > 0 && !content ? '正在处理...' : '')}
+          {isUser ? (
+            <span className="whitespace-pre-wrap">{content || ''}</span>
+          ) : (
+            content ? <FormattedText text={content} color="#E5E7EB" fontSize={14} compact /> : (toolCalls.length > 0 ? <span className="text-white/50">正在处理...</span> : null)
+          )}
         </div>
 
         {/* 生成的图片 */}
@@ -76,7 +97,6 @@ export function AgentMessage({ type, content, toolCalls = [], attachments, gener
                 onClick={() => setLightboxSrc(url)}
               />
             ))}
-            <p className="w-full text-[10px] text-white/30 mt-0.5">点击图片查看大图</p>
           </div>
         )}
 
@@ -149,6 +169,43 @@ export function AgentMessage({ type, content, toolCalls = [], attachments, gener
           </div>
         )}
 
+        {/* 操作按钮 — AI 消息始终可见，用户消息 hover 显示 */}
+        {!isUser && onCopy && (
+          <div className="flex items-center gap-0.5 mt-1.5 opacity-70 hover:opacity-100 transition-opacity duration-150">
+            <ActionBtn
+              icon={isCopied ? CheckIcon : CopyIcon}
+              tooltip="复制"
+              onClick={onCopy}
+            />
+            <ActionBtn
+              icon={RefreshIcon}
+              tooltip="重新生成"
+              className={isRegenerating ? 'animate-spin' : ''}
+              onClick={onRegenerate || (() => {})}
+            />
+            <ActionBtn
+              icon={TrashIcon}
+              tooltip="删除"
+              onClick={onDelete || (() => {})}
+            />
+          </div>
+        )}
+
+        {isUser && onCopy && (
+          <div className="flex items-center gap-0.5 mt-1.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <ActionBtn
+              icon={isCopied ? CheckIcon : CopyIcon}
+              tooltip="复制"
+              onClick={onCopy}
+            />
+            <ActionBtn
+              icon={TrashIcon}
+              tooltip="删除"
+              onClick={onDelete || (() => {})}
+            />
+          </div>
+        )}
+
         {/* 时间戳 */}
         {timestamp && (
           <div className={`text-xs text-white/30 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
@@ -169,6 +226,69 @@ export function AgentMessage({ type, content, toolCalls = [], attachments, gener
         </div>
       )}
     </div>
+  );
+}
+
+// ====== 小图标按钮 ======
+
+function ActionBtn({ icon: Icon, tooltip, onClick, className = '' }: {
+  icon: React.ComponentType<{ size: number; color?: string }>;
+  tooltip: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <div className="relative group/btn">
+      <button
+        onClick={onClick}
+        className={`w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors ${className}`}
+      >
+        <Icon size={14} />
+      </button>
+      <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-700 text-gray-200 text-[10px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-10">
+        {tooltip}
+      </span>
+    </div>
+  );
+}
+
+// ====== 内联图标组件（避免引入 lucide-react 依赖） ======
+
+function CopyIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+    </svg>
+  );
+}
+
+function TrashIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
   );
 }
 

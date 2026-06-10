@@ -38,7 +38,7 @@ export type AgentEvent =
   | { type: 'tool_call'; tool: string; params: Record<string, unknown> }
   | { type: 'tool_result'; tool: string; result: ToolResult }
   | { type: 'delta'; content: string }
-  | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string }
+  | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string; toolResults?: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> }
   | { type: 'error'; message: string };
 
 // ====== Agent 配置 ======

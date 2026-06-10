@@ -39,6 +39,8 @@ export function AgentChatView() {
   const [currentTool, setCurrentTool] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [showTools, setShowTools] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
@@ -105,71 +107,34 @@ export function AgentChatView() {
       if (list.length > 0) {
         switchSession(list[0].id);
         loadMessages(list[0].id).then(msgs => {
-          const uiMsgs: UIMessage[] = msgs.map((m: any) => ({
-            id: m.id,
-            type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-            content: m.content,
-            toolCalls: [],
-            attachments: m.attachments || undefined,
-            timestamp: new Date(m.created_at),
-          }));
+          const uiMsgs: UIMessage[] = msgs.map((m: any) => {
+            const meta = m.metadata || {};
+            return {
+              id: m.id,
+              type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+              content: m.content || '',
+              toolCalls: Array.isArray(meta.toolCalls) ? meta.toolCalls : [],
+              attachments: Array.isArray(m.attachments) && m.attachments.length > 0 ? m.attachments : undefined,
+              generatedImages: Array.isArray(meta.generatedImages) ? meta.generatedImages : undefined,
+              generatedVideo: meta.generatedVideo || undefined,
+              generatedAudio: meta.generatedAudio || undefined,
+              timestamp: new Date(m.created_at),
+            };
+          });
           setMessages(uiMsgs);
         });
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
-    const hasFiles = attachedFiles.length > 0;
-    if ((!trimmed && !hasFiles) || isStreaming) return;
-
-    // 上传附件
-    const uploadedImages: string[] = [];
-    const uploadedVideos: string[] = [];
-    const uploadedDocs: string[] = [];
-    const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' }[] = [];
-
-    for (const af of attachedFiles) {
-      const url = await uploadFile(af.file);
-      if (url) {
-        const type: 'image' | 'video' | 'document' = af.type;
-        attachmentInfo.push({ url, name: af.file.name, type });
-        if (type === 'image') uploadedImages.push(url);
-        else if (type === 'video') uploadedVideos.push(url);
-        else uploadedDocs.push(url);
-      }
-      if (af.type === 'image' || af.type === 'video') revokePreview(af.preview);
-    }
-
-    let displayContent = trimmed;
-    if (!displayContent && uploadedDocs.length > 0) {
-      displayContent = `请分析这份文档：${attachedFiles.filter(f => f.type === 'document').map(f => f.file.name).join('、')}`;
-    }
-    if (!displayContent && uploadedVideos.length > 0) {
-      displayContent = `请分析这个视频`;
-    }
-    if (!displayContent && uploadedImages.length > 0) {
-      displayContent = `请分析这${uploadedImages.length}张图片`;
-    }
-
-    // 如果没有当前会话，自动创建
-    let sessionId = currentSessionId;
-    if (!sessionId) {
-      const title = trimmed ? (trimmed.substring(0, 30) + (trimmed.length > 30 ? '...' : '')) : '新对话';
-      const session = await createSession(title);
-      if (session) sessionId = session.id;
-    }
-
-    const userMsg: UIMessage = {
-      id: crypto.randomUUID(),
-      type: 'user',
-      content: displayContent,
-      toolCalls: [],
-      attachments: attachmentInfo.length > 0 ? attachmentInfo : undefined,
-      timestamp: new Date(),
-    };
-
+  const doStream = useCallback(async (
+    displayContent: string,
+    uploadedImages: string[],
+    uploadedVideos: string[],
+    uploadedDocs: string[],
+    attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' }[],
+    sessionId: string | null,
+  ) => {
     const assistantId = crypto.randomUUID();
     const assistantMsg: UIMessage = {
       id: assistantId,
@@ -179,9 +144,7 @@ export function AgentChatView() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    setInput('');
-    setAttachedFiles([]);
+    setMessages((prev) => [...prev, assistantMsg]);
     setIsStreaming(true);
     setStatusText('');
     setCurrentTool('');
@@ -283,7 +246,65 @@ export function AgentChatView() {
       setIsStreaming(false);
       sseClientRef.current = null;
     }
-  }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession]);
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    const trimmed = input.trim();
+    const hasFiles = attachedFiles.length > 0;
+    if ((!trimmed && !hasFiles) || isStreaming) return;
+
+    // 上传附件
+    const uploadedImages: string[] = [];
+    const uploadedVideos: string[] = [];
+    const uploadedDocs: string[] = [];
+    const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' }[] = [];
+
+    for (const af of attachedFiles) {
+      const url = await uploadFile(af.file);
+      if (url) {
+        const type: 'image' | 'video' | 'document' = af.type;
+        attachmentInfo.push({ url, name: af.file.name, type });
+        if (type === 'image') uploadedImages.push(url);
+        else if (type === 'video') uploadedVideos.push(url);
+        else uploadedDocs.push(url);
+      }
+      if (af.type === 'image' || af.type === 'video') revokePreview(af.preview);
+    }
+
+    let displayContent = trimmed;
+    if (!displayContent && uploadedDocs.length > 0) {
+      displayContent = `请分析这份文档：${attachedFiles.filter(f => f.type === 'document').map(f => f.file.name).join('、')}`;
+    }
+    if (!displayContent && uploadedVideos.length > 0) {
+      displayContent = `请分析这个视频`;
+    }
+    if (!displayContent && uploadedImages.length > 0) {
+      displayContent = `请分析这${uploadedImages.length}张图片`;
+    }
+
+    // 如果没有当前会话，自动创建
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const title = trimmed ? (trimmed.substring(0, 30) + (trimmed.length > 30 ? '...' : '')) : '新对话';
+      const session = await createSession(title);
+      if (session) sessionId = session.id;
+    }
+
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: displayContent,
+      toolCalls: [],
+      attachments: attachmentInfo.length > 0 ? attachmentInfo : undefined,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
+    setAttachedFiles([]);
+
+    await doStream(displayContent, uploadedImages, uploadedVideos, uploadedDocs, attachmentInfo, sessionId);
+  }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession, doStream]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const mod = e.metaKey || e.ctrlKey;
@@ -372,18 +393,56 @@ export function AgentChatView() {
     });
   };
 
+  // 消息操作
+  const handleCopy = useCallback((msg: UIMessage) => {
+    const text = msg.content || '';
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }).catch(() => {});
+  }, []);
+
+  const handleRegenerate = useCallback(async (msg: UIMessage) => {
+    if (isStreaming) return;
+    setRegeneratingId(msg.id);
+    const msgIndex = messages.findIndex(m => m.id === msg.id);
+    let userMsg: UIMessage | null = null;
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].type === 'user') { userMsg = messages[i]; break; }
+    }
+    if (!userMsg) { setRegeneratingId(null); return; }
+
+    const images = userMsg.attachments?.filter(a => a.type === 'image').map(a => a.url) || [];
+    const docs = userMsg.attachments?.filter(a => a.type === 'document').map(a => a.url) || [];
+    const attachmentInfo = userMsg.attachments || [];
+
+    setMessages(prev => prev.filter(m => m.id !== msg.id));
+    await doStream(userMsg.content, images, [], docs, attachmentInfo, currentSessionId);
+    setRegeneratingId(null);
+  }, [isStreaming, messages, currentSessionId, doStream]);
+
+  const handleDelete = useCallback((msg: UIMessage) => {
+    setMessages(prev => prev.filter(m => m.id !== msg.id));
+  }, []);
+
   // 会话操作
   const handleSwitchSession = (session: AgentSession) => {
     switchSession(session.id);
     loadMessages(session.id).then(msgs => {
-      const uiMsgs: UIMessage[] = msgs.map((m: any) => ({
-        id: m.id,
-        type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: m.content,
-        toolCalls: [],
-        attachments: m.attachments || undefined,
-        timestamp: new Date(m.created_at),
-      }));
+      const uiMsgs: UIMessage[] = msgs.map((m: any) => {
+        const meta = m.metadata || {};
+        return {
+          id: m.id,
+          type: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: m.content || '',
+          toolCalls: Array.isArray(meta.toolCalls) ? meta.toolCalls : [],
+          attachments: Array.isArray(m.attachments) && m.attachments.length > 0 ? m.attachments : undefined,
+          generatedImages: Array.isArray(meta.generatedImages) ? meta.generatedImages : undefined,
+          generatedVideo: meta.generatedVideo || undefined,
+          generatedAudio: meta.generatedAudio || undefined,
+          timestamp: new Date(m.created_at),
+        };
+      });
       setMessages(uiMsgs);
     });
   };
@@ -497,6 +556,11 @@ export function AgentChatView() {
             generatedVideo={msg.generatedVideo}
             generatedAudio={msg.generatedAudio}
             timestamp={msg.timestamp}
+            onCopy={() => handleCopy(msg)}
+            onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
+            onDelete={() => handleDelete(msg)}
+            isCopied={copiedId === msg.id}
+            isRegenerating={regeneratingId === msg.id}
           />
         ))}
 
