@@ -2,6 +2,8 @@
 // POST /api/ai/agent/chat → SSE 响应
 // V2: 使用 ContextAssembler 统一组装上下文
 
+export const maxDuration = 120; // 最高 120s，防止 Agent 多轮调用超时
+
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
 import { consume, InsufficientCreditsError } from '@/lib/credits';

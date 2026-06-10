@@ -58,8 +58,20 @@ export const generateDigitalHumanTool: ToolDefinition = {
               data: { taskId: result.taskId, script, status: 'processing' },
             };
           }
-        } catch {
-          // 降级：返回脚本
+          // 提交失败但拿到了错误信息
+          return {
+            success: true,
+            output: `口播脚本已生成，但数字人视频提交失败: ${result.message || '未知错误'}\n\n脚本内容:\n\n${script}`,
+            data: { script, submitError: result.message },
+          };
+        } catch (e) {
+          // 网络错误或超时
+          const errMsg = e instanceof Error ? e.message : String(e);
+          return {
+            success: true,
+            output: `口播脚本已生成，但数字人视频提交时发生网络错误: ${errMsg}\n\n脚本内容:\n\n${script}`,
+            data: { script, submitError: errMsg },
+          };
         }
       }
 

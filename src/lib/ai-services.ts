@@ -702,24 +702,34 @@ export async function submitDigitalHumanTask(params: {
   const { imageUrl, audioUrl, resolution = '720P' } = params;
 
   try {
-    const response = await fetch(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getHappyHorseApiKey()}`,
-        'X-DashScope-Async': 'enable',
+    const apiKey = getHappyHorseApiKey();
+    if (!apiKey) {
+      console.error('[DigitalHuman] 缺少 HAPPYHORSE_API_KEY 环境变量');
+      return { taskId: null, status: 'error', message: '数字人服务未配置 (缺少 API Key)' };
+    }
+
+    const response = await fetchWithTimeout(
+      `${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'X-DashScope-Async': 'enable',
+        },
+        body: JSON.stringify({
+          model: 'wan2.2-s2v',
+          input: {
+            image_url: imageUrl,
+            audio_url: audioUrl,
+          },
+          parameters: {
+            resolution,
+          },
+        }),
       },
-      body: JSON.stringify({
-        model: 'wan2.2-s2v',
-        input: {
-          image_url: imageUrl,
-          audio_url: audioUrl,
-        },
-        parameters: {
-          resolution,
-        },
-      }),
-    });
+      30000
+    );
 
     if (!response.ok) {
       const errText = await response.text();
@@ -734,8 +744,11 @@ export async function submitDigitalHumanTask(params: {
     }
     return { taskId, status: 'queued', message: '数字人任务已提交' };
   } catch (error) {
-    console.error('[DigitalHuman] 提交错误:', error);
-    return { taskId: null, status: 'error', message: '网络错误' };
+    const msg = error instanceof Error
+      ? (error.name === 'AbortError' ? '数字人服务请求超时(30s)' : error.message)
+      : String(error);
+    console.error('[DigitalHuman] 提交错误:', msg);
+    return { taskId: null, status: 'error', message: msg };
   }
 }
 
@@ -743,9 +756,16 @@ export async function getDigitalHumanTaskStatus(
   taskId: string
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
-    });
+    const apiKey = getHappyHorseApiKey();
+    if (!apiKey) {
+      return { status: 'error', message: '数字人服务未配置' };
+    }
+
+    const response = await fetchWithTimeout(
+      `${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+      15000
+    );
 
     if (!response.ok) {
       return { status: 'error', message: '查询失败' };
@@ -765,8 +785,11 @@ export async function getDigitalHumanTaskStatus(
 
     return { status: 'running', message: '生成中...' };
   } catch (error) {
-    console.error('[DigitalHuman] 查询错误:', error);
-    return { status: 'error', message: '网络错误' };
+    const msg = error instanceof Error
+      ? (error.name === 'AbortError' ? '查询超时' : error.message)
+      : String(error);
+    console.error('[DigitalHuman] 查询错误:', msg);
+    return { status: 'error', message: msg };
   }
 }
 

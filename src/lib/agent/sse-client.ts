@@ -23,6 +23,14 @@ export class AgentSSEClient {
         body: JSON.stringify(body),
         credentials: 'include',
         signal: mergedSignal,
+      }).catch((err) => {
+        if (err instanceof TypeError && err.message === 'Failed to fetch') {
+          throw new Error('网络连接失败，请检查网络后重试');
+        }
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          throw new Error('请求已取消');
+        }
+        throw err;
       });
 
       if (!response.ok) {
