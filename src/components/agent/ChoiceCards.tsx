@@ -3,7 +3,7 @@
 // 交互式选项卡片 — 解析 LLM 输出的 <choices> 标签，渲染为可勾选的卡片
 // 选择状态通过 onChange 上报父组件，由父组件统一处理提交
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { parseChoices, type ChoiceBlock, type ChoiceOption } from '@/lib/agent/choice-parser';
 
 export { parseChoices, type ChoiceBlock, type ChoiceOption } from '@/lib/agent/choice-parser';
@@ -21,6 +21,7 @@ interface ChoiceCardsProps {
 export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customInput, setCustomInput] = useState('');
+  const customInputRef = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((sel: Set<string>, input: string) => {
     const opts = block.options.filter(o => sel.has(o.id));
@@ -122,15 +123,24 @@ export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
 
       {/* 自定义输入行 — 用户输入即自动勾选 */}
       <div
-        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 ${
+        onClick={(e) => {
+          // 点击复选框区域则切换勾选，否则聚焦输入框
+          if (!(e.target instanceof HTMLInputElement)) {
+            customInputRef.current?.focus();
+          }
+        }}
+        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-text ${
           selected.has('__custom__')
             ? 'bg-blue-500/20 border border-blue-400/40'
-            : 'bg-white/5 border border-white/10'
+            : 'bg-white/5 border border-white/10 hover:bg-white/8'
         }`}
       >
         <div
-          onClick={toggleCustomCheck}
-          className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCustomCheck();
+          }}
+          className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
             selected.has('__custom__')
               ? 'bg-blue-500 border-blue-500'
               : 'border border-white/30'
@@ -147,11 +157,12 @@ export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
           )}
         </div>
         <input
+          ref={customInputRef}
           type="text"
           value={customInput}
           onChange={(e) => handleCustomChange(e.target.value)}
-          placeholder="其他（自定义输入）"
-          className="flex-1 bg-transparent text-sm text-white/80 placeholder-white/30 outline-none"
+          placeholder="其他（自定义输入，可自行填写）"
+          className="flex-1 min-w-0 bg-transparent text-sm text-white/80 placeholder-white/30 outline-none"
         />
       </div>
     </div>
