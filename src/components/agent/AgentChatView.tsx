@@ -3,6 +3,7 @@
 // Agent 聊天主容器 — 会话管理 + 流式消息 + 语音 + 附件 + 媒体预览
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useInputHistory } from '@/hooks/use-input-history';
 import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
@@ -45,6 +46,24 @@ export function AgentChatView() {
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressHandledRef = useRef(false);
   const sessionLoadedRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isPastingRef = useRef(false);
+
+  // Intl.Segmenter — 安全设置光标位置（正确处理 emoji/CJK 字形簇）
+  const setCursorSafe = useCallback((el: HTMLTextAreaElement, pos: number) => {
+    try {
+      const segmenter = new Intl.Segmenter('zh-Hans-CN', { granularity: 'grapheme' });
+      const segments = Array.from(segmenter.segment(el.value));
+      // 将 grapheme 索引映射回 UTF-16 code unit 偏移
+      if (pos >= segments.length) {
+        el.selectionStart = el.selectionEnd = el.value.length;
+      } else {
+        el.selectionStart = el.selectionEnd = segments[pos]?.index ?? el.value.length;
+      }
+    } catch {
+      el.selectionStart = el.selectionEnd = pos;
+    }
+  }, []);
 
   // 语音录制
   const voice = useVoiceRecording();
@@ -53,6 +72,9 @@ export function AgentChatView() {
   // 文件上传
   const fileUpload = useFileUpload();
   const { uploadError, setUploadError, uploadFile, pickImage, pickDocument, revokePreview } = fileUpload;
+
+  // 输入历史（undo/redo 最多 50 步）
+  const inputHistory = useInputHistory(input, setInput);
 
   // 会话管理
   const sessionMgr = useAgentSessions();
@@ -264,6 +286,22 @@ export function AgentChatView() {
   }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey;
+
+    // Undo: Ctrl+Z / Cmd+Z（无 Shift）
+    if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      inputHistory.undo();
+      return;
+    }
+
+    // Redo: Ctrl+Shift+Z / Cmd+Shift+Z
+    if (mod && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      inputHistory.redo();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -596,7 +634,22 @@ export function AgentChatView() {
                 <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // 粘贴后跳过实时校验，延迟重置标记
+                    if (isPastingRef.current) {
+                      isPastingRef.current = false;
+                      return;
+                    }
+                    // 去抖 150ms — 预留给搜索/API 调用等重操作
+                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                    debounceTimerRef.current = setTimeout(() => {
+                      // 此处可接入搜索建议等 debounced 操作
+                    }, 150);
+                  }}
+                  onPaste={() => {
+                    isPastingRef.current = true;
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder={attachedFiles.length > 0 ? '添加描述...' : '说说你想创作什么...'}
                   rows={1}
