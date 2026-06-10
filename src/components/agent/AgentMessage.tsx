@@ -8,7 +8,7 @@ interface AgentMessageProps {
   type: 'user' | 'assistant';
   content: string;
   toolCalls?: Array<{ tool: string; params: Record<string, unknown>; result?: { success: boolean; output: string; data?: unknown; error?: string } }>;
-  attachments?: Array<{ url: string; name: string; type: 'image' | 'document' }>;
+  attachments?: Array<{ url: string; name: string; type: 'image' | 'video' | 'document' }>;
   generatedImages?: string[];
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
