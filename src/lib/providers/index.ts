@@ -27,3 +27,4 @@ export type {
 import './builtin/dashscope';
 import './builtin/volcengine';
 import './builtin/openrouter';
+import './builtin/agnes';
