@@ -2,6 +2,7 @@
 // 内置 Provider 始终存在，外部 Provider 通过插件方式注册
 
 import type { MemoryEntry, MemoryProvider, MemorySearchResult } from '../types';
+import type { ChatMessage } from '@/lib/ai/types';
 import { buildMemoryContextBlock } from './provider';
 
 export class MemoryManager {
@@ -75,6 +76,24 @@ export class MemoryManager {
     }
   }
 
+  /** 会话结束时提取并持久化长期记忆（异步，不阻塞） */
+  async onSessionEnd(sessionId: string, messages: ChatMessage[]): Promise<void> {
+    const results = await Promise.allSettled(
+      this.providers.map(async (p) => {
+        if (!(await p.isAvailable())) return;
+        if (p.onSessionEnd) {
+          await p.onSessionEnd(sessionId, messages);
+        }
+      })
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === 'rejected') {
+        console.warn(`Memory provider '${this.providers[i].name}' onSessionEnd 失败:`, (results[i] as PromiseRejectedResult).reason);
+      }
+    }
+  }
+
   async saveEntry(
     userId: string,
     entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt'>
@@ -85,6 +104,14 @@ export class MemoryManager {
       } catch { /* try next */ }
     }
     return null;
+  }
+
+  async shutdown(): Promise<void> {
+    for (const p of this.providers) {
+      try {
+        if (p.shutdown) await p.shutdown();
+      } catch { /* skip */ }
+    }
   }
 
   get providerNames(): string[] {

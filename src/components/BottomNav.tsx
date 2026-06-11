@@ -11,7 +11,7 @@ const items = [
   { key: "home" as PageKey, label: "首页", Icon: Home },
   { key: "inspiration" as PageKey, label: "灵感库", Icon: BookOpen },
   { key: "agent" as PageKey, label: "", Icon: Plus, isCapture: true },
-  { key: "ai" as PageKey, label: "AI创作", Icon: Sparkles },
+  { key: "ai" as PageKey, label: "AI工具", Icon: Sparkles },
   { key: "profile" as PageKey, label: "我的", Icon: User },
 ];
 

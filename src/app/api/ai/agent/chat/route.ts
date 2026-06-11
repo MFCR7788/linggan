@@ -17,6 +17,7 @@ import type { ChatMessage } from '@/lib/ai/types';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
 import { BuiltinMemoryProvider } from '@/lib/assistant/memory/builtin-provider';
+import { LongTermMemoryProvider } from '@/lib/memory/long-term/provider';
 import { KnowledgeManager } from '@/lib/assistant/knowledge/manager';
 import { InspirationKnowledgeProvider } from '@/lib/assistant/knowledge/inspiration-provider';
 import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provider';
@@ -121,6 +122,7 @@ export const POST = withAuth(async ({ request, user }) => {
     // 初始化记忆/知识/技能
     const memoryManager = new MemoryManager();
     memoryManager.addProvider(new BuiltinMemoryProvider());
+    memoryManager.addProvider(new LongTermMemoryProvider());
     await memoryManager.initialize(user.id);
 
     const knowledgeManager = new KnowledgeManager();
@@ -264,6 +266,15 @@ export const POST = withAuth(async ({ request, user }) => {
                 },
               });
             } catch (e) { console.warn('保存 Agent 消息失败:', e); }
+
+            // 异步提取长期记忆（不阻塞响应）
+            try {
+              const conversationMessages: ChatMessage[] = [
+                ...assembled.messages.filter(m => m.role === 'user' || m.role === 'assistant'),
+                { role: 'assistant', content: finalContent } as ChatMessage,
+              ];
+              await memoryManager.onSessionEnd(sessionId, conversationMessages);
+            } catch (e) { console.warn('记忆提取失败:', e); }
           }
 
           controller.close();

@@ -56,3 +56,6 @@ android/fastlane/test_output/
 # Claude plans
 .claude/plans/
 screenshots/
+
+# local data (SQLite, etc.)
+.data/
