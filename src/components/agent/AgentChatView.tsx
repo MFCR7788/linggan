@@ -661,19 +661,34 @@ export function AgentChatView() {
   const handleSaveToInspiration = useCallback(async (msg: UIMessage) => {
     const text = msg.content;
     if (!text) return;
+
+    // 找到之前用户消息作为 prompt
+    const msgIndex = messages.findIndex(m => m.id === msg.id);
+    let userPrompt = '';
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].type === 'user') { userPrompt = messages[i].content; break; }
+    }
+
     try {
       const baseUrl = window.location.origin;
+      const title = (userPrompt || text).substring(0, 50);
       const res = await fetch(`${baseUrl}/api/inspiration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: text.substring(0, 50), content: text, type: 'text', tags: ['Agent生成'] }),
+        body: JSON.stringify({
+          title,
+          original_text: text,
+          prompt: userPrompt || null,
+          type: 'text',
+          tags: ['Agent生成'],
+        }),
       });
       if (res.ok) {
         setCopiedId('saved_' + msg.id);
         setTimeout(() => setCopiedId(null), 1500);
       }
     } catch { /* 静默失败 */ }
-  }, []);
+  }, [messages]);
 
   const handleSpeak = useCallback(async (msg: UIMessage) => {
     const text = msg.content;
