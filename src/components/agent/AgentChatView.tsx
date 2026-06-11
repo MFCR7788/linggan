@@ -148,6 +148,7 @@ export function AgentChatView() {
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPastingRef = useRef(false);
   const fileMapRef = useRef<Map<string, File | Blob>>(new Map());
+  const uploadPromisesRef = useRef<Map<string, Promise<string | null>>>(new Map());
 
   // Intl.Segmenter — 安全设置光标位置（正确处理 emoji/CJK 字形簇）
   const setCursorSafe = useCallback((el: HTMLTextAreaElement, pos: number) => {
@@ -441,7 +442,12 @@ export function AgentChatView() {
     const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }[] = [];
 
     for (const af of attachedFiles) {
-      const url = await uploadFile(af.file);
+      // 优先用已上传的 URL（选文件时已开始上传），否则等待/上传
+      let url = af.uploadedUrl || null;
+      if (!url) {
+        const pending = uploadPromisesRef.current.get(af.id);
+        url = pending ? await pending : await uploadFile(af.file);
+      }
       if (url) {
         const type: 'image' | 'video' | 'document' | 'audio' = af.type;
         attachmentInfo.push({ url, name: af.file.name, type });
@@ -564,11 +570,22 @@ export function AgentChatView() {
     if (transcript) setInput(prev => (prev ? prev + transcript : transcript));
   };
 
+  // 选文件后立即上传，不等发送
+  const attachAndUpload = useCallback((af: AttachedFile) => {
+    setAttachedFiles(prev => [...prev, af]);
+    const promise = uploadFile(af.file).then(url => {
+      setAttachedFiles(prev => prev.map(f => f.id === af.id ? { ...f, uploadedUrl: url || undefined } : f));
+      uploadPromisesRef.current.delete(af.id);
+      return url;
+    });
+    uploadPromisesRef.current.set(af.id, promise);
+  }, [uploadFile]);
+
   // 附件操作
   const handlePickImage = async () => {
     setShowTools(false);
     const file = await pickImage();
-    if (file) setAttachedFiles(prev => [...prev, file]);
+    if (file) attachAndUpload(file);
   };
 
   const handlePickVideo = () => {
@@ -584,7 +601,7 @@ export function AgentChatView() {
       if (file.size > 100 * 1024 * 1024) return;
       const preview = URL.createObjectURL(file);
       fileMapRef.current.set(file.name, file);
-      setAttachedFiles(prev => [...prev, { id: Date.now().toString(), file, preview, type: 'video' as const }]);
+      attachAndUpload({ id: Date.now().toString(), file, preview, type: 'video' as const });
     };
     input.click();
   };
@@ -592,13 +609,13 @@ export function AgentChatView() {
   const handlePickDocument = async () => {
     setShowTools(false);
     const file = await pickDocument();
-    if (file) setAttachedFiles(prev => [...prev, file]);
+    if (file) attachAndUpload(file);
   };
 
   const handlePickAudio = async () => {
     setShowTools(false);
     const file = await pickAudio();
-    if (file) setAttachedFiles(prev => [...prev, file]);
+    if (file) attachAndUpload(file);
   };
 
   const removeAttachedFile = (id: string) => {
@@ -924,6 +941,7 @@ export function AgentChatView() {
     setAccountSearch('');
     setShowSessionList(false);
     fileMapRef.current = new Map();
+    uploadPromisesRef.current = new Map();
   };
 
   const handleDeleteSession = (e: React.MouseEvent, sessionId: string) => {
@@ -1508,6 +1526,18 @@ export function AgentChatView() {
               <div className="flex gap-2 overflow-x-auto pb-1 items-end">
                 {attachedFiles.map(af => (
                   <div key={af.id} className="relative flex-shrink-0">
+                    {/* 上传状态指示 */}
+                    {af.uploadedUrl ? (
+                      <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center z-10">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center z-10">
+                        <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
                     {af.type === 'document' ? (
                       <div className="w-14 h-14 rounded-lg border border-gray-700 flex flex-col items-center justify-center gap-0.5 bg-blue-500/10">
                         <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

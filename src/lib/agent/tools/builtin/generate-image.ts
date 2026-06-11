@@ -56,8 +56,8 @@ export const generateImageTool: ToolDefinition = {
 
       return {
         success: true,
-        output: `已生成 ${urls.length} 张图片：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
-        data: { imageUrls: urls, prompt, quality, ratio },
+        output: `已生成 ${urls.length} 张图片并自动保存到灵感库：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
+        data: { imageUrls: urls, prompt, quality, ratio, autoSaved: true },
       };
     } catch (e) {
       return { success: false, output: '', error: `图片生成失败: ${e instanceof Error ? e.message : String(e)}` };

@@ -50,8 +50,8 @@ export const editImageTool: ToolDefinition = {
       }
       return {
         success: true,
-        output: `图片${OP_LABELS[operation] || '编辑'}成功！\n![编辑结果](${result.imageUrl})`,
-        data: { resultUrl: result.imageUrl, operation },
+        output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库！\n![编辑结果](${result.imageUrl})`,
+        data: { resultUrl: result.imageUrl, operation, autoSaved: true },
       };
     } catch (agnesErr) {
       console.warn('[edit_image] Agnes 失败，尝试 API 降级:', agnesErr);

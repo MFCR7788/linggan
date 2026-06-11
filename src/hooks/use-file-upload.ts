@@ -10,6 +10,7 @@ export interface AttachedFile {
   file: File;
   preview: string;
   type: 'image' | 'video' | 'document' | 'audio';
+  uploadedUrl?: string;
 }
 
 export function useFileUpload() {

@@ -103,7 +103,7 @@ export const generateVideoTool: ToolDefinition = {
           }
           return {
             success: true,
-            output: `视频已生成完成！`,
+            output: `视频已生成完成，已自动保存到灵感库！`,
             data: {
               taskId,
               videoUrl: status.videoUrl,
@@ -111,6 +111,7 @@ export const generateVideoTool: ToolDefinition = {
               model,
               duration,
               resolution,
+              autoSaved: true,
             },
           };
         }

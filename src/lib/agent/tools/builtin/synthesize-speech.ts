@@ -29,8 +29,8 @@ export const synthesizeSpeechTool: ToolDefinition = {
       }
       return {
         success: true,
-        output: `已生成语音，文本长度 ${text.length} 字。`,
-        data: { audioBase64: result.toString('base64') },
+        output: `已生成语音并自动保存到灵感库，文本长度 ${text.length} 字。`,
+        data: { audioBase64: result.toString('base64'), autoSaved: true },
       };
     } catch (e) {
       return { success: false, output: '', error: `语音合成失败: ${e instanceof Error ? e.message : String(e)}` };
