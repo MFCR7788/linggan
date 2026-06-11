@@ -9,8 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "remotion-server": "tsx src/remotion/server.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",
@@ -30,9 +29,6 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@remotion/bundler": "^4.0.475",
-    "@remotion/cli": "^4.0.475",
-    "@remotion/renderer": "^4.0.475",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.45.0",
@@ -48,8 +44,7 @@
     "pdf-parse": "^2.4.5",
     "pg": "^8.21.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "remotion": "^4.0.475"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
