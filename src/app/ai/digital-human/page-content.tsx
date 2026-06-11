@@ -42,6 +42,14 @@ interface InspirationItem {
 
 type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang' | 'animate' | 'avatar';
 
+interface AnimatePreset {
+  imageUrl: string;
+  imagePreview: string | null;
+  name: string;
+  savedAt: number;
+}
+const ANIMATE_PRESET_KEY = 'lingji_animate_preset';
+
 interface BatchItem {
   id: string;
   topic: string;
@@ -56,8 +64,8 @@ interface BatchItem {
 const STEPS = ['选择角色', '音频来源', '参数设置', '生成预览'];
 
 const RESOLUTION_OPTIONS = [
-  { key: '480P' as const, label: '480P', cost: '~0.30 元/秒' },
-  { key: '720P' as const, label: '720P', cost: '~0.45 元/秒' },
+  { key: '480P' as const, label: '480P', cost: '10 灵力/段' },
+  { key: '720P' as const, label: '720P', cost: '20 灵力/段' },
 ];
 
 const MODES: { key: DigitalHumanMode; label: string; icon: string; desc: string }[] = [
@@ -147,6 +155,7 @@ function DigitalHumanContent() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 加载数字分身信息
   useEffect(() => {
     if (dhMode !== 'avatar') return;
     try {
@@ -160,6 +169,25 @@ function DigitalHumanContent() {
       }
     } catch {}
   }, [dhMode, searchParams]);
+
+  // 加载角色形象预配置 (Animate)
+  const [animatePreset, setAnimatePreset] = useState<AnimatePreset | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ANIMATE_PRESET_KEY);
+      if (raw) setAnimatePreset(JSON.parse(raw));
+    } catch {}
+  }, []);
+  // 进入 Animate 模式时自动填入预配置形象
+  useEffect(() => {
+    if (dhMode !== 'animate' || !animatePreset) return;
+    if (!imageUrl) {
+      setImageUrl(animatePreset.imageUrl);
+      setImagePreview(animatePreset.imagePreview || animatePreset.imageUrl);
+      setAnimateRefImageUrl(animatePreset.imageUrl);
+      setImageTab('url');
+    }
+  }, [dhMode, animatePreset]);
 
   useEffect(() => () => {
     if (avatarPollRef.current) clearInterval(avatarPollRef.current);
@@ -1360,7 +1388,7 @@ function DigitalHumanContent() {
               <div>
                 <span style={{ color: '#E5E7EB', fontSize: 12 }}>数字人口播视频 · {resolution}</span>
                 <br />
-                <span style={{ color: '#FCD34D', fontSize: 11 }}>预估 {resolution === '720P' ? '~0.45' : '~0.30'} 元/秒</span>
+                <span style={{ color: '#FCD34D', fontSize: 11 }}>{resolution === '720P' ? '20' : '10'} 灵力/段 (含配音+数字人)</span>
               </div>
             </div>
           </div>
@@ -1611,7 +1639,7 @@ function DigitalHumanContent() {
         </div>
 
         <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 12 }}>
-          分辨率: {resolution} · 预估 ~{resolution === '720P' ? '0.45' : '0.30'} 元/秒
+          分辨率: {resolution} · {resolution === '720P' ? '20' : '10'} 灵力/段
         </p>
 
         {ocPhase === 'idle' ? (
@@ -1726,8 +1754,8 @@ function DigitalHumanContent() {
             <select value={resolution} onChange={e => setResolution(e.target.value as '480P' | '720P')}
               className="w-full bg-transparent px-2 py-1.5 rounded-lg text-xs outline-none"
               style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <option value="720P" style={{ background: '#0F172A' }}>720P (~0.45元/秒)</option>
-              <option value="480P" style={{ background: '#0F172A' }}>480P (~0.30元/秒)</option>
+              <option value="720P" style={{ background: '#0F172A' }}>720P (20 灵力/段)</option>
+              <option value="480P" style={{ background: '#0F172A' }}>480P (10 灵力/段)</option>
             </select>
           </div>
         </div>
@@ -1969,13 +1997,51 @@ function DigitalHumanContent() {
             </button>
           )}
           {(imagePreview || imageUrl) && (
-            <input
-              value={animateRefImageUrl || imagePreview || imageUrl}
-              onChange={(e) => setAnimateRefImageUrl(e.target.value)}
-              placeholder="或直接粘贴图片 URL"
-              className="w-full mt-2 px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-            />
+            <div>
+              <input
+                value={animateRefImageUrl || imagePreview || imageUrl}
+                onChange={(e) => setAnimateRefImageUrl(e.target.value)}
+                placeholder="或直接粘贴图片 URL"
+                className="w-full mt-2 px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none"
+                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
+              />
+              {/* 保存为我的形象 */}
+              {(!animatePreset || animatePreset.imageUrl !== (imagePreview || imageUrl)) && (
+                <button
+                  onClick={() => {
+                    const preset: AnimatePreset = {
+                      imageUrl: imagePreview || imageUrl,
+                      imagePreview,
+                      name: '我的角色形象',
+                      savedAt: Date.now(),
+                    };
+                    localStorage.setItem(ANIMATE_PRESET_KEY, JSON.stringify(preset));
+                    setAnimatePreset(preset);
+                    setToast({ message: '已保存为我的形象，下次可直接使用', type: 'success' });
+                  }}
+                  className="w-full mt-1.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1"
+                  style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.25)', color: '#C4B5FD' }}
+                >
+                  <Save size={11} /> 保存为我的形象
+                </button>
+              )}
+              {animatePreset && animatePreset.imageUrl === (imagePreview || imageUrl) && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <CheckCircle2 size={12} color="#22C55E" />
+                  <span style={{ color: '#86EFAC', fontSize: 10 }}>已保存为我的形象</span>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem(ANIMATE_PRESET_KEY);
+                      setAnimatePreset(null);
+                      setToast({ message: '已清除预配置形象', type: 'success' });
+                    }}
+                    style={{ color: '#FCA5A5', fontSize: 10, marginLeft: 'auto' }}
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -2266,7 +2332,99 @@ function DigitalHumanContent() {
           </div>
         </div>
 
-        {/* ─── 数字分身模式（提取为函数） ─── */}
+        {/* 预配置资产状态栏 */}
+        <div className="flex gap-2">
+          {/* 数字分身 */}
+          {avatarInfo?.status === 'ready' ? (
+            <button
+              onClick={() => { setDhMode('avatar'); }}
+              className="flex-1 flex items-center gap-2 p-2.5 rounded-xl transition-all"
+              style={{
+                background: dhMode === 'avatar' ? 'rgba(236,72,153,0.12)' : 'rgba(34,197,94,0.06)',
+                border: dhMode === 'avatar' ? '1px solid rgba(236,72,153,0.35)' : '1px solid rgba(34,197,94,0.15)',
+              }}
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(236,72,153,0.2)' }}>
+                <UserCircle2 size={14} color="#F9A8D4" />
+              </div>
+              <div className="text-left min-w-0">
+                <p style={{ color: '#D1D5DB', fontSize: 11, fontWeight: 600 }} className="truncate">
+                  {avatarInfo.name}
+                </p>
+                <p style={{ color: '#34D399', fontSize: 10 }}>● 分身就绪</p>
+              </div>
+              <ChevronRight size={12} color="#6B7280" className="flex-shrink-0 ml-auto" />
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push('/profile/settings')}
+              className="flex-1 flex items-center gap-2 p-2.5 rounded-xl transition-all"
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px dashed rgba(255,255,255,0.12)',
+              }}
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <UserCircle2 size={14} color="#9CA3AF" />
+              </div>
+              <div className="text-left">
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 500 }}>训练数字分身</p>
+                <p style={{ color: '#6B7280', fontSize: 10 }}>HeyGen · 5-15分钟</p>
+              </div>
+              <ChevronRight size={12} color="#6B7280" className="flex-shrink-0 ml-auto" />
+            </button>
+          )}
+
+          {/* 角色形象 */}
+          {animatePreset ? (
+            <button
+              onClick={() => { setDhMode('animate'); }}
+              className="flex-1 flex items-center gap-2 p-2.5 rounded-xl transition-all"
+              style={{
+                background: dhMode === 'animate' ? 'rgba(139,92,246,0.12)' : 'rgba(34,197,94,0.06)',
+                border: dhMode === 'animate' ? '1px solid rgba(139,92,246,0.35)' : '1px solid rgba(34,197,94,0.15)',
+              }}
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
+                style={{ background: 'rgba(139,92,246,0.2)' }}>
+                {animatePreset.imagePreview ? (
+                  <img src={animatePreset.imagePreview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <UserCircle2 size={14} color="#C4B5FD" />
+                )}
+              </div>
+              <div className="text-left min-w-0">
+                <p style={{ color: '#D1D5DB', fontSize: 11, fontWeight: 600 }} className="truncate">
+                  {animatePreset.name}
+                </p>
+                <p style={{ color: '#34D399', fontSize: 10 }}>● 形象就绪</p>
+              </div>
+              <ChevronRight size={12} color="#6B7280" className="flex-shrink-0 ml-auto" />
+            </button>
+          ) : (
+            <button
+              onClick={() => { setDhMode('animate'); }}
+              className="flex-1 flex items-center gap-2 p-2.5 rounded-xl transition-all"
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px dashed rgba(255,255,255,0.12)',
+              }}
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <UserCircle2 size={14} color="#9CA3AF" />
+              </div>
+              <div className="text-left">
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 500 }}>配置角色形象</p>
+                <p style={{ color: '#6B7280', fontSize: 10 }}>Wan2.2 · 动作迁移</p>
+              </div>
+              <ChevronRight size={12} color="#6B7280" className="flex-shrink-0 ml-auto" />
+            </button>
+          )}
+        </div>
+
         {/* 模式内容 */}
         {dhMode === 'manual' && renderManualMode()}
         {dhMode === 'ai-write' && renderAIWriteMode()}
