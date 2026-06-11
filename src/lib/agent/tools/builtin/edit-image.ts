@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '../../types';
 import { editImageAgnes, type EditOperation } from '@/lib/ai/image';
+import { saveMediaToInspiration } from '../save-media-helper';
 
 const OP_LABELS: Record<string, string> = {
   enhance: '增强画质',
@@ -37,13 +38,16 @@ export const editImageTool: ToolDefinition = {
     },
     required: ['imageUrl'],
   },
-  async handler(params, _ctx) {
+  async handler(params, ctx) {
     const imageUrl = params.imageUrl as string;
     const operation = (params.operation as EditOperation) || 'enhance';
     const prompt = params.prompt as string | undefined;
 
     try {
       const result = await editImageAgnes({ image: imageUrl, operation, prompt });
+      if (ctx.userId) {
+        saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [result.imageUrl]).catch(() => {});
+      }
       return {
         success: true,
         output: `图片${OP_LABELS[operation] || '编辑'}成功！\n![编辑结果](${result.imageUrl})`,

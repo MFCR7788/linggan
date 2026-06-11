@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '../../types';
 import { synthesizeWithCosyVoice } from '@/lib/ai-services';
+import { saveMediaToInspiration } from '../save-media-helper';
 
 export const synthesizeSpeechTool: ToolDefinition = {
   name: 'synthesize_speech',
@@ -12,7 +13,7 @@ export const synthesizeSpeechTool: ToolDefinition = {
     },
     required: ['text'],
   },
-  async handler(params, _ctx) {
+  async handler(params, ctx) {
     const text = params.text as string;
     const speed = (params.speed as number) || 1.0;
     try {
@@ -22,6 +23,9 @@ export const synthesizeSpeechTool: ToolDefinition = {
       });
       if (!result) {
         return { success: false, output: '语音合成失败，未返回音频数据。' };
+      }
+      if (ctx.userId) {
+        saveMediaToInspiration(ctx.userId, 'audio', text, []).catch(() => {});
       }
       return {
         success: true,

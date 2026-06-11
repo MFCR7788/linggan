@@ -6,6 +6,7 @@ import {
   getAgnesVideoTaskStatus,
 } from '@/lib/ai/video';
 import type { VideoProvider } from '@/lib/video-models';
+import { saveMediaToInspiration } from '../save-media-helper';
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 580_000; // 9 分 40 秒，留 20s 余量给 tool-timeout 的 600s
@@ -46,7 +47,7 @@ export const generateVideoTool: ToolDefinition = {
     },
     required: ['prompt'],
   },
-  async handler(params, _ctx) {
+  async handler(params, ctx) {
     const prompt = params.prompt as string;
     const duration = (params.duration as number) || 5;
     const resolution = (params.resolution as '720p' | '1080p') || '720p';
@@ -97,6 +98,9 @@ export const generateVideoTool: ToolDefinition = {
           : await getVideoTaskStatusUniversal(taskId, provider as VideoProvider);
 
         if (status.status === 'succeeded' && status.videoUrl) {
+          if (ctx.userId) {
+            saveMediaToInspiration(ctx.userId, 'video', prompt, [status.videoUrl]).catch(() => {});
+          }
           return {
             success: true,
             output: `视频已生成完成！`,

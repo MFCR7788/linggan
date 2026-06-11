@@ -1,0 +1,94 @@
+// Agent 工具共用 — 生成内容自动保存到灵感库
+import { createAdminClient } from '@/lib/supabase-server';
+
+const TYPE_TO_CATEGORY: Record<string, string> = {
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+};
+
+export async function saveMediaToInspiration(
+  userId: string,
+  type: 'image' | 'video' | 'audio',
+  prompt: string,
+  mediaUrls: string[],
+  options?: { sourcePlatform?: string; tags?: string[] }
+): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+
+    // 查找或创建对应分类
+    const catName = TYPE_TO_CATEGORY[type] || '灵感';
+    const { data: cat } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('name', catName)
+      .maybeSingle();
+
+    let categoryId = cat?.id || null;
+    if (!categoryId) {
+      const { data: newCat } = await supabase
+        .from('categories')
+        .insert({ user_id: userId, name: catName, icon: type === 'image' ? '🖼️' : type === 'video' ? '🎬' : '🎵', color: '#3B82F6', sort_order: 0 })
+        .select('id')
+        .single();
+      categoryId = newCat?.id || null;
+    }
+
+    const title = prompt.length > 50 ? prompt.slice(0, 50) : prompt;
+    const tags = options?.tags || ['AI生成', type === 'image' ? 'AI生图' : type === 'video' ? 'AI视频' : 'AI音频'];
+
+    const { data: item, error } = await supabase
+      .from('content_items')
+      .insert({
+        user_id: userId,
+        type,
+        title,
+        original_text: prompt,
+        prompt,
+        category_id: categoryId,
+        media_urls: mediaUrls.length > 0 ? mediaUrls : null,
+        source_platform: options?.sourcePlatform || 'ai',
+        status: 'active',
+        analysis_status: 'completed',
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.warn('[saveMediaToInspiration] 插入失败:', error.message);
+      return;
+    }
+
+    // 批量创建标签关联
+    if (item?.id && tags.length > 0) {
+      const { data: existing } = await supabase
+        .from('tags')
+        .select('id, name')
+        .eq('user_id', userId)
+        .in('name', tags);
+
+      const existingMap = new Map((existing || []).map((t: any) => [t.name, t.id]));
+      const newNames = tags.filter((n) => !existingMap.has(n));
+
+      if (newNames.length > 0) {
+        const { data: created } = await supabase
+          .from('tags')
+          .insert(newNames.map((name) => ({ user_id: userId, name })))
+          .select('id, name');
+        (created || []).forEach((t: any) => existingMap.set(t.name, t.id));
+      }
+
+      const rows = tags
+        .map((name) => ({ content_id: item.id, tag_id: existingMap.get(name) }))
+        .filter((r) => r.tag_id);
+
+      if (rows.length > 0) {
+        await supabase.from('content_tags').insert(rows);
+      }
+    }
+  } catch (e) {
+    console.warn('[saveMediaToInspiration] 保存失败:', e);
+  }
+}

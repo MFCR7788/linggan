@@ -1,6 +1,7 @@
 import type { ToolDefinition } from '../../types';
 import { generateImageAgnes } from '@/lib/ai/image';
 import { generateImage } from '@/lib/ai-services';
+import { saveMediaToInspiration } from '../save-media-helper';
 
 export const generateImageTool: ToolDefinition = {
   name: 'generate_image',
@@ -26,7 +27,7 @@ export const generateImageTool: ToolDefinition = {
     },
     required: ['prompt'],
   },
-  async handler(params, _ctx) {
+  async handler(params, ctx) {
     const prompt = params.prompt as string;
     const ratio = (params.ratio as string) || '1:1';
     const quality = ((params.quality as string) || 'standard') as 'standard' | 'hd' | '4k';
@@ -47,6 +48,12 @@ export const generateImageTool: ToolDefinition = {
       if (urls.length === 0) {
         return { success: false, output: '图片生成失败，未返回图片 URL。' };
       }
+
+      // 自动保存到灵感库
+      if (ctx.userId) {
+        saveMediaToInspiration(ctx.userId, 'image', prompt, urls).catch(() => {});
+      }
+
       return {
         success: true,
         output: `已生成 ${urls.length} 张图片：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
