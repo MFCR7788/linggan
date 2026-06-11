@@ -11,6 +11,8 @@ import { CREDIT_COSTS } from '@/lib/credit-costs';
 import { createAdminClient } from '@/lib/supabase-server';
 import { ToolRegistry, registerAllBuiltinTools } from '@/lib/agent/tools';
 import { agentStreamLoop } from '@/lib/agent/stream';
+import { MCPManager } from '@/lib/mcp/manager';
+import { getDefaultMCPServers } from '@/lib/mcp/defaults';
 import { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '@/lib/agent/conversational';
 import type { AgentEvent } from '@/lib/agent/types';
 import type { ChatMessage } from '@/lib/ai/types';
@@ -118,6 +120,13 @@ export const POST = withAuth(async ({ request, user }) => {
     // 初始化工具注册表
     const registry = new ToolRegistry();
     registerAllBuiltinTools(registry);
+
+    // 初始化 MCP Server（默认接入 GitHub 等，未配置 token 时优雅降级）
+    const mcpManager = new MCPManager(registry);
+    const defaultMCPServers = getDefaultMCPServers();
+    if (defaultMCPServers.length > 0) {
+      await mcpManager.initialize(defaultMCPServers);
+    }
 
     // 初始化记忆/知识/技能
     const memoryManager = new MemoryManager();

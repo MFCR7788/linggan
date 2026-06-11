@@ -123,13 +123,8 @@ export class LongTermMemoryStore {
   search(params: MemorySearchParams): LongTermMemoryEntry[] {
     const { userId, query, limit = 10, minImportance = 3, type } = params;
 
-    // FTS5 查询语法：对用户输入做清理
-    const ftsQuery = query
-      .replace(/['"]/g, '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((t) => `"${t}"`)
-      .join(' OR ');
+    // trigram tokenizer 可直接使用原始查询文本
+    const ftsQuery = query.replace(/['"]/g, '').trim();
 
     if (!ftsQuery) return this.getByUser(userId, limit, minImportance, type);
 

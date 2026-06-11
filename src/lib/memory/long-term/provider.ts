@@ -101,6 +101,45 @@ export class LongTermMemoryProvider implements MemoryProvider {
     store.delete(numericId, this.userId);
   }
 
+  async getByCategory(category: string): Promise<MemoryEntry[]> {
+    if (!this.available) return [];
+
+    const store = getLongTermMemoryStore();
+    const memType = mapCategoryToType(category as MemoryEntry['category']);
+    const memories = store.getByUser(this.userId, 20, 0, memType);
+
+    return memories.map((m) => ({
+      id: `ltm_${m.id}`,
+      userId: m.user_id,
+      category: mapTypeToCategory(m.type),
+      key: undefined,
+      value: m.content,
+      importance: m.importance,
+      sourceSessionId: m.source_session_id || undefined,
+      createdAt: m.created_at,
+      updatedAt: m.last_accessed_at,
+    }));
+  }
+
+  async getAll(): Promise<MemoryEntry[]> {
+    if (!this.available) return [];
+
+    const store = getLongTermMemoryStore();
+    const memories = store.getByUser(this.userId, 50, 0);
+
+    return memories.map((m) => ({
+      id: `ltm_${m.id}`,
+      userId: m.user_id,
+      category: mapTypeToCategory(m.type),
+      key: undefined,
+      value: m.content,
+      importance: m.importance,
+      sourceSessionId: m.source_session_id || undefined,
+      createdAt: m.created_at,
+      updatedAt: m.last_accessed_at,
+    }));
+  }
+
   async onSessionEnd(sessionId: string, messages: ChatMessage[]): Promise<void> {
     if (!this.available) return;
 

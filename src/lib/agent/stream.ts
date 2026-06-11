@@ -1,14 +1,17 @@
 // Agent SSE Stream — 流式多轮执行
 // 通过 SSE 实时推送文字 delta + 工具调用状态
 // V2: 通过 ModelRouter 解耦模型调用，通过 ContextEngine 实现真实 token 计数
+// V3: 目标分解 (Plan-then-Execute)
 
 import type { ChatMessage } from '@/lib/ai/types';
 import type { ToolRegistry } from './tools/registry';
-import type { AgentConfig, AgentEvent, ToolResult, ToolCallRequest, AgentLoopOptions } from './types';
+import type { AgentConfig, AgentEvent, ToolResult, ToolCallRequest, AgentLoopOptions, ExecutionPlan } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
 import { executeWithTimeout } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
+import { GoalPlanner, updatePlanProgress, getCurrentStep } from './goal-planner';
+import { GoalProgressTracker } from './goal-progress';
 
 export async function* agentStreamLoop(
   messages: ChatMessage[],
@@ -30,8 +33,24 @@ export async function* agentStreamLoop(
     await hooks.emit('agent:start', { userId: context.userId, sessionId: context.sessionId, config: { ...config } });
   }
 
-  let iteration = 0;
+  // 目标分解：复杂任务先生成执行计划
+  let plan: ExecutionPlan | null = null;
+  const progressTracker = new GoalProgressTracker();
   const maxIter = config.maxIterations || 10;
+
+  if (maxIter >= 5) {
+    const userMsg = messages.filter(m => m.role === 'user').pop();
+    if (userMsg && typeof userMsg.content === 'string') {
+      const planner = new GoalPlanner();
+      plan = await planner.plan(userMsg.content);
+      if (plan) {
+        progressTracker.setPlan(plan);
+        yield { type: 'plan_generated', plan };
+      }
+    }
+  }
+
+  let iteration = 0;
   let finalContent = '';
   const allToolResults: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> = [];
 
@@ -45,7 +64,11 @@ export async function* agentStreamLoop(
       return finalContent;
     }
 
-    yield { type: 'thinking', message: iteration === 0 ? '思考中...' : '继续思考...' };
+    const currentStep = plan ? getCurrentStep(plan) : null;
+    const thinkingMsg = iteration === 0
+      ? (currentStep ? `执行步骤: ${currentStep.title}` : '思考中...')
+      : '继续思考...';
+    yield { type: 'thinking', message: thinkingMsg };
 
     // pre_llm_call
     if (hooks) {
@@ -59,6 +82,7 @@ export async function* agentStreamLoop(
       model: config.model,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      taskType: 'main_chat',
     })) {
       if (chunk.type === 'text') {
         finalContent += chunk.content;
@@ -95,6 +119,21 @@ export async function* agentStreamLoop(
           };
           allToolResults.push({ tool: tc.function.name, params: toolArgs, result: sseResult });
           yield { type: 'tool_result', tool: tc.function.name, result: sseResult };
+
+          // 更新计划进度
+          if (plan) {
+            progressTracker.markToolExecuted(tc.function.name);
+            const snapshot = progressTracker.getSnapshot();
+            if (snapshot && !snapshot.isComplete) {
+              yield {
+                type: 'plan_progress',
+                goal: snapshot.goal,
+                totalSteps: snapshot.totalSteps,
+                completedSteps: snapshot.completedSteps,
+                currentStep: snapshot.currentStep?.title || null,
+              };
+            }
+          }
 
           messages.push({
             role: 'assistant',
@@ -151,6 +190,7 @@ export async function* agentStreamLoop(
     const finalText = await modelRouter.chat(messages, {
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      taskType: 'main_chat',
     });
     finalContent = finalText;
     yield { type: 'delta', content: finalText };

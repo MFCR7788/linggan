@@ -87,6 +87,7 @@ export function AgentChatView() {
   const [selectedAccountType, setSelectedAccountType] = useState<AccountTypePreset | null>(null);
   const [activeFlow, setActiveFlow] = useState<{ combo: RecommendationCombo; currentStep: number } | null>(null);
   const [accountSearch, setAccountSearch] = useState('');
+  const [planProgress, setPlanProgress] = useState<{ goal: string; totalSteps: number; completedSteps: number; currentStep: string | null } | null>(null);
 
   // 斜杠指令
   const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
@@ -258,6 +259,24 @@ export function AgentChatView() {
         session_id: sessionId || undefined,
       })) {
         switch (event.type) {
+          case 'plan_generated':
+            setPlanProgress({
+              goal: event.plan.goal,
+              totalSteps: event.plan.subgoals.length,
+              completedSteps: 0,
+              currentStep: event.plan.subgoals[0]?.title || null,
+            });
+            break;
+
+          case 'plan_progress':
+            setPlanProgress({
+              goal: event.goal,
+              totalSteps: event.totalSteps,
+              completedSteps: event.completedSteps,
+              currentStep: event.currentStep,
+            });
+            break;
+
           case 'thinking':
             setStatusText(event.message);
             break;
@@ -1158,6 +1177,35 @@ export function AgentChatView() {
           <div className="flex items-center justify-center py-12">
             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <span className="ml-3 text-sm text-gray-400">加载消息中...</span>
+          </div>
+        )}
+
+        {/* 计划进度条 */}
+        {planProgress && (
+          <div className="mx-4 mb-4 p-3 rounded-xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-blue-400">目标</span>
+              <span className="text-sm text-white/80">{planProgress.goal}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${planProgress.totalSteps > 0 ? (planProgress.completedSteps / planProgress.totalSteps) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                {planProgress.completedSteps}/{planProgress.totalSteps}
+              </span>
+            </div>
+            {planProgress.currentStep && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-400">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                当前: {planProgress.currentStep}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,14 +1,16 @@
 // Agent Loop — ReAct 模式多轮执行
 // Reasoning + Acting: 模型决定调用工具 → 执行 → 结果注入 → 继续 → 最终输出
 // V2: 通过 ModelRouter 解耦模型调用，通过 ContextEngine 实现真实 token 计数
+// V3: 目标分解 (Plan-then-Execute)
 
 import type { ChatMessage } from '@/lib/ai/types';
 import type { ToolRegistry } from './tools/registry';
-import type { AgentConfig, AgentLoopOptions } from './types';
+import type { AgentConfig, AgentLoopOptions, ExecutionPlan } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
 import { executeWithTimeout } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
+import { GoalPlanner, updatePlanProgress, getCurrentStep } from './goal-planner';
 
 interface AgentLoopResult {
   content: string;
@@ -34,10 +36,21 @@ export async function agentLoop(
     await hooks.emit('agent:start', { userId: context.userId, sessionId: context.sessionId, config: { ...config } });
   }
 
+  // 目标分解：复杂任务先生成执行计划
+  let plan: ExecutionPlan | null = null;
+  const maxIter = config.maxIterations || 10;
+
+  if (maxIter >= 5) {
+    const userMsg = messages.filter(m => m.role === 'user').pop();
+    if (userMsg && typeof userMsg.content === 'string') {
+      const planner = new GoalPlanner();
+      plan = await planner.plan(userMsg.content);
+    }
+  }
+
   const toolsUsed = new Set<string>();
   const toolCallHistory = new Map<string, number>();
   let iteration = 0;
-  const maxIter = config.maxIterations || 10;
 
   while (iteration < maxIter) {
     if (context.signal?.aborted) {
@@ -66,6 +79,7 @@ export async function agentLoop(
       model: config.model,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      taskType: 'main_chat',
     });
 
     // 从 API 响应更新真实 token 计数
@@ -148,6 +162,11 @@ export async function agentLoop(
 
         toolsUsed.add(toolName);
 
+        // 更新计划进度
+        if (plan) {
+          plan = updatePlanProgress(plan, [...toolsUsed]);
+        }
+
         // post_tool_call hook
         if (hooks) {
           await hooks.emit('post_tool_call', {
@@ -205,6 +224,7 @@ export async function agentLoop(
     const finalContent = await modelRouter.chat(messages, {
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      taskType: 'main_chat',
     });
     if (hooks) {
       await hooks.emit('agent:end', {

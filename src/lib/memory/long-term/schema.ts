@@ -30,7 +30,7 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content,
         content_rowid='id',
-        tokenize='unicode61 remove_diacritics 2'
+        tokenize='trigram'
       );
 
       CREATE TABLE IF NOT EXISTS schema_version (

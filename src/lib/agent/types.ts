@@ -31,6 +31,21 @@ export type ToolHandler = (
   context: ToolContext
 ) => Promise<ToolResult>;
 
+// ====== 目标分解 ======
+
+export interface PlanStep {
+  id: string;
+  title: string;
+  description: string;
+  expectedTools: string[];
+  done: boolean;
+}
+
+export interface ExecutionPlan {
+  goal: string;
+  subgoals: PlanStep[];
+}
+
 // ====== Agent 事件（SSE 传输） ======
 
 export type AgentEvent =
@@ -39,6 +54,8 @@ export type AgentEvent =
   | { type: 'tool_result'; tool: string; result: ToolResult }
   | { type: 'delta'; content: string }
   | { type: 'skills_matched'; recommendations: Array<{ name: string; displayName: string; score: number }> }
+  | { type: 'plan_generated'; plan: ExecutionPlan }
+  | { type: 'plan_progress'; goal: string; totalSteps: number; completedSteps: number; currentStep: string | null }
   | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string; toolResults?: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> }
   | { type: 'error'; message: string };
 

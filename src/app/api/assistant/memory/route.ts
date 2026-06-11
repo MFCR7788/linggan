@@ -1,4 +1,4 @@
-// 记忆 API — CRUD 用户记忆
+// 记忆 API — CRUD 用户记忆（Supabase + 本地 SQLite 长期记忆）
 // GET  /api/assistant/memory?action=list|search&query=&category=
 // POST /api/assistant/memory — 创建记忆
 // DELETE /api/assistant/memory?id=xxx — 删除记忆
@@ -7,6 +7,8 @@ import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { BuiltinMemoryProvider } from '@/lib/assistant/memory/builtin-provider';
+import { LongTermMemoryProvider } from '@/lib/memory/long-term/provider';
+import type { MemoryEntry, MemorySearchResult } from '@/lib/assistant/types';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 
 export const GET = withAuth(async ({ request, user }) => {
@@ -19,19 +21,37 @@ export const GET = withAuth(async ({ request, user }) => {
     const builtin = new BuiltinMemoryProvider();
     await builtin.initialize(user.id);
 
+    // 同时初始化长期记忆 Provider
+    const longTerm = new LongTermMemoryProvider();
+    await longTerm.initialize(user.id);
+
     if (action === 'search' && query) {
       const embedding = await generateEmbedding(query).catch(() => []);
-      const results = await builtin.prefetch(query, embedding);
-      return createApiResponse(results);
+
+      // 并行查询两个 provider
+      const [supabaseResults, localResults] = await Promise.all([
+        builtin.prefetch(query, embedding),
+        longTerm.prefetch(query, []),
+      ]);
+
+      return createApiResponse([...supabaseResults, ...localResults]);
     }
 
     if (category) {
-      const results = await builtin.getByCategory(category);
-      return createApiResponse(results);
+      const [supabaseResults, localResults] = await Promise.all([
+        builtin.getByCategory(category),
+        longTerm.getByCategory(category),
+      ]);
+
+      return createApiResponse([...supabaseResults, ...localResults]);
     }
 
-    const results = await builtin.getAll();
-    return createApiResponse(results);
+    const [supabaseResults, localResults] = await Promise.all([
+      builtin.getAll(),
+      longTerm.getAll(),
+    ]);
+
+    return createApiResponse([...supabaseResults, ...localResults]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return createApiError(msg, 500);
@@ -78,9 +98,17 @@ export const DELETE = withAuth(async ({ request, user }) => {
   if (!id) return createApiError('缺少 id 参数', 400);
 
   try {
-    const builtin = new BuiltinMemoryProvider();
-    await builtin.initialize(user.id);
-    await builtin.delete(id);
+    // 根据 ID 前缀选择对应的 provider
+    if (id.startsWith('ltm_')) {
+      const longTerm = new LongTermMemoryProvider();
+      await longTerm.initialize(user.id);
+      await longTerm.delete(id);
+    } else {
+      const builtin = new BuiltinMemoryProvider();
+      await builtin.initialize(user.id);
+      await builtin.delete(id);
+    }
+
     return createApiResponse({ deleted: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

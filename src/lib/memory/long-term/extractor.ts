@@ -65,6 +65,7 @@ export class MemoryExtractor {
         {
           temperature: 0.3,
           maxTokens: 1024,
+          taskType: 'memory_extract',
         }
       );
 

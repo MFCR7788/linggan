@@ -3,6 +3,18 @@
 
 export { ProviderRegistry } from './registry';
 export { ModelRouter } from './model-router';
+export {
+  resolveTaskModel,
+  detectTaskType,
+  accumulateCost,
+  getSessionCostEstimate,
+  resetSessionCost,
+} from './cost-matrix';
+export type {
+  TaskType,
+  TaskModelResult,
+  CostEstimate,
+} from './cost-matrix';
 export type {
   ProviderProfile,
   ModelCapability,

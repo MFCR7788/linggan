@@ -1,15 +1,19 @@
 // ModelRouter — 按任务类型 + provider 优先级路由模型调用
 // 替换 agent loop 中硬编码的 callDeepSeek* 调用
+// V2: 支持 taskType 成本感知路由
 
 import { ProviderRegistry } from './registry';
 import type { ProviderProfile, ResolvedModel } from './types';
 import type { ChatMessage } from '@/lib/ai/types';
+import { resolveTaskModel, accumulateCost, type TaskType, type TaskModelResult } from './cost-matrix';
 
 interface RouterOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
   enableSearch?: boolean;
+  /** 任务类型，用于成本感知路由 */
+  taskType?: TaskType;
 }
 
 interface ToolCallDelta {
@@ -27,8 +31,14 @@ export class ModelRouter {
     this.defaultProviderName = defaultProviderName;
   }
 
-  /** 解析模型 → provider + api key（搜索所有 provider 找到匹配模型） */
-  resolveModel(modelId?: string): ResolvedModel {
+  /** 解析模型 → provider + api key（按 taskType 成本路由） */
+  resolveModel(modelId?: string, taskType?: TaskType): ResolvedModel {
+    // 成本感知路由：按任务类型选择最佳模型
+    if (taskType && !modelId) {
+      const resolved = resolveTaskModel(taskType);
+      modelId = resolved.model;
+    }
+
     // 搜索所有可用 provider 中匹配的模型
     if (modelId) {
       for (const provider of this.registry.listAvailable()) {
@@ -72,7 +82,7 @@ export class ModelRouter {
     messages: ChatMessage[],
     options: RouterOptions = {}
   ): Promise<string> {
-    const resolved = this.resolveModel(options.model);
+    const resolved = this.resolveModel(options.model, options.taskType);
     const body = this.buildBody(resolved, messages, options);
 
     const response = await this.fetchWithTimeout(resolved.baseUrl, {
@@ -88,6 +98,12 @@ export class ModelRouter {
 
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
+
+    // 成本追踪
+    if (data?.usage?.completion_tokens) {
+      accumulateCost(data.usage.completion_tokens, resolved.model);
+    }
+
     if (typeof content !== 'string') {
       throw new Error(`Unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
     }
@@ -107,7 +123,7 @@ export class ModelRouter {
     };
     usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
   }> {
-    const resolved = this.resolveModel(options.model);
+    const resolved = this.resolveModel(options.model, options.taskType);
     const body = {
       ...this.buildBody(resolved, messages, options),
       tools,
@@ -141,7 +157,7 @@ export class ModelRouter {
     messages: ChatMessage[],
     options: RouterOptions = {}
   ): AsyncGenerator<string, string, unknown> {
-    const resolved = this.resolveModel(options.model);
+    const resolved = this.resolveModel(options.model, options.taskType);
     const body = { ...this.buildBody(resolved, messages, options), stream: true };
 
     const response = await this.fetchWithTimeout(resolved.baseUrl, {
@@ -197,7 +213,7 @@ export class ModelRouter {
     string,
     unknown
   > {
-    const resolved = this.resolveModel(options.model);
+    const resolved = this.resolveModel(options.model, options.taskType);
     const body = {
       ...this.buildBody(resolved, messages, options),
       tools,
