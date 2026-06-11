@@ -13,7 +13,7 @@ import { InspirationKnowledgeProvider } from '@/lib/assistant/knowledge/inspirat
 import { PublicKnowledgeProvider } from '@/lib/assistant/knowledge/public-provider';
 import { WebSearchProvider } from '@/lib/assistant/knowledge/web-search-provider';
 import { generateEmbedding } from '@/lib/assistant/embedding';
-import { extractMemories } from '@/lib/assistant/memory/extractor';
+import { LongTermMemoryProvider } from '@/lib/memory/long-term/provider';
 import { compressHistory, buildCompressedMessages } from '@/lib/assistant/context-compressor';
 import { SkillsHub } from '@/lib/assistant/skills/hub';
 import type { DetectedIntent, IntentType, GenType } from '@/lib/assistant';

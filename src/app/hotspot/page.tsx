@@ -182,7 +182,15 @@ function RadarTab({
           { key: 'urgent', label: '紧急', count: stats?.urgent ?? 0, color: '#EF4444' },
           { key: 'unread', label: '未读', count: stats?.unread ?? 0, color: '#F59E0B' },
         ].map(({ key, label, count, color }) => (
-          <button key={key} onClick={() => { setActiveFilter(key); setPage(1); if (key === 'today') setTimeRange('today'); }}
+          <button key={key} onClick={() => {
+            setActiveFilter(key);
+            setPage(1);
+            // 重置冲突的筛选状态，确保标签预设与实际筛选一致
+            if (key === 'today') { setTimeRange('today'); setImportance(''); }
+            else if (key === 'urgent') { setTimeRange(''); setImportance(''); }
+            else if (key === 'unread') { setTimeRange(''); setImportance(''); }
+            else { setTimeRange(''); setImportance(''); }
+          }}
             className="rounded-lg p-3 text-center transition-all"
             style={{
               background: activeFilter === key
@@ -238,7 +246,7 @@ function RadarTab({
         </select>
         {/* 重要性 */}
         {['urgent', 'high', 'medium', 'low'].map((level) => (
-          <button key={level} onClick={() => setImportance(importance === level ? '' : level)}
+          <button key={level} onClick={() => { setImportance(importance === level ? '' : level); setActiveFilter('all'); }}
             className="flex-shrink-0 px-2 py-1 rounded text-[11px]"
             style={{
               background: importance === level ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
@@ -249,7 +257,7 @@ function RadarTab({
         ))}
         {/* 时间 */}
         {TIME_RANGES.filter(t => t.key).map(({ key, label }) => (
-          <button key={key} onClick={() => setTimeRange(timeRange === key ? '' : key)}
+          <button key={key} onClick={() => { setTimeRange(timeRange === key ? '' : key); setActiveFilter('all'); }}
             className="flex-shrink-0 px-2 py-1 rounded text-[11px]"
             style={{
               background: timeRange === key ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)',

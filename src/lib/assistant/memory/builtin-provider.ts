@@ -2,7 +2,10 @@
 // 使用 user_memories 表持久化，search_user_memories 函数做向量检索
 
 import type { MemoryProvider, MemoryEntry, MemorySearchResult } from '../types';
+import type { ChatMessage } from '@/lib/ai/types';
 import { createAdminClient } from '@/lib/supabase-server';
+import { extractMemories } from './extractor';
+import { generateEmbedding } from '../embedding';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
@@ -136,6 +139,47 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       '每次对话后，检查是否有值得持久化的新信息（用户说了什么关于自己的事、偏好变化、' +
       '重复出现的工作模式等），写入 user_memories。'
     );
+  }
+
+  async onSessionEnd(sessionId: string, messages: ChatMessage[]): Promise<void> {
+    if (!this.available) return;
+
+    const userContent = messages
+      .filter((m) => m.role === 'user')
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    const assistantContent = messages
+      .filter((m) => m.role === 'assistant')
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+
+    const extracted = await extractMemories(userContent, assistantContent);
+    if (extracted.length === 0) return;
+
+    for (const mem of extracted) {
+      let embedding: number[] | undefined;
+      try {
+        embedding = await generateEmbedding(mem.value);
+      } catch {
+        /* skip */
+      }
+
+      try {
+        await this.save({
+          userId: this.userId,
+          category: mem.category,
+          key: mem.key,
+          value: mem.value,
+          importance: mem.importance,
+          sourceSessionId: sessionId,
+          embedding,
+        });
+      } catch (e) {
+        console.warn('[BuiltinMemory] onSessionEnd save 失败:', e);
+      }
+    }
+
+    console.log(`[BuiltinMemory] 提取 ${extracted.length} 条记忆 (session: ${sessionId})`);
   }
 }
 
