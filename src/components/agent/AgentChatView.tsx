@@ -44,7 +44,7 @@ interface UIMessage {
   type: 'user' | 'assistant';
   content: string;
   toolCalls: ToolCallRecord[];
-  attachments?: { url: string; name: string; type: 'image' | 'video' | 'document' }[];
+  attachments?: { url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }[];
   generatedImages?: string[];
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
@@ -167,7 +167,7 @@ export function AgentChatView() {
 
   // 文件上传
   const fileUpload = useFileUpload();
-  const { uploadError, setUploadError, uploadFile, pickImage, pickDocument, revokePreview } = fileUpload;
+  const { uploadError, setUploadError, uploadFile, pickImage, pickDocument, pickAudio, revokePreview } = fileUpload;
 
   // 输入历史（undo/redo 最多 50 步）
   const inputHistory = useInputHistory(input, setInput);
@@ -236,7 +236,7 @@ export function AgentChatView() {
     uploadedImages: string[],
     uploadedVideos: string[],
     uploadedDocs: string[],
-    attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' }[],
+    attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }[],
     sessionId: string | null,
   ) => {
     const assistantId = crypto.randomUUID();
@@ -423,18 +423,19 @@ export function AgentChatView() {
     const uploadedImages: string[] = [];
     const uploadedVideos: string[] = [];
     const uploadedDocs: string[] = [];
-    const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' }[] = [];
+    const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }[] = [];
 
     for (const af of attachedFiles) {
       const url = await uploadFile(af.file);
       if (url) {
-        const type: 'image' | 'video' | 'document' = af.type;
+        const type: 'image' | 'video' | 'document' | 'audio' = af.type;
         attachmentInfo.push({ url, name: af.file.name, type });
         if (type === 'image') uploadedImages.push(url);
         else if (type === 'video') uploadedVideos.push(url);
+        else if (type === 'audio') uploadedDocs.push(url);
         else uploadedDocs.push(url);
       }
-      if (af.type === 'image' || af.type === 'video') revokePreview(af.preview);
+      if (af.type === 'image' || af.type === 'video' || af.type === 'audio') revokePreview(af.preview);
     }
 
     let displayContent = trimmed;
@@ -572,6 +573,12 @@ export function AgentChatView() {
   const handlePickDocument = async () => {
     setShowTools(false);
     const file = await pickDocument();
+    if (file) setAttachedFiles(prev => [...prev, file]);
+  };
+
+  const handlePickAudio = async () => {
+    setShowTools(false);
+    const file = await pickAudio();
     if (file) setAttachedFiles(prev => [...prev, file]);
   };
 
@@ -1461,7 +1468,7 @@ export function AgentChatView() {
           <div className="flex flex-col gap-2">
             {/* 附件预览 */}
             {attachedFiles.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="flex gap-2 overflow-x-auto pb-1 items-end">
                 {attachedFiles.map(af => (
                   <div key={af.id} className="relative flex-shrink-0">
                     {af.type === 'document' ? (
@@ -1474,11 +1481,38 @@ export function AgentChatView() {
                         </span>
                       </div>
                     ) : af.type === 'video' ? (
-                      <div className="w-14 h-14 rounded-lg border border-gray-700 flex flex-col items-center justify-center gap-0.5 bg-purple-500/10 relative">
-                        <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      <div className="w-20 h-14 rounded-lg overflow-hidden border border-gray-700 bg-black">
+                        <video
+                          src={af.preview}
+                          className="w-full h-full object-cover"
+                          playsInline
+                          muted
+                          preload="metadata"
+                          onMouseEnter={(e) => { try { (e.target as HTMLVideoElement).play(); } catch {} }}
+                          onMouseLeave={(e) => { try { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; } catch {} }}
+                          onTouchStart={(e) => {
+                            const v = e.target as HTMLVideoElement;
+                            if (v.paused) { try { v.play(); } catch {} } else { try { v.pause(); } catch {} }
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <svg className="w-4 h-4 text-white drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    ) : af.type === 'audio' ? (
+                      <div className="flex items-center gap-2 px-2.5 h-14 rounded-lg border border-gray-700 bg-green-500/10 min-w-[160px]">
+                        <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                         </svg>
-                        <span className="text-[9px] text-gray-400 mt-0.5">视频</span>
+                        <audio
+                          src={af.preview}
+                          controls
+                          preload="metadata"
+                          className="h-8 flex-1 min-w-0"
+                          style={{ maxWidth: 180 }}
+                        />
                       </div>
                     ) : (
                       <img src={af.preview} alt="" className="w-14 h-14 rounded-lg object-cover border border-gray-700" />
@@ -1565,6 +1599,13 @@ export function AgentChatView() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         文档
+                      </button>
+                      <button onClick={handlePickAudio} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-14 0V7a7 7 0 1114 0v4zm-6-3v4m0 0v4m0-4h2m-2 0h-2" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18v2" />
+                        </svg>
+                        音频
                       </button>
                     </div>
                   </>

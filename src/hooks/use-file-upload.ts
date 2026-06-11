@@ -9,7 +9,7 @@ export interface AttachedFile {
   id: string;
   file: File;
   preview: string;
-  type: 'image' | 'video' | 'document';
+  type: 'image' | 'video' | 'document' | 'audio';
 }
 
 export function useFileUpload() {
@@ -36,7 +36,19 @@ export function useFileUpload() {
     } catch { setUploadError('网络错误，上传失败'); return null; }
   }, []);
 
-  const validateFile = useCallback((file: File, type: 'image' | 'document'): boolean => {
+  const validateFile = useCallback((file: File, type: 'image' | 'document' | 'audio'): boolean => {
+    if (type === 'audio') {
+      const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/x-m4a'];
+      const validExts = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.aac'];
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
+        showToast('仅支持 MP3/WAV/M4A/OGG/AAC 格式', 'warning'); return false;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        showToast(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），最大 50MB`, 'warning'); return false;
+      }
+      return true;
+    }
     if (type === 'document') {
       const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown'];
       const validExts = ['.pdf', '.docx', '.txt', '.md'];
@@ -112,5 +124,27 @@ export function useFileUpload() {
     });
   }, [validateFile]);
 
-  return { uploadError, setUploadError, objectUrlsRef, uploadFile, validateFile, createPreview, revokePreview, pickImage, pickDocument };
+  const pickAudio = useCallback((): Promise<AttachedFile | null> => {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'audio/*';
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) { resolve(null); return; }
+        const isValid = validateFile(file, 'audio');
+        if (!isValid) { resolve(null); return; }
+        const attached: AttachedFile = {
+          id: Date.now().toString(),
+          file,
+          preview: createPreview(file),
+          type: 'audio',
+        };
+        resolve(attached);
+      };
+      input.click();
+    });
+  }, [validateFile, createPreview]);
+
+  return { uploadError, setUploadError, objectUrlsRef, uploadFile, validateFile, createPreview, revokePreview, pickImage, pickDocument, pickAudio };
 }

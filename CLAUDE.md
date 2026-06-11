@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 灵集 LingJi — AI 灵感收集 + 热点监控 + 内容创作工具，面向中文创作者。Vercel 部署 H5，Capacitor 8 套壳为 iOS/Android 原生应用。
 
+## 回复规范
+
+回复结尾如果存在需要用户手动操作的事项，用 Markdown 勾选清单列出：
+
+```markdown
+- [ ] 待办一
+- [ ] 待办二
+```
+
+用户完成后，用一句话做进度回顾（不需要展开分析，不需要重新列出已完成项）。
+
 ## 常用命令
 
 ```bash

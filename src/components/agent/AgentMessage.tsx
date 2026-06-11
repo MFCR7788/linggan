@@ -9,7 +9,7 @@ interface AgentMessageProps {
   type: 'user' | 'assistant';
   content: string;
   toolCalls?: Array<{ tool: string; params: Record<string, unknown>; result?: { success: boolean; output: string; data?: unknown; error?: string } }>;
-  attachments?: Array<{ url: string; name: string; type: 'image' | 'video' | 'document' }>;
+  attachments?: Array<{ url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }>;
   generatedImages?: string[];
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
@@ -63,11 +63,15 @@ export function AgentMessage({
                 {att.type === 'image' ? (
                   <img src={att.url} alt={att.name} className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxSrc(att.url)} />
                 ) : att.type === 'video' ? (
-                  <div className="w-20 h-20 rounded-lg border border-white/10 bg-purple-500/10 flex flex-col items-center justify-center gap-1">
-                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <div className="w-24 h-20 rounded-lg overflow-hidden border border-white/10 bg-black relative">
+                    <video src={att.url} className="w-full h-full object-cover" playsInline controls preload="metadata" />
+                  </div>
+                ) : att.type === 'audio' ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                     </svg>
-                    <span className="text-[9px] text-gray-400">{att.name.length > 6 ? att.name.slice(0, 6) + '..' : att.name}</span>
+                    <audio src={att.url} controls preload="metadata" className="h-8 max-w-[200px]" />
                   </div>
                 ) : (
                   <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 hover:bg-blue-500/30 transition-colors">
