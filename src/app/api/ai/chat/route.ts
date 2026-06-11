@@ -665,32 +665,21 @@ ${forecastText}
               } catch (e) { console.warn('保存 streaming 消息失败:', e); }
             }
 
-            // 异步提取记忆
+            // 异步提取记忆（双写 Supabase + SQLite）
             if (session_id) {
+              const memMgr = new MemoryManager();
+              const builtin = new BuiltinMemoryProvider();
+              await builtin.initialize(user.id);
+              memMgr.addProvider(builtin);
+              memMgr.addProvider(new LongTermMemoryProvider());
               const userMsg = content || '';
               const assistantMsg = analysis.response || '';
-              extractMemories(userMsg, assistantMsg).then(async (extracted) => {
-                if (extracted.length > 0) {
-                  try {
-                    const builtinMem = new BuiltinMemoryProvider();
-                    await builtinMem.initialize(user.id);
-                    for (const mem of extracted) {
-                      let embedding: number[] | undefined;
-                      try { embedding = await generateEmbedding(mem.value); } catch { /* skip */ }
-                      await builtinMem.save({
-                        userId: user.id,
-                        category: mem.category,
-                        key: mem.key,
-                        value: mem.value,
-                        importance: mem.importance,
-                        sourceSessionId: session_id,
-                        embedding,
-                      });
-                    }
-                    console.log(`[Memory] 提取 ${extracted.length} 条记忆`);
-                  } catch (e) { console.warn('[Memory] 保存失败:', e); }
-                }
-              }).catch(e => console.warn('[Memory] 提取失败:', e));
+              const msgs = [
+                ...historyMessages,
+                { role: 'user' as const, content: userMsg },
+                { role: 'assistant' as const, content: assistantMsg },
+              ];
+              memMgr.onSessionEnd(session_id, msgs as any).catch(e => console.warn('[Memory] onSessionEnd 失败:', e));
             }
 
             // 发送最终结果
@@ -939,32 +928,19 @@ JSON 格式：
     }
     // V2.0: 异步提取记忆（fire-and-forget）
     if (session_id) {
+      const memMgr = new MemoryManager();
+      const builtin = new BuiltinMemoryProvider();
+      await builtin.initialize(user.id);
+      memMgr.addProvider(builtin);
+      memMgr.addProvider(new LongTermMemoryProvider());
       const userMsg = content || '';
       const assistantMsg = analysis.response || '';
-      extractMemories(userMsg, assistantMsg).then(async (extracted) => {
-        if (extracted.length > 0) {
-          try {
-            const builtinMem = new BuiltinMemoryProvider();
-            await builtinMem.initialize(user.id);
-            for (const mem of extracted) {
-              let embedding: number[] | undefined;
-              try { embedding = await generateEmbedding(mem.value); } catch { /* skip */ }
-              await builtinMem.save({
-                userId: user.id,
-                category: mem.category,
-                key: mem.key,
-                value: mem.value,
-                importance: mem.importance,
-                sourceSessionId: session_id,
-                embedding,
-              });
-            }
-            console.log(`[Memory] 提取 ${extracted.length} 条记忆`);
-          } catch (e) {
-            console.warn('[Memory] 保存失败:', e);
-          }
-        }
-      }).catch(e => console.warn('[Memory] 提取失败:', e));
+      const msgs = [
+        ...historyMessages,
+        { role: 'user' as const, content: userMsg },
+        { role: 'assistant' as const, content: assistantMsg },
+      ];
+      memMgr.onSessionEnd(session_id, msgs as any).catch(e => console.warn('[Memory] onSessionEnd 失败:', e));
     }
 
     return NextResponse.json({
