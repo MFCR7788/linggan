@@ -2,10 +2,13 @@
 // 用法: npx tsx src/revideo/render-test.ts
 
 import { createRequire } from 'module';
+import path from 'path';
+
 const require = createRequire(import.meta.url);
 const { renderVideo } = require('@revideo/renderer');
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser';
+const PROJECT_FILE = path.resolve('src/revideo/project.ts');
 
 interface TestCase {
   name: string;
@@ -33,6 +36,7 @@ const testCases: TestCase[] = [
 
 async function main() {
   console.log('Revideo 渲染测试开始...');
+  console.log(`Project: ${PROJECT_FILE}`);
   console.log(`Chromium: ${CHROMIUM_PATH}\n`);
 
   for (const test of testCases) {
@@ -41,7 +45,7 @@ async function main() {
 
     try {
       const outputPath = await renderVideo({
-        projectFile: 'src/revideo/project.ts',
+        projectFile: PROJECT_FILE,
         variables: test.variables,
         settings: {
           outFile: `${test.name}.mp4`,
@@ -50,6 +54,14 @@ async function main() {
           puppeteer: {
             executablePath: CHROMIUM_PATH,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          },
+          viteConfig: {
+            server: {
+              headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+                'Cross-Origin-Embedder-Policy': 'require-corp',
+              },
+            },
           },
         },
       });
