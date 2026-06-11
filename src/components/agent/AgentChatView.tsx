@@ -10,6 +10,7 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { useSkillRecommendations } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
 import { ChoiceCards, type ChoiceSelection } from './ChoiceCards';
+import { InspirationPicker } from './InspirationPicker';
 import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
@@ -88,6 +89,10 @@ export function AgentChatView() {
   const [activeFlow, setActiveFlow] = useState<{ combo: RecommendationCombo; currentStep: number } | null>(null);
   const [accountSearch, setAccountSearch] = useState('');
   const [planProgress, setPlanProgress] = useState<{ goal: string; totalSteps: number; completedSteps: number; currentStep: string | null } | null>(null);
+
+  // 素材选择器
+  const [inspPickerOpen, setInspPickerOpen] = useState(false);
+  const [inspPickerMediaType, setInspPickerMediaType] = useState<'image' | 'video'>('image');
 
   // 斜杠指令
   const [slashMenu, setSlashMenu] = useState<{ show: boolean; filter: string; index: number; pos: number }>({
@@ -778,6 +783,48 @@ export function AgentChatView() {
     setChoiceSubmitting(false);
   }, [isStreaming, choiceSubmitting, choiceSelections, messages, currentSessionId, doStream]);
 
+  // 从本地选择素材并自动注入对话
+  const handlePickLocalMedia = useCallback(async (mediaType: 'image' | 'video') => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = mediaType === 'image' ? 'image/*' : 'video/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const maxSize = mediaType === 'image' ? 20 * 1024 * 1024 : 100 * 1024 * 1024;
+      if (file.size > maxSize) { setUploadError(`文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB）`); return; }
+      const url = await uploadFile(file);
+      if (!url) return;
+      const lastUserMsg = [...messages].reverse().find(m => m.type === 'user');
+      const ctx = lastUserMsg?.content || '';
+      const label = mediaType === 'image' ? '图片' : '视频';
+      const text = `我的选择：已上传${label} ${url}${ctx ? `\n\n原始需求：${ctx}` : ''}`;
+      const userMsg: UIMessage = { id: crypto.randomUUID(), type: 'user', content: text, toolCalls: [], timestamp: new Date() };
+      setMessages(prev => [...prev, userMsg]);
+      setChoiceSelections(new Map());
+      await doStream(text, mediaType === 'image' ? [url] : [], mediaType === 'video' ? [url] : [], [], [], currentSessionId);
+    };
+    input.click();
+  }, [messages, currentSessionId, doStream, uploadFile, setUploadError]);
+
+  // 从灵感库选择素材
+  const handlePickInspirationMedia = useCallback((mediaType: 'image' | 'video') => {
+    setInspPickerMediaType(mediaType);
+    setInspPickerOpen(true);
+  }, []);
+
+  // 灵感库选择后的回调
+  const handleInspirationSelect = useCallback(async (item: { id: string; url: string; title?: string; type: string }) => {
+    const lastUserMsg = [...messages].reverse().find(m => m.type === 'user');
+    const ctx = lastUserMsg?.content || '';
+    const label = item.type === 'image' ? '图片' : '视频';
+    const text = `我的选择：已选${label} ${item.url}${item.title ? ` (${item.title})` : ''}${ctx ? `\n\n原始需求：${ctx}` : ''}`;
+    const userMsg: UIMessage = { id: crypto.randomUUID(), type: 'user', content: text, toolCalls: [], timestamp: new Date() };
+    setMessages(prev => [...prev, userMsg]);
+    setChoiceSelections(new Map());
+    await doStream(text, item.type === 'image' ? [item.url] : [], item.type === 'video' ? [item.url] : [], [], [], currentSessionId);
+  }, [messages, currentSessionId, doStream]);
+
   // 会话操作
   const handleSwitchSession = async (session: AgentSession) => {
     switchSession(session.id);
@@ -1267,6 +1314,8 @@ export function AgentChatView() {
                       return next;
                     });
                   }}
+                  onPickLocal={block.type ? () => handlePickLocalMedia(block.type!) : undefined}
+                  onPickInspiration={block.type ? () => handlePickInspirationMedia(block.type!) : undefined}
                 />
               ))}
 
@@ -1558,6 +1607,14 @@ export function AgentChatView() {
         )}
         </div>
       </div>
+
+    {/* 灵感库素材选择弹窗 */}
+    <InspirationPicker
+      open={inspPickerOpen}
+      onClose={() => setInspPickerOpen(false)}
+      onSelect={handleInspirationSelect}
+      mediaType={inspPickerMediaType}
+    />
     </div>
   );
 }
