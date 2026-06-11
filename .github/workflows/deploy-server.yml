@@ -35,27 +35,29 @@ jobs:
             grep -q "^VOLC_TTS_APP_ID=" .env.local && sed -i "s#^VOLC_TTS_APP_ID=.*#VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}#" .env.local || echo "VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}" >> .env.local
             grep -q "^VOLC_TTS_ACCESS_TOKEN=" .env.local && sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local || echo "VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}" >> .env.local
             grep -q "^CRON_SECRET=" .env.local && sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}" .env.local || echo "CRON_SECRET=${{ secrets.CRON_SECRET }}" >> .env.local
-            # 先停应用释放内存，清理旧构建缓存
+            # 先停应用释放内存
             pm2 stop lingji || true
-            rm -rf node_modules .next
-            # 确保 swap 存在（低配 ECS 编译原生模块容易 OOM）
+            # 只删构建缓存，保留 node_modules 避免全量重装 OOM
+            rm -rf .next
+            # 确保 swap 存在并激活
             if [ ! -f /swapfile ]; then
               echo "=== creating 2G swap ==="
               dd if=/dev/zero of=/swapfile bs=1M count=2048
               chmod 600 /swapfile
               mkswap /swapfile
               swapon /swapfile
-            elif ! swapon --show | grep -q /swapfile; then
+            elif ! swapon --show 2>/dev/null | grep -q /swapfile; then
               swapon /swapfile
             fi
+            free -m
             # 安装 C++ 编译工具（better-sqlite3 原生模块需要）
             if command -v apt-get &> /dev/null; then
               apt-get update -qq && apt-get install -y -qq build-essential python3
             elif command -v yum &> /dev/null; then
               yum install -y gcc-c++ make python3
             fi
-            export NODE_OPTIONS="--max-old-space-size=768"
-            npm install
+            # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
+            npm install --no-audit --no-fund
             npm run build
             pm2 start lingji --update-env
             pm2 save
