@@ -56,11 +56,16 @@ export class ModelRouter {
       }
     }
 
-    // 回退到默认 provider
+    // 回退到默认 provider（使用其自身支持的模型，而非外部 modelId）
     const provider = this.registry.get(this.defaultProviderName);
     if (!provider) throw new Error(`Provider "${this.defaultProviderName}" not registered`);
 
-    const model = modelId || provider.models[0]?.id || 'deepseek-v3';
+    // 如果显式指定的 modelId 在可用的 provider 中找不到，说明该 provider 不可用
+    // 此时应使用默认 provider 自身的模型，避免把 modelId 发给不支持的 provider
+    const fallbackModel = provider.models[0]?.id || 'deepseek-v3';
+    const model = (modelId && provider.models.some((m) => m.id === modelId))
+      ? modelId
+      : fallbackModel;
     const apiKey = this.registry.getApiKey(provider);
 
     return {

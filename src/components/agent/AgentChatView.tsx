@@ -11,6 +11,8 @@ import { useSkillRecommendations } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
 import { ChoiceCards, type ChoiceSelection } from './ChoiceCards';
 import { InspirationPicker } from './InspirationPicker';
+import { EditPlanCard } from './EditPlanCard';
+import type { EditPlan } from '@/lib/agent/types';
 import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
@@ -49,6 +51,7 @@ interface UIMessage {
   generatedVideo?: { taskId: string; status: string; videoUrl?: string };
   generatedAudio?: string;
   schedules?: ScheduleItem[];
+  editPlan?: EditPlan;
   timestamp: Date;
 }
 
@@ -144,6 +147,7 @@ export function AgentChatView() {
   const sessionLoadedRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPastingRef = useRef(false);
+  const fileMapRef = useRef<Map<string, File | Blob>>(new Map());
 
   // Intl.Segmenter — 安全设置光标位置（正确处理 emoji/CJK 字形簇）
   const setCursorSafe = useCallback((el: HTMLTextAreaElement, pos: number) => {
@@ -283,6 +287,12 @@ export function AgentChatView() {
             });
             break;
 
+          case 'edit_plan_generated':
+            setMessages((prev) =>
+              prev.map((m) => m.id === assistantId ? { ...m, editPlan: event.editPlan } : m)
+            );
+            break;
+
           case 'thinking':
             setStatusText(event.message);
             break;
@@ -333,6 +343,8 @@ export function AgentChatView() {
                 let generatedVideo = m.generatedVideo;
                 let schedules = m.schedules;
 
+                let editPlan = m.editPlan;
+
                 if (resultData) {
                   if (event.tool === 'generate_image' && Array.isArray(resultData.imageUrls)) {
                     generatedImages = [...(m.generatedImages || []), ...resultData.imageUrls as string[]];
@@ -363,9 +375,12 @@ export function AgentChatView() {
                   if (event.tool === 'extract_schedule' && Array.isArray(resultData.schedules)) {
                     schedules = resultData.schedules as ScheduleItem[];
                   }
+                  if (event.tool === 'generate_edit_plan' && resultData.editPlan && typeof resultData.editPlan === 'object') {
+                    editPlan = resultData.editPlan as EditPlan;
+                  }
                 }
 
-                return { ...m, toolCalls, generatedImages, generatedAudio, generatedVideo, schedules };
+                return { ...m, toolCalls, generatedImages, generatedAudio, generatedVideo, schedules, editPlan };
               })
             );
             break;
@@ -434,6 +449,9 @@ export function AgentChatView() {
         else if (type === 'video') uploadedVideos.push(url);
         else if (type === 'audio') uploadedDocs.push(url);
         else uploadedDocs.push(url);
+        // 保存 File 引用供本地 ffmpeg 剪辑使用
+        fileMapRef.current.set(af.file.name, af.file);
+        fileMapRef.current.set(url, af.file);
       }
       if (af.type === 'image' || af.type === 'video' || af.type === 'audio') revokePreview(af.preview);
     }
@@ -565,6 +583,7 @@ export function AgentChatView() {
       if (!validTypes.includes(file.type)) return;
       if (file.size > 100 * 1024 * 1024) return;
       const preview = URL.createObjectURL(file);
+      fileMapRef.current.set(file.name, file);
       setAttachedFiles(prev => [...prev, { id: Date.now().toString(), file, preview, type: 'video' as const }]);
     };
     input.click();
@@ -904,6 +923,7 @@ export function AgentChatView() {
     setActiveFlow(null);
     setAccountSearch('');
     setShowSessionList(false);
+    fileMapRef.current = new Map();
   };
 
   const handleDeleteSession = (e: React.MouseEvent, sessionId: string) => {
@@ -1315,31 +1335,48 @@ export function AgentChatView() {
           const displayContent = cleaned || msg.content;
 
           return (
-            <AgentMessage
-              key={msg.id}
-              type={msg.type}
-              content={displayContent}
-              toolCalls={msg.toolCalls.length > 0 ? msg.toolCalls : undefined}
-              attachments={msg.attachments}
-              generatedImages={msg.generatedImages}
-              generatedVideo={msg.generatedVideo}
-              generatedAudio={msg.generatedAudio}
-              schedules={msg.schedules}
-              scheduledItems={scheduledItems}
-              schedulingId={schedulingId}
-              onAddSchedule={(idx, edited) => addToSchedule(msg, idx, edited)}
-              onAddAllSchedules={() => addToSchedule(msg)}
-              messageId={msg.id}
-              timestamp={msg.timestamp}
-              onCopy={() => handleCopy(msg)}
-              onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
-              onDelete={() => handleDelete(msg)}
-              onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
-              onSpeak={msg.type === 'assistant' ? () => handleSpeak(msg) : undefined}
-              onShare={msg.type === 'assistant' ? () => handleShare(msg) : undefined}
-              isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id || copiedId === 'shared_' + msg.id}
-              isRegenerating={regeneratingId === msg.id}
-            />
+            <div key={msg.id}>
+              <AgentMessage
+                type={msg.type}
+                content={displayContent}
+                toolCalls={msg.toolCalls.length > 0 ? msg.toolCalls : undefined}
+                attachments={msg.attachments}
+                generatedImages={msg.generatedImages}
+                generatedVideo={msg.generatedVideo}
+                generatedAudio={msg.generatedAudio}
+                schedules={msg.schedules}
+                scheduledItems={scheduledItems}
+                schedulingId={schedulingId}
+                onAddSchedule={(idx, edited) => addToSchedule(msg, idx, edited)}
+                onAddAllSchedules={() => addToSchedule(msg)}
+                messageId={msg.id}
+                timestamp={msg.timestamp}
+                onCopy={() => handleCopy(msg)}
+                onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
+                onDelete={() => handleDelete(msg)}
+                onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
+                onSpeak={msg.type === 'assistant' ? () => handleSpeak(msg) : undefined}
+                onShare={msg.type === 'assistant' ? () => handleShare(msg) : undefined}
+                isCopied={copiedId === msg.id || copiedId === 'saved_' + msg.id || copiedId === 'shared_' + msg.id}
+                isRegenerating={regeneratingId === msg.id}
+              />
+              {msg.editPlan && (
+                <div className="px-4">
+                  <EditPlanCard
+                    plan={msg.editPlan}
+                    fileMap={fileMapRef.current}
+                    onDownload={(blob, name) => {
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = name;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           );
         })}
 
