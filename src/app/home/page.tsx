@@ -375,13 +375,13 @@ function HomeContent() {
               description="点击下方按钮，开始记录你的第一个灵感"
             />
           ) : filteredInspirations.length > 0 ? (
-            <div className="space-y-1.5">
+            <div className="columns-2 gap-3 [&>*]:[break-inside:avoid]">
               {filteredInspirations.slice(0, 5).map((item: ContentItem) => (
                 <GlassCard
                   key={item.id}
                   hover
                   onClick={() => router.push(`/inspiration/detail?id=${item.id}`)}
-                  className="!p-3"
+                  className="!p-3 mb-3"
                 >
                   <div className="flex items-center gap-2.5">
                     <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_EMOJIS[item.type] || "✨"}</span>
