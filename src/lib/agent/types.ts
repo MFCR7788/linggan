@@ -13,10 +13,23 @@ export interface ToolDefinition {
   isLongRunning?: boolean;          // 长时间运行（如视频生成）
 }
 
+export interface AgentPresets {
+  avatar?: {
+    name: string;
+    avatarId: string;
+    status: 'ready' | 'training' | 'error';
+  };
+  animate?: {
+    name: string;
+    imageUrl: string;
+  };
+}
+
 export interface ToolContext {
   userId: string;
   sessionId?: string;
   signal?: AbortSignal;
+  presets?: AgentPresets;
 }
 
 export interface ToolResult {
@@ -46,6 +59,34 @@ export interface ExecutionPlan {
   subgoals: PlanStep[];
 }
 
+// ====== 本地视频剪辑方案 ======
+
+/** 单个剪辑操作 */
+export type EditOperation =
+  | { type: 'trim'; source: string; start: number; end: number; label?: string }
+  | { type: 'transcode'; source: string; width: number; height: number; fps?: number; label?: string }
+  | { type: 'merge'; sources: string[]; label?: string }
+  | { type: 'audio_overlay'; source: string; audioUrl: string; volume?: number; mix?: boolean; label?: string }
+  | { type: 'audio_replace'; source: string; audioUrl: string; label?: string }
+  | { type: 'speed'; source: string; rate: number; label?: string }
+  | { type: 'subtitle'; source: string; subtitles: Array<{ text: string; start: number; end: number }>; label?: string };
+
+/** 剪辑方案 */
+export interface EditPlan {
+  /** 方案目标描述 */
+  goal: string;
+  /** 输入素材列表（用户上传的文件引用） */
+  inputs: Array<{ name: string; description?: string }>;
+  /** 操作步骤（按序执行） */
+  operations: EditOperation[];
+  /** 输出规格 */
+  output: {
+    format: 'mp4' | 'mov' | 'webm';
+    label: string;
+    estimatedSeconds: number;
+  };
+}
+
 // ====== Agent 事件（SSE 传输） ======
 
 export type AgentEvent =
@@ -55,6 +96,7 @@ export type AgentEvent =
   | { type: 'delta'; content: string }
   | { type: 'skills_matched'; recommendations: Array<{ name: string; displayName: string; score: number }> }
   | { type: 'plan_generated'; plan: ExecutionPlan }
+  | { type: 'edit_plan_generated'; editPlan: EditPlan }
   | { type: 'plan_progress'; goal: string; totalSteps: number; completedSteps: number; currentStep: string | null }
   | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string; toolResults?: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> }
   | { type: 'error'; message: string };

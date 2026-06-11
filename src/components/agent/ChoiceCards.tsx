@@ -2,8 +2,10 @@
 
 // 交互式选项卡片 — 解析 LLM 输出的 <choices> 标签，渲染为可勾选的卡片
 // 选择状态通过 onChange 上报父组件，由父组件统一处理提交
+// 当 choice block 有 type="image" 或 type="video" 时，额外渲染"从本地选择"/"从灵感库选择"按钮
 
 import { useState, useCallback, useRef } from 'react';
+import { Image, FolderOpen, Film } from 'lucide-react';
 import { parseChoices, type ChoiceBlock, type ChoiceOption } from '@/lib/agent/choice-parser';
 
 export { parseChoices, type ChoiceBlock, type ChoiceOption } from '@/lib/agent/choice-parser';
@@ -16,9 +18,13 @@ export interface ChoiceSelection {
 interface ChoiceCardsProps {
   block: ChoiceBlock;
   onChange: (selection: ChoiceSelection) => void;
+  /** 用户点击"从本地选择"时的回调，父组件负责打开文件选择器并处理上传 */
+  onPickLocal?: () => void;
+  /** 用户点击"从灵感库选择"时的回调，父组件负责打开 InspirationPicker */
+  onPickInspiration?: () => void;
 }
 
-export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
+export function ChoiceCards({ block, onChange, onPickLocal, onPickInspiration }: ChoiceCardsProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customInput, setCustomInput] = useState('');
   const customInputRef = useRef<HTMLInputElement>(null);
@@ -71,8 +77,53 @@ export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
     });
   }, [customInput, notify]);
 
+  const mediaType = block.type; // 'image' | 'video' | undefined
+
   return (
     <div className="my-2 space-y-1.5">
+      {/* 媒体选择按钮 — 当 block.type 为 image/video 时显示 */}
+      {mediaType && (onPickLocal || onPickInspiration) && (
+        <div className="flex gap-2 mb-2">
+          {onPickLocal && (
+            <button
+              onClick={onPickLocal}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all active:scale-[0.98] hover:brightness-110"
+              style={{
+                background: mediaType === 'image'
+                  ? 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.1))'
+                  : 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.1))',
+                border: mediaType === 'image'
+                  ? '1px solid rgba(245,158,11,0.3)'
+                  : '1px solid rgba(139,92,246,0.3)',
+                color: mediaType === 'image' ? '#FCD34D' : '#C4B5FD',
+              }}
+            >
+              <Image size={14} />
+              从本地选择
+            </button>
+          )}
+          {onPickInspiration && (
+            <button
+              onClick={onPickInspiration}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all active:scale-[0.98] hover:brightness-110"
+              style={{
+                background: mediaType === 'image'
+                  ? 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.1))'
+                  : 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(139,92,246,0.1))',
+                border: mediaType === 'image'
+                  ? '1px solid rgba(59,130,246,0.3)'
+                  : '1px solid rgba(139,92,246,0.3)',
+                color: mediaType === 'image' ? '#93C5FD' : '#C4B5FD',
+              }}
+            >
+              <FolderOpen size={14} />
+              从灵感库选择
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 文字选项卡片 */}
       {block.options.map((opt) => {
         const isSelected = selected.has(opt.id);
         return (
@@ -121,10 +172,9 @@ export function ChoiceCards({ block, onChange }: ChoiceCardsProps) {
         );
       })}
 
-      {/* 自定义输入行 — 用户输入即自动勾选 */}
+      {/* 自定义输入行 */}
       <div
         onClick={(e) => {
-          // 点击复选框区域则切换勾选，否则聚焦输入框
           if (!(e.target instanceof HTMLInputElement)) {
             customInputRef.current?.focus();
           }

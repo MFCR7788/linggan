@@ -16,7 +16,7 @@ import { GoalProgressTracker } from './goal-progress';
 export async function* agentStreamLoop(
   messages: ChatMessage[],
   registry: ToolRegistry,
-  context: { userId: string; sessionId?: string; signal?: AbortSignal },
+  context: { userId: string; sessionId?: string; signal?: AbortSignal; presets?: import('./types').AgentPresets },
   config: AgentConfig = DEFAULT_AGENT_CONFIG,
   options: AgentLoopOptions = {}
 ): AsyncGenerator<AgentEvent, string, unknown> {
@@ -101,7 +101,7 @@ export async function* agentStreamLoop(
 
           const result = await executeToolCall(
             tc, registry,
-            { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+            { userId: context.userId, sessionId: context.sessionId, signal: context.signal, presets: context.presets },
             toolCallHistory,
             toolTimeout
           );
@@ -230,7 +230,7 @@ function parseArgs(tc: ToolCallRequest): Record<string, unknown> {
 async function executeToolCall(
   tc: ToolCallRequest,
   registry: ToolRegistry,
-  context: { userId: string; sessionId?: string; signal?: AbortSignal },
+  context: { userId: string; sessionId?: string; signal?: AbortSignal; presets?: import('./types').AgentPresets },
   history: Map<string, number>,
   timeoutMs: number
 ): Promise<ToolResult> {

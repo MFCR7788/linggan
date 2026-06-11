@@ -48,6 +48,7 @@ export const POST = withAuth(async ({ request, user }) => {
       documents = [],
       session_id: sessionId,
       model: selectedModel,
+      presets,
     } = body;
 
     if (!content && images.length === 0 && documents.length === 0) {
@@ -164,6 +165,23 @@ export const POST = withAuth(async ({ request, user }) => {
       summaryBlock: summaryBlock || undefined,
     });
 
+    // 注入用户预配置资产状态（数字分身 / 角色形象）
+    if (presets) {
+      const presetLines: string[] = [];
+      const avatar = presets.avatar as Record<string, unknown> | undefined;
+      const animate = presets.animate as Record<string, unknown> | undefined;
+      if (avatar?.status === 'ready') {
+        presetLines.push(`- 数字分身已就绪: "${avatar.name}" (avatarId: ${avatar.avatarId})。用户说"用我的分身"时，直接调用 generate_avatar_video 工具生成口播视频。`);
+      }
+      if (animate) {
+        presetLines.push(`- 角色形象已配置: "${animate.name}"。用户说"用我的形象"时，直接调用 generate_animate_video 工具（需用户提供参考动作视频URL）。`);
+      }
+      if (presetLines.length > 0) {
+        const presetBlock = `\n\n[用户预配置资产]\n${presetLines.join('\n')}\n注意: 以上资产可直接通过 generate_avatar_video / generate_animate_video 工具调用，无需引导用户去其他页面。`;
+        assembled.messages[0].content += presetBlock;
+      }
+    }
+
     const agentConfig = {
       ...DEFAULT_CONFIG,
       ...(selectedModel ? { model: selectedModel } : {}),
@@ -217,11 +235,42 @@ export const POST = withAuth(async ({ request, user }) => {
             } catch (e) { console.warn('保存用户消息失败:', e); }
           }
 
-          for await (const event of agentStreamLoop(assembled.messages, registry, {
+          // 构建 agent 上下文（含预配置资产）
+          const agentContext: {
+            userId: string;
+            sessionId?: string;
+            signal: AbortSignal;
+            presets?: import('@/lib/agent/types').AgentPresets;
+          } = {
             userId: user.id,
             sessionId: sessionId || undefined,
             signal: abortController.signal,
-          }, agentConfig)) {
+          };
+          if (presets) {
+            const avatar = presets.avatar as Record<string, unknown> | undefined;
+            const animate = presets.animate as Record<string, unknown> | undefined;
+            if (avatar?.status === 'ready' && avatar.avatarId) {
+              agentContext.presets = {
+                ...agentContext.presets,
+                avatar: {
+                  name: avatar.name as string || '我的分身',
+                  avatarId: avatar.avatarId as string,
+                  status: 'ready',
+                },
+              };
+            }
+            if (animate?.imageUrl) {
+              agentContext.presets = {
+                ...agentContext.presets,
+                animate: {
+                  name: animate.name as string || '我的形象',
+                  imageUrl: animate.imageUrl as string,
+                },
+              };
+            }
+          }
+
+          for await (const event of agentStreamLoop(assembled.messages, registry, agentContext, agentConfig)) {
             sendEvent(event);
             if (event.type === 'tool_call') {
               completedToolCalls.push({ tool: event.tool, params: event.params, result: { success: true, output: '' } });

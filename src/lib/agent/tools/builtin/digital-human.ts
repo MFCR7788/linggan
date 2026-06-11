@@ -3,7 +3,7 @@ import { callDeepSeek } from '@/lib/ai-services';
 
 export const generateDigitalHumanTool: ToolDefinition = {
   name: 'generate_digital_human',
-  description: '生成数字人讲解视频。需要提供肖像图片和音频。如果没有音频，可先生成口播脚本，再通过 synthesize_speech 工具合成语音。',
+  description: '生成数字人讲解视频（DashScope wan2.2-s2v：肖像图片 + 音频 → 视频）。需要提供肖像图片和音频。如果没有音频，可先生成口播脚本，再通过 synthesize_speech 工具合成语音。注意: 如果用户已预配置了 HeyGen 数字分身，优先使用 generate_avatar_video 工具；如果用户已配置角色形象且有动作视频，使用 generate_animate_video 工具。',
   parameters: {
     type: 'object',
     properties: {

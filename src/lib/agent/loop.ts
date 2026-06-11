@@ -22,7 +22,7 @@ interface AgentLoopResult {
 export async function agentLoop(
   messages: ChatMessage[],
   registry: ToolRegistry,
-  context: { userId: string; sessionId?: string; signal?: AbortSignal },
+  context: { userId: string; sessionId?: string; signal?: AbortSignal; presets?: import('./types').AgentPresets },
   config: AgentConfig = DEFAULT_AGENT_CONFIG,
   options: AgentLoopOptions = {}
 ): Promise<AgentLoopResult> {
@@ -155,7 +155,7 @@ export async function agentLoop(
           ? await executeWithTimeout(
               tool.handler,
               toolArgs,
-              { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+              { userId: context.userId, sessionId: context.sessionId, signal: context.signal, presets: context.presets },
               { timeoutMs: toolTimeout, isLongRunning: tool.isLongRunning }
             )
           : { success: false, output: '', error: `未找到工具: ${toolName}` };

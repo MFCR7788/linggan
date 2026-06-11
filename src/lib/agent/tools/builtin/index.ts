@@ -19,6 +19,10 @@ import { generateDigitalHumanTool } from './digital-human';
 import { editImageTool } from './edit-image';
 import { generateGridImagesTool } from './grid-images';
 import { publishContentTool } from './publish';
+import { generateAvatarVideoTool } from './avatar-video';
+import { generateAnimateVideoTool } from './animate';
+import { generateEditPlanTool } from './generate-edit-plan';
+import { generateVideoTemplateTool } from './generate-video-template';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -35,7 +39,7 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     getHotspotTool,
     summarizeTool,
     synthesizeSpeechTool,
-    // 新增 8 个工具
+    // 新增 9 个工具
     generateCopywritingTool,
     extractScheduleTool,
     analyzeLinkTool,
@@ -44,6 +48,10 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     editImageTool,
     generateGridImagesTool,
     publishContentTool,
+    generateAvatarVideoTool,
+    generateAnimateVideoTool,
+    generateEditPlanTool,
+    generateVideoTemplateTool,
   ]);
 }
 
@@ -51,4 +59,4 @@ export { webSearchTool, generateImageTool, generateVideoTool, getWeatherTool, an
 export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirationsTool };
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
-export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool };
+export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
