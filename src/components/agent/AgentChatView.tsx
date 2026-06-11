@@ -36,6 +36,7 @@ const TOOL_TO_ENTRY: Record<string, string> = {
   generate_video: '/ai/video',
   synthesize_speech: '/ai/tts',
   get_hotspot: '/hotspot',
+  publish_content: '/publish',
 };
 
 interface UIMessage {
@@ -346,7 +347,11 @@ export function AgentChatView() {
                     generatedAudio = resultData.audioUrl as string;
                   }
                   if ((event.tool === 'generate_video' || event.tool === 'generate_digital_human') && typeof resultData.taskId === 'string') {
-                    generatedVideo = { taskId: resultData.taskId as string, status: (resultData.status as string) || 'queued' };
+                    generatedVideo = {
+                      taskId: resultData.taskId as string,
+                      status: (resultData.status as string) || 'queued',
+                      videoUrl: resultData.videoUrl as string | undefined,
+                    };
                   }
                   if (event.tool === 'extract_schedule' && Array.isArray(resultData.schedules)) {
                     schedules = resultData.schedules as ScheduleItem[];
@@ -918,6 +923,35 @@ export function AgentChatView() {
     await doStream(kickoffMsg, [], [], [], [], session.id);
   };
 
+  // 点击步骤节点 → 跳到该步骤重做
+  const handleJumpToStep = async (stepIndex: number) => {
+    const flow = activeFlowRef.current;
+    if (!flow || !currentSessionRef.current) return;
+
+    // 中断进行中的 Agent 请求
+    sseClientRef.current?.abort();
+
+    setActiveFlow({ combo: flow.combo, currentStep: stepIndex });
+    await sessionMgr.updateMetadata(currentSessionRef.current, {
+      comboId: flow.combo.id,
+      currentStep: stepIndex,
+    });
+
+    const step = flow.combo.steps[stepIndex];
+    const redoMsg = `请重新从第${stepIndex + 1}步「${step.label}」开始。`;
+
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: redoMsg,
+      toolCalls: [],
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    await doStream(redoMsg, [], [], [], [], currentSessionRef.current);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* 顶部 — 返回 + 会话选择器 + 新建 */}
@@ -1096,9 +1130,14 @@ export function AgentChatView() {
             {activeFlow.combo.steps.map((step, i) => (
               <div key={i} className="flex items-center gap-1 flex-1 min-w-0">
                 {i > 0 && <div className="flex-1 h-px bg-white/10 min-w-[8px]" />}
-                <div
-                  className={`flex flex-col items-center gap-0.5 ${i === activeFlow.currentStep ? 'text-blue-300' : i < activeFlow.currentStep ? 'text-green-300/60' : 'text-gray-600'}`}
-                  title={step.label}
+                <button
+                  onClick={() => handleJumpToStep(i)}
+                  className={`flex flex-col items-center gap-0.5 transition-all hover:opacity-80 active:scale-95 cursor-pointer ${
+                    i === activeFlow.currentStep ? 'text-blue-300' :
+                    i < activeFlow.currentStep ? 'text-green-300/60' :
+                    'text-gray-600'
+                  }`}
+                  title={`${step.label} — 点击跳转到此步骤`}
                 >
                   <span className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
                     i === activeFlow.currentStep ? 'bg-blue-500 text-white' :
@@ -1108,7 +1147,7 @@ export function AgentChatView() {
                     {i < activeFlow.currentStep ? '✓' : i + 1}
                   </span>
                   <span className="text-[8px] text-center leading-tight max-w-[44px] truncate">{step.label}</span>
-                </div>
+                </button>
               </div>
             ))}
           </div>
