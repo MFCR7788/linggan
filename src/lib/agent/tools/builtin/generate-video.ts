@@ -7,8 +7,8 @@ const POLL_TIMEOUT_MS = 280_000; // 4 分 40 秒，留 20s 余量给 tool-timeou
 
 export const generateVideoTool: ToolDefinition = {
   name: 'generate_video',
-  description: `根据文字描述生成视频，支持文生视频(T2V)和图生视频(I2V)。
-当用户要求制作视频、生成视频、做短片等时使用。
+  description: `根据文字描述AI生成视频（文生视频T2V / 图生视频I2V），使用 Wan 2.6 模型。
+这是主要的视频生成工具。当用户要求制作视频、生成视频、做短片、文生视频、图生视频、把图片变成视频等时调用。
 
 质量档位(tier):
 - fast: 流畅 720P，最长5秒，生成快（推荐）
@@ -17,7 +17,7 @@ export const generateVideoTool: ToolDefinition = {
 
 图生视频: 如果用户提供了图片或希望基于图片生成视频，传入 imageUrl 参数。
 
-视频生成需要 1-3 分钟，工具会自动等待完成后返回视频链接。`,
+注意: 此工具是AI直接生成视频画面，不是套用模板。如需使用预置模板（片头/抖音短视频），请使用 generate_video_template 工具。`,
   isLongRunning: true,
   parameters: {
     type: 'object',

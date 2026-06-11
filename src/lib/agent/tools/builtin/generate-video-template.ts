@@ -16,17 +16,7 @@ const TEMPLATE_INFO: Record<string, { description: string }> = {
 
 export const generateVideoTemplateTool: ToolDefinition = {
   name: 'generate_video_template',
-  description: `根据用户需求自动生成视频。当用户说"帮我生成一段视频"、"做一个片头"、"生成抖音视频"、"做一段关于XX的宣传片"等时调用此工具。
-
-工具自动完成全流程：
-1. 分析用户意图，生成标题、副标题等创作参数
-2. 调用 Revideo 渲染引擎（MIT 许可，无水印）
-3. 上传到云存储
-4. 返回视频的公网 URL
-
-整个流程自动完成，用户只需一句话描述需求。渲染需要约 10-30 秒。
-
-可用模板：TitleIntro — 横版片头开场动画 (1920×1080)，含标题 spring 弹入、装饰线展开、光晕呼吸动画。`,
+  description: `使用预置模板渲染片头动画（模板渲染，非AI生成画面）。当用户明确要求"做片头"、"开场动画"、"标题动画"等时使用。注意：这是 TitleIntro 模板渲染，不是 AI 文生视频/图生视频。如果用户要求"根据描述生成视频"或"把图片变成视频"，请使用 generate_video 工具。`,
 
   parameters: {
     type: 'object',

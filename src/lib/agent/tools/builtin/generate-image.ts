@@ -3,7 +3,7 @@ import { generateImage } from '@/lib/ai-services';
 
 export const generateImageTool: ToolDefinition = {
   name: 'generate_image',
-  description: '根据文字描述生成图片。当用户要求画图、生成图片、制作海报等时使用。',
+  description: '根据文字描述生成图片（文生图）。当用户要求画图、生成图片、做海报、做封面、设计图、生成照片、画一个/张/幅等时调用。这是唯一的图片生成工具。',
   parameters: {
     type: 'object',
     properties: {

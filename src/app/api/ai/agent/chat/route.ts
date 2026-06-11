@@ -16,6 +16,7 @@ import { getDefaultMCPServers } from '@/lib/mcp/defaults';
 import { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '@/lib/agent/conversational';
 import type { AgentEvent } from '@/lib/agent/types';
 import type { ChatMessage } from '@/lib/ai/types';
+import { detectIntent } from '@/lib/assistant/intent';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
 import { BuiltinMemoryProvider } from '@/lib/assistant/memory/builtin-provider';
@@ -182,6 +183,15 @@ export const POST = withAuth(async ({ request, user }) => {
       }
     }
 
+    // 意图检测 — 如果用户明确要求生图/视频，注入提示引导模型优先调用工具
+    const detectedIntent = detectIntent(content, images.length > 0, false);
+    if (detectedIntent.wantsGeneration) {
+      const toolHint = detectedIntent.type === 'image'
+        ? '\n\n[系统指令] 用户想要生成图片。请直接调用 generate_image 工具生成图片，使用用户消息中的描述作为 prompt 参数。不要反问，直接调用工具。'
+        : '\n\n[系统指令] 用户想要生成视频。请直接调用 generate_video 工具，使用用户消息中的描述作为 prompt 参数。不要反问，直接调用工具。';
+      assembled.messages[0].content += toolHint;
+    }
+
     const agentConfig = {
       ...DEFAULT_CONFIG,
       ...(selectedModel ? { model: selectedModel } : {}),
@@ -301,7 +311,11 @@ export const POST = withAuth(async ({ request, user }) => {
                   generatedImages.push(...(d.imageUrls as string[]));
                 }
                 if (tc.tool === 'generate_video' && d.taskId) {
-                  generatedVideo = { taskId: d.taskId as string, status: (d.status as string) || 'queued' };
+                  generatedVideo = {
+                    taskId: d.taskId as string,
+                    status: (d.status as string) || 'queued',
+                    videoUrl: d.videoUrl as string | undefined,
+                  };
                 }
                 if (tc.tool === 'generate_video_template' && d.url) {
                   generatedVideo = { taskId: d.renderId as string || '', status: 'completed', videoUrl: d.url as string };
