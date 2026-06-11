@@ -303,6 +303,9 @@ export const POST = withAuth(async ({ request, user }) => {
                 if (tc.tool === 'generate_video' && d.taskId) {
                   generatedVideo = { taskId: d.taskId as string, status: (d.status as string) || 'queued' };
                 }
+                if (tc.tool === 'generate_video_template' && d.url) {
+                  generatedVideo = { taskId: d.renderId as string || '', status: 'completed', videoUrl: d.url as string };
+                }
                 if (tc.tool === 'synthesize_speech' && d.audioBase64) {
                   generatedAudio = `data:audio/mpeg;base64,${d.audioBase64}`;
                 }

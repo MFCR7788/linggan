@@ -353,6 +353,13 @@ export function AgentChatView() {
                       videoUrl: resultData.videoUrl as string | undefined,
                     };
                   }
+                  if (event.tool === 'generate_video_template' && typeof resultData.url === 'string') {
+                    generatedVideo = {
+                      taskId: (resultData.renderId as string) || '',
+                      status: 'completed',
+                      videoUrl: resultData.url as string,
+                    };
+                  }
                   if (event.tool === 'extract_schedule' && Array.isArray(resultData.schedules)) {
                     schedules = resultData.schedules as ScheduleItem[];
                   }
