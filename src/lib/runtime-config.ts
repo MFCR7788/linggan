@@ -56,7 +56,7 @@ export function getVolcTtsAccessToken(): string | undefined {
 }
 
 export function getHappyHorseApiKey(): string | undefined {
-  return getEnv('HAPPYHORSE_API_KEY');
+  return getEnv('HAPPYHORSE_API_KEY') || getEnv('DASHSCOPE_API_KEY');
 }
 
 export function getHeyGenApiKey(): string | undefined {
