@@ -21,6 +21,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e  # 任何一步失败即停止，防止半成品构建启动
             cd /var/www/lingji
             # 强制同步远程最新代码
             echo "=== git remote ==="
@@ -30,21 +31,31 @@ jobs:
             git reset --hard origin/main
             echo "=== git log ==="
             git log --oneline -5
-            echo "=== page-content.tsx key lines ==="
-            grep -n 'rows={10}\|fullText\|minHeight: 100' src/app/ai/copywriting/page-content.tsx || echo "WARNING: key changes NOT found!"
             # 同步 env var（运行时敏感配置，不存在则追加）
             grep -q "^VOLC_TTS_APP_ID=" .env.local && sed -i "s#^VOLC_TTS_APP_ID=.*#VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}#" .env.local || echo "VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}" >> .env.local
             grep -q "^VOLC_TTS_ACCESS_TOKEN=" .env.local && sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local || echo "VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}" >> .env.local
-            grep -q "^CRON_SECRET=" .env.local && sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}#" .env.local || echo "CRON_SECRET=${{ secrets.CRON_SECRET }}" >> .env.local
+            grep -q "^CRON_SECRET=" .env.local && sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}" .env.local || echo "CRON_SECRET=${{ secrets.CRON_SECRET }}" >> .env.local
             # 先停应用释放内存，清理旧构建缓存
-            pm2 stop lingji
+            pm2 stop lingji || true
             rm -rf node_modules .next
+            # 确保 swap 存在（低配 ECS 编译原生模块容易 OOM）
+            if [ ! -f /swapfile ]; then
+              echo "=== creating 2G swap ==="
+              dd if=/dev/zero of=/swapfile bs=1M count=2048
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+            elif ! swapon --show | grep -q /swapfile; then
+              swapon /swapfile
+            fi
             # 安装 C++ 编译工具（better-sqlite3 原生模块需要）
             if command -v apt-get &> /dev/null; then
               apt-get update -qq && apt-get install -y -qq build-essential python3
             elif command -v yum &> /dev/null; then
               yum install -y gcc-c++ make python3
             fi
+            # 限制 Node 堆内存，防止 build worker OOM
+            export NODE_OPTIONS="--max-old-space-size=512"
             npm install
             npm run build
             pm2 start lingji --update-env
