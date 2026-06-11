@@ -331,25 +331,12 @@ export function AgentMessage({
               className={isRegenerating ? 'animate-spin' : ''}
               onClick={onRegenerate || (() => {})}
             />
-            {onSaveToInspiration && (
-              hasGeneratedMedia ? (
-                <div className="relative group/btn">
-                  <span className="w-7 h-7 flex items-center justify-center rounded-full">
-                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </span>
-                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gray-700 text-gray-200 text-[10px] rounded whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none z-10">
-                    已自动保存
-                  </span>
-                </div>
-              ) : (
-                <ActionBtn
-                  icon={isCopied ? CheckIcon : BookmarkIcon}
-                  tooltip="保存到灵感"
-                  onClick={onSaveToInspiration}
-                />
-              )
+            {onSaveToInspiration && !hasGeneratedMedia && (
+              <ActionBtn
+                icon={isCopied ? CheckIcon : BookmarkIcon}
+                tooltip="保存到灵感"
+                onClick={onSaveToInspiration}
+              />
             )}
             <ActionBtn
               icon={TrashIcon}

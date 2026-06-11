@@ -172,7 +172,7 @@ export function AgentChatView() {
 
   // 文件上传
   const fileUpload = useFileUpload();
-  const { uploadError, setUploadError, uploadFile, pickImage, pickDocument, pickAudio, revokePreview } = fileUpload;
+  const { uploadError, setUploadError, uploadFile, pickImage, pickDocument, pickAudio, revokePreview, validateFile, createPreview } = fileUpload;
 
   // 输入历史（undo/redo 最多 50 步）
   const inputHistory = useInputHistory(input, setInput);
@@ -1707,7 +1707,28 @@ export function AgentChatView() {
                       // 此处可接入搜索建议等 debounced 操作
                     }, 150);
                   }}
-                  onPaste={() => {
+                  onPaste={(e) => {
+                    // 粘贴图片 → 转为附件上传
+                    const items = e.clipboardData?.items;
+                    if (items) {
+                      for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        if (item.type.startsWith('image/')) {
+                          e.preventDefault();
+                          const file = item.getAsFile();
+                          if (!file) continue;
+                          if (!validateFile(file, 'image')) continue;
+                          const attached: AttachedFile = {
+                            id: Date.now().toString() + '_' + i,
+                            file,
+                            preview: createPreview(file),
+                            type: 'image',
+                          };
+                          attachAndUpload(attached);
+                          return;
+                        }
+                      }
+                    }
                     isPastingRef.current = true;
                   }}
                   onKeyDown={handleKeyDown}

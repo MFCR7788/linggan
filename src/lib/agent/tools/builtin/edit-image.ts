@@ -50,8 +50,8 @@ export const editImageTool: ToolDefinition = {
       }
       return {
         success: true,
-        output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库！\n![编辑结果](${result.imageUrl})`,
-        data: { resultUrl: result.imageUrl, operation, autoSaved: true },
+        output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库（agnes-image-2.1-flash）！\n![编辑结果](${result.imageUrl})`,
+        data: { resultUrl: result.imageUrl, operation, model: 'agnes-image-2.1-flash', autoSaved: true },
       };
     } catch (agnesErr) {
       console.warn('[edit_image] Agnes 失败，降级 DashScope:', agnesErr);
@@ -65,8 +65,8 @@ export const editImageTool: ToolDefinition = {
         }
         return {
           success: true,
-          output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库！\n![编辑结果](${resultUrl})`,
-          data: { resultUrl, operation, autoSaved: true },
+          output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库（qwen-image-edit-plus 降级）！\n![编辑结果](${resultUrl})`,
+          data: { resultUrl, operation, model: 'qwen-image-edit-plus', fallback: true, autoSaved: true },
         };
       } catch (e2) {
         return {

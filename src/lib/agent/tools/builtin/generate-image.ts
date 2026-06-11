@@ -33,6 +33,7 @@ export const generateImageTool: ToolDefinition = {
     const quality = ((params.quality as string) || 'standard') as 'standard' | 'hd' | '4k';
     try {
       let result;
+      let model = 'agnes-image-2.1-flash';
       try {
         result = await generateImageAgnes(prompt, {
           ratio: ratio as '1:1' | '16:9' | '9:16' | '4:3' | '3:4',
@@ -42,6 +43,7 @@ export const generateImageTool: ToolDefinition = {
         console.warn('[generate_image] Agnes 失败，降级 DashScope:', agnesErr);
         const dashResult = await generateImage(prompt, { ratio: ratio as '1:1' | '16:9' | '9:16' });
         result = dashResult;
+        model = 'wanx2.1-t2i-turbo';
       }
       const images = Array.isArray(result) ? result : [result];
       const urls = images.map((img) => img.imageUrl).filter(Boolean);
@@ -56,8 +58,8 @@ export const generateImageTool: ToolDefinition = {
 
       return {
         success: true,
-        output: `已生成 ${urls.length} 张图片并自动保存到灵感库：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
-        data: { imageUrls: urls, prompt, quality, ratio, autoSaved: true },
+        output: `已生成 ${urls.length} 张图片并自动保存到灵感库（${model}）：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
+        data: { imageUrls: urls, prompt, quality, ratio, model, autoSaved: true },
       };
     } catch (e) {
       return { success: false, output: '', error: `图片生成失败: ${e instanceof Error ? e.message : String(e)}` };
