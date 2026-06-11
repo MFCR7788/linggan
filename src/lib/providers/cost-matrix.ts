@@ -27,8 +27,10 @@ const MODEL_COSTS: Record<string, ModelCost> = {
   'qwen-turbo':     { inputPer1M: 0.15, outputPer1M: 0.30 },
   'qwen-plus':      { inputPer1M: 0.30, outputPer1M: 0.60 },
   'qwen-max':       { inputPer1M: 1.20, outputPer1M: 2.40 },
-  'deepseek-v3':    { inputPer1M: 0.50, outputPer1M: 1.00 },
-  'deepseek-r1':    { inputPer1M: 1.00, outputPer1M: 4.00 },
+  'deepseek-v3':       { inputPer1M: 0.50, outputPer1M: 1.00 },
+  'deepseek-r1':       { inputPer1M: 1.00, outputPer1M: 4.00 },
+  'deepseek-v4-pro':   { inputPer1M: 1.50, outputPer1M: 6.00 },
+  'deepseek-v4-flash': { inputPer1M: 0.30, outputPer1M: 0.60 },
 };
 
 // ====== 任务 → 推荐模型（按性价比） ======
@@ -39,9 +41,9 @@ const TASK_MODEL_MAP: Record<TaskType, { preferred: string; fallback: string }> 
   memory_extract:  { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   compress:        { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   embedding:       { preferred: 'qwen-plus',  fallback: 'qwen-max' },
-  main_chat:       { preferred: 'deepseek-v3', fallback: 'qwen-max' },
-  creative:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
-  code_gen:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
+  main_chat:       { preferred: 'deepseek-v4-pro', fallback: 'deepseek-v4-flash' },
+  creative:        { preferred: 'deepseek-v4-pro', fallback: 'deepseek-v4-flash' },
+  code_gen:        { preferred: 'deepseek-v4-pro', fallback: 'deepseek-v4-flash' },
 };
 
 // ====== 路由逻辑 ======
@@ -66,8 +68,8 @@ export function resolveTaskModel(
 
   // 2. 查任务映射表
   const mapping = TASK_MODEL_MAP[taskType];
-  const preferred = mapping?.preferred || 'deepseek-v3';
-  const fallback = mapping?.fallback || 'qwen-max';
+  const preferred = mapping?.preferred || 'deepseek-v4-pro';
+  const fallback = mapping?.fallback || 'deepseek-v4-flash';
 
   // 3. 验证 preferred 是否可用
   if (isModelAvailable(registry, preferred)) {

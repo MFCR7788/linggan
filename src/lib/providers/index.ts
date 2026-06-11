@@ -24,6 +24,7 @@ export type {
 } from './types';
 
 // 触发 builtin provider 自注册（side-effect import）
+import './builtin/deepseek';
 import './builtin/dashscope';
 import './builtin/volcengine';
 import './builtin/openrouter';

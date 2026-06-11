@@ -70,8 +70,8 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作助手。你会主动
 
 export const DEFAULT_CONFIG: AgentConfig = {
   maxIterations: 10,
-  model: 'deepseek-v3',
+  model: 'deepseek-v4-pro',
   temperature: 0.7,
-  maxTokens: 4096,
+  maxTokens: 8192,
   conversationalMode: false,
 };
