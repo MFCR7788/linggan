@@ -58,7 +58,7 @@ export const generateImageTool: ToolDefinition = {
 
       return {
         success: true,
-        output: `已生成 ${urls.length} 张图片并自动保存到灵感库（${model}）：\n${urls.map((u, i) => `![图片${i + 1}](${u})`).join('\n')}`,
+        output: `已生成 ${urls.length} 张图片并自动保存到灵感库（${model}）`,
         data: { imageUrls: urls, prompt, quality, ratio, model, autoSaved: true },
       };
     } catch (e) {

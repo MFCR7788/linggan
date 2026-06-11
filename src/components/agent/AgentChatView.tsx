@@ -138,6 +138,7 @@ export function AgentChatView() {
     }, 50);
   };
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sseClientRef = useRef<AgentSSEClient | null>(null);
   const assistantMsgRef = useRef<string>('');
@@ -192,7 +193,10 @@ export function AgentChatView() {
   const currentSessionRef = useRef(currentSessionId);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      const el = scrollContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [messages]);
 
   // 同步 ref 以便 doStream 闭包中读到最新值
@@ -1222,7 +1226,7 @@ export function AgentChatView() {
       )}
 
       {/* 消息列表 — pb-32 给固定输入框留空间 */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-1 pb-32">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4 space-y-1 pb-32">
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
           <div className="flex flex-col items-center justify-center h-full px-6 text-center">
             {/* Logo */}
