@@ -39,9 +39,9 @@ const TASK_MODEL_MAP: Record<TaskType, { preferred: string; fallback: string }> 
   memory_extract:  { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   compress:        { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   embedding:       { preferred: 'qwen-plus',  fallback: 'qwen-max' },
-  main_chat:       { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
-  creative:        { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
-  code_gen:        { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
+  main_chat:       { preferred: 'deepseek-v3', fallback: 'qwen-max' },
+  creative:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
+  code_gen:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
 };
 
 // ====== 路由逻辑 ======
