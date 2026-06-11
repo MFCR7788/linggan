@@ -1,5 +1,5 @@
 import type { ToolDefinition } from '../../types';
-import { editImageAgnes, type EditOperation } from '@/lib/ai/image';
+import { editImageAgnes, editImageDashScope, type EditOperation } from '@/lib/ai/image';
 import { saveMediaToInspiration } from '../save-media-helper';
 
 const OP_LABELS: Record<string, string> = {
@@ -54,25 +54,20 @@ export const editImageTool: ToolDefinition = {
         data: { resultUrl: result.imageUrl, operation, autoSaved: true },
       };
     } catch (agnesErr) {
-      console.warn('[edit_image] Agnes 失败，尝试 API 降级:', agnesErr);
+      console.warn('[edit_image] Agnes 失败，降级 DashScope:', agnesErr);
 
-      // 降级到原有 API 路由
+      // 降级到 DashScope qwen-image-edit-plus（直调 API，不走需认证的路由）
+      const dashOp = operation === 'style_transfer' || operation === 'inpaint' ? 'enhance' : operation;
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-        const res = await fetch(`${baseUrl}/api/ai/image/edit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl, action: operation === 'style_transfer' ? 'enhance' : operation, prompt }),
-        });
-        const data = await res.json();
-        if (data.success && data.data?.resultUrl) {
-          return {
-            success: true,
-            output: `图片${OP_LABELS[operation] || '编辑'}成功！\n![编辑结果](${data.data.resultUrl})`,
-            data: { resultUrl: data.data.resultUrl, operation },
-          };
+        const resultUrl = await editImageDashScope(imageUrl, dashOp, prompt);
+        if (ctx.userId) {
+          saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [resultUrl]).catch(() => {});
         }
-        return { success: false, output: `图片编辑失败: ${data.error || '未知错误'}`, error: data.error };
+        return {
+          success: true,
+          output: `图片${OP_LABELS[operation] || '编辑'}成功，已自动保存到灵感库！\n![编辑结果](${resultUrl})`,
+          data: { resultUrl, operation, autoSaved: true },
+        };
       } catch (e2) {
         return {
           success: false,

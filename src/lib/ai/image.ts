@@ -314,3 +314,79 @@ export async function editImageAgnes(options: AgnesEditOptions): Promise<ImageRe
     clearTimeout(timer);
   }
 }
+
+// ====== DashScope 图片编辑（服务端直调，不走 API 路由） ======
+
+const DASHSCOPE_MM_BASE = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+
+const DASHSCOPE_EDIT_PROMPTS: Record<string, { prompt: string; negative: string }> = {
+  enhance: {
+    prompt: 'Enhance this image to higher quality. Improve sharpness, fine details, and color vibrancy. Keep the exact same composition, all subjects, and every element completely unchanged.',
+    negative: 'blurry, low quality, distorted, different composition, changed subjects, missing elements',
+  },
+  remove_bg: {
+    prompt: 'Remove the background completely. Replace with pure white background. Keep the main subject 100% intact.',
+    negative: 'background remnants, gray background, subject altered, missing parts, blurry edges',
+  },
+  expand: {
+    prompt: 'Expand the canvas outward to show more of the surrounding scene. Keep the original image content centered and completely unchanged.',
+    negative: 'seam, visible border, frame, distorted original, cropped original',
+  },
+};
+
+export async function editImageDashScope(
+  imageUrl: string,
+  operation: string,
+  customPrompt?: string
+): Promise<string> {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error('DASHSCOPE_API_KEY 未配置');
+
+  const defaults = DASHSCOPE_EDIT_PROMPTS[operation] || DASHSCOPE_EDIT_PROMPTS.enhance;
+  const instruction = customPrompt || defaults.prompt;
+
+  const res = await fetch(DASHSCOPE_MM_BASE, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'qwen-image-edit-plus',
+      input: {
+        messages: [{
+          role: 'user',
+          content: [
+            { image: imageUrl },
+            { text: instruction },
+          ],
+        }],
+      },
+      parameters: {
+        negative_prompt: defaults.negative,
+        watermark: false,
+        prompt_extend: true,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`DashScope 图片编辑失败 (${res.status}): ${errText.substring(0, 200)}`);
+  }
+
+  const data = await res.json();
+  if (data.code || data.message) {
+    throw new Error(data.message || `DashScope API 错误: ${data.code}`);
+  }
+
+  const contents = data.output?.choices?.[0]?.message?.content;
+  if (!contents || !Array.isArray(contents)) {
+    throw new Error('DashScope 图片编辑未返回结果');
+  }
+
+  const resultImage = contents.find((c: { image?: string }) => c.image)?.image;
+  if (!resultImage) throw new Error('DashScope 图片编辑未返回图片 URL');
+
+  return resultImage;
+}
