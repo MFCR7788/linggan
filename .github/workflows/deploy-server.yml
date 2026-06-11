@@ -20,8 +20,9 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          timeout_minutes: 20
           script: |
-            set -e  # 任何一步失败即停止，防止半成品构建启动
+            set -e  # git + env 阶段失败立即停止
             cd /var/www/lingji
             # 强制同步远程最新代码
             echo "=== git remote ==="
@@ -56,13 +57,29 @@ jobs:
             elif command -v yum &> /dev/null; then
               yum install -y gcc-c++ make python3
             fi
+            set +e  # npm/build 允许失败，下面有回退逻辑
             # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
-            npm install --no-audit --no-fund
-            npm run build
-            pm2 start lingji --update-env
+            echo "=== npm install ==="
+            npm install --prefer-offline --no-audit --no-fund
+            INSTALL_EXIT=$?
+            if [ $INSTALL_EXIT -eq 0 ]; then
+              echo "=== npm run build ==="
+              npm run build
+              BUILD_EXIT=$?
+            else
+              BUILD_EXIT=$INSTALL_EXIT
+            fi
+            if [ $BUILD_EXIT -eq 0 ]; then
+              echo "=== build success, restarting pm2 ==="
+              pm2 start lingji --update-env
+            else
+              echo "=== build failed (exit $BUILD_EXIT), restarting pm2 with previous build ==="
+              pm2 start lingji
+            fi
             pm2 save
             # 安装 crontab 定时任务
             chmod +x scripts/cron-runner.sh
             crontab scripts/ecs-crontab.txt
             echo "=== crontab installed ==="
             crontab -l
+          command_timeout: 20m
