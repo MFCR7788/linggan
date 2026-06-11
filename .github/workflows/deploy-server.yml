@@ -39,6 +39,12 @@ jobs:
             # 先停应用释放内存，清理旧构建缓存
             pm2 stop lingji
             rm -rf node_modules .next
+            # 安装 C++ 编译工具（better-sqlite3 原生模块需要）
+            if command -v apt-get &> /dev/null; then
+              apt-get update -qq && apt-get install -y -qq build-essential python3
+            elif command -v yum &> /dev/null; then
+              yum install -y gcc-c++ make python3
+            fi
             npm install
             npm run build
             pm2 start lingji --update-env
