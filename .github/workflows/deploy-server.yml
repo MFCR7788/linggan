@@ -54,8 +54,7 @@ jobs:
             elif command -v yum &> /dev/null; then
               yum install -y gcc-c++ make python3
             fi
-            # 限制 Node 堆内存，防止 build worker OOM
-            export NODE_OPTIONS="--max-old-space-size=512"
+            export NODE_OPTIONS="--max-old-space-size=768"
             npm install
             npm run build
             pm2 start lingji --update-env
