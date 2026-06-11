@@ -242,3 +242,131 @@ export async function generateVideo(prompt: string, duration: number = 5) {
   }
   return { videoUrl: `https://picsum.photos/seed/${Date.now()}/800/600`, prompt, duration };
 }
+
+// ====== Agnes AI 视频生成 ======
+
+const AGNES_VIDEO_BASE = 'https://apihub.agnes-ai.com/v1/video/generations';
+
+/** 视频比例 → [width, height] */
+const VIDEO_SIZE_MAP: Record<string, { landscape: string; portrait: string }> = {
+  '16:9': { landscape: '1920x1080', portrait: '1080x1920' },
+  '9:16': { landscape: '1920x1080', portrait: '1080x1920' },
+  '1:1': { landscape: '1080x1080', portrait: '1080x1080' },
+};
+
+export interface AgnesVideoOptions {
+  /** 视频时长（秒），默认 5，最长 20 */
+  duration?: number;
+  /** 分辨率: 720p (1280x768) / 1080p (1920x1080)，默认 720p */
+  resolution?: '720p' | '1080p';
+  /** 视频比例: 16:9 / 9:16 / 1:1，默认 16:9 */
+  ratio?: string;
+  /** 首帧图片 URL，用于图生视频 (I2V) */
+  imageUrl?: string;
+}
+
+const MAX_DURATION = 20;
+const MIN_DURATION = 3;
+
+export interface AgnesVideoResult {
+  taskId: string;
+  videoUrl?: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  model: string;
+  message?: string;
+  size?: string;
+  seconds?: number;
+}
+
+export async function submitAgnesVideoTask(
+  prompt: string,
+  options: AgnesVideoOptions = {}
+): Promise<AgnesVideoResult> {
+  const apiKey = process.env.AGNES_API_KEY;
+  if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
+
+  const duration = Math.min(Math.max(options.duration || 5, MIN_DURATION), MAX_DURATION);
+  const ratio = options.ratio || '16:9';
+  const sizeEntry = VIDEO_SIZE_MAP[ratio] || VIDEO_SIZE_MAP['16:9'];
+  const size = options.resolution === '1080p' ? sizeEntry.landscape : '1280x768';
+
+  const body: Record<string, unknown> = {
+    model: 'agnes-video-v2.0',
+    prompt,
+    seconds: String(duration),
+    size,
+  };
+
+  // 图生视频：传入首帧图片
+  if (options.imageUrl) {
+    body.image_url = options.imageUrl;
+  }
+
+  try {
+    const res = await fetch(AGNES_VIDEO_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`Agnes 视频提交失败 (${res.status}): ${err.substring(0, 300)}`);
+    }
+
+    const data = await res.json();
+    const taskId = data.id || data.task_id;
+    if (!taskId) throw new Error('Agnes 视频提交失败: 未获取到任务 ID');
+
+    return {
+      taskId,
+      status: 'queued',
+      model: 'agnes-video-v2.0',
+      size,
+      seconds: duration,
+      message: data.message,
+    };
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Agnes')) throw e;
+    throw new Error(`Agnes 视频提交网络错误: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export async function getAgnesVideoTaskStatus(taskId: string): Promise<AgnesVideoResult> {
+  const apiKey = process.env.AGNES_API_KEY;
+  if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
+
+  try {
+    const res = await fetch(`${AGNES_VIDEO_BASE}/${taskId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!res.ok) {
+      return { taskId, status: 'running', model: 'agnes-video-v2.0', message: '查询中...' };
+    }
+
+    const response = await res.json();
+    const inner = response.data || response;
+    const platformStatus = inner.status;
+    const videoData = inner.data;
+
+    if (platformStatus === 'SUCCESS' || videoData?.status === 'succeeded') {
+      const videoUrl = videoData?.url || videoData?.video_url;
+      return { taskId, status: 'succeeded', videoUrl, model: 'agnes-video-v2.0' };
+    }
+
+    if (platformStatus === 'FAILED' || videoData?.status === 'failed') {
+      return {
+        taskId, status: 'failed', model: 'agnes-video-v2.0',
+        message: inner.fail_reason || videoData?.error || '生成失败',
+      };
+    }
+
+    return { taskId, status: 'running', model: 'agnes-video-v2.0', message: '生成中...' };
+  } catch {
+    return { taskId, status: 'running', model: 'agnes-video-v2.0', message: '查询中...' };
+  }
+}

@@ -162,3 +162,139 @@ async function pollImageTask(apiKey: string, taskId: string): Promise<string | n
   }
   return null;
 }
+
+// ====== Agnes AI 图片生成 ======
+
+const AGNES_IMAGE_BASE = 'https://apihub.agnes-ai.com/v1/images';
+
+/** 质量档位 → 1:1 基准分辨率，实际按比例缩放 */
+type ImageQuality = 'standard' | 'hd' | '4k';
+
+const QUALITY_BASE: Record<ImageQuality, number> = {
+  standard: 1024,
+  hd: 1920,
+  '4k': 3840,
+};
+
+/** 比例 → [width, height] 乘数 */
+const RATIO_MAP: Record<string, [number, number]> = {
+  '1:1': [1, 1],
+  '16:9': [16, 9],
+  '9:16': [9, 16],
+  '4:3': [4, 3],
+  '3:4': [3, 4],
+};
+
+function calcAgnesSize(ratio: string, quality: ImageQuality): string {
+  const base = QUALITY_BASE[quality] || QUALITY_BASE.standard;
+  const [rw, rh] = RATIO_MAP[ratio] || RATIO_MAP['1:1'];
+  const diag = Math.sqrt(rw * rw + rh * rh);
+  const w = Math.round((base * rw) / diag);
+  const h = Math.round((base * rh) / diag);
+  return `${w}x${h}`;
+}
+
+export interface AgnesImageOptions {
+  /** 图片比例，默认 1:1 */
+  ratio?: string;
+  /** 生成张数，默认 1 */
+  n?: number;
+  /** 质量档位: standard(1024) / hd(1920) / 4k(3840)，默认 standard */
+  quality?: ImageQuality;
+}
+
+export async function generateImageAgnes(
+  prompt: string,
+  options: AgnesImageOptions = {}
+): Promise<ImageResult> {
+  const apiKey = process.env.AGNES_API_KEY;
+  if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
+
+  const size = calcAgnesSize(options.ratio || '1:1', options.quality || 'standard');
+
+  const res = await fetch(`${AGNES_IMAGE_BASE}/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'agnes-image-2.1-flash',
+      prompt,
+      n: options.n || 1,
+      size,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Agnes 图片生成失败 (${res.status}): ${err.substring(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const url = data.data?.[0]?.url;
+  if (!url) throw new Error('Agnes 图片生成失败: 未返回图片 URL');
+
+  return { imageUrl: url, prompt, size };
+}
+
+// ====== Agnes AI 图片编辑 ======
+
+export type EditOperation = 'enhance' | 'remove_bg' | 'style_transfer' | 'inpaint' | 'expand';
+
+const EDIT_PROMPTS: Record<EditOperation, string> = {
+  enhance: '增强画质，提升清晰度和色彩，保持原图内容不变',
+  remove_bg: '移除背景，替换为纯白色背景，保持主体完整清晰',
+  style_transfer: '转换风格',
+  inpaint: '修复和填充',
+  expand: '智能扩展画面，向外延伸画面内容，保持构图和谐',
+};
+
+export interface AgnesEditOptions {
+  /** 图片 URL 或 base64 */
+  image: string;
+  /** 编辑操作 */
+  operation: EditOperation;
+  /** 额外 prompt（style_transfer 需要目标风格描述） */
+  prompt?: string;
+  /** 遮罩图片 URL（inpaint 需要） */
+  mask?: string;
+}
+
+export async function editImageAgnes(options: AgnesEditOptions): Promise<ImageResult> {
+  const apiKey = process.env.AGNES_API_KEY;
+  if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
+
+  const basePrompt = EDIT_PROMPTS[options.operation];
+  const fullPrompt = [basePrompt, options.prompt].filter(Boolean).join('。');
+
+  const body: Record<string, unknown> = {
+    model: 'agnes-image-2.1-flash',
+    image: options.image,
+    prompt: fullPrompt,
+    n: 1,
+    size: '1024x1024',
+  };
+
+  if (options.mask) body.mask = options.mask;
+
+  const res = await fetch(`${AGNES_IMAGE_BASE}/edits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Agnes 图片编辑失败 (${res.status}): ${err.substring(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const url = data.data?.[0]?.url;
+  if (!url) throw new Error('Agnes 图片编辑失败: 未返回图片 URL');
+
+  return { imageUrl: url, prompt: fullPrompt, size: '1024x1024' };
+}

@@ -23,6 +23,7 @@ interface ModelCost {
 }
 
 const MODEL_COSTS: Record<string, ModelCost> = {
+  'agnes-2.0-flash': { inputPer1M: 0, outputPer1M: 0 },
   'qwen-turbo':     { inputPer1M: 0.15, outputPer1M: 0.30 },
   'qwen-plus':      { inputPer1M: 0.30, outputPer1M: 0.60 },
   'qwen-max':       { inputPer1M: 1.20, outputPer1M: 2.40 },
@@ -38,9 +39,9 @@ const TASK_MODEL_MAP: Record<TaskType, { preferred: string; fallback: string }> 
   memory_extract:  { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   compress:        { preferred: 'qwen-plus',  fallback: 'qwen-max' },
   embedding:       { preferred: 'qwen-plus',  fallback: 'qwen-max' },
-  main_chat:       { preferred: 'deepseek-v3', fallback: 'qwen-max' },
-  creative:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
-  code_gen:        { preferred: 'deepseek-v3', fallback: 'qwen-max' },
+  main_chat:       { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
+  creative:        { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
+  code_gen:        { preferred: 'agnes-2.0-flash', fallback: 'deepseek-v3' },
 };
 
 // ====== 路由逻辑 ======
