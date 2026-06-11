@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "src/remotion", "src/lib/remotion-local-render.ts"]
+  "exclude": ["node_modules", "src/remotion", "src/lib/remotion-local-render.ts", "src/revideo", "src/lib/revideo-local-render.ts"]
 }
