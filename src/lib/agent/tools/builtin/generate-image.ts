@@ -4,6 +4,7 @@ import { generateImage } from '@/lib/ai-services';
 
 export const generateImageTool: ToolDefinition = {
   name: 'generate_image',
+  isLongRunning: true,
   description: `根据文字描述生成图片（文生图），使用 Agnes Image 2.1 Flash 模型。
 当用户要求画图、生成图片、做海报、做封面、设计图、生成照片、画一个/张/幅等时调用。
 

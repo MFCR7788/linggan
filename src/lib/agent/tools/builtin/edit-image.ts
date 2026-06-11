@@ -11,6 +11,7 @@ const OP_LABELS: Record<string, string> = {
 
 export const editImageTool: ToolDefinition = {
   name: 'edit_image',
+  isLongRunning: true,
   description: `编辑或增强图片，使用 Agnes Image 2.1 Flash 模型。
 支持操作(operation):
 - enhance: 提升清晰度和色彩（默认）

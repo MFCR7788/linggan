@@ -212,30 +212,38 @@ export async function generateImageAgnes(
 
   const size = calcAgnesSize(options.ratio || '1:1', options.quality || 'standard');
 
-  const res = await fetch(`${AGNES_IMAGE_BASE}/generations`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'agnes-image-2.1-flash',
-      prompt,
-      n: options.n || 1,
-      size,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`Agnes 图片生成失败 (${res.status}): ${err.substring(0, 300)}`);
+  try {
+    const res = await fetch(`${AGNES_IMAGE_BASE}/generations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'agnes-image-2.1-flash',
+        prompt,
+        n: options.n || 1,
+        size,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`Agnes 图片生成失败 (${res.status}): ${err.substring(0, 300)}`);
+    }
+
+    const data = await res.json();
+    const url = data.data?.[0]?.url;
+    if (!url) throw new Error('Agnes 图片生成失败: 未返回图片 URL');
+
+    return { imageUrl: url, prompt, size };
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  const url = data.data?.[0]?.url;
-  if (!url) throw new Error('Agnes 图片生成失败: 未返回图片 URL');
-
-  return { imageUrl: url, prompt, size };
 }
 
 // ====== Agnes AI 图片编辑 ======
@@ -278,23 +286,31 @@ export async function editImageAgnes(options: AgnesEditOptions): Promise<ImageRe
 
   if (options.mask) body.mask = options.mask;
 
-  const res = await fetch(`${AGNES_IMAGE_BASE}/edits`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`Agnes 图片编辑失败 (${res.status}): ${err.substring(0, 300)}`);
+  try {
+    const res = await fetch(`${AGNES_IMAGE_BASE}/edits`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`Agnes 图片编辑失败 (${res.status}): ${err.substring(0, 300)}`);
+    }
+
+    const data = await res.json();
+    const url = data.data?.[0]?.url;
+    if (!url) throw new Error('Agnes 图片编辑失败: 未返回图片 URL');
+
+    return { imageUrl: url, prompt: fullPrompt, size: '1024x1024' };
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  const url = data.data?.[0]?.url;
-  if (!url) throw new Error('Agnes 图片编辑失败: 未返回图片 URL');
-
-  return { imageUrl: url, prompt: fullPrompt, size: '1024x1024' };
 }
