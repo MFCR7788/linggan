@@ -1,88 +1,101 @@
-// Revideo 本地渲染函数（仅在 42 渲染服务器使用）
-// tsconfig exclude 此文件，防止 101 构建时解析 @revideo/renderer
+// Revideo 本地渲染 — 仅在 42 渲染服务器使用
+// 此文件包含 @revideo/renderer 的静态引用（需 Chromium）
+// 生产 LingJi 服务器（101）不加载此文件（tsconfig exclude）
 // 用法: import { renderRevideoComposition } from '../lib/revideo-local-render';
 
 import { createRequire } from 'module';
-import path from 'path';
-import fs from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { readFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { createAdminClient } from './supabase-server';
+import type { RenderResult } from './remotion-render';
 
 const require = createRequire(import.meta.url);
 const { renderVideo } = require('@revideo/renderer');
 
-export interface RevideoRenderParams {
-  /** 模板 ID（scene name） */
-  templateId: string;
-  /** 视频变量 */
-  variables: Record<string, unknown>;
-  /** 输出文件名（不含扩展名） */
-  outputName?: string;
-  /** 输出目录 */
-  outputDir?: string;
-  /** 帧率 */
-  fps?: number;
-  /** 分辨率 [width, height] */
-  size?: [number, number];
-  /** 时长（帧数） */
+const CHROMIUM_PATH = process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser';
+
+export async function renderRevideoComposition(params: {
+  compositionId: string;
+  props: Record<string, unknown>;
+  userId: string;
   durationInFrames?: number;
-}
-
-export interface RevideoRenderResult {
-  success: boolean;
-  outputPath?: string;
-  error?: string;
-  renderTimeMs?: number;
-}
-
-/**
- * 渲染 Revideo 视频合成
- */
-export async function renderRevideoComposition(
-  params: RevideoRenderParams,
-): Promise<RevideoRenderResult> {
+  fps?: number;
+  outputFormat?: 'mp4';
+}): Promise<RenderResult> {
   const {
-    templateId,
-    variables,
-    outputName = 'revideo-output',
-    outputDir = './output/revideo',
-    fps = 30,
-    size = [1920, 1080],
+    compositionId,
+    props,
+    userId,
     durationInFrames = 150,
+    fps = 30,
   } = params;
 
-  const startTime = Date.now();
-
-  // 确保输出目录存在
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+  const renderId = randomUUID();
+  const outputDir = join(tmpdir(), 'revideo-output');
+  mkdirSync(outputDir, { recursive: true });
+  const outName = `revideo-${renderId}`;
+  const outputFile = join(outputDir, `${outName}.mp4`);
 
   try {
-    const projectFile = path.resolve('src/revideo/project.ts');
+    const projectFile = join(process.cwd(), 'src/revideo/project.ts');
 
-    const outputPath = await renderVideo({
+    await renderVideo({
       projectFile,
-      variables,
+      variables: props,
       settings: {
-        outFile: `${outputName}.mp4`,
+        outFile: `${outName}.mp4`,
         outDir: outputDir,
         logProgress: false,
+        puppeteer: {
+          executablePath: CHROMIUM_PATH,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        },
+        viteConfig: {
+          server: {
+            headers: {
+              'Cross-Origin-Opener-Policy': 'same-origin',
+              'Cross-Origin-Embedder-Policy': 'require-corp',
+            },
+          },
+        },
         projectSettings: {
-          size: { x: size[0], y: size[1] },
+          size: { x: 1920, y: 1080 },
           range: [0, durationInFrames],
         },
       },
     });
 
+    const videoBuffer = readFileSync(outputFile);
+    const storagePath = `revideo/${userId}/${renderId}.mp4`;
+
+    const supabase = createAdminClient();
+    const { error: uploadError } = await supabase.storage
+      .from('lingji-media')
+      .upload(storagePath, videoBuffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+
+    if (uploadError) throw new Error(`上传失败: ${uploadError.message}`);
+
+    const { data: urlData } = supabase.storage
+      .from('lingji-media')
+      .getPublicUrl(storagePath);
+
     return {
-      success: true,
-      outputPath,
-      renderTimeMs: Date.now() - startTime,
+      url: urlData.publicUrl,
+      storagePath,
+      renderId,
+      compositionId,
+      durationInFrames,
+      fps,
+      width: 1920,
+      height: 1080,
+      size: videoBuffer.length,
     };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : String(err),
-      renderTimeMs: Date.now() - startTime,
-    };
+  } finally {
+    try { if (existsSync(outputFile)) unlinkSync(outputFile); } catch { /* ignore */ }
   }
 }

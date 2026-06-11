@@ -722,6 +722,18 @@ function CaptureContent() {
         onBack={() => router.push("/home")}
       />
 
+      {/* 新版 Agent 入口 */}
+      <div className="px-4 pt-2">
+        <button
+          onClick={() => router.push('/agent')}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-[#3B82F6] text-sm hover:bg-[#3B82F6]/15 transition-colors"
+        >
+          <Sparkles size={14} />
+          试试新版对话助手
+          <span className="text-[#60A5FA]">→</span>
+        </button>
+      </div>
+
       {/* 会话列表下拉 */}
       {showSessionList && (
         <>
