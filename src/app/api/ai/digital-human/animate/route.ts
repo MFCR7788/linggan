@@ -3,10 +3,11 @@
 // GET  ?taskId=xxx                                 → 查状态
 
 import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { submitAnimateTask, getAnimateTaskStatus } from '@/lib/ai-services';
-import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
 import { calcDigitalHumanCost } from '@/lib/credit-costs';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,40 @@ export const POST = withAuth(async ({ request, user }) => {
       return createApiError(result.message || '任务提交失败', 500);
     }
 
+    // 保存到历史
+    const supabase = createAdminClient();
+    const { data: session } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('title', 'AI创作')
+      .maybeSingle();
+    const sessionId = session?.id || (await supabase
+      .from('chat_sessions')
+      .insert({ user_id: user.id, title: 'AI创作' })
+      .select('id')
+      .single()
+    ).data?.id;
+    if (sessionId) {
+      await supabase.from('chat_messages').insert({
+        session_id: sessionId,
+        user_id: user.id,
+        type: 'ai',
+        content: `角色动作迁移 · ${res}`,
+        content_type: 'video',
+        metadata: {
+          source: 'ai_creation',
+          source_platform: 'ai_digital_human',
+          generatedVideo: { taskId: result.taskId, status: 'pending', imageUrl },
+          imageUrl,
+          videoUrl,
+          taskId: result.taskId,
+          resolution: res,
+          creditCost,
+        },
+      });
+    }
+
     return createApiResponse({
       taskId: result.taskId,
       status: result.status,
@@ -60,11 +95,55 @@ export const POST = withAuth(async ({ request, user }) => {
   }
 });
 
-export const GET = withAuth(async ({ request, user: _user }) => {
+export const GET = withAuth(async ({ request, user }) => {
   const { searchParams } = new URL(request.url);
   const taskId = searchParams.get('taskId');
   if (!taskId) return createApiError('缺少 taskId', 400);
 
   const result = await getAnimateTaskStatus(taskId);
+
+  // 任务失败 → 退点
+  if (result.status === 'failed' || result.status === 'error') {
+    const already = await hasRefunded(user.id, taskId);
+    if (!already) {
+      const supabase = createAdminClient();
+      const { data: msg } = await supabase
+        .from('chat_messages')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .eq('metadata->>taskId', taskId)
+        .maybeSingle();
+      const cost = (msg?.metadata as any)?.creditCost;
+      if (cost && cost > 0) {
+        await refund(user.id, cost, 'ai_digital_human', 'Animate 任务失败退点', {
+          taskId, status: result.status, message: result.message,
+        });
+      }
+    }
+  }
+
+  // 任务成功 → 回写 videoUrl
+  if (result.status === 'succeeded' && result.videoUrl) {
+    const supabase = createAdminClient();
+    const { data: msg } = await supabase
+      .from('chat_messages')
+      .select('metadata')
+      .eq('user_id', user.id)
+      .eq('metadata->>taskId', taskId)
+      .maybeSingle();
+    if (msg) {
+      const meta = msg.metadata as any;
+      await supabase.from('chat_messages')
+        .update({
+          metadata: {
+            ...meta,
+            generatedVideo: { ...meta.generatedVideo, videoUrl: result.videoUrl, status: 'succeeded' },
+          },
+        })
+        .eq('user_id', user.id)
+        .eq('metadata->>taskId', taskId);
+    }
+  }
+
   return createApiResponse(result, '状态已获取');
 });
