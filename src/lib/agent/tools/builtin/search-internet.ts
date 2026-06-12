@@ -1,5 +1,5 @@
 // Agent Reach — 多平台互联网搜索工具
-// 底层调用 mcporter (Exa)、Jina Reader、gh CLI 等
+// 底层调用 Exa REST API、Jina Reader、gh CLI 等
 // 比现有 web_search 覆盖更广：GitHub 代码搜索、JS 渲染页面读取
 
 import type { ToolDefinition } from '../../types';
@@ -29,15 +29,42 @@ function hasCli(name: string): boolean {
   }
 }
 
-/** Exa 语义搜索（通过 mcporter MCP 客户端） */
+/** Exa 语义搜索（直接调用 REST API） */
 async function exaSearch(query: string, limit = 5): Promise<string> {
-  if (!hasCli('mcporter')) return 'Exa 搜索不可用：mcporter 未安装。请在服务器上安装 mcporter 并配置 Exa API key。';
+  const apiKey = process.env.EXA_API_KEY;
+  if (!apiKey) return 'Exa 搜索不可用：未配置 EXA_API_KEY 环境变量。';
+
+  const body = JSON.stringify({
+    query,
+    type: 'auto',
+    numResults: limit,
+    contents: { highlights: true },
+  });
+
   const { stdout, stderr } = await sh(
-    `mcporter call 'exa.web_search_exa(query: "${query.replace(/"/g, '\\"')}", numResults: ${limit})'`
+    `curl -s --max-time 30 -X POST "https://api.exa.ai/search" -H "Content-Type: application/json" -H "x-api-key: ${apiKey}" -d '${body.replace(/'/g, "'\\''")}'`
   );
+
   if (stderr && !stdout) return `搜索异常: ${stderr.substring(0, 300)}`;
   if (!stdout.trim()) return '无结果';
-  return stdout.length > 3000 ? stdout.substring(0, 3000) + '\n...(已截断)' : stdout;
+
+  try {
+    const data = JSON.parse(stdout);
+    if (data.error) return `Exa API 错误: ${data.error}`;
+    const results = data.results || [];
+    if (results.length === 0) return `"${query}" 无结果`;
+    const formatted = results
+      .map((r: { title?: string; url?: string; highlights?: string[] }, i: number) => {
+        const title = r.title || '无标题';
+        const url = r.url || '';
+        const highlights = r.highlights?.slice(0, 2).join(' | ') || '';
+        return `${i + 1}. ${title}\n   ${url}${highlights ? '\n   ' + highlights : ''}`;
+      })
+      .join('\n\n');
+    return formatted.length > 3000 ? formatted.substring(0, 3000) + '\n...(已截断)' : formatted;
+  } catch {
+    return stdout.substring(0, 3000);
+  }
 }
 
 /** Jina Reader 读取任意网页（含 JS 渲染的 SPA 页面，如微信公众号/小红书） */
