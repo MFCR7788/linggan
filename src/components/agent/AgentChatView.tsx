@@ -1061,7 +1061,8 @@ export function AgentChatView() {
               />
             ) : (
               <span
-                className="truncate text-sm text-white"
+                className="truncate text-sm text-white cursor-default"
+                onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   const sid = currentSessionId;
@@ -1137,6 +1138,7 @@ export function AgentChatView() {
                   ) : (
                     <span
                       className="truncate flex-1"
+                      onClick={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
