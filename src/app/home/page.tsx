@@ -376,33 +376,69 @@ function HomeContent() {
             />
           ) : filteredInspirations.length > 0 ? (
             <div className="columns-2 gap-3 [&>*]:[break-inside:avoid]">
-              {filteredInspirations.slice(0, 5).map((item: ContentItem) => (
+              {filteredInspirations.slice(0, 5).map((item: ContentItem) => {
+                const coverUrl = item.media_urls?.[0] || item.thumbnail_url;
+                const isImage = item.type === 'image';
+                const isVideo = item.type === 'video';
+                const isAudio = item.type === 'audio' || item.type === 'voice';
+                const showCover = (isImage || isVideo) && coverUrl;
+
+                return (
                 <GlassCard
                   key={item.id}
                   hover
                   onClick={() => router.push(`/inspiration/detail?id=${item.id}`)}
-                  className="!p-3 mb-3"
+                  className="!p-0 mb-3 overflow-hidden"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_EMOJIS[item.type] || "✨"}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }} className="truncate">
-                          {item.title || item.original_text?.substring(0, 40) || "未命名灵感"}
-                        </p>
-                        <span style={{ color: "#6B7280", fontSize: 11, flexShrink: 0 }}>
-                          {new Date(item.created_at).toLocaleDateString("zh-CN")}
-                        </span>
-                      </div>
-                      {item.original_text && item.original_text !== (item.title || "") && (
-                        <p style={{ color: "#9CA3AF", fontSize: 12, marginTop: 1 }} className="truncate">
-                          {item.original_text}
-                        </p>
+                  {/* 图片/视频 — 封面图 */}
+                  {showCover ? (
+                    <div className="relative w-full bg-gray-900/50">
+                      <img
+                        src={coverUrl}
+                        alt={item.title || ''}
+                        loading="lazy"
+                        className="w-full object-cover"
+                        style={{ maxHeight: 200 }}
+                      />
+                      {isVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                            <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </div>
+                        </div>
                       )}
                     </div>
+                  ) : isAudio ? (
+                    /* 音频 — 渐变占位 */
+                    <div className="flex items-center justify-center py-8" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.08))' }}>
+                      <svg className="w-8 h-8 text-green-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                    </div>
+                  ) : null}
+
+                  {/* 文字信息 */}
+                  <div className="p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span style={{ fontSize: 13 }}>{TYPE_EMOJIS[item.type] || '✨'}</span>
+                      <span style={{ color: '#6B7280', fontSize: 10 }}>
+                        {new Date(item.created_at).toLocaleDateString('zh-CN')}
+                      </span>
+                    </div>
+                    <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }} className="line-clamp-2">
+                      {item.title || item.prompt || item.original_text?.substring(0, 40) || '未命名灵感'}
+                    </p>
+                    {item.original_text && item.original_text !== (item.title || '') && (
+                      <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4, lineHeight: 1.4 }} className="line-clamp-2">
+                        {item.original_text}
+                      </p>
+                    )}
                   </div>
                 </GlassCard>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </div>
