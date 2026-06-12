@@ -1169,23 +1169,6 @@ function DigitalHumanContent() {
 
   const renderS2VMode = () => (
     <>
-      <MediaPicker accept="image" onSelect={handleImageSelect} value={imageUrl} />
-
-      {imagePreview && (
-        <GlassCard>
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '2px solid rgba(6,182,212,0.4)' }}>
-              <img src={imagePreview} alt="角色" className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <span style={{ color: '#86EFAC', fontSize: 11 }}>✓ 角色已选</span>
-              <button onClick={() => { setImageUrl(''); setImagePreview(null); }}
-                className="block text-xs mt-0.5" style={{ color: '#F87171' }}>移除</button>
-            </div>
-          </div>
-        </GlassCard>
-      )}
-
       {/* 脚本来源 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
@@ -1505,28 +1488,10 @@ function DigitalHumanContent() {
           <br />适合: 创始人 IP 持续产出、虚拟主播预制动作库、产品发布会动画。
         </p>
 
-        {/* 角色头像:复用 imagePreview / imageUrl 状态 */}
+        {/* 角色头像:使用上方共用的图片选择器 */}
         <div className="mb-3">
           <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>① 角色头像(必填)</p>
-          {imagePreview || imageUrl ? (
-            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)' }}>
-              <img src={imagePreview || imageUrl} alt="角色" className="w-12 h-12 rounded-lg object-cover" />
-              <div className="flex-1 min-w-0">
-                <p style={{ color: '#86EFAC', fontSize: 11, fontWeight: 600 }}>已选择</p>
-                <p style={{ color: '#6B7280', fontSize: 10 }} className="truncate">{imagePreview || imageUrl}</p>
-              </div>
-              <button onClick={() => { setImagePreview(null); setImageUrl(''); setAnimateRefImageUrl(''); }}
-                style={{ color: '#FCA5A5', fontSize: 11 }}>清除</button>
-            </div>
-          ) : (
-            <div
-              className="w-full py-2.5 rounded-lg text-xs text-center"
-              style={{ background: 'rgba(236,72,153,0.1)', border: '1px dashed rgba(236,72,153,0.4)', color: '#F9A8D4' }}
-            >
-              👆 请先在上方选择/上传角色图片
-            </div>
-          )}
-          {(imagePreview || imageUrl) && (
+          {(imagePreview || imageUrl) ? (
             <div>
               <input
                 value={animateRefImageUrl || imagePreview || imageUrl}
@@ -1572,7 +1537,7 @@ function DigitalHumanContent() {
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* 参考视频 */}
@@ -1954,6 +1919,23 @@ function DigitalHumanContent() {
             </button>
           )}
         </div>
+
+        {/* 角色图片（所有模式共用） */}
+        <MediaPicker accept="image" onSelect={handleImageSelect} value={imageUrl} />
+        {imagePreview && (
+          <GlassCard>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '2px solid rgba(6,182,212,0.4)' }}>
+                <img src={imagePreview} alt="角色" className="w-full h-full object-cover" />
+              </div>
+              <div>
+                <span style={{ color: '#86EFAC', fontSize: 11 }}>✓ 角色已选</span>
+                <button onClick={() => { setImageUrl(''); setImagePreview(null); }}
+                  className="block text-xs mt-0.5" style={{ color: '#F87171' }}>移除</button>
+              </div>
+            </div>
+          </GlassCard>
+        )}
 
         {/* 模式内容 */}
         {dhMode === 's2v' && renderS2VMode()}
