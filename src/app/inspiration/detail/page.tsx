@@ -194,13 +194,6 @@ function InspirationDetailContent() {
     }
   };
 
-  const generateContent = (type?: string) => {
-    const params = new URLSearchParams();
-    if (id) params.set('inspirationId', id);
-    if (type) params.set('type', type);
-    router.push(`/ai/copywriting?${params.toString()}`);
-  };
-
   const handleNavigate = (page: PageKey, params?: string) => {
     switch (page) {
       case "home": router.push("/home"); break;
@@ -541,11 +534,9 @@ function InspirationDetailContent() {
 
             <GlassCard className="!p-3">
               <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 10 }}>快捷操作</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-wrap gap-2">
                 {[
-                  { label: "生成小红书文案", icon: <Zap size={14} />, action: () => generateContent('xiaohongshu') },
-                  { label: "生成公众号文章", icon: <Zap size={14} />, action: () => generateContent('wechat') },
-                  { label: "生成分镜脚本", icon: <Zap size={14} />, action: () => generateContent('script') },
+                  { label: "去AI生成文案", icon: <Zap size={14} />, action: () => router.push(`/ai/copywriting?inspirationId=${id}`) },
                   { label: "分享", icon: <Share2 size={14} />, action: shareInspiration },
                   ...(inspiration.prompt ? [
                     { label: "做同款图片", icon: <ImageIcon size={14} />, action: () => router.push(`/ai/image?prompt=${encodeURIComponent(inspiration.prompt!)}`) },
@@ -567,29 +558,53 @@ function InspirationDetailContent() {
 
             <div>
               <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600, marginBottom: 10 }}>相关灵感</h3>
-              <div className="space-y-3">
-                {relatedInspirations.length === 0 && (
-                  <p style={{ color: "#6B7280", fontSize: 13 }}>暂无相关灵感</p>
-                )}
-                {relatedInspirations.map((item) => (
-                  <GlassCard key={item.id} hover onClick={() => router.push(`/inspiration/detail?id=${item.id}`)} className="!p-4">
-                    <div className="flex items-start gap-3">
-                      <span style={{ fontSize: 28 }}>{typeEmojis[item.type] || "✨"}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <GlassBadge color="primary">{typeLabels[item.type] || item.type}</GlassBadge>
+              {relatedInspirations.length === 0 ? (
+                <p style={{ color: "#6B7280", fontSize: 13 }}>暂无相关灵感</p>
+              ) : (
+                <div className="columns-2 gap-3 [&>*]:[break-inside:avoid]">
+                  {relatedInspirations.map((item) => {
+                    const coverUrl = item.media_urls?.[0] || item.thumbnail_url;
+                    const isImg = item.type === 'image';
+                    const isVid = item.type === 'video';
+                    const showCover = (isImg || isVid) && coverUrl;
+
+                    return (
+                    <GlassCard key={item.id} hover onClick={() => router.push(`/inspiration/detail?id=${item.id}`)} className="!p-0 mb-3 overflow-hidden">
+                      {showCover ? (
+                        <div className="relative w-full bg-gray-900/50">
+                          <img src={coverUrl} alt={item.title || ''} loading="lazy" className="w-full object-cover" style={{ maxHeight: 160 }} />
+                          {isVid && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                                <svg className="w-4 h-4 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }} className="truncate">
-                          {item.title ? stripMarkdown(item.title) : ""}
+                      ) : null}
+                      <div className="p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span style={{ fontSize: 13 }}>{typeEmojis[item.type] || '✨'}</span>
+                          <span style={{ color: '#6B7280', fontSize: 10 }}>
+                            {new Date(item.created_at).toLocaleDateString('zh-CN')}
+                          </span>
+                        </div>
+                        <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }} className="line-clamp-2">
+                          {item.title || '未命名'}
                         </p>
-                        <p style={{ color: "#9CA3AF", fontSize: 12 }} className="line-clamp-2">
-                          {item.original_text ? stripMarkdown(item.original_text.substring(0, 60)) : "暂无描述"}
-                        </p>
+                        {item.original_text && (
+                          <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 3, lineHeight: 1.4 }} className="line-clamp-2">
+                            {item.original_text}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
+                    </GlassCard>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div>
@@ -760,8 +775,8 @@ function InspirationDetailContent() {
             zIndex: 40,
           }}
         >
-          <PrimaryButton fullWidth size="md" fontSize={14} onClick={() => generateContent()}>
-            <Zap size={16} /> 一键生成
+          <PrimaryButton fullWidth size="md" fontSize={14} onClick={() => router.push(`/ai/copywriting?inspirationId=${id}`)}>
+            <Zap size={16} /> AI生成文案
           </PrimaryButton>
         </div>
       )}
