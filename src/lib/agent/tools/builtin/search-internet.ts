@@ -1,6 +1,5 @@
-// Agent Reach — 多平台互联网搜索工具
-// 底层调用 Exa REST API、Jina Reader、gh CLI 等
-// 比现有 web_search 覆盖更广：GitHub 代码搜索、JS 渲染页面读取
+// 多平台互联网搜索工具
+// 底层：Exa REST API（curl）、Jina Reader（curl）、GitHub CLI（gh）
 
 import type { ToolDefinition } from '../../types';
 import { execSync } from 'child_process';
@@ -91,40 +90,20 @@ async function githubSearch(query: string, type: 'repos' | 'code' | 'issues' = '
   return stdout.length > 3000 ? stdout.substring(0, 3000) + '\n...(已截断)' : stdout;
 }
 
-/** agent-reach 健康检查，列出可用渠道 */
-async function doctorCheck(): Promise<string> {
-  if (!hasCli('agent-reach')) return 'agent-reach CLI 未安装';
-  const { stdout } = await sh('agent-reach doctor --json', 10000);
-  try {
-    const data = JSON.parse(stdout);
-    const channels = Object.entries(data)
-      .map(([k, v]: [string, unknown]) => {
-        const info = v as { status: string; name: string; active_backend: string | null };
-        const icon = info.status === 'ok' ? '✅' : info.status === 'warn' ? '⚠️' : '❌';
-        return `${icon} ${info.name}${info.active_backend ? ` (${info.active_backend})` : ''}`;
-      })
-      .join('\n');
-    return channels;
-  } catch {
-    return stdout.substring(0, 2000);
-  }
-}
-
 export const searchInternetTool: ToolDefinition = {
   name: 'search_internet',
   description: `全网深度搜索工具，覆盖普通搜索引擎无法触达的平台：
 - 使用 Exa 语义搜索获取高质量网页结果（比传统关键词搜索更智能）
 - 使用 Jina Reader 读取任意网页全文（含微信公众号/小红书/知乎等 JS 渲染页面）
 - 搜索 GitHub 仓库和代码
-- 查看 agent-reach 各平台渠道可用状态
 - 适合做深度调研、竞品分析、技术研究`,
   parameters: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['search', 'read_page', 'github', 'doctor'],
-        description: '操作类型：search=全网语义搜索，read_page=读取网页全文，github=搜索GitHub，doctor=查看各渠道可用状态',
+        enum: ['search', 'read_page', 'github'],
+        description: '操作类型：search=全网语义搜索，read_page=读取网页全文，github=搜索GitHub',
       },
       query: {
         type: 'string',
@@ -170,10 +149,6 @@ export const searchInternetTool: ToolDefinition = {
           const ghType = (params.github_type as string) || 'repos';
           const result = await githubSearch(query, ghType as 'repos' | 'code' | 'issues', limit);
           return { success: true, output: result, data: { source: 'github', query, type: ghType } };
-        }
-        case 'doctor': {
-          const result = await doctorCheck();
-          return { success: true, output: result };
         }
         default:
           return { success: false, output: '', error: `不支持的操作: ${action}` };
