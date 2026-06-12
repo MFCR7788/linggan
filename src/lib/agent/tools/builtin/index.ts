@@ -24,6 +24,7 @@ import { generateAnimateVideoTool } from './animate';
 import { generateEditPlanTool } from './generate-edit-plan';
 import { generateVideoTemplateTool } from './generate-video-template';
 import { searchInternetTool } from './search-internet';
+import { douyinTranscriptTool } from './douyin-transcript';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -55,6 +56,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     generateVideoTemplateTool,
     // Agent Reach 多平台搜索
     searchInternetTool,
+    // 抖音文案提取
+    douyinTranscriptTool,
   ]);
 }
 
@@ -63,4 +66,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool };
+export { searchInternetTool, douyinTranscriptTool };
