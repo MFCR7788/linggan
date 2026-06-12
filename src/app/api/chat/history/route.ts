@@ -38,11 +38,11 @@ export const GET = withAuth(async ({ request, user }) => {
 
     // 映射统一格式
     const chatWorks = (messages || []).map((m: any) => {
-      // 严格判断：必须有实际的 videoUrl/imageUrl 才算视频/图片作品
       const hasVideo = !!(m.metadata?.generatedVideo?.videoUrl);
       const hasImage = !!(m.metadata?.generatedImage?.imageUrl);
-      const workTypeResult: string = hasVideo ? '视频' : hasImage ? '图片' : '文案';
-      const emoji = hasVideo ? '🎬' : hasImage ? '🖼️' : '📄';
+      const hasAudio = !!(m.metadata?.generatedAudio);
+      const workTypeResult: string = hasVideo ? '视频' : hasImage ? '图片' : hasAudio ? '配音' : '文案';
+      const emoji = hasVideo ? '🎬' : hasImage ? '🖼️' : hasAudio ? '🎵' : '📄';
       const title = (m.content || '').replace(/<[^>]*>/g, '').substring(0, 40) + ((m.content || '').length > 40 ? '...' : '');
       return {
         id: m.id,

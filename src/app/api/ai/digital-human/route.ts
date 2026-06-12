@@ -101,7 +101,9 @@ export const POST = withAuth(async ({ request, user }) => {
         content: `数字人视频生成 · ${finalRes}`,
         content_type: 'video',
         metadata: {
-          source: 'digital_human',
+          source: 'ai_creation',
+          source_platform: 'ai_digital_human',
+          generatedVideo: { taskId: result.taskId, status: 'pending', imageUrl, audioUrl },
           batchId,
           imageUrl,
           audioUrl,
@@ -133,13 +135,12 @@ export const GET = withAuth(async ({ request, user }) => {
 
     const result = await getDigitalHumanTaskStatus(taskId);
 
+    const supabase = createAdminClient();
+
     // 异步任务失败 → 自动退点(防止用户白花)
-    // 用 hasRefunded 查 taskId 是否已退过,避免重复退
     if (result.status === 'failed' || result.status === 'error') {
       const already = await hasRefunded(user.id, taskId);
       if (!already) {
-        // 找原始扣点:从 chat_messages 里查这条任务的 creditCost
-        const supabase = createAdminClient();
         const { data: msg } = await supabase
           .from('chat_messages')
           .select('metadata')
@@ -152,6 +153,28 @@ export const GET = withAuth(async ({ request, user }) => {
             taskId, status: result.status, message: result.message,
           });
         }
+      }
+    }
+
+    // 任务成功 → 回写 videoUrl 到 chat_messages,供历史作品展示
+    if (result.status === 'succeeded' && result.videoUrl) {
+      const { data: msg } = await supabase
+        .from('chat_messages')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .eq('metadata->>taskId', taskId)
+        .maybeSingle();
+      if (msg) {
+        const meta = msg.metadata as any;
+        await supabase.from('chat_messages')
+          .update({
+            metadata: {
+              ...meta,
+              generatedVideo: { ...meta.generatedVideo, videoUrl: result.videoUrl, status: 'succeeded' },
+            },
+          })
+          .eq('user_id', user.id)
+          .eq('metadata->>taskId', taskId);
       }
     }
 

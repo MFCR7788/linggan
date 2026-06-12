@@ -143,6 +143,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // 保存到历史生成（不存 base64，仅元信息）
     await saveWorkHistory(user.id, text.substring(0, 200), {
+      source_platform: 'ai_tts',
       generatedAudio: {
         voice: voiceConfig.label,
         engine: 'cosyvoice',

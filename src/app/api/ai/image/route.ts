@@ -122,6 +122,7 @@ export const POST = withAuth(async ({ request, user }) => {
         content_type: 'text',
         metadata: {
           source: 'ai_creation',
+          source_platform: 'ai_image',
           generatedImage: { imageUrl: firstResult.imageUrl, prompt: firstResult.prompt, size: firstResult.size },
           batchImages: Array.isArray(result) ? result.map((r) => ({ imageUrl: r.imageUrl, size: r.size })) : undefined,
           presetId: presetId || null,

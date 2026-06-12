@@ -104,7 +104,7 @@ export const POST = withAuth(async ({ request, user }) => {
         type: 'ai',
         content: prompt,
         content_type: 'text',
-        metadata: { source: 'ai_creation', generatedVideo: { taskId: result.taskId, prompt: enrichedPrompt } },
+        metadata: { source: 'ai_creation', source_platform: 'ai_video', generatedVideo: { taskId: result.taskId, prompt: enrichedPrompt } },
       });
     }
 
@@ -125,6 +125,30 @@ export const GET = withAuth(async ({ request, user }) => {
     }
 
     const result = await getVideoTaskStatus(taskId);
+
+    // 任务成功 → 回写 videoUrl 到 chat_messages,供历史作品展示
+    if (result.status === 'succeeded' && result.videoUrl) {
+      const supabase = createAdminClient();
+      const { data: msg } = await supabase
+        .from('chat_messages')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .eq('metadata->>taskId', taskId)
+        .maybeSingle();
+      if (msg) {
+        const meta = msg.metadata as any;
+        await supabase.from('chat_messages')
+          .update({
+            metadata: {
+              ...meta,
+              generatedVideo: { ...meta.generatedVideo, videoUrl: result.videoUrl, status: 'succeeded' },
+            },
+          })
+          .eq('user_id', user.id)
+          .eq('metadata->>taskId', taskId);
+      }
+    }
+
     return createApiResponse(result);
   } catch (error) {
     console.error('Video task status error:', error);
