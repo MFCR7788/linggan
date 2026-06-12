@@ -37,7 +37,7 @@ jobs:
             grep -q "^VOLC_TTS_ACCESS_TOKEN=" .env.local && sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local || echo "VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}" >> .env.local
             grep -q "^CRON_SECRET=" .env.local && sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}" .env.local || echo "CRON_SECRET=${{ secrets.CRON_SECRET }}" >> .env.local
             # 先停应用释放内存
-            pm2 stop lingji || true
+            systemctl stop lingji || true
             # 只删构建缓存，保留 node_modules 避免全量重装 OOM
             rm -rf .next
             # 确保 swap 存在并激活
@@ -70,13 +70,12 @@ jobs:
               BUILD_EXIT=$INSTALL_EXIT
             fi
             if [ $BUILD_EXIT -eq 0 ]; then
-              echo "=== build success, restarting pm2 ==="
-              pm2 start lingji --update-env
+              echo "=== build success, restarting lingji ==="
+              systemctl restart lingji
             else
-              echo "=== build failed (exit $BUILD_EXIT), restarting pm2 with previous build ==="
-              pm2 start lingji
+              echo "=== build failed (exit $BUILD_EXIT), restarting lingji with previous build ==="
+              systemctl start lingji
             fi
-            pm2 save
             # 安装 crontab 定时任务
             chmod +x scripts/cron-runner.sh
             crontab scripts/ecs-crontab.txt
