@@ -1,61 +1,143 @@
 // 抖音文案提取工具
-// 快速路径：iesdouyin SSR 页面解析 → 提取已有字幕/描述
-// 降级路径：下载视频 → ffmpeg 提取音频 → DashScope Paraformer ASR
-// 批量提取：并行处理多个视频链接
+// 主路径：douyin-cli 下载视频 → ffmpeg 提取音频 → DashScope Paraformer ASR
+// 快速路径：douyin-cli 仅提取描述文案（不下载视频）
 
 import type { ToolDefinition } from '../../types';
 import { getDashScopeApiKey } from '@/lib/runtime-config';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFile, writeFile, mkdtemp, rm } from 'fs/promises';
+import { readFile, writeFile, mkdtemp, rm, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 const execAsync = promisify(exec);
 
-const UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
+// ── douyin-cli Python 路径 ──
 
-// ── 快速路径：直接从 iesdouyin SSR 页面提取视频描述 ──
+let _pythonPath: string | null = null;
 
-interface DouyinPageData {
-  desc?: string;
-  rawText?: string;
-  captions?: string;
+async function getDouyinPython(): Promise<string> {
+  if (_pythonPath) return _pythonPath;
+  try {
+    const { stdout } = await execAsync('which douyin');
+    const douyinBin = stdout.trim();
+    const { stdout: pyOut } = await execAsync(
+      `find "$(dirname "${douyinBin}")/.." -path "*/bin/python*" -type f 2>/dev/null | head -1 || echo ""`
+    );
+    if (pyOut.trim()) {
+      _pythonPath = pyOut.trim();
+      return _pythonPath;
+    }
+  } catch { /* fall through */ }
+  _pythonPath = 'python3';
+  return _pythonPath;
 }
 
-async function extractFromSSRPage(videoId: string): Promise<DouyinPageData | null> {
+// ── 调用 douyin-cli 下载视频 + 获取元数据 ──
+
+interface DouyinAwemeData {
+  desc?: string;
+  videoPath?: string;
+  error?: string;
+}
+
+async function fetchViaDouyinCLI(videoUrl: string, workDir: string): Promise<DouyinAwemeData> {
+  const python = await getDouyinPython();
+  const pyScript = `
+import json, sys, os
+from douyin_cli.douyin import Douyin
+from douyin_cli.paths import get_download_root
+
+result = {"desc": "", "videoPath": "", "error": ""}
+
+def collect(items, _type):
+    for item in items:
+        result["desc"] = item.get("desc", "") or ""
+        break
+
+try:
+    douyin = Douyin(
+        target=${JSON.stringify(videoUrl)},
+        limit=1,
+        type="aweme",
+        down_path=${JSON.stringify(workDir)},
+        enable_download_title=False,
+        enable_download_cover=False,
+        on_new_items=collect,
+    )
+    douyin.run()
+
+    # Find downloaded video file
+    for f in os.listdir(${JSON.stringify(workDir)}):
+        if f.endswith(".mp4") or f.endswith(".mov") or f.endswith(".webm"):
+            result["videoPath"] = os.path.join(${JSON.stringify(workDir)}, f)
+            break
+except Exception as e:
+    result["error"] = str(e)
+
+json.dump(result, sys.stdout, ensure_ascii=False)
+`;
+
+  const scriptPath = join(workDir, 'fetch.py');
+  await writeFile(scriptPath, pyScript);
+
   try {
-    const ssrUrl = `https://www.iesdouyin.com/share/video/${videoId}/?app=douyin_select`;
-    const res = await fetch(ssrUrl, {
-      headers: { 'User-Agent': UA, Accept: 'text/html', 'Accept-Language': 'zh-CN' },
-      signal: AbortSignal.timeout(10000),
+    const { stdout, stderr } = await execAsync(`${python} "${scriptPath}"`, {
+      timeout: 120000,
+      maxBuffer: 1024 * 1024,
     });
-    const html = await res.text();
-
-    // 尝试从 __INITIAL_STATE__ 或内嵌 JSON 提取
-    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/) ||
-                       html.match(/__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/);
-    if (stateMatch) {
-      try {
-        const state = JSON.parse(stateMatch[1]);
-        const item = state?.itemList?.[0] || state?.item || {};
-        return {
-          desc: item.desc || '',
-          rawText: item.rawText || '',
-        };
-      } catch { /* JSON parse failed, try regex fallback */ }
-    }
-
-    // Regex 降级提取
-    const descMatch = html.match(/"desc"\s*:\s*"([^"]+)"/);
-    return descMatch ? { desc: descMatch[1] } : null;
-  } catch {
-    return null;
+    if (stderr && !stdout) throw new Error(stderr.substring(0, 500));
+    return JSON.parse(stdout) as DouyinAwemeData;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 }
 
-// ── ASR 转写（Supabase 临时上传 → DashScope Paraformer） ──
+// ── 快速路径：仅获取描述（不下载视频） ──
+
+async function fetchDescOnly(videoUrl: string): Promise<string> {
+  const python = await getDouyinPython();
+  const tmpDir = await mkdtemp(join(tmpdir(), 'dy-fast-'));
+  const pyScript = `
+import json, sys
+from douyin_cli.douyin import Douyin
+
+desc = [""]
+def collect(items, _type):
+    for item in items:
+        desc[0] = item.get("desc", "") or ""
+        break
+
+try:
+    douyin = Douyin(
+        target=${JSON.stringify(videoUrl)},
+        limit=1,
+        type="aweme",
+        down_path=${JSON.stringify(tmpDir)},
+        on_new_items=collect,
+    )
+    douyin.run()
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
+    sys.exit(0)
+
+print(json.dumps({"desc": desc[0]}))
+`;
+  const scriptPath = join(tmpDir, 'desc.py');
+  await writeFile(scriptPath, pyScript);
+
+  try {
+    const { stdout } = await execAsync(`${python} "${scriptPath}"`, { timeout: 30000, maxBuffer: 1024 * 1024 });
+    const data = JSON.parse(stdout);
+    return data.desc || '';
+  } catch {
+    return '';
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// ── ASR 转写 ──
 
 async function recognizeAudioFile(audioPath: string): Promise<string> {
   const apiKey = getDashScopeApiKey();
@@ -104,7 +186,6 @@ async function recognizeAudioFile(audioPath: string): Promise<string> {
     const taskId = submitData.output?.task_id;
     if (!taskId) throw new Error('未获取到 ASR 任务 ID');
 
-    // 轮询结果（最长 2 分钟）
     for (let i = 0; i < 30; i++) {
       const pollRes = await fetch(
         `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
@@ -132,12 +213,11 @@ async function recognizeAudioFile(audioPath: string): Promise<string> {
     }
     throw new Error('ASR 转写超时（2 分钟）');
   } finally {
-    // 清理 Supabase 上的临时音频文件
     await supabase.storage.from('lingji-media').remove([storageKey]).catch(() => {});
   }
 }
 
-// ── 下载 + 提取音频 + ASR ──
+// ── 单视频提取 ──
 
 interface ExtractResult {
   success: boolean;
@@ -147,79 +227,54 @@ interface ExtractResult {
   error?: string;
 }
 
-async function extractSingleVideo(url: string): Promise<ExtractResult> {
+async function extractSingleVideo(url: string, fastOnly: boolean): Promise<ExtractResult> {
   let tmpDir: string | null = null;
 
   try {
-    // 1. 解析视频 ID
-    const vidMatch = url.match(/\/video\/(\d+)/) || url.match(/\/share\/video\/(\d+)/);
-    const videoId = vidMatch?.[1];
-    if (!videoId) {
-      // 尝试跟随重定向获取真实 URL
-      try {
-        const probe = await fetch(url, {
-          headers: { 'User-Agent': UA },
-          redirect: 'follow',
-          signal: AbortSignal.timeout(8000),
-        });
-        const finalUrl = probe.url || url;
-        const fvMatch = finalUrl.match(/\/video\/(\d+)/) || finalUrl.match(/\/share\/video\/(\d+)/);
-        const fvId = fvMatch?.[1];
-        if (fvId) {
-          // 递归调用自己，用解析出的完整 URL
-          return extractSingleVideo(`https://www.douyin.com/video/${fvId}`);
-        }
-      } catch { /* 继续 */ }
-      return { success: false, method: 'direct', error: '无法从链接中解析视频 ID' };
-    }
-
-    // 2. 快速路径：直接从 SSR 页面提取描述文案
-    const pageData = await extractFromSSRPage(videoId);
-    const title = pageData?.desc || '';
-
-    // 3. 下载视频（使用 iesdouyin SSR 解析拿到直链）
-    const ssrUrl = `https://www.iesdouyin.com/share/video/${videoId}/?app=douyin_select`;
-    const pageRes = await fetch(ssrUrl, {
-      headers: { 'User-Agent': UA, Accept: 'text/html', 'Accept-Language': 'zh-CN' },
-      signal: AbortSignal.timeout(15000),
-    });
-    const html = await pageRes.text();
-
-    const urlMatch = html.match(
-      /"play_addr":\{"uri":"[^"]*","url_list":\["(https:\\u002F\\u002F[^"]+)"/
-    );
-    if (!urlMatch) {
+    if (fastOnly) {
+      const desc = await fetchDescOnly(url);
       return {
-        success: !!title,
-        title,
-        transcript: title,
+        success: !!desc,
+        title: desc,
+        transcript: desc,
         method: 'direct',
-        error: title ? undefined : '无法从页面解析视频地址',
+        error: desc ? undefined : '未提取到描述',
       };
     }
 
-    let videoUrl = urlMatch[1].replace(/\\u002F/g, '/');
-
-    // 4. 下载视频
+    // 主路径：douyin-cli 下载视频
     tmpDir = await mkdtemp(join(tmpdir(), 'dy-trans-'));
-    const videoPath = join(tmpDir, 'video.mp4');
-    const videoRes = await fetch(videoUrl, {
-      headers: { 'User-Agent': UA, Referer: 'https://www.iesdouyin.com/' },
-      signal: AbortSignal.timeout(60000),
-    });
-    if (!videoRes.ok) throw new Error(`视频下载失败: HTTP ${videoRes.status}`);
+    const data = await fetchViaDouyinCLI(url, tmpDir);
 
-    const buffer = Buffer.from(await videoRes.arrayBuffer());
-    await writeFile(videoPath, buffer);
+    if (data.error) {
+      // 降级：只提取描述
+      if (data.desc) {
+        return { success: true, title: data.desc, transcript: data.desc, method: 'direct' };
+      }
+      return { success: false, method: 'direct', error: data.error };
+    }
 
-    // 5. ffmpeg 提取音频
+    const title = data.desc || '';
+    const videoPath = data.videoPath;
+
+    if (!videoPath) {
+      return {
+        success: !!title,
+        title,
+        transcript: title || '',
+        method: 'direct',
+        error: title ? undefined : '视频下载失败，未找到文件',
+      };
+    }
+
+    // ffmpeg 提取音频
     const audioPath = join(tmpDir, 'audio.mp3');
     await execAsync(
       `ffmpeg -i "${videoPath}" -vn -acodec mp3 -q:a 3 -y "${audioPath}" 2>&1`,
       { timeout: 60000 }
     );
 
-    // 6. DashScope ASR 识别
+    // ASR 识别
     const transcript = await recognizeAudioFile(audioPath);
 
     return {
@@ -266,7 +321,7 @@ export const douyinTranscriptTool: ToolDefinition = {
 - 单个视频链接（https://v.douyin.com/xxx 或 https://www.douyin.com/video/xxx）
 - 含链接的分享文本（自动从中提取链接）
 - 多个视频链接，批量提取
-底层：iesdouyin SSR 页面解析 + ffmpeg 音频提取 + DashScope Paraformer ASR 语音识别。`,
+底层：douyin-cli 下载视频 + ffmpeg 音频提取 + DashScope Paraformer ASR 语音识别。`,
   parameters: {
     type: 'object',
     properties: {
@@ -306,24 +361,8 @@ export const douyinTranscriptTool: ToolDefinition = {
 
     const results: ExtractResult[] = [];
     for (const url of urls) {
-      if (fastOnly) {
-        const vidMatch = url.match(/\/video\/(\d+)/) || url.match(/\/share\/video\/(\d+)/);
-        if (vidMatch?.[1]) {
-          const pageData = await extractFromSSRPage(vidMatch[1]);
-          results.push({
-            success: !!pageData?.desc,
-            title: pageData?.desc || '',
-            transcript: pageData?.desc || '',
-            method: 'direct',
-            error: pageData?.desc ? undefined : '未提取到描述',
-          });
-        } else {
-          results.push({ success: false, method: 'direct', error: '无法解析视频 ID' });
-        }
-      } else {
-        const result = await extractSingleVideo(url);
-        results.push(result);
-      }
+      const result = await extractSingleVideo(url, fastOnly);
+      results.push(result);
     }
 
     // 格式化输出
@@ -339,7 +378,11 @@ export const douyinTranscriptTool: ToolDefinition = {
         '',
         `【来源】${urls[0]}`,
       ];
-      return { success: true, output: lines.join('\n'), data: { title: r.title, transcript: r.transcript, method: r.method } };
+      return {
+        success: true,
+        output: lines.join('\n'),
+        data: { title: r.title, transcript: r.transcript, method: r.method },
+      };
     }
 
     // 批量结果
