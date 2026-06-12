@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Zap, ChevronDown, ChevronUp, Download, FolderOpen, RefreshCw, Share2, Mic, Grid3x3, Layers,
   ChevronLeft, AlertCircle, Loader2, CheckCircle2, XCircle,
-  Settings, Wand2, Sparkles, ImageIcon, Upload, X, Link2, Music,
+  Settings, Wand2, Sparkles, ImageIcon, Music,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -79,7 +79,7 @@ const bgmOptions = [
 const subtitleStyles = ['白色粗体', '黄色描边', '黑底白字', '渐变彩色'];
 const subtitlePositions = ['底部', '中部', '顶部'];
 
-const STEPS = ['确定方向', '分镜预览', '首帧生成', '视频生成'];
+const STEPS = ['创作方向', '分镜脚本', '生成成片'];
 
 const stylePresets = Object.entries(STYLE_PRESETS);
 
@@ -565,248 +565,6 @@ function AIVideoContent() {
         />
       </GlassCard>
 
-      {/* 首帧图片（关键：图生视频入口） */}
-      <GlassCard>
-        <div className="flex items-center justify-between mb-2">
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
-            <span style={{ color: '#F59E0B' }}>首帧</span> · 视频起始画面
-            <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>（可作为图生视频的素材）</span>
-          </p>
-          {firstFrameUrl && (
-            <button
-              onClick={() => setFirstFrameUrl(null)}
-              className="text-xs flex items-center gap-1 px-2 py-0.5 rounded"
-              style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}
-            >
-              <X size={11} /> 清除
-            </button>
-          )}
-        </div>
-
-        {/* 已选首帧预览 */}
-        {firstFrameUrl && (
-          <div
-            className="mb-3 rounded-xl overflow-hidden"
-            style={{
-              background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(139,92,246,0.15))',
-              border: '1px solid rgba(245,158,11,0.3)',
-              aspectRatio: '16/9',
-              maxHeight: 200,
-            }}
-          >
-            <img src={firstFrameUrl} alt="首帧" className="w-full h-full object-cover" />
-          </div>
-        )}
-
-        {/* 三个 tab */}
-        <div className="flex rounded-lg overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.05)' }}>
-          {([
-            { key: 'inspiration' as const, label: '灵感库', icon: '📚' },
-            { key: 'url' as const, label: 'URL', icon: '🔗' },
-            { key: 'upload' as const, label: '上传', icon: '📤' },
-          ]).map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => setFirstFrameTab(key)}
-              className="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition-all"
-              style={{
-                background: firstFrameTab === key ? 'rgba(245,158,11,0.2)' : 'transparent',
-                color: firstFrameTab === key ? '#FCD34D' : '#9CA3AF',
-                fontWeight: firstFrameTab === key ? 600 : 400,
-              }}
-            >
-              <span>{icon}</span> {label}
-            </button>
-          ))}
-        </div>
-
-        {firstFrameTab === 'inspiration' && (
-          <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
-            {inspirationsLoading ? (
-              <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 8 }}>加载中...</p>
-            ) : inspirations.filter((i) => i.type === 'image' && i.media_urls && i.media_urls.length > 0).length === 0 ? (
-              <p style={{ color: '#6B7280', fontSize: 11, textAlign: 'center', padding: 8 }}>暂无图片灵感</p>
-            ) : (
-              inspirations
-                .filter((i) => i.type === 'image' && i.media_urls && i.media_urls.length > 0)
-                .map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setFirstFrameUrl(item.media_urls![0])}
-                    className="flex items-center gap-2 p-1.5 rounded-lg cursor-pointer"
-                    style={{
-                      background: firstFrameUrl === item.media_urls![0] ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-                      border: firstFrameUrl === item.media_urls![0] ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                    }}
-                  >
-                    <img src={item.media_urls![0]} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
-                    <span style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate flex-1">
-                      {item.title || '未命名'}
-                    </span>
-                    {firstFrameUrl === item.media_urls![0] && <CheckCircle2 size={12} color="#FCD34D" />}
-                  </div>
-                ))
-            )}
-          </div>
-        )}
-
-        {firstFrameTab === 'url' && (
-          <div>
-            <div className="flex gap-1.5">
-              <input
-                value={firstFrameInput}
-                onChange={(e) => setFirstFrameInput(e.target.value)}
-                placeholder="https://... 图片 URL"
-                className="flex-1 px-2.5 py-2 rounded-lg text-xs bg-transparent outline-none"
-                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-              />
-              <button
-                onClick={() => { if (firstFrameInput.trim()) setFirstFrameUrl(firstFrameInput.trim()); }}
-                className="px-3 py-1.5 rounded-lg text-xs"
-                style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)' }}
-              >
-                <Link2 size={11} className="inline mr-0.5" /> 应用
-              </button>
-            </div>
-            {firstFrameUrl && firstFrameTab === 'url' && (
-              <p style={{ color: '#FCD34D', fontSize: 10, marginTop: 4 }} className="truncate">
-                ✓ 已设置：{firstFrameUrl.slice(0, 60)}...
-              </p>
-            )}
-          </div>
-        )}
-
-        {firstFrameTab === 'upload' && (
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                // 简单方案：用 FileReader 读为 data URL
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const dataUrl = ev.target?.result as string;
-                  setFirstFrameUrl(dataUrl);
-                  setToast({ message: '已加载本地图片', type: 'success' });
-                };
-                reader.readAsDataURL(file);
-              }}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3 rounded-lg text-xs flex items-center justify-center gap-1.5"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', color: '#9CA3AF' }}
-            >
-              <Upload size={14} /> 点击选择本地图片
-            </button>
-          </div>
-        )}
-      </GlassCard>
-
-      {/* 多首尾帧模式（高级：首帧 + 尾帧 + 中间关键帧） */}
-      <GlassCard>
-        <div className="flex items-center justify-between mb-2">
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
-            <span style={{ color: '#A78BFA' }}>多帧</span> · 首尾帧 + 关键帧
-            <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 6 }}>
-              (可选 · 适合产品 360° / 分镜衔接)
-            </span>
-          </p>
-          <button
-            onClick={() => setMultiFrameMode(!multiFrameMode)}
-            className="px-2.5 py-1 rounded-lg text-xs"
-            style={{
-              background: multiFrameMode ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.05)',
-              border: multiFrameMode ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)',
-              color: multiFrameMode ? '#C4B5FD' : '#9CA3AF',
-            }}
-          >
-            {multiFrameMode ? '✓ 启用' : '启用'}
-          </button>
-        </div>
-
-        {multiFrameMode && (
-          <div className="space-y-2 mt-3">
-            <p style={{ color: '#9CA3AF', fontSize: 10, lineHeight: 1.6 }}>
-              ✨ 多帧模式会用首张 + 末张作起止画面,中间帧作参考。适合:产品 360° 展示、人物多角度切换、场景过渡。
-              <span style={{ color: '#FBBF24' }}>注意:中间关键帧不限制张数,但会按 ¥0.4-0.8/秒 计费</span>
-            </p>
-
-            <div>
-              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>尾帧 URL（视频最后一帧）</p>
-              <input
-                value={lastFrameUrl}
-                onChange={(e) => setLastFrameUrl(e.target.value)}
-                placeholder="https://... 末帧图片 URL（可与首帧选同一张）"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none"
-                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-              />
-              {lastFrameUrl && (
-                <div className="mt-1.5">
-                  <img src={lastFrameUrl} alt="尾帧" className="w-full h-20 object-cover rounded-lg"
-                    onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>中间关键帧 URL（可选,逗号或换行分隔）</p>
-              <textarea
-                value={extraFramesText}
-                onChange={(e) => setExtraFramesText(e.target.value)}
-                placeholder={'https://...中间帧1\nhttps://...中间帧2\n（最多 5 张）'}
-                rows={3}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-transparent text-xs outline-none resize-none"
-                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-              />
-              {(() => {
-                const urls = extraFramesText.split(/[,\n]/).map((s) => s.trim()).filter((s) => s.startsWith('http'));
-                if (urls.length > 5) {
-                  return <p style={{ color: '#FCA5A5', fontSize: 10, marginTop: 2 }}>最多 5 张,已自动取前 5 张</p>;
-                }
-                if (urls.length > 0) {
-                  return <p style={{ color: '#86EFAC', fontSize: 10, marginTop: 2 }}>已识别 {urls.length} 张关键帧</p>;
-                }
-                return null;
-              })()}
-            </div>
-
-            <div className="flex items-center gap-1.5 mt-1">
-              <span style={{ color: '#6B7280', fontSize: 10 }}>预览：</span>
-              <div className="flex gap-1 flex-1 overflow-x-auto">
-                {firstFrameUrl && (
-                  <div className="flex flex-col items-center">
-                    <img src={firstFrameUrl} className="w-12 h-12 object-cover rounded" alt="首" />
-                    <span style={{ fontSize: 9, color: '#9CA3AF' }}>首</span>
-                  </div>
-                )}
-                {(() => {
-                  const urls = extraFramesText.split(/[,\n]/).map((s) => s.trim()).filter((s) => s.startsWith('http')).slice(0, 5);
-                  return urls.map((u, i) => (
-                    <div key={i} className="flex flex-col items-center">
-                      <img src={u} className="w-12 h-12 object-cover rounded" alt={`关键${i+1}`}
-                        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
-                      <span style={{ fontSize: 9, color: '#A78BFA' }}>关键{i + 1}</span>
-                    </div>
-                  ));
-                })()}
-                {lastFrameUrl && (
-                  <div className="flex flex-col items-center">
-                    <img src={lastFrameUrl} className="w-12 h-12 object-cover rounded" alt="尾"
-                      onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
-                    <span style={{ fontSize: 9, color: '#FCA5A5' }}>尾</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </GlassCard>
-
       {/* 素材选择 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
@@ -1005,117 +763,6 @@ function AIVideoContent() {
         <Sparkles size={16} /> {isGenerating ? '生成中...' : 'AI 生成分镜'}
       </PrimaryButton>
 
-      {/* 动态图形 · HyperFrames Beta */}
-      <div className="mt-6 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12, textAlign: 'center', letterSpacing: 2 }}>
-          ── 或 ──
-        </p>
-      </div>
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-          <span style={{ color: '#A78BFA' }}>动态图形</span> · 文字动画视频
-          <span style={{
-            background: 'rgba(168,85,247,0.2)',
-            color: '#C4B5FD',
-            fontSize: 9,
-            fontWeight: 700,
-            padding: '2px 6px',
-            borderRadius: 6,
-            marginLeft: 8,
-            verticalAlign: 'middle',
-          }}>Beta</span>
-        </p>
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12, lineHeight: 1.5 }}>
-          输入脚本，AI 自动生成 HTML+GSAP 动画并渲染为竖屏视频。适合产品介绍、社交媒体、知识讲解。
-        </p>
-
-        {/* 风格选择 */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {([
-            { key: 'product' as const, label: '产品展示', icon: '✨', desc: '卖点弹入 + CTA' },
-            { key: 'social' as const, label: '社交媒体', icon: '🔥', desc: '大字报 · 快节奏' },
-            { key: 'slide' as const, label: '知识讲解', icon: '📚', desc: '逐页幻灯片' },
-          ]).map(({ key, label, icon, desc }) => (
-            <button
-              key={key}
-              onClick={() => setHfStyle(key)}
-              className="flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all"
-              style={{
-                background: hfStyle === key ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)',
-                border: hfStyle === key ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(255,255,255,0.1)',
-              }}
-            >
-              <span style={{ fontSize: 18 }}>{icon}</span>
-              <span style={{ color: hfStyle === key ? '#C4B5FD' : '#E5E7EB', fontSize: 11, fontWeight: 600 }}>{label}</span>
-              <span style={{ color: '#9CA3AF', fontSize: 9 }}>{desc}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* 脚本输入 */}
-        <textarea
-          value={hfScript}
-          onChange={(e) => setHfScript(e.target.value)}
-          placeholder={'输入你的脚本内容，例如：\n\n"XX 品牌新品发布，主打轻薄续航卖点，\n目标用户是年轻白领女性，限时优惠中..."\n\nAI 会自动拆分为分镜并生成动画'}
-          rows={4}
-          className="w-full px-3 py-2.5 rounded-xl bg-transparent text-xs outline-none resize-none mb-3"
-          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}
-        />
-
-        {/* 生成按钮 */}
-        {!hfVideoUrl ? (
-          <button
-            onClick={handleHyperFramesGenerate}
-            disabled={hfGenerating || !hfScript.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all"
-            style={{
-              background: hfGenerating ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, #8B5CF6, #A855F7)',
-              color: '#FFFFFF',
-              opacity: (!hfScript.trim() || hfGenerating) ? 0.6 : 1,
-              boxShadow: '0 4px 20px rgba(139,92,246,0.3)',
-            }}
-          >
-            {hfGenerating ? (
-              <><Loader2 size={14} className="animate-spin" /> 渲染中...约 2 分钟</>
-            ) : (
-              <><Wand2 size={14} /> 生成动态图形 · {CREDIT_COSTS.ai_hyperframes.perVideo} 灵力</>
-            )}
-          </button>
-        ) : (
-          /* 生成完成 */
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 p-2 rounded-lg"
-              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
-              <CheckCircle2 size={14} color="#22C55E" />
-              <span style={{ color: '#86EFAC', fontSize: 12 }}>生成完成</span>
-            </div>
-            <video src={hfVideoUrl} controls playsInline
-              className="w-full rounded-xl" style={{ background: '#000', maxHeight: 320 }} />
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={handleHfDownload}
-                className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
-                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
-                <Download size={12} /> 下载
-              </button>
-              <button onClick={handleHfSave}
-                className="flex items-center justify-center gap-1 py-2 rounded-lg text-xs"
-                style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#86EFAC' }}>
-                <FolderOpen size={12} /> 保存作品
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 错误提示 */}
-        {hfError && (
-          <div className="flex items-center gap-2 mt-2 p-2 rounded-lg"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <XCircle size={12} color="#EF4444" />
-            <span style={{ color: '#FCA5A5', fontSize: 11 }}>{hfError}</span>
-          </div>
-        )}
-      </GlassCard>
     </>
   );
 
@@ -1206,233 +853,19 @@ function AIVideoContent() {
         </GlassCard>
       )}
 
-      {/* 后期配置：BGM + 字幕（实做） */}
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#EC4899' }}>后期</span> · BGM 与字幕
-          <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>（已配置真实音频）</span>
-        </p>
-
-        {/* BGM 选择 */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Music size={13} color="#EC4899" />
-            <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600 }}>背景音乐</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {bgmOptions.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setBgmStyle(b.id)}
-                className="flex flex-col items-center gap-1.5 py-2.5 rounded-lg transition-all"
-                style={{
-                  background: bgmStyle === b.id ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.05)',
-                  border: bgmStyle === b.id ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                <div className="flex items-end gap-0.5 h-4">
-                  {b.wave.map((v, i) => (
-                    <div key={i} className="w-0.5 rounded-full" style={{
-                      height: v * 1.5,
-                      background: bgmStyle === b.id ? '#F472B6' : '#6B7280',
-                    }} />
-                  ))}
-                </div>
-                <span style={{ color: bgmStyle === b.id ? '#FBCFE8' : '#E5E7EB', fontSize: 11, fontWeight: 600 }}>{b.label}</span>
-              </button>
-            ))}
-          </div>
-          {/* 试听按钮(AI 自动模式不显示,合并时会智能选择) */}
-          {bgmStyle && bgmStyle !== 'auto' && (
-            <audio
-              key={bgmStyle}
-              controls
-              preload="none"
-              src={`/bgm/${bgmStyle}.mp3`}
-              className="w-full mt-2"
-              style={{ height: 32 }}
-            />
-          )}
-          {bgmStyle === 'auto' && (
-            <p style={{ color: '#FBBF24', fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
-              ✨ AI 将根据主题「{topic || '(未填)'}」自动匹配最合适的 BGM 风格
-            </p>
-          )}
-        </div>
-
-        {/* 字幕样式 */}
-        <div className="mb-3">
-          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>字幕样式</p>
-          <div className="grid grid-cols-4 gap-1.5">
-            {subtitleStyles.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSubtitleStyle(s)}
-                className="py-1.5 rounded text-[11px] transition-all"
-                style={{
-                  background: subtitleStyle === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                  border: subtitleStyle === s ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  color: subtitleStyle === s ? '#93C5FD' : '#9CA3AF',
-                }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 字幕位置 */}
-        <div>
-          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>字幕位置</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {subtitlePositions.map((p) => (
-              <button
-                key={p}
-                onClick={() => setSubtitlePos(p)}
-                className="py-1.5 rounded text-[11px] transition-all"
-                style={{
-                  background: subtitlePos === p ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                  border: subtitlePos === p ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  color: subtitlePos === p ? '#93C5FD' : '#9CA3AF',
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      </GlassCard>
-
       {/* 操作按钮 */}
       <div className="flex gap-3">
         <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(1)}>
           <ChevronLeft size={16} /> 上一步
         </PrimaryButton>
         <PrimaryButton fullWidth size="md" onClick={() => setCurrentStep(3)}>
-          <ImageIcon size={16} /> 下一步：生成首帧
+          <Zap size={16} /> 下一步：生成视频
         </PrimaryButton>
       </div>
     </>
   );
 
   const renderStep3 = () => (
-    <>
-      {/* 首帧生成卡片 */}
-      <GlassCard>
-        <div className="flex items-center justify-between mb-3">
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
-            <span style={{ color: '#F59E0B' }}>首帧</span> · 为每段分镜生成画面
-          </p>
-          {storyboard.length > 0 && (
-            <button
-              onClick={() => handleGenerateFrames()}
-              disabled={generatingFrameIndices.size > 0}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs"
-              style={{
-                background: 'rgba(245,158,11,0.15)',
-                border: '1px solid rgba(245,158,11,0.3)',
-                color: '#FCD34D',
-                opacity: generatingFrameIndices.size > 0 ? 0.5 : 1,
-              }}
-            >
-              <Sparkles size={11} /> 全部生成
-            </button>
-          )}
-        </div>
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 12 }}>
-          首帧将作为图生视频的起始画面，不满意可重新生成
-        </p>
-        {generatingFrameIndices.size > 0 && (
-          <p style={{ color: '#FCD34D', fontSize: 11, marginBottom: 12 }}>
-            <Loader2 size={11} className="inline animate-spin mr-1" />
-            正在生成首帧 {generatingFrameIndices.size} 张...
-          </p>
-        )}
-        <div className="space-y-3">
-          {storyboard.map((scene) => {
-            const hasFrame = !!sceneFrames[scene.index];
-            const isGenerating = generatingFrameIndices.has(scene.index);
-            return (
-              <div key={scene.index}
-                className="p-3 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-0.5 rounded text-xs font-bold"
-                    style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D' }}>
-                    段{scene.index + 1}
-                  </span>
-                  <span style={{ color: '#F59E0B', fontSize: 11 }}>{scene.duration}秒</span>
-                </div>
-                <p style={{ color: '#E5E7EB', fontSize: 11, marginBottom: 2, lineHeight: 1.5 }}
-                  className="line-clamp-2">
-                  {scene.visualPrompt}
-                </p>
-                {scene.subtitle && (
-                  <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 8 }}>{scene.subtitle}</p>
-                )}
-
-                {/* 已生成的首帧预览 */}
-                {hasFrame && (
-                  <div className="mb-2 rounded-lg overflow-hidden"
-                    style={{ border: '1px solid rgba(245,158,11,0.3)', aspectRatio: '16/9', maxHeight: 180 }}>
-                    <img src={sceneFrames[scene.index]?.imageUrl} alt={`段${scene.index + 1} 首帧`}
-                      className="w-full h-full object-cover" />
-                  </div>
-                )}
-
-                {/* 生成中 */}
-                {isGenerating && (
-                  <div className="flex items-center justify-center gap-2 py-4 mb-2 rounded-lg"
-                    style={{ background: 'rgba(245,158,11,0.08)', border: '1px dashed rgba(245,158,11,0.2)' }}>
-                    <Loader2 size={14} className="animate-spin" color="#FCD34D" />
-                    <span style={{ color: '#FCD34D', fontSize: 11 }}>生成中...</span>
-                  </div>
-                )}
-
-                {/* 操作按钮 */}
-                <button
-                  onClick={() => handleGenerateFrames([scene.index])}
-                  disabled={isGenerating}
-                  className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-xs transition-all"
-                  style={{
-                    background: hasFrame ? 'rgba(139,92,246,0.12)' : 'rgba(245,158,11,0.12)',
-                    border: hasFrame ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(245,158,11,0.3)',
-                    color: hasFrame ? '#C4B5FD' : '#FCD34D',
-                    opacity: isGenerating ? 0.5 : 1,
-                  }}
-                >
-                  {isGenerating ? (
-                    <><Loader2 size={11} className="animate-spin" /> 生成中...</>
-                  ) : hasFrame ? (
-                    <><RefreshCw size={11} /> 重新生成</>
-                  ) : (
-                    <><ImageIcon size={11} /> 生成首帧</>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </GlassCard>
-
-      {/* 操作按钮 */}
-      <div className="flex gap-3">
-        <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(2)}>
-          <ChevronLeft size={16} /> 上一步
-        </PrimaryButton>
-        <PrimaryButton fullWidth size="md"
-          onClick={() => { setCurrentStep(4); submitGenerate(); }}
-          disabled={Object.keys(sceneFrames).length === 0 && storyboard.length > 0}>
-          <Zap size={16} />
-          {Object.keys(sceneFrames).length > 0
-            ? `开始生成视频 (${Object.keys(sceneFrames).length}/${storyboard.length} 段有首帧)`
-            : '跳过首帧，直接生成视频'}
-        </PrimaryButton>
-      </div>
-    </>
-  );
-
-  const renderStep4 = () => (
     <GlassCard>
       {genPhase === 'idle' ? (
         (() => {
@@ -1453,6 +886,111 @@ function AIVideoContent() {
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#3B82F6' }}>确认</span> · 生成参数
           </p>
+
+          {/* 首帧图片（折叠） */}
+          <details className="mb-3 rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <summary className="px-3 py-2.5 cursor-pointer" style={{ color: '#F59E0B', fontSize: 13, fontWeight: 600, listStyle: 'none' }}>
+              <span className="flex items-center gap-1.5">
+                <ImageIcon size={14} /> 首帧图片（图生视频）{firstFrameUrl ? ' ✓ 已设置' : ''}
+                <span style={{ color: '#6B7280', fontSize: 10, fontWeight: 400, marginLeft: 4 }}>可选 · 展开设置</span>
+              </span>
+            </summary>
+            <div className="px-3 pb-3 space-y-2">
+              {firstFrameUrl && (
+                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(245,158,11,0.3)', aspectRatio: '16/9', maxHeight: 160 }}>
+                  <img src={firstFrameUrl} alt="首帧" className="w-full h-full object-cover" />
+                  <button onClick={() => setFirstFrameUrl(null)} className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: '#FCA5A5', fontSize: 10 }}>✕</button>
+                </div>
+              )}
+              <div className="flex rounded-lg overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                {([
+                  { key: 'inspiration' as const, label: '灵感库', icon: '📚' },
+                  { key: 'url' as const, label: 'URL', icon: '🔗' },
+                ]).map(({ key, label, icon }) => (
+                  <button key={key} onClick={() => setFirstFrameTab(key)}
+                    className="flex-1 py-1.5 text-xs flex items-center justify-center gap-1"
+                    style={{ background: firstFrameTab === key ? 'rgba(245,158,11,0.2)' : 'transparent', color: firstFrameTab === key ? '#FCD34D' : '#9CA3AF' }}>
+                    <span>{icon}</span> {label}
+                  </button>
+                ))}
+              </div>
+              {firstFrameTab === 'inspiration' && (
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {inspirations.filter((i) => i.type === 'image' && i.media_urls?.length).length === 0 ? (
+                    <p style={{ color: '#6B7280', fontSize: 10, textAlign: 'center', padding: 4 }}>暂无图片灵感</p>
+                  ) : (
+                    inspirations.filter((i) => i.type === 'image' && i.media_urls?.length).slice(0, 6).map((item) => (
+                      <div key={item.id} onClick={() => setFirstFrameUrl(item.media_urls![0])}
+                        className="flex items-center gap-1.5 p-1 rounded cursor-pointer"
+                        style={{ background: firstFrameUrl === item.media_urls![0] ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.03)' }}>
+                        <img src={item.media_urls![0]} alt="" className="w-8 h-8 rounded object-cover" />
+                        <span style={{ color: '#E5E7EB', fontSize: 10 }} className="truncate flex-1">{item.title || '未命名'}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+              {firstFrameTab === 'url' && (
+                <div className="flex gap-1.5">
+                  <input value={firstFrameInput} onChange={(e) => setFirstFrameInput(e.target.value)} placeholder="https://... 图片 URL"
+                    className="flex-1 px-2 py-1.5 rounded text-xs bg-transparent outline-none"
+                    style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <button onClick={() => { if (firstFrameInput.trim()) setFirstFrameUrl(firstFrameInput.trim()); }}
+                    className="px-2.5 py-1 rounded text-xs"
+                    style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D' }}>应用</button>
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* BGM + 字幕 */}
+          <GlassCard>
+            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+              <span style={{ color: '#EC4899' }}>后期</span> · BGM 与字幕
+            </p>
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Music size={12} color="#EC4899" />
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600 }}>背景音乐</p>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {bgmOptions.map((b) => (
+                  <button key={b.id} onClick={() => setBgmStyle(b.id)}
+                    className="flex flex-col items-center gap-1 py-2 rounded-lg transition-all"
+                    style={{ background: bgmStyle === b.id ? 'rgba(236,72,153,0.2)' : 'rgba(255,255,255,0.05)', border: bgmStyle === b.id ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="flex items-end gap-0.5 h-3">
+                      {b.wave.map((v, i) => (<div key={i} className="w-0.5 rounded-full" style={{ height: v * 1.2, background: bgmStyle === b.id ? '#F472B6' : '#6B7280' }} />))}
+                    </div>
+                    <span style={{ color: bgmStyle === b.id ? '#FBCFE8' : '#E5E7EB', fontSize: 10, fontWeight: 600 }}>{b.label}</span>
+                  </button>
+                ))}
+              </div>
+              {bgmStyle && bgmStyle !== 'auto' && <audio key={bgmStyle} controls preload="none" src={`/bgm/${bgmStyle}.mp3`} className="w-full mt-1.5" style={{ height: 28 }} />}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p style={{ color: '#9CA3AF', fontSize: 10, fontWeight: 600, marginBottom: 4 }}>字幕样式</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {subtitleStyles.map((s) => (
+                    <button key={s} onClick={() => setSubtitleStyle(s)}
+                      className="py-1 rounded text-[10px]"
+                      style={{ background: subtitleStyle === s ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)', border: subtitleStyle === s ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)', color: subtitleStyle === s ? '#93C5FD' : '#9CA3AF' }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p style={{ color: '#9CA3AF', fontSize: 10, fontWeight: 600, marginBottom: 4 }}>字幕位置</p>
+                <div className="grid grid-cols-1 gap-1">
+                  {subtitlePositions.map((p) => (
+                    <button key={p} onClick={() => setSubtitlePos(p)}
+                      className="py-1 rounded text-[10px]"
+                      style={{ background: subtitlePos === p ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)', border: subtitlePos === p ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.1)', color: subtitlePos === p ? '#93C5FD' : '#9CA3AF' }}>{p}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </GlassCard>
 
           {/* 灵力消耗估算 */}
           <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
@@ -1509,7 +1047,7 @@ function AIVideoContent() {
             ))}
           </div>
           <div className="flex gap-3">
-            <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(3)}>
+            <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(2)}>
               <ChevronLeft size={16} /> 上一步
             </PrimaryButton>
             <PrimaryButton fullWidth size="lg" onClick={submitGenerate}>
@@ -1859,21 +1397,7 @@ function AIVideoContent() {
         {/* Step 内容 */}
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
-        {currentStep === 3 && renderStep3()}
-        {currentStep === 4 && genPhase === 'idle' && renderStep4()}
-
-        {/* 生成中 / 生成完成 — 全屏占据 */}
-        {(isGenActive || genPhase === 'done') && (
-          <>
-            {genPhase === 'done' ? (
-              <div className="pt-2">
-                {renderStep4()}
-              </div>
-            ) : (
-              renderStep4()
-            )}
-          </>
-        )}
+        {(currentStep === 3 || isGenActive || genPhase === 'done') && renderStep3()}
       </div>
 
       {/* 历史生成 */}
@@ -1913,6 +1437,71 @@ function AIVideoContent() {
           </div>
         </div>
       )}
+
+      {/* 动态图形 · HyperFrames Beta（独立功能） */}
+      <div className="px-4 mt-8 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+        <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 12, textAlign: 'center', letterSpacing: 2 }}>
+          ── 独立功能 ──
+        </p>
+        <div className="p-4 rounded-2xl" style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)' }}>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 2 }}>
+            <span style={{ color: '#A78BFA' }}>动态图形</span> · 文字动画视频
+            <span style={{
+              background: 'rgba(168,85,247,0.2)', color: '#C4B5FD', fontSize: 9, fontWeight: 700,
+              padding: '2px 6px', borderRadius: 6, marginLeft: 8, verticalAlign: 'middle',
+            }}>Beta</span>
+          </p>
+          <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 10, lineHeight: 1.5 }}>
+            输入脚本，AI 自动生成 HTML+GSAP 动画并渲染为竖屏视频。适合产品介绍、社交媒体、知识讲解。
+          </p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {([
+              { key: 'product' as const, label: '产品展示', icon: '✨' },
+              { key: 'social' as const, label: '社交媒体', icon: '🔥' },
+              { key: 'slide' as const, label: '知识讲解', icon: '📚' },
+            ]).map(({ key, label, icon }) => (
+              <button key={key} onClick={() => setHfStyle(key)}
+                className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
+                style={{ background: hfStyle === key ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)', border: hfStyle === key ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ fontSize: 16 }}>{icon}</span>
+                <span style={{ color: hfStyle === key ? '#C4B5FD' : '#E5E7EB', fontSize: 10, fontWeight: 600 }}>{label}</span>
+              </button>
+            ))}
+          </div>
+          <textarea value={hfScript} onChange={(e) => setHfScript(e.target.value)}
+            placeholder={'输入脚本内容...\nAI 会自动拆分为分镜并生成动画'}
+            rows={3}
+            className="w-full px-3 py-2 rounded-xl bg-transparent text-xs outline-none resize-none mb-2"
+            style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
+          {!hfVideoUrl ? (
+            <button onClick={handleHyperFramesGenerate} disabled={hfGenerating || !hfScript.trim()}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all"
+              style={{ background: hfGenerating ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, #8B5CF6, #A855F7)', color: '#FFFFFF', opacity: (!hfScript.trim() || hfGenerating) ? 0.6 : 1 }}>
+              {hfGenerating ? <><Loader2 size={14} className="animate-spin" /> 渲染中...</> : <><Wand2 size={14} /> 生成动态图形 · {CREDIT_COSTS.ai_hyperframes.perVideo} 灵力</>}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                <CheckCircle2 size={14} color="#22C55E" /><span style={{ color: '#86EFAC', fontSize: 12 }}>生成完成</span>
+              </div>
+              <video src={hfVideoUrl} controls playsInline className="w-full rounded-xl" style={{ background: '#000', maxHeight: 240 }} />
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={handleHfDownload} className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs"
+                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#93C5FD' }}>
+                  <Download size={12} /> 下载</button>
+                <button onClick={handleHfSave} className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs"
+                  style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#86EFAC' }}>
+                  <FolderOpen size={12} /> 保存作品</button>
+              </div>
+            </div>
+          )}
+          {hfError && (
+            <div className="flex items-center gap-2 mt-2 p-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <XCircle size={12} color="#EF4444" /><span style={{ color: '#FCA5A5', fontSize: 11 }}>{hfError}</span>
+            </div>
+          )}
+        </div>
+      </div>
 
       <BottomNav activePage="ai" onNavigate={handleNavigate} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

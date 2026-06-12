@@ -23,6 +23,7 @@ import { generateAvatarVideoTool } from './avatar-video';
 import { generateAnimateVideoTool } from './animate';
 import { generateEditPlanTool } from './generate-edit-plan';
 import { generateVideoTemplateTool } from './generate-video-template';
+import { searchInternetTool } from './search-internet';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -52,6 +53,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     generateAnimateVideoTool,
     generateEditPlanTool,
     generateVideoTemplateTool,
+    // Agent Reach 多平台搜索
+    searchInternetTool,
   ]);
 }
 
@@ -60,3 +63,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
+export { searchInternetTool };
