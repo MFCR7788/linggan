@@ -26,6 +26,7 @@ import { generateVideoTemplateTool } from './generate-video-template';
 import { searchInternetTool } from './search-internet';
 import { douyinTranscriptTool } from './douyin-transcript';
 import { douyinSearchTool } from './douyin-search';
+import { composeVideoTool } from './compose-video';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -61,6 +62,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     douyinTranscriptTool,
     // 抖音搜索
     douyinSearchTool,
+    // 视频合成（图片+BGM+字幕）
+    composeVideoTool,
   ]);
 }
 
@@ -69,4 +72,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool };
