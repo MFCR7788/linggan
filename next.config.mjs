@@ -4,7 +4,6 @@ const nextConfig = {
     domains: ["fibzvsstxxkdcflvtdzu.supabase.co"],
   },
   experimental: {
-    instrumentationHook: true,
     serverActions: {
       bodySizeLimit: '30mb',
     },
