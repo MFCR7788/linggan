@@ -221,15 +221,42 @@ function InspirationLibraryContent() {
   const dateParams = getDateRange(timeRange);
 
   const isAiFilter = activeFilter === "AI作品";
-  const { data: inspirations, isLoading } = useInspirations({
+
+  // ─── 分页状态 ──────────────────────────────────────────
+  const [page, setPage] = useState(1);
+  const [allItems, setAllItems] = useState<any[]>([]);
+  const PAGE_SIZE = 30;
+
+  const queryParams = {
     type: isAiFilter ? undefined : (typeMap[activeFilter] as any),
-    limit: 50,
+    page,
+    limit: PAGE_SIZE,
     sourcePlatform: isAiFilter ? "ai" : undefined,
     ...dateParams,
     sortBy: SORT_OPTIONS[sortKey].sortBy,
     sortOrder: SORT_OPTIONS[sortKey].sortOrder,
     tagIds: selectedTagIds.size > 0 ? Array.from(selectedTagIds).join(",") : undefined,
-  });
+  };
+
+  const { data: inspirations, isLoading, isFetching } = useInspirations(queryParams);
+
+  // 累计分页数据；筛选条件变化时重置
+  useEffect(() => {
+    setPage(1);
+    setAllItems([]);
+  }, [activeFilter, timeRange, sortKey, selectedTagIds]);
+
+  useEffect(() => {
+    if (!inspirations) return;
+    if (page === 1) {
+      setAllItems(inspirations);
+    } else {
+      setAllItems(prev => [...prev, ...inspirations]);
+    }
+  }, [inspirations, page]);
+
+  const hasMore = inspirations && inspirations.length >= PAGE_SIZE;
+  const loadMore = () => { if (hasMore && !isFetching) setPage(p => p + 1); };
 
   const createInspiration = useCreateInspiration();
   const deleteInspiration = useDeleteInspiration();
@@ -238,7 +265,7 @@ function InspirationLibraryContent() {
 
   const { data: schedules = [] } = useSchedules({ limit: 10 });
 
-  const items = inspirations || [];
+  const items = allItems;
 
   // 按日期分组（用于日历视图）
   const calendarEvents = useMemo(() => {
@@ -1116,6 +1143,29 @@ function InspirationLibraryContent() {
             ))}
           </div>
         ) : null}
+
+        {/* 加载更多 */}
+        {!isLoading && hasMore && (
+          <div className="flex justify-center py-4">
+            <button
+              onClick={loadMore}
+              disabled={isFetching}
+              className="px-6 py-2.5 rounded-xl text-sm font-medium transition-all"
+              style={{
+                background: isFetching ? 'rgba(255,255,255,0.05)' : 'rgba(59,130,246,0.15)',
+                border: '1px solid rgba(59,130,246,0.3)',
+                color: isFetching ? '#6B7280' : '#93C5FD',
+              }}
+            >
+              {isFetching ? '加载中...' : `加载更多 (当前 ${items.length} 条)`}
+            </button>
+          </div>
+        )}
+        {!isLoading && items.length > 0 && !hasMore && (
+          <p style={{ color: '#6B7280', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
+            已加载全部 {items.length} 条记录
+          </p>
+        )}
       </div>
 
       <BottomNav activePage="inspiration" onNavigate={(page) => handleNavigate(page)} />

@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Zap, ChevronRight, Download, Save, RefreshCw,
   Loader2, CheckCircle2, XCircle, Wand2,
-  ImageIcon, Upload, Link, Mic, Music,
+  Upload, Mic, Music,
   FileText, Trash2, Plus, Square, Share2, Video as VideoIcon,
   Sparkles, FolderOpen, UserCircle2, Check,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
+import { MediaPicker } from '@/components/MediaPicker';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -28,15 +29,6 @@ interface VoiceOption {
   label: string;
   id: string;
   language?: string;
-}
-
-interface InspirationItem {
-  id: string | number;
-  title: string;
-  type?: string;
-  media_urls?: string[];
-  original_text?: string;
-  ai_summary?: string;
 }
 
 type DigitalHumanMode = 's2v' | 'animate' | 'avatar';
@@ -116,12 +108,8 @@ function DigitalHumanContent() {
   const [s2vBatchMode, setS2vBatchMode] = useState(false);
 
   // ─── Step 1: 角色图片（所有模式共用）────────────────────
-  const [imageTab, setImageTab] = useState<'upload' | 'inspiration' | 'url'>('upload');
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [inspirations, setInspirations] = useState<InspirationItem[]>([]);
-  const [selectedInspId, setSelectedInspId] = useState<string | null>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // ─── Step 2: 音频 (manual/ai-write/multi-lang 共用) ─────
   const [audioTab, setAudioTab] = useState<'tts' | 'upload'>('tts');
@@ -187,7 +175,6 @@ function DigitalHumanContent() {
       setImageUrl(animatePreset.imageUrl);
       setImagePreview(animatePreset.imagePreview || animatePreset.imageUrl);
       setAnimateRefImageUrl(animatePreset.imageUrl);
-      setImageTab('url');
     }
   }, [dhMode, animatePreset]);
 
@@ -209,7 +196,6 @@ function DigitalHumanContent() {
     if (params.imageUrl) {
       setImageUrl(params.imageUrl);
       setImagePreview(params.imageUrl);
-      setImageTab('url');
     }
     if (params.audioUrl) {
       setAudioUrl(params.audioUrl);
@@ -229,7 +215,6 @@ function DigitalHumanContent() {
     if (h.imageUrl) {
       setImageUrl(h.imageUrl);
       setImagePreview(h.imageUrl);
-      setImageTab('url');
     }
     if (h.audioUrl) {
       setAudioUrl(h.audioUrl);
@@ -278,11 +263,6 @@ function DigitalHumanContent() {
 
   // ─── 初始化 ───────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/inspiration?type=image&limit=30')
-      .then(r => r.json())
-      .then(d => { if (d.success) setInspirations(d.data || []); })
-      .catch(() => {});
-
     fetch('/api/ai/tts')
       .then(r => r.json())
       .then(d => { if (d.success && d.data?.voices) setVoices(d.data.voices); })
@@ -361,36 +341,9 @@ function DigitalHumanContent() {
     return chunks.filter(c => c.length > 0);
   }
 
-  // ─── Step 1: 图片处理 ────────────────────────────────
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploadingImage(true);
-    try {
-      const url = await uploadFile(file, 'image');
-      setImageUrl(url);
-      setImagePreview(url);
-    } catch (err: any) {
-      setToast({ message: err.message || '图片上传失败', type: 'error' });
-    }
-    setIsUploadingImage(false);
-  };
-
-  const handleImageUrlConfirm = () => {
-    if (imageUrl.startsWith('http')) {
-      setImagePreview(imageUrl);
-    } else {
-      setToast({ message: '请输入有效的图片URL', type: 'error' });
-    }
-  };
-
-  const selectInspirationImage = (item: InspirationItem) => {
-    const imgUrl = item.media_urls?.[0];
-    if (imgUrl) {
-      setImageUrl(imgUrl);
-      setImagePreview(imgUrl);
-      setSelectedInspId(String(item.id));
-    }
+  const handleImageSelect = (url: string) => {
+    setImageUrl(url);
+    setImagePreview(url);
   };
 
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1026,99 +979,6 @@ function DigitalHumanContent() {
   // 共用：角色图片选择器
   // ══════════════════════════════════════════════════════════
 
-  const renderImagePicker = (compact = false) => (
-    <GlassCard>
-      {!compact && (
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#06B6D4' }}>Step 1</span> · 选择角色图片
-        </p>
-      )}
-      <div className="flex rounded-lg overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
-        {([
-          { key: 'upload' as const, label: '上传', icon: <Upload size={12} /> },
-          { key: 'inspiration' as const, label: '灵感库', icon: <ImageIcon size={12} /> },
-          { key: 'url' as const, label: '粘贴URL', icon: <Link size={12} /> },
-        ]).map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => setImageTab(key)}
-            className="flex-1 py-2 text-xs flex items-center justify-center gap-1 transition-all"
-            style={{
-              background: imageTab === key ? 'rgba(6,182,212,0.2)' : 'transparent',
-              color: imageTab === key ? '#67E8F9' : '#9CA3AF',
-              fontWeight: imageTab === key ? 600 : 400,
-            }}
-          >
-            {icon} {compact ? '' : label}
-          </button>
-        ))}
-      </div>
-
-      {imageTab === 'upload' && (
-        <div className="text-center py-3">
-          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="dh-img-upload" />
-          <label htmlFor="dh-img-upload" className="flex flex-col items-center gap-2 py-4 px-4 rounded-xl cursor-pointer"
-            style={{ border: '2px dashed rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.03)' }}>
-            {isUploadingImage ? <Loader2 size={20} color="#67E8F9" className="animate-spin" /> : <Upload size={20} color="#67E8F9" />}
-            <span style={{ color: '#9CA3AF', fontSize: 12 }}>{isUploadingImage ? '上传中...' : '点击上传角色照片'}</span>
-          </label>
-        </div>
-      )}
-
-      {imageTab === 'inspiration' && (
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {inspirations.filter(i => i.type === 'image').length === 0 ? (
-            <p style={{ color: '#6B7280', fontSize: 12, textAlign: 'center', padding: 16 }}>暂无图片类灵感</p>
-          ) : (
-            inspirations.filter(i => i.type === 'image').slice(0, 12).map(item => (
-              <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer"
-                onClick={() => selectInspirationImage(item)}
-                style={{
-                  background: selectedInspId === String(item.id) ? 'rgba(6,182,212,0.1)' : 'rgba(255,255,255,0.05)',
-                  border: selectedInspId === String(item.id) ? '1px solid rgba(6,182,212,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                }}>
-                {item.media_urls?.[0] ? (
-                  <img src={item.media_urls[0]} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    <ImageIcon size={16} color="#6B7280" />
-                  </div>
-                )}
-                <span style={{ color: '#E5E7EB', fontSize: 12 }} className="truncate">{item.title || '未命名'}</span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {imageTab === 'url' && (
-        <div className="flex gap-2">
-          <input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="粘贴图片URL..."
-            className="flex-1 px-3 py-2 rounded-xl bg-transparent text-sm outline-none"
-            style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-          <button onClick={handleImageUrlConfirm}
-            className="px-4 py-2 rounded-xl text-xs font-semibold"
-            style={{ background: 'rgba(6,182,212,0.2)', color: '#67E8F9', border: '1px solid rgba(6,182,212,0.3)' }}>
-            确认
-          </button>
-        </div>
-      )}
-
-      {imagePreview && (
-        <div className="mt-3 flex items-center gap-3">
-          <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '2px solid rgba(6,182,212,0.4)' }}>
-            <img src={imagePreview} alt="角色" className="w-full h-full object-cover" />
-          </div>
-          <div>
-            <span style={{ color: '#86EFAC', fontSize: 11 }}>✓ 角色已选</span>
-            <button onClick={() => { setImageUrl(''); setImagePreview(null); }}
-              className="block text-xs mt-0.5" style={{ color: '#F87171' }}>移除</button>
-          </div>
-        </div>
-      )}
-    </GlassCard>
-  );
-
   // ══════════════════════════════════════════════════════════
   // 共用：TTS 面板
   // ══════════════════════════════════════════════════════════
@@ -1309,7 +1169,22 @@ function DigitalHumanContent() {
 
   const renderS2VMode = () => (
     <>
-      {renderImagePicker()}
+      <MediaPicker accept="image" onSelect={handleImageSelect} value={imageUrl} />
+
+      {imagePreview && (
+        <GlassCard>
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '2px solid rgba(6,182,212,0.4)' }}>
+              <img src={imagePreview} alt="角色" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <span style={{ color: '#86EFAC', fontSize: 11 }}>✓ 角色已选</span>
+              <button onClick={() => { setImageUrl(''); setImagePreview(null); }}
+                className="block text-xs mt-0.5" style={{ color: '#F87171' }}>移除</button>
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* 脚本来源 */}
       <GlassCard>
@@ -1644,13 +1519,12 @@ function DigitalHumanContent() {
                 style={{ color: '#FCA5A5', fontSize: 11 }}>清除</button>
             </div>
           ) : (
-            <button
-              onClick={() => setImageTab('upload')}
-              className="w-full py-2.5 rounded-lg text-xs"
+            <div
+              className="w-full py-2.5 rounded-lg text-xs text-center"
               style={{ background: 'rgba(236,72,153,0.1)', border: '1px dashed rgba(236,72,153,0.4)', color: '#F9A8D4' }}
             >
-              👆 请先在上方「选择图片」上传/选一张头像
-            </button>
+              👆 请先在上方选择/上传角色图片
+            </div>
           )}
           {(imagePreview || imageUrl) && (
             <div>
