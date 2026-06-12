@@ -201,6 +201,10 @@ export interface AgnesImageOptions {
   n?: number;
   /** 质量档位: standard(1024) / hd(1920) / 4k(3840)，默认 standard */
   quality?: ImageQuality;
+  /** 随机种子，相同 seed + 相同 prompt 生成几乎一致的图片。用于分镜/系列图保持风格统一 */
+  seed?: number;
+  /** 参考图 URL，用于引导构图、风格、主体一致性（仅在模型支持时生效） */
+  referenceImageUrl?: string;
 }
 
 export async function generateImageAgnes(
@@ -227,6 +231,8 @@ export async function generateImageAgnes(
         prompt,
         n: options.n || 1,
         size,
+        ...(options.seed != null ? { seed: options.seed } : {}),
+        ...(options.referenceImageUrl ? { image: options.referenceImageUrl } : {}),
       }),
       signal: controller.signal,
     });
