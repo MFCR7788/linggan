@@ -1,12 +1,11 @@
 // 抖音文案提取工具
-// 主路径：douyin-cli 下载视频 → ffmpeg 提取音频 → DashScope Paraformer ASR
+// 主路径：douyin-cli 下载视频 → ffmpeg 提取音频 → FunASR 本地 ASR (降级 DashScope)
 // 快速路径：douyin-cli 仅提取描述文案（不下载视频）
 
 import type { ToolDefinition } from '../../types';
-import { getDashScopeApiKey } from '@/lib/runtime-config';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFile, writeFile, mkdtemp, rm, mkdir } from 'fs/promises';
+import { writeFile, mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -137,84 +136,13 @@ print(json.dumps({"desc": desc[0]}))
   }
 }
 
-// ── ASR 转写 ──
+// ── ASR 转写（FunASR 本地优先 → DashScope 降级）──
 
 async function recognizeAudioFile(audioPath: string): Promise<string> {
-  const apiKey = getDashScopeApiKey();
-  if (!apiKey) throw new Error('DASHSCOPE_API_KEY 未配置');
-
-  const { createAdminClient } = await import('@/lib/supabase-server');
-  const supabase = createAdminClient();
-
-  const audioBuffer = await readFile(audioPath);
-  const storageKey = `transcribe/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp3`;
-
-  const { error: uploadErr } = await supabase.storage
-    .from('lingji-media')
-    .upload(storageKey, audioBuffer, { contentType: 'audio/mpeg', upsert: false });
-
-  if (uploadErr) throw new Error(`音频上传失败: ${uploadErr.message}`);
-
-  const { data: urlData } = supabase.storage.from('lingji-media').getPublicUrl(storageKey);
-  const publicUrl = urlData.publicUrl;
-
-  try {
-    const submitRes = await fetch(
-      'https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'X-DashScope-Async': 'enable',
-        },
-        body: JSON.stringify({
-          model: 'paraformer-v2',
-          input: { file_urls: [publicUrl] },
-          parameters: {
-            format: 'mp3',
-            sample_rate: 16000,
-            disfluency_removal_enabled: false,
-          },
-        }),
-      }
-    );
-
-    const submitData = await submitRes.json();
-    if (!submitRes.ok) throw new Error(submitData.message || 'ASR 任务提交失败');
-
-    const taskId = submitData.output?.task_id;
-    if (!taskId) throw new Error('未获取到 ASR 任务 ID');
-
-    for (let i = 0; i < 30; i++) {
-      const pollRes = await fetch(
-        `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
-        { headers: { Authorization: `Bearer ${apiKey}` } }
-      );
-      const pollData = await pollRes.json();
-      const status = pollData.output?.task_status;
-
-      if (status === 'SUCCEEDED') {
-        const transcriptionUrl = pollData.output?.results?.[0]?.transcription_url;
-        if (!transcriptionUrl) throw new Error('转录结果 URL 为空');
-        const transcriptRes = await fetch(transcriptionUrl);
-        const transcriptData = await transcriptRes.json();
-        const parts: string[] = [];
-        for (const ch of transcriptData.transcripts || []) {
-          if (ch.text) parts.push(ch.text);
-          for (const s of ch.sentences || []) {
-            if (s.text?.trim()) parts.push(s.text);
-          }
-        }
-        return parts.join('').trim() || parts.map((t) => t.trim()).join('\n').trim();
-      }
-      if (status === 'FAILED') throw new Error(pollData.output?.message || 'ASR 转写失败');
-      await new Promise((r) => setTimeout(r, 4000));
-    }
-    throw new Error('ASR 转写超时（2 分钟）');
-  } finally {
-    await supabase.storage.from('lingji-media').remove([storageKey]).catch(() => {});
-  }
+  const { recognizeAudio } = await import('@/lib/ai/funasr-client');
+  const result = await recognizeAudio(audioPath);
+  if (!result.success) throw new Error(result.error || 'ASR 识别失败');
+  return result.text;
 }
 
 // ── 单视频提取 ──
@@ -267,10 +195,10 @@ async function extractSingleVideo(url: string, fastOnly: boolean): Promise<Extra
       };
     }
 
-    // ffmpeg 提取音频
-    const audioPath = join(tmpDir, 'audio.mp3');
+    // ffmpeg 提取音频 → 16kHz 单声道 WAV (FunASR 标准格式)
+    const audioPath = join(tmpDir, 'audio.wav');
     await execAsync(
-      `ffmpeg -i "${videoPath}" -vn -acodec mp3 -q:a 3 -y "${audioPath}" 2>&1`,
+      `ffmpeg -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "${audioPath}" 2>&1`,
       { timeout: 60000 }
     );
 
@@ -321,7 +249,7 @@ export const douyinTranscriptTool: ToolDefinition = {
 - 单个视频链接（https://v.douyin.com/xxx 或 https://www.douyin.com/video/xxx）
 - 含链接的分享文本（自动从中提取链接）
 - 多个视频链接，批量提取
-底层：douyin-cli 下载视频 + ffmpeg 音频提取 + DashScope Paraformer ASR 语音识别。`,
+底层：douyin-cli 下载视频 + ffmpeg 音频提取 + FunASR 本地语音识别（ECS Docker），不可用时自动降级 DashScope Paraformer。`,
   parameters: {
     type: 'object',
     properties: {
@@ -347,15 +275,6 @@ export const douyinTranscriptTool: ToolDefinition = {
         success: false,
         output: '未识别到抖音视频链接。请提供 v.douyin.com 或 www.douyin.com/video/xxx 格式的链接。',
         error: 'NO_URL_FOUND',
-      };
-    }
-
-    const apiKey = getDashScopeApiKey();
-    if (!fastOnly && !apiKey) {
-      return {
-        success: false,
-        output: '语音识别需要 DASHSCOPE_API_KEY，但当前未配置。可设置 fast_only=true 仅提取页面描述。',
-        error: 'NO_API_KEY',
       };
     }
 

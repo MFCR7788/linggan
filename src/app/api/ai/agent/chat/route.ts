@@ -28,7 +28,7 @@ import { SkillsHub } from '@/lib/assistant/skills/hub';
 import { compressHistory } from '@/lib/assistant/context-compressor';
 import { extractDocuments } from '@/lib/assistant/chat-helpers';
 import { ContextAssembler, MemorySource, KnowledgeSource, SkillSource, ComboSkillSource } from '@/lib/context';
-import { agentSkillMatcher, getAllComboSkills } from '@/lib/agent/skills';
+import { agentSkillMatcher, getAllComboSkills, getAllPresetSkills } from '@/lib/agent/skills';
 
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
@@ -143,10 +143,11 @@ export const POST = withAuth(async ({ request, user }) => {
     const skillsHub = new SkillsHub({ userId: user.id });
     await skillsHub.initialize();
 
-    // 加载 combo 技能到 Agent 技能匹配器（首次加载后缓存）
+    // 加载 combo + 预设技能到 Agent 技能匹配器（首次加载后缓存）
     if (agentSkillMatcher.getAllSkills().length === 0) {
       const comboSKills = getAllComboSkills();
-      agentSkillMatcher.loadSkills(comboSKills);
+      const presetSkills = getAllPresetSkills();
+      agentSkillMatcher.loadSkills([...comboSKills, ...presetSkills]);
     }
 
     // === V2: 使用 ContextAssembler 统一组装上下文 ===

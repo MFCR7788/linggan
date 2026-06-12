@@ -1,10 +1,9 @@
 // 视频语音转文字 — yt-dlp 下载 → ffmpeg 提取音频 → 本地 FunASR (优先) / DashScope Paraformer (降级)
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readFile, writeFile, mkdtemp, rm } from "fs/promises";
+import { writeFile, mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { createAdminClient } from "@/lib/supabase-server";
 
 const execAsync = promisify(exec);
 
@@ -143,37 +142,15 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
       { timeout: 60000 }
     );
 
-    // 4. 语音识别 — 百炼 Paraformer
-    const audioBuffer = await readFile(audioOutput);
-    const supabase = createAdminClient();
-    const storageName = `transcribe/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`;
+    // 4. 语音识别 — FunASR 本地优先，降级 DashScope Paraformer
+    const { recognizeAudio } = await import("@/lib/ai/funasr-client");
+    const asrResult = await recognizeAudio(audioOutput);
 
-    const { error: uploadErr } = await supabase.storage
-      .from("lingji-media")
-      .upload(storageName, audioBuffer, {
-        contentType: "audio/wav",
-        upsert: false,
-      });
-
-    if (uploadErr) {
-      console.error("音频上传失败:", uploadErr);
-      throw new Error("音频上传失败");
+    if (!asrResult.success || !asrResult.text.trim()) {
+      return { success: false, error: asrResult.error || "未能识别到语音内容" };
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("lingji-media").getPublicUrl(storageName);
-
-    const transcript = await callDashScopeASR(publicUrl);
-
-    // 清理 Supabase 上的临时音频文件
-    await supabase.storage.from("lingji-media").remove([storageName]);
-
-    if (!transcript || transcript.trim().length === 0) {
-      return { success: false, error: "未能识别到语音内容" };
-    }
-
-    return { success: true, transcript };
+    return { success: true, transcript: asrResult.text };
   } catch (error: unknown) {
     console.error("视频转录失败:", error);
     return {
@@ -186,62 +163,6 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
       try { await rm(tmpDir, { recursive: true, force: true }); } catch {}
     }
   }
-}
-
-/**
- * 百炼 Paraformer 文件转写 API
- */
-async function callDashScopeASR(audioUrl: string): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
-
-  // 提交转写任务
-  const submitRes = await fetch(
-    "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable",
-      },
-      body: JSON.stringify({
-        model: "paraformer-v2",
-        input: { file_urls: [audioUrl] },
-        parameters: {
-          format: "wav",
-          sample_rate: 16000,
-          disfluency_removal_enabled: false,
-        },
-      }),
-    }
-  );
-
-  const submitData = await submitRes.json();
-  if (!submitRes.ok) {
-    console.error("ASR 提交失败:", JSON.stringify(submitData));
-    throw new Error(submitData.message || "ASR 任务提交失败");
-  }
-
-  const taskId = submitData.output?.task_id;
-  if (!taskId) throw new Error("未获取到 ASR 任务 ID");
-
-  // 轮询转写结果 (最长等待 120 秒)
-  const transcriptionUrl = await pollTranscriptionTask(apiKey, taskId);
-  if (!transcriptionUrl) throw new Error("ASR 转写超时");
-
-  // 获取逐字稿内容
-  const transcriptRes = await fetch(transcriptionUrl);
-  const transcriptData = await transcriptRes.json();
-
-  // 拼接所有句子的文本
-  const transcripts = transcriptData.transcripts || [];
-  const fullText = transcripts
-    .map((item: { text?: string }) => item.text || "")
-    .join("")
-    .trim();
-
-  return fullText;
 }
 
 export function generateSRT(sentences: TimedSentence[]): string {

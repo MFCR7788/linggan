@@ -8,3 +8,5 @@ export type { MatchOptions, MatchResult } from './agent-skill-matcher';
 
 export { createBridgeSession, activateSkills, deactivateSkills, cleanupBridgeSession, buildSkillPromptBlock } from './skill-tool-bridge';
 export type { BridgeSession } from './skill-tool-bridge';
+
+export { getAllPresetSkills, appendPresetSkills } from './preset-skills';
