@@ -3,11 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Zap, ChevronLeft, ChevronRight, Play, Download, Save, RefreshCw,
-  AlertCircle, Loader2, CheckCircle2, XCircle, Wand2,
-  ImageIcon, Upload, Link, Mic, Music, Volume2,
-  FileText, Globe, BookOpen, Layers, ChevronDown, ChevronUp,
-  Settings, Trash2, Plus, Square, Share2, Video as VideoIcon, ArrowRight,
+  Zap, ChevronRight, Download, Save, RefreshCw,
+  Loader2, CheckCircle2, XCircle, Wand2,
+  ImageIcon, Upload, Link, Mic, Music,
+  FileText, Trash2, Plus, Square, Share2, Video as VideoIcon,
   Sparkles, FolderOpen, UserCircle2, Check,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
@@ -40,7 +39,7 @@ interface InspirationItem {
   ai_summary?: string;
 }
 
-type DigitalHumanMode = 'manual' | 'ai-write' | 'one-click' | 'batch' | 'multi-lang' | 'animate' | 'avatar';
+type DigitalHumanMode = 's2v' | 'animate' | 'avatar';
 
 interface AnimatePreset {
   imageUrl: string;
@@ -61,21 +60,15 @@ interface BatchItem {
   errorMsg?: string;
 }
 
-const STEPS = ['选择角色', '音频来源', '参数设置', '生成预览'];
-
 const RESOLUTION_OPTIONS = [
   { key: '480P' as const, label: '480P', cost: '10 灵力/段' },
   { key: '720P' as const, label: '720P', cost: '20 灵力/段' },
 ];
 
 const MODES: { key: DigitalHumanMode; label: string; icon: string; desc: string }[] = [
-  { key: 'one-click', label: '一键生数字人', icon: '⚡', desc: '全自动流水线' },
-  { key: 'ai-write', label: 'AI 写稿', icon: '✍️', desc: '主题→AI脚本' },
-  { key: 'batch', label: '批量生成', icon: '📦', desc: '20s 短视频合集' },
-  { key: 'multi-lang', label: '多语言', icon: '🌐', desc: '20s 多语种短讲解' },
-  { key: 'animate', label: '用我的形象', icon: '🎭', desc: '角色动作迁移' },
-  { key: 'avatar', label: '用我的分身', icon: '🧬', desc: '数字分身口播' },
-  { key: 'manual', label: '手动配置', icon: '⚙️', desc: '逐步设置' },
+  { key: 's2v', label: '数字人口播', icon: '👤', desc: '图片+音频→口播视频' },
+  { key: 'animate', label: '角色动作迁移', icon: '🎭', desc: '图+参考视频→动作复刻' },
+  { key: 'avatar', label: '数字分身', icon: '🧬', desc: 'HeyGen 个人分身口播' },
 ];
 
 const ORAL_STYLES = [
@@ -103,6 +96,12 @@ const BATCH_STATUS_LABELS: Record<BatchItem['status'], { text: string; color: st
   error: { text: '失败', color: '#FCA5A5', bg: 'rgba(239,68,68,0.1)' },
 };
 
+const OC_PHASES: Record<string, string> = {
+  idle: '准备中', scripting: 'AI 写稿中', tts: '语音合成中',
+  uploading: '上传音频中', submitting: '提交任务中', generating: '生成视频中',
+  merging: '合并视频中', done: '完成', error: '出错',
+};
+
 function DigitalHumanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -111,7 +110,10 @@ function DigitalHumanContent() {
   const { session, isInWorkflow, completeCurrentStep, pauseSession, resumeSession, abandonSession } = useWorkflowSession(workflowSessionId);
 
   // ─── 模式 ─────────────────────────────────────────────
-  const [dhMode, setDhMode] = useState<DigitalHumanMode>('one-click');
+  const [dhMode, setDhMode] = useState<DigitalHumanMode>('s2v');
+  // s2v 子模式
+  const [s2vScriptSource, setS2vScriptSource] = useState<'ai' | 'manual'>('ai');
+  const [s2vBatchMode, setS2vBatchMode] = useState(false);
 
   // ─── Step 1: 角色图片（所有模式共用）────────────────────
   const [imageTab, setImageTab] = useState<'upload' | 'inspiration' | 'url'>('upload');
@@ -216,7 +218,7 @@ function DigitalHumanContent() {
     }
     if (params.text || params.script) {
       setTtsText((params.text || params.script || '').slice(0, 1000));
-      setOcTopic((params.text || params.script || '').slice(0, 100));
+      setAiTopic((params.text || params.script || '').slice(0, 100));
     }
   }, []);
 
@@ -236,7 +238,7 @@ function DigitalHumanContent() {
     }
     if (h.text || h.script) {
       setTtsText((h.text || h.script || '').slice(0, 1000));
-      setOcTopic((h.text || h.script || '').slice(0, 100));
+      setAiTopic((h.text || h.script || '').slice(0, 100));
     }
   }, [session]);
 
@@ -249,9 +251,7 @@ function DigitalHumanContent() {
   const [selectedVariant, setSelectedVariant] = useState(0);
 
   // ─── 一键成片 ─────────────────────────────────────────
-  const [ocTopic, setOcTopic] = useState('');
-  const [ocStyle, setOcStyle] = useState('oral');
-  const [ocPhase, setOcPhase] = useState('idle'); // idle|scripting|tts|uploading|submitting|generating|done|error
+  const [ocPhase, setOcPhase] = useState<'idle' | 'scripting' | 'tts' | 'uploading' | 'submitting' | 'generating' | 'merging' | 'done' | 'error'>('idle');
   const [ocError, setOcError] = useState<string | null>(null);
   const [ocCurrentSegment, setOcCurrentSegment] = useState(0); // 当前正在处理的段号 (1-based)
   const [ocTotalSegments, setOcTotalSegments] = useState(0); // 总段数
@@ -262,17 +262,14 @@ function DigitalHumanContent() {
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
   const [batchInput, setBatchInput] = useState('');
   const [isBatchRunning, setIsBatchRunning] = useState(false);
-  const [batchShowDetail, setBatchShowDetail] = useState<Record<string, boolean>>({});
   const batchAbortRef = useRef(false);
 
   // ─── 多语言 ───────────────────────────────────────────
   const [targetLang, setTargetLang] = useState('zh');
 
-  // ─── 通用 Step/生成状态 ────────────────────────────────
-  const [currentStep, setCurrentStep] = useState(1);
+  // ─── 通用生成状态 ──────────────────────────────────────
   const [resolution, setResolution] = useState<'480P' | '720P'>('720P');
   const [generatePhase, setGeneratePhase] = useState<'idle' | 'uploading_audio' | 'submitting' | 'generating' | 'done' | 'error'>('idle');
-  const [taskId, setTaskId] = useState<string | null>(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -545,7 +542,7 @@ function DigitalHumanContent() {
 
     const poll = await submitAndPoll(
       imageUrl, finalAudioUrl, resolution,
-      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } },
+      (videoUrl) => { setFinalVideoUrl(videoUrl); setGeneratePhase('done'); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } },
       (msg) => { setErrorMsg(msg); setGeneratePhase('error'); },
       audioDuration,
     );
@@ -556,7 +553,6 @@ function DigitalHumanContent() {
   const handleCancel = () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     setGeneratePhase('idle');
-    setTaskId(null);
   };
 
   // ─── Animate 模式:上传参考视频/头像 → 提交 → 轮询 ──
@@ -804,7 +800,7 @@ function DigitalHumanContent() {
     try {
       const res = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', {
         topic: aiTopic, style: aiStyle, targetLength: aiLength,
-        variantCount: 3, language: dhMode === 'multi-lang' ? targetLang : 'zh',
+        variantCount: 3, language: targetLang,
       });
       const scripts = res.data?.scripts;
       if (res.success && scripts && scripts.length > 0) {
@@ -820,107 +816,114 @@ function DigitalHumanContent() {
     setIsGeneratingScript(false);
   };
 
-  // ─── 一键成片 ────────────────────────────────────────
+  // ─── 一键成片 (统一版) ──────────────────────────────
   const handleOneClick = async () => {
     if (!imageUrl) { setToast({ message: '请先选择角色图片', type: 'error' }); return; }
-    if (!ocTopic.trim()) { setToast({ message: '请输入主题', type: 'error' }); return; }
 
     ocAbortRef.current = false;
     setOcError(null);
     setOcVideoUrls([]);
 
-    // Step 1: 写稿 (生成较长脚本,后续自动分段)
-    setOcPhase('scripting');
-    try {
-      const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: ocTopic, style: ocStyle, targetLength: 400, variantCount: 1 });
-      if (!sRes.success) throw new Error(sRes.error || '写稿失败');
-      const script = sRes.data!.scripts[0];
+    // Step 1: 获取脚本 — AI 写稿或直接用已输入的文本
+    let script: string;
+    if (s2vScriptSource === 'ai') {
+      if (!aiTopic.trim()) { setToast({ message: '请输入主题', type: 'error' }); return; }
+      setOcPhase('scripting');
+      try {
+        const sRes = await apiClient.post<{ scripts: string[] }>('/ai/digital-human/script', { topic: aiTopic, style: aiStyle, targetLength: aiLength, variantCount: 1, language: targetLang });
+        if (!sRes.success) throw new Error(sRes.error || '写稿失败');
+        script = sRes.data!.scripts[0];
+      } catch (err: any) {
+        setOcError(err.message);
+        setOcPhase('error');
+        return;
+      }
+    } else {
+      if (!ttsText.trim()) { setToast({ message: '请输入口播脚本', type: 'error' }); return; }
+      script = ttsText.trim();
+    }
+    if (ocAbortRef.current) return;
+
+    // Step 2: 按 20s 限制自动拆段
+    const segments = splitScriptForDigitalHuman(script, 100);
+    setOcTotalSegments(segments.length);
+    setOcCurrentSegment(0);
+    const videoUrls: string[] = [];
+
+    // Step 3-N: 逐段 TTS → 上传 → 提交数字人 → 轮询
+    for (let i = 0; i < segments.length; i++) {
+      if (ocAbortRef.current) return;
+      setOcCurrentSegment(i + 1);
+
+      // TTS
+      setOcPhase('tts');
+      const ttsRes = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: segments[i], voice, speed, pitch }),
+      });
+      const ttsData = await ttsRes.json();
+      if (!ttsData.success || !ttsData.audioBase64) throw new Error(ttsData.error || `第${i + 1}段配音失败`);
       if (ocAbortRef.current) return;
 
-      // Step 2: 按 20s 限制自动拆段
-      const segments = splitScriptForDigitalHuman(script, 100);
-      setOcTotalSegments(segments.length);
-      setOcCurrentSegment(0);
-      const videoUrls: string[] = [];
+      // 上传音频
+      setOcPhase('uploading');
+      const audUrl = await base64ToUrl(ttsData.audioBase64);
+      if (ocAbortRef.current) return;
 
-      // Step 3-N: 逐段 TTS → 上传 → 提交数字人 → 轮询
-      for (let i = 0; i < segments.length; i++) {
-        if (ocAbortRef.current) return;
-        setOcCurrentSegment(i + 1);
+      // 测时长兜底 (超过 20s 则跳过该段)
+      try {
+        const dur = await measureAudioDuration(audUrl);
+        if (dur > MAX_AUDIO_SECONDS) {
+          setToast({ message: `第${i + 1}段音频 ${dur.toFixed(1)}s 超 20s 限制,已跳过`, type: 'error' });
+          continue;
+        }
+      } catch { /* 测时长失败不阻塞 */ }
 
-        // TTS
-        setOcPhase('tts');
-        const ttsRes = await fetch('/api/ai/tts', {
+      // 提交 + 轮询
+      setOcPhase('submitting');
+      await new Promise<void>((resolve, reject) => {
+        submitAndPoll(imageUrl, audUrl, resolution,
+          (videoUrl) => {
+            videoUrls.push(videoUrl);
+            setOcVideoUrls([...videoUrls]);
+            resolve();
+          },
+          (msg) => { reject(new Error(msg)); },
+        );
+        if (ocAbortRef.current) { resolve(); }
+      });
+      if (ocAbortRef.current) return;
+    }
+
+    if (videoUrls.length === 0) throw new Error('所有分段均生成失败,请精简主题或换更短的脚本');
+
+    // 多段自动合并为单视频
+    let mergedUrl: string | null = null;
+    if (videoUrls.length > 1) {
+      setOcPhase('merging');
+      try {
+        const mergeRes = await fetch('/api/ai/digital-human/merge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: segments[i], voice, speed, pitch }),
+          body: JSON.stringify({ videoUrls }),
         });
-        const ttsData = await ttsRes.json();
-        if (!ttsData.success || !ttsData.audioBase64) throw new Error(ttsData.error || `第${i + 1}段配音失败`);
-        if (ocAbortRef.current) return;
-
-        // 上传音频
-        setOcPhase('uploading');
-        const audUrl = await base64ToUrl(ttsData.audioBase64);
-        if (ocAbortRef.current) return;
-
-        // 测时长兜底 (超过 20s 则跳过该段)
-        try {
-          const dur = await measureAudioDuration(audUrl);
-          if (dur > MAX_AUDIO_SECONDS) {
-            setToast({ message: `第${i + 1}段音频 ${dur.toFixed(1)}s 超 20s 限制,已跳过`, type: 'error' });
-            continue;
-          }
-        } catch { /* 测时长失败不阻塞 */ }
-
-        // 提交 + 轮询
-        setOcPhase('submitting');
-        await new Promise<void>((resolve, reject) => {
-          submitAndPoll(imageUrl, audUrl, resolution,
-            (videoUrl) => {
-              videoUrls.push(videoUrl);
-              setOcVideoUrls([...videoUrls]);
-              resolve();
-            },
-            (msg) => { reject(new Error(msg)); },
-          );
-          if (ocAbortRef.current) { resolve(); }
-        });
-        if (ocAbortRef.current) return;
-      }
-
-      if (videoUrls.length === 0) throw new Error('所有分段均生成失败,请精简主题或换更短的脚本');
-
-      // 多段自动合并为单视频
-      let mergedUrl: string | null = null;
-      if (videoUrls.length > 1) {
-        setOcPhase('merging');
-        try {
-          const mergeRes = await fetch('/api/ai/digital-human/merge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoUrls }),
-          });
-          const mergeData = await mergeRes.json();
-          if (mergeData.success && mergeData.data?.videoUrl) {
-            mergedUrl = mergeData.data.videoUrl;
-            setOcVideoUrls([]); // 合并成功,仅展示合并结果
-          } else {
-            console.warn('[dh-merge] 合并失败,保留分段:', mergeData.error);
-          }
-        } catch { /* 合并失败不阻塞,保留分段结果 */ }
-      }
-
-      // 全部完成,优先用合并后视频
-      const finalUrl = mergedUrl || videoUrls[0];
-      setFinalVideoUrl(finalUrl);
-      setOcPhase('done');
-      if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: finalUrl }, undefined); }
-    } catch (err: any) {
-      if (ocAbortRef.current) { setOcPhase('idle'); return; }
-      setOcError(err.message);
-      setOcPhase('error');
+        const mergeData = await mergeRes.json();
+        if (mergeData.success && mergeData.data?.videoUrl) {
+          mergedUrl = mergeData.data.videoUrl;
+          setOcVideoUrls([]);
+        } else {
+          console.warn('[dh-merge] 合并失败,保留分段:', mergeData.error);
+        }
+      } catch { /* 合并失败不阻塞,保留分段结果 */ }
     }
+
+    // 全部完成,优先用合并后视频
+    const finalUrl = mergedUrl || videoUrls[0];
+    setFinalVideoUrl(finalUrl);
+    setOcPhase('done');
+    const topic = s2vScriptSource === 'ai' ? aiTopic : ttsText.slice(0, 30);
+    if (isInWorkflow) { completeCurrentStep({ text: ttsText, script, topic, imageUrl: imageUrl || '', firstFrame: finalUrl }, undefined); }
   };
 
   // ─── 批量生成 ────────────────────────────────────────
@@ -987,7 +990,7 @@ function DigitalHumanContent() {
         updateItem({ status: 'submitting' });
         await new Promise<void>((resolve, reject) => {
           submitAndPoll(imageUrl, aUrl, resolution,
-            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: ocTopic || aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } resolve(); },
+            (videoUrl) => { updateItem({ videoUrl, status: 'done' }); if (isInWorkflow) { completeCurrentStep({ text: ttsText, script: ttsText, topic: aiTopic, imageUrl: imageUrl || '', firstFrame: videoUrl }, undefined); } resolve(); },
             (msg) => { updateItem({ errorMsg: msg, status: 'error' }); reject(new Error(msg)); },
             audioDuration,
           );
@@ -1015,12 +1018,6 @@ function DigitalHumanContent() {
       hotspot: '/hotspot', profile: '/profile',
     };
     router.push(routes[page] || '/home');
-  };
-
-  const canNext = () => {
-    if (currentStep === 1) return !!imageUrl;
-    if (currentStep === 2) return !!(audioUrl || ttsAudioBase64);
-    return true;
   };
 
   const showProgress = generatePhase === 'uploading_audio' || generatePhase === 'submitting' || generatePhase === 'generating';
@@ -1285,7 +1282,7 @@ function DigitalHumanContent() {
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => handoff('/ai/video', { firstFrame: videoUrl, topic: ocTopic || '我的数字人', imageUrl: imageUrl || '' })}
+            onClick={() => handoff('/ai/video', { firstFrame: videoUrl, topic: aiTopic || ttsText.slice(0, 30) || '我的数字人', imageUrl: imageUrl || '' })}
             className="flex flex-col items-center gap-1 py-2.5 rounded-xl"
             style={{ background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.3)' }}
           >
@@ -1293,7 +1290,7 @@ function DigitalHumanContent() {
             <span style={{ color: '#F43F5E', fontSize: 11, fontWeight: 600 }}>做更长视频</span>
           </button>
           <button
-            onClick={() => handoff('/publish', { text: ocTopic || '我的数字人', topic: ocTopic || '我的数字人' })}
+            onClick={() => handoff('/publish', { text: aiTopic || ttsText.slice(0, 30) || '我的数字人', topic: aiTopic || ttsText.slice(0, 30) || '我的数字人' })}
             className="flex flex-col items-center gap-1 py-2.5 rounded-xl"
             style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)' }}
           >
@@ -1306,42 +1303,121 @@ function DigitalHumanContent() {
   );
 
   // ══════════════════════════════════════════════════════════
-  // 模式：manual
+  // 模式：数字人口播 (wan2.2-s2v)
+  // 合并原 one-click / ai-write / manual / batch / multi-lang
   // ══════════════════════════════════════════════════════════
 
-  const renderManualMode = () => (
+  const renderS2VMode = () => (
     <>
-      {/* Step 指示器 */}
-      <div className="overflow-x-auto">
-        <div className="flex gap-0 min-w-max justify-center">
-          {STEPS.map((step, i) => {
-            const si = i + 1;
-            return (
-              <button key={step} onClick={() => { if (si <= currentStep && !showProgress) setCurrentStep(si); }}
-                className="flex flex-col items-center gap-1 px-3">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
-                  style={{
-                    background: si === currentStep ? '#06B6D4' : si < currentStep ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)',
-                    border: si === currentStep ? 'none' : si < currentStep ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.2)',
-                    color: si === currentStep ? '#FFFFFF' : si < currentStep ? '#86EFAC' : '#9CA3AF',
-                    boxShadow: si === currentStep ? '0 0 12px rgba(6,182,212,0.5)' : 'none',
-                  }}>{si < currentStep ? '✓' : si}</div>
-                <span style={{
-                  color: si === currentStep ? '#06B6D4' : si < currentStep ? '#86EFAC' : '#9CA3AF',
-                  fontSize: 10, whiteSpace: 'nowrap',
-                }}>{step}</span>
-              </button>
-            );
-          })}
+      {renderImagePicker()}
+
+      {/* 脚本来源 */}
+      <GlassCard>
+        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <span style={{ color: '#3B82F6' }}>脚本</span> · 口播内容
+        </p>
+        <div className="flex rounded-lg overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          {([
+            { key: 'ai' as const, label: 'AI 写稿', icon: <Wand2 size={12} /> },
+            { key: 'manual' as const, label: '自己写', icon: <FileText size={12} /> },
+          ]).map(({ key, label, icon }) => (
+            <button key={key} onClick={() => setS2vScriptSource(key)}
+              className="flex-1 py-2 text-xs flex items-center justify-center gap-1 transition-all"
+              style={{
+                background: s2vScriptSource === key ? 'rgba(59,130,246,0.2)' : 'transparent',
+                color: s2vScriptSource === key ? '#93C5FD' : '#9CA3AF',
+                fontWeight: s2vScriptSource === key ? 600 : 400,
+              }}>{icon} {label}</button>
+          ))}
         </div>
-      </div>
 
-      {currentStep === 1 && renderImagePicker()}
+        {s2vScriptSource === 'ai' ? (
+          <div className="space-y-3">
+            <div>
+              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>主题</p>
+              <input value={aiTopic} onChange={e => setAiTopic(e.target.value)}
+                placeholder="输入主题，例如：AI如何改变教育"
+                className="w-full bg-transparent px-3 py-2 rounded-xl text-sm outline-none"
+                style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>风格</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {ORAL_STYLES.map(({ key, label }) => (
+                    <button key={key} onClick={() => setAiStyle(key)}
+                      className="py-1.5 rounded-lg text-xs transition-all"
+                      style={{
+                        background: aiStyle === key ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)',
+                        border: aiStyle === key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                        color: aiStyle === key ? '#93C5FD' : '#9CA3AF',
+                      }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>语言</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {LANGUAGES.map(({ key, label }) => (
+                    <button key={key} onClick={() => setTargetLang(key)}
+                      className="py-1.5 rounded-lg text-xs transition-all"
+                      style={{
+                        background: targetLang === key ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)',
+                        border: targetLang === key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                        color: targetLang === key ? '#93C5FD' : '#9CA3AF',
+                      }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span style={{ color: '#9CA3AF', fontSize: 11 }}>字数</span>
+                <span style={{ color: '#93C5FD', fontSize: 11 }}>{aiLength}字 · ≈{Math.ceil(aiLength / 5)}秒</span>
+              </div>
+              <input type="range" min="50" max="400" step="10" value={aiLength}
+                onChange={e => setAiLength(parseInt(e.target.value))} className="w-full accent-blue-500" />
+            </div>
+            <PrimaryButton size="md" onClick={handleGenerateScript} disabled={isGeneratingScript || !aiTopic.trim()}>
+              {isGeneratingScript ? <><Loader2 size={14} className="animate-spin" /> 生成中...</> : <><Wand2 size={14} /> AI 生成脚本</>}
+            </PrimaryButton>
+            {generatedScripts.length > 0 && (
+              <div className="space-y-2">
+                <p style={{ color: '#9CA3AF', fontSize: 11 }}>选择脚本变体</p>
+                {generatedScripts.map((s, i) => (
+                  <div key={i} onClick={() => { setSelectedVariant(i); setTtsText(s); }}
+                    className="p-3 rounded-xl cursor-pointer text-sm transition-all"
+                    style={{
+                      background: selectedVariant === i ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)',
+                      border: selectedVariant === i ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                      color: '#E5E7EB', maxHeight: 120, overflowY: 'auto',
+                    }}>
+                    <span style={{ color: selectedVariant === i ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: 600 }}>
+                      变体 {i + 1} {selectedVariant === i ? '✓' : ''}
+                    </span>
+                    <p className="mt-1 whitespace-pre-wrap" style={{ lineHeight: 1.5 }}>{s}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {targetLang !== 'zh' && (
+              <p style={{ color: '#FBBF24', fontSize: 10 }}>⚠ 当前音色为中文音色，非中文文本朗读可能带口音</p>
+            )}
+          </div>
+        ) : (
+          <textarea value={ttsText} onChange={e => setTtsText(e.target.value)}
+            placeholder="直接输入或粘贴口播脚本..."
+            rows={5}
+            className="w-full bg-transparent p-3 rounded-xl resize-none outline-none text-sm"
+            style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
+        )}
+      </GlassCard>
 
-      {currentStep === 2 && (
+      {/* 音频 */}
+      {ttsText && (
         <GlassCard>
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            <span style={{ color: '#8B5CF6' }}>Step 2</span> · 音频来源
+            <span style={{ color: '#8B5CF6' }}>音频</span> · 配音
           </p>
           <div className="flex rounded-lg overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
             {([
@@ -1362,599 +1438,179 @@ function DigitalHumanContent() {
         </GlassCard>
       )}
 
-      {currentStep === 3 && (
+      {/* 生成 */}
+      {(ttsText || audioUrl) && (
         <GlassCard>
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            <span style={{ color: '#F59E0B' }}>Step 3</span> · 参数设置
+            <span style={{ color: '#06B6D4' }}>生成</span> · 视频
           </p>
-          <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>分辨率</p>
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            {RESOLUTION_OPTIONS.map(({ key, label, cost }) => (
-              <button key={key} onClick={() => setResolution(key)}
-                className="flex flex-col items-center gap-1 py-3 rounded-xl transition-all"
-                style={{
-                  background: resolution === key ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: resolution === key ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                }}>
-                <span style={{ color: resolution === key ? '#FCD34D' : '#E5E7EB', fontSize: 16, fontWeight: 700 }}>{label}</span>
-                <span style={{ color: '#9CA3AF', fontSize: 10 }}>{cost}</span>
-              </button>
-            ))}
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>生成摘要</p>
-            <div className="flex items-center gap-3">
-              {imagePreview && <img src={imagePreview} alt="" className="w-10 h-10 rounded-lg object-cover" />}
-              <div>
-                <span style={{ color: '#E5E7EB', fontSize: 12 }}>数字人口播视频 · {resolution}</span>
-                <br />
-                <span style={{ color: '#FCD34D', fontSize: 11 }}>{resolution === '720P' ? '20' : '10'} 灵力/段 (含配音+数字人)</span>
-              </div>
+
+          {/* 批量模式 toggle */}
+          <div className="flex items-center justify-between mb-3 p-2.5 rounded-xl"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div>
+              <span style={{ color: '#E5E7EB', fontSize: 12, fontWeight: 600 }}>📦 批量模式</span>
+              <span style={{ color: '#9CA3AF', fontSize: 10, marginLeft: 6 }}>多主题逐条生成</span>
             </div>
-          </div>
-        </GlassCard>
-      )}
-
-      {currentStep === 4 && (
-        <GlassCard>
-          {generatePhase === 'idle' ? (
-            <div className="text-center py-4">
-              <Wand2 size={32} color="#06B6D4" style={{ margin: '0 auto 12px' }} />
-              <p style={{ color: '#E5E7EB', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>准备生成数字人视频</p>
-              <p style={{ color: '#9CA3AF', fontSize: 12 }}>{resolution} · 音频驱动数字人</p>
-            </div>
-          ) : generatePhase === 'done' ? (
-            renderVideoResult(finalVideoUrl!)
-          ) : generatePhase === 'error' ? (
-            <div className="flex flex-col items-center py-8 gap-4">
-              <XCircle size={40} color="#EF4444" />
-              <p style={{ color: '#FCA5A5', fontSize: 14 }}>{errorMsg || '生成失败'}</p>
-              <PrimaryButton size="sm" onClick={() => { setGeneratePhase('idle'); setErrorMsg(null); }}>
-                <RefreshCw size={14} /> 重试
-              </PrimaryButton>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center py-8 gap-4">
-              <div className="relative w-16 h-16">
-                <div className="absolute inset-0 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                <div className="absolute inset-3 rounded-full border-2 border-purple-400 border-b-transparent animate-spin"
-                  style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
-              </div>
-              <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
-                {generatePhase === 'uploading_audio' ? '正在上传音频...' :
-                 generatePhase === 'submitting' ? '正在提交任务...' : '正在生成数字人视频...'}
-              </p>
-              <button onClick={handleCancel}
-                className="px-4 py-1.5 rounded-lg text-xs"
-                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>取消</button>
-            </div>
-          )}
-        </GlassCard>
-      )}
-
-      {/* 导航按钮 */}
-      {!showProgress && generatePhase !== 'done' && (
-        <div className="flex gap-3">
-          {currentStep > 1 && (
-            <PrimaryButton variant="ghost" size="md" onClick={() => setCurrentStep(currentStep - 1)}>
-              <ChevronLeft size={16} /> 上一步
-            </PrimaryButton>
-          )}
-          {currentStep < 4 && (
-            <PrimaryButton fullWidth size="md" onClick={() => setCurrentStep(currentStep + 1)} disabled={!canNext()}>
-              下一步 <ChevronRight size={16} />
-            </PrimaryButton>
-          )}
-          {currentStep === 4 && generatePhase === 'idle' && (
-            <PrimaryButton fullWidth size="lg" onClick={handleGenerate} disabled={!canNext()}>
-              <Wand2 size={18} /> 开始生成数字人
-            </PrimaryButton>
-          )}
-        </div>
-      )}
-    </>
-  );
-
-  // ══════════════════════════════════════════════════════════
-  // 模式：AI 写稿
-  // ══════════════════════════════════════════════════════════
-
-  const renderAIWriteMode = () => (
-    <>
-      {renderImagePicker()}
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#3B82F6' }}>AI 写稿</span> · 生成口播脚本
-        </p>
-
-        <div className="space-y-3 mb-4">
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>主题</p>
-            <input value={aiTopic} onChange={e => setAiTopic(e.target.value)}
-              placeholder="输入主题，例如：AI如何改变教育"
-              className="w-full bg-transparent px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-          </div>
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>风格</p>
-            <div className="grid grid-cols-2 gap-2">
-              {ORAL_STYLES.map(({ key, label, desc }) => (
-                <button key={key} onClick={() => setAiStyle(key)}
-                  className="py-2 px-3 rounded-xl text-xs text-left transition-all"
-                  style={{
-                    background: aiStyle === key ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)',
-                    border: aiStyle === key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                  }}>
-                  <span style={{ color: aiStyle === key ? '#93C5FD' : '#E5E7EB', fontWeight: 600 }}>{label}</span>
-                  <span style={{ color: '#9CA3AF', fontSize: 10, display: 'block' }}>{desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span style={{ color: '#9CA3AF', fontSize: 11 }}>字数</span>
-              <span style={{ color: '#93C5FD', fontSize: 11 }}>{aiLength}字 · ≈{Math.ceil(aiLength / 5)}秒</span>
-            </div>
-            <input type="range" min="50" max="300" step="10" value={aiLength}
-              onChange={e => setAiLength(parseInt(e.target.value))} className="w-full accent-blue-500" />
-          </div>
-        </div>
-
-        <PrimaryButton size="md" onClick={handleGenerateScript} disabled={isGeneratingScript || !aiTopic.trim()}>
-          {isGeneratingScript ? <><Loader2 size={14} className="animate-spin" /> 生成中...</> : <><Wand2 size={14} /> AI 生成脚本</>}
-        </PrimaryButton>
-
-        {generatedScripts.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <p style={{ color: '#9CA3AF', fontSize: 11 }}>选择脚本变体</p>
-            {generatedScripts.map((s, i) => (
-              <div key={i} onClick={() => { setSelectedVariant(i); setTtsText(s); }}
-                className="p-3 rounded-xl cursor-pointer text-sm transition-all"
-                style={{
-                  background: selectedVariant === i ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)',
-                  border: selectedVariant === i ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                  color: '#E5E7EB', maxHeight: 120, overflowY: 'auto',
-                }}>
-                <span style={{ color: selectedVariant === i ? '#93C5FD' : '#9CA3AF', fontSize: 10, fontWeight: 600 }}>
-                  变体 {i + 1} {selectedVariant === i ? '✓' : ''}
-                </span>
-                <p className="mt-1 whitespace-pre-wrap" style={{ lineHeight: 1.5 }}>{s}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </GlassCard>
-
-      {/* TTS + 生成 */}
-      {selectedVariant >= 0 && generatedScripts[selectedVariant] && (
-        <>
-          <GlassCard>
-            <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-              <span style={{ color: '#8B5CF6' }}>配音 & 生成</span>
-            </p>
-            {renderTTSPanel(ttsText, setTtsText)}
-            {renderAudioReady()}
-          </GlassCard>
-
-          <GlassCard>
-            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>分辨率</p>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              {RESOLUTION_OPTIONS.map(({ key, label, cost }) => (
-                <button key={key} onClick={() => setResolution(key)}
-                  className="flex flex-col items-center gap-1 py-2 rounded-xl transition-all"
-                  style={{
-                    background: resolution === key ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
-                    border: resolution === key ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.1)',
-                  }}>
-                  <span style={{ color: resolution === key ? '#FCD34D' : '#E5E7EB', fontSize: 14, fontWeight: 700 }}>{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {generatePhase === 'done' ? renderVideoResult(finalVideoUrl!) :
-             generatePhase === 'error' ? (
-              <div className="flex flex-col items-center py-4 gap-2">
-                <XCircle size={30} color="#EF4444" />
-                <p style={{ color: '#FCA5A5', fontSize: 13 }}>{errorMsg || '生成失败'}</p>
-                <PrimaryButton size="sm" onClick={() => { setGeneratePhase('idle'); setErrorMsg(null); }}>
-                  <RefreshCw size={14} /> 重试
-                </PrimaryButton>
-              </div>
-            ) : showProgress ? (
-              <div className="flex flex-col items-center py-6 gap-3">
-                <div className="relative w-12 h-12">
-                  <div className="absolute inset-0 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                </div>
-                <p style={{ color: '#FFFFFF', fontSize: 14 }}>
-                  {generatePhase === 'uploading_audio' ? '上传音频...' : generatePhase === 'submitting' ? '提交中...' : '生成中...'}
-                </p>
-                <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-xs"
-                  style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }}>取消</button>
-              </div>
-            ) : (
-              <PrimaryButton fullWidth size="lg" onClick={handleGenerate} disabled={!imageUrl || !audioUrl}>
-                <Wand2 size={18} /> 开始生成数字人
-              </PrimaryButton>
-            )}
-          </GlassCard>
-        </>
-      )}
-    </>
-  );
-
-  // ══════════════════════════════════════════════════════════
-  // 模式：一键成片
-  // ══════════════════════════════════════════════════════════
-
-  const OC_PHASES: Record<string, string> = {
-    idle: '准备中', scripting: 'AI 写稿中', tts: '语音合成中',
-    uploading: '上传音频中', submitting: '提交任务中', generating: '生成视频中',
-    merging: '合并视频中', done: '完成', error: '出错',
-  };
-
-  const renderOneClickMode = () => (
-    <>
-      {renderImagePicker()}
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#F43F5E' }}>⚡ 一键成片</span> · 全自动流水线
-        </p>
-        <input value={ocTopic} onChange={e => setOcTopic(e.target.value)}
-          placeholder="输入主题，例如：产品发布介绍、知识科普..."
-          className="w-full bg-transparent px-3 py-3 rounded-xl text-sm outline-none mb-3"
-          style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>风格</p>
-            <div className="grid grid-cols-2 gap-1">
-              {ORAL_STYLES.map(({ key, label }) => (
-                <button key={key} onClick={() => setOcStyle(key)}
-                  className="py-1.5 rounded-lg text-xs transition-all"
-                  style={{
-                    background: ocStyle === key ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.06)',
-                    border: ocStyle === key ? '1px solid rgba(244,63,94,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                    color: ocStyle === key ? '#FDA4AF' : '#9CA3AF',
-                  }}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>音色</p>
-            <div className="grid grid-cols-2 gap-1 max-h-28 overflow-y-auto">
-              {voices.slice(0, 4).map(v => (
-                <button key={v.key} onClick={() => setVoice(v.key)}
-                  className="py-1.5 rounded-lg text-xs transition-all"
-                  style={{
-                    background: voice === v.key ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.06)',
-                    border: voice === v.key ? '1px solid rgba(244,63,94,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                    color: voice === v.key ? '#FDA4AF' : '#9CA3AF',
-                  }}>{v.label}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 12 }}>
-          分辨率: {resolution} · {resolution === '720P' ? '20' : '10'} 灵力/段
-        </p>
-
-        {ocPhase === 'idle' ? (
-          <PrimaryButton fullWidth size="lg" onClick={handleOneClick} disabled={!imageUrl || !ocTopic.trim()}>
-            <Zap size={18} /> 一键成片
-          </PrimaryButton>
-        ) : ocPhase === 'done' ? (
-          <div>
-            {ocVideoUrls.length > 1 ? (
-              // 多段结果: 展示全部视频
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 p-2 rounded-lg"
-                  style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
-                  <CheckCircle2 size={14} color="#22C55E" />
-                  <span style={{ color: '#86EFAC', fontSize: 12 }}>已生成 {ocVideoUrls.length} 段视频 (长脚本自动分段)</span>
-                </div>
-                {ocVideoUrls.map((url, i) => (
-                  <div key={i}>
-                    <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>片段 {i + 1}</p>
-                    {renderVideoResult(url, () => handleSave(url, `数字人 · ${ocTopic} (片段${i + 1})`))}
-                  </div>
-                ))}
-                <button onClick={() => { setOcPhase('idle'); setOcVideoUrls([]); setFinalVideoUrl(null); }}
-                  className="w-full py-2 rounded-xl text-xs flex items-center justify-center gap-1"
-                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB' }}>
-                  <RefreshCw size={14} /> 重新生成
-                </button>
-              </div>
-            ) : (
-              renderVideoResult(finalVideoUrl!)
-            )}
-          </div>
-        ) : ocPhase === 'error' ? (
-          <div className="flex flex-col items-center py-4 gap-2">
-            <XCircle size={30} color="#EF4444" />
-            <p style={{ color: '#FCA5A5', fontSize: 13 }}>{ocError || '生成失败'}</p>
-            <button onClick={() => { setOcPhase('idle'); setOcError(null); }}
-              className="px-4 py-1.5 rounded-lg text-xs"
-              style={{ background: 'rgba(244,63,94,0.15)', color: '#FDA4AF', border: '1px solid rgba(244,63,94,0.3)' }}>
-              重试
+            <button onClick={() => setS2vBatchMode(!s2vBatchMode)}
+              className="relative w-10 h-5 rounded-full transition-all"
+              style={{ background: s2vBatchMode ? 'rgba(245,158,11,0.6)' : 'rgba(255,255,255,0.15)' }}>
+              <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                style={{ left: s2vBatchMode ? 22 : 2 }} />
             </button>
           </div>
-        ) : (
-          <div className="flex flex-col items-center py-6 gap-3">
-            <div className="relative w-14 h-14">
-              <div className="absolute inset-0 rounded-full border-2 border-rose-400 border-t-transparent animate-spin" />
-              <div className="absolute inset-3 rounded-full border-2 border-amber-400 border-b-transparent animate-spin"
-                style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
+
+          {s2vBatchMode ? (
+            <>
+              <div className="flex gap-2 mb-3">
+                <input value={batchInput} onChange={e => setBatchInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addBatchItem(); }}
+                  placeholder="输入主题，每行一个..."
+                  className="flex-1 bg-transparent px-3 py-2 rounded-xl text-sm outline-none"
+                  style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
+                <button onClick={addBatchItem} className="px-4 py-2 rounded-xl text-xs flex items-center gap-1"
+                  style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)' }}>
+                  <Plus size={14} /> 添加
+                </button>
+              </div>
+              {batchItems.length > 0 && (
+                <div className="space-y-1.5 max-h-60 overflow-y-auto mb-3">
+                  {batchItems.map((item, idx) => {
+                    const st = BATCH_STATUS_LABELS[item.status];
+                    return (
+                      <div key={item.id} className="p-2 rounded-lg flex items-center justify-between"
+                        style={{ background: st.bg, border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span style={{ color: '#6B7280', fontSize: 10 }}>#{idx + 1}</span>
+                          <span className="truncate" style={{ color: '#E5E7EB', fontSize: 11 }}>{item.topic}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {item.status === 'done' ? <CheckCircle2 size={12} color="#22C55E" />
+                            : item.status === 'error' ? <XCircle size={12} color="#EF4444" />
+                            : item.status !== 'pending' ? <Loader2 size={12} color={st.color} className="animate-spin" />
+                            : null}
+                          <span style={{ color: st.color, fontSize: 10 }}>{st.text}</span>
+                          {!isBatchRunning && <button onClick={() => removeBatchItem(item.id)}><Trash2 size={10} color="#6B7280" /></button>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex gap-2 text-xs mb-3" style={{ color: '#9CA3AF' }}>
+                <span>总计: {batchItems.length}</span>
+                <span style={{ color: '#86EFAC' }}>完成: {batchItems.filter(i => i.status === 'done').length}</span>
+                <span style={{ color: '#FCA5A5' }}>失败: {batchItems.filter(i => i.status === 'error').length}</span>
+              </div>
+              {isBatchRunning ? (
+                <button onClick={() => { batchAbortRef.current = true; }}
+                  className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>
+                  <Square size={14} /> 停止生成
+                </button>
+              ) : (
+                <PrimaryButton fullWidth size="lg" onClick={runBatch} disabled={batchItems.length === 0 || !imageUrl}>
+                  <Zap size={18} /> 开始批量生成 ({batchItems.length} 个 · 约 {batchItems.length * (resolution === '720P' ? 20 : 10)} 灵力)
+                </PrimaryButton>
+              )}
+            </>
+          ) : (
+            <>
+              <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>分辨率</p>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                {RESOLUTION_OPTIONS.map(({ key, label, cost }) => (
+                  <button key={key} onClick={() => setResolution(key)}
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all"
+                    style={{
+                      background: resolution === key ? 'rgba(6,182,212,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: resolution === key ? '1px solid rgba(6,182,212,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                    }}>
+                    <span style={{ color: resolution === key ? '#67E8F9' : '#E5E7EB', fontSize: 14, fontWeight: 700 }}>{label}</span>
+                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>{cost}</span>
+                  </button>
+                ))}
+              </div>
+
+              {generatePhase === 'done' ? (
+                renderVideoResult(finalVideoUrl!)
+              ) : generatePhase === 'error' ? (
+                <div className="flex flex-col items-center py-4 gap-2">
+                  <XCircle size={30} color="#EF4444" />
+                  <p style={{ color: '#FCA5A5', fontSize: 13 }}>{errorMsg || '生成失败'}</p>
+                  <PrimaryButton size="sm" onClick={() => { setGeneratePhase('idle'); setErrorMsg(null); }}>
+                    <RefreshCw size={14} /> 重试
+                  </PrimaryButton>
+                </div>
+              ) : showProgress ? (
+                <div className="flex flex-col items-center py-4 gap-3">
+                  <div className="relative w-12 h-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+                    <div className="absolute inset-3 rounded-full border-2 border-purple-400 border-b-transparent animate-spin"
+                      style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
+                  </div>
+                  <p style={{ color: '#FFFFFF', fontSize: 14 }}>
+                    {generatePhase === 'uploading_audio' ? '上传音频...' : generatePhase === 'submitting' ? '提交中...' : '生成视频中...'}
+                  </p>
+                  <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-xs"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }}>取消</button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={handleOneClick}
+                    disabled={!imageUrl || !ttsText}
+                    className="flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all"
+                    style={{
+                      background: imageUrl && ttsText ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.05)',
+                      border: imageUrl && ttsText ? '1px solid rgba(6,182,212,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                      opacity: imageUrl && ttsText ? 1 : 0.4,
+                    }}>
+                    <Zap size={18} color="#67E8F9" />
+                    <span style={{ color: '#67E8F9', fontSize: 12, fontWeight: 600 }}>一键生成</span>
+                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>自动配音+分段+合并</span>
+                  </button>
+                  <button onClick={handleGenerate}
+                    disabled={!imageUrl || !audioUrl}
+                    className="flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all"
+                    style={{
+                      background: imageUrl && audioUrl ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: imageUrl && audioUrl ? '1px solid rgba(139,92,246,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                      opacity: imageUrl && audioUrl ? 1 : 0.4,
+                    }}>
+                    <Wand2 size={18} color="#C4B5FD" />
+                    <span style={{ color: '#C4B5FD', fontSize: 12, fontWeight: 600 }}>生成视频</span>
+                    <span style={{ color: '#9CA3AF', fontSize: 10 }}>用已有音频生成</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </GlassCard>
+      )}
+
+      {/* 一键生成进度 */}
+      {ocPhase !== 'idle' && ocPhase !== 'done' && ocPhase !== 'error' && !s2vBatchMode && (
+        <GlassCard>
+          <div className="flex flex-col items-center py-4 gap-2">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
             </div>
-            <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>{OC_PHASES[ocPhase]}</p>
+            <p style={{ color: '#67E8F9', fontSize: 13, fontWeight: 600 }}>{OC_PHASES[ocPhase]}</p>
             <p style={{ color: '#9CA3AF', fontSize: 11 }}>
-              {ocPhase === 'merging'
-                ? '正在拼接多段视频...'
-                : ocTotalSegments > 1 && ocCurrentSegment > 0
-                ? `正在处理 ${ocCurrentSegment}/${ocTotalSegments} 段`
+              {ocTotalSegments > 1 && ocCurrentSegment > 0
+                ? `处理 ${ocCurrentSegment}/${ocTotalSegments} 段`
                 : ocPhase === 'generating' ? '唇形同步 + 表情生成，预计 2-5 分钟' : '请稍候...'}
             </p>
-            {ocTotalSegments > 1 && ocPhase !== 'merging' && (
+            {ocTotalSegments > 1 && (
               <div className="w-full max-w-[200px] h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
                 <div className="h-full rounded-full transition-all duration-300"
-                  style={{ background: 'linear-gradient(90deg, #F43F5E, #F59E0B)', width: `${(ocCurrentSegment / ocTotalSegments) * 100}%` }} />
+                  style={{ background: 'linear-gradient(90deg, #06B6D4, #8B5CF6)', width: `${(ocCurrentSegment / ocTotalSegments) * 100}%` }} />
               </div>
             )}
             <button onClick={() => { ocAbortRef.current = true; setOcPhase('idle'); }}
               className="px-4 py-1.5 rounded-lg text-xs"
               style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>取消</button>
           </div>
-        )}
-      </GlassCard>
-    </>
-  );
-
-  // ══════════════════════════════════════════════════════════
-  // 模式：批量生成
-  // ══════════════════════════════════════════════════════════
-
-  const renderBatchMode = () => (
-    <>
-      {renderImagePicker()}
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#F59E0B' }}>📦 批量生成</span> · {batchItems.length} 个主题
-        </p>
-
-        {/* 添加主题 */}
-        <div className="flex gap-2 mb-3">
-          <input value={batchInput} onChange={e => setBatchInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') addBatchItem(); }}
-            placeholder="输入主题，每行一个..."
-            className="flex-1 bg-transparent px-3 py-2 rounded-xl text-sm outline-none"
-            style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-          <button onClick={addBatchItem} className="px-4 py-2 rounded-xl text-xs flex items-center gap-1"
-            style={{ background: 'rgba(245,158,11,0.2)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)' }}>
-            <Plus size={14} /> 添加
-          </button>
-        </div>
-
-        {/* 音色 + 分辨率 */}
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 2 }}>音色</p>
-            <select value={voice} onChange={e => setVoice(e.target.value)}
-              className="w-full bg-transparent px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}>
-              {clonedVoiceId && <option value="cloned_voice" style={{ background: '#0F172A' }}>⭐ 我的克隆</option>}
-              {voices.map(v => <option key={v.key} value={v.key} style={{ background: '#0F172A' }}>{v.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 10, marginBottom: 2 }}>分辨率</p>
-            <select value={resolution} onChange={e => setResolution(e.target.value as '480P' | '720P')}
-              className="w-full bg-transparent px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <option value="720P" style={{ background: '#0F172A' }}>720P (20 灵力/段)</option>
-              <option value="480P" style={{ background: '#0F172A' }}>480P (10 灵力/段)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* 主题列表 */}
-        {batchItems.length > 0 && (
-          <div className="space-y-2 max-h-80 overflow-y-auto mb-3">
-            {batchItems.map((item, idx) => {
-              const st = BATCH_STATUS_LABELS[item.status];
-              return (
-                <div key={item.id} className="p-2.5 rounded-xl"
-                  style={{ background: st.bg, border: item.status === 'done' ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span style={{ color: '#6B7280', fontSize: 11, flexShrink: 0 }}>#{idx + 1}</span>
-                      <span className="truncate" style={{ color: '#E5E7EB', fontSize: 12 }}>{item.topic}</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {item.status === 'done' ? (
-                        <CheckCircle2 size={14} color="#22C55E" />
-                      ) : item.status === 'error' ? (
-                        <XCircle size={14} color="#EF4444" />
-                      ) : item.status !== 'pending' ? (
-                        <Loader2 size={14} color={st.color} className="animate-spin" />
-                      ) : null}
-                      <span style={{ color: st.color, fontSize: 10, fontWeight: 600 }}>{st.text}</span>
-                      {!isBatchRunning && (
-                        <button onClick={() => removeBatchItem(item.id)}>
-                          <Trash2 size={12} color="#6B7280" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {item.videoUrl && (
-                    <div className="mt-2">
-                      <video src={item.videoUrl} controls playsInline className="w-full rounded-lg"
-                        style={{ background: '#000', maxHeight: 200 }} />
-                      <div className="flex gap-2 mt-1">
-                        <button onClick={() => handleDownload(item.videoUrl!)}
-                          className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-                          style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF' }}>
-                          <Download size={11} /> 下载
-                        </button>
-                        <button onClick={() => handleSave(item.videoUrl!, item.topic)}
-                          className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-                          style={{ background: 'rgba(255,255,255,0.08)', color: '#9CA3AF' }}>
-                          <Save size={11} /> 保存
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {item.status === 'error' && item.errorMsg && (
-                    <p style={{ color: '#FCA5A5', fontSize: 10, marginTop: 4 }}>{item.errorMsg}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 操作按钮 */}
-        {isBatchRunning ? (
-          <button onClick={() => { batchAbortRef.current = true; }}
-            className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5' }}>
-            <Square size={14} /> 停止生成
-          </button>
-        ) : (
-          <PrimaryButton fullWidth size="lg" onClick={runBatch}
-            disabled={batchItems.length === 0 || !imageUrl}>
-            <Zap size={18} /> 开始批量生成 ({batchItems.length} 个)
-          </PrimaryButton>
-        )}
-
-        {/* 进度统计 */}
-        {batchItems.length > 0 && (
-          <div className="mt-2 flex gap-3 text-xs" style={{ color: '#9CA3AF' }}>
-            <span>总计: {batchItems.length}</span>
-            <span style={{ color: '#86EFAC' }}>完成: {batchItems.filter(i => i.status === 'done').length}</span>
-            <span style={{ color: '#FCA5A5' }}>失败: {batchItems.filter(i => i.status === 'error').length}</span>
-            <span style={{ color: '#FCD34D' }}>等待: {batchItems.filter(i => i.status === 'pending').length}</span>
-          </div>
-        )}
-      </GlassCard>
-    </>
-  );
-
-  // ══════════════════════════════════════════════════════════
-  // 模式：多语言
-  // ══════════════════════════════════════════════════════════
-
-  const renderMultiLangMode = () => (
-    <>
-      {renderImagePicker()}
-
-      <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#22C55E' }}>🌐 多语言播报</span> · 同一角色多语种
-        </p>
-
-        {/* 语言选择 */}
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>目标语言</p>
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {LANGUAGES.map(({ key, label, native }) => (
-            <button key={key} onClick={() => setTargetLang(key)}
-              className="flex flex-col items-center gap-1 py-2 rounded-xl transition-all"
-              style={{
-                background: targetLang === key ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)',
-                border: targetLang === key ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.1)',
-              }}>
-              <span style={{ fontSize: 16 }}>{native}</span>
-              <span style={{ color: targetLang === key ? '#86EFAC' : '#9CA3AF', fontSize: 10 }}>{label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* AI 写稿（多语言） */}
-        <div className="space-y-3 mb-4">
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 4 }}>主题（用{targetLang === 'zh' ? '中文' : targetLang === 'en' ? 'English' : targetLang === 'ja' ? '日本語' : '한국어'}输入）</p>
-            <input value={aiTopic} onChange={e => setAiTopic(e.target.value)}
-              placeholder={targetLang === 'en' ? 'Enter a topic...' : targetLang === 'ja' ? 'トピックを入力...' : targetLang === 'ko' ? '주제를 입력...' : '输入主题...'}
-              className="w-full bg-transparent px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ color: '#E5E7EB', border: '1px solid rgba(255,255,255,0.1)' }} />
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span style={{ color: '#9CA3AF', fontSize: 11 }}>字数</span>
-              <span style={{ color: '#86EFAC', fontSize: 11 }}>{aiLength}字 · ≈{Math.ceil(aiLength / 5)}秒</span>
-            </div>
-            <input type="range" min="50" max="300" step="10" value={aiLength}
-              onChange={e => setAiLength(parseInt(e.target.value))} className="w-full accent-green-500" />
-          </div>
-        </div>
-
-        <PrimaryButton size="md" onClick={handleGenerateScript} disabled={isGeneratingScript || !aiTopic.trim()}>
-          {isGeneratingScript ? <><Loader2 size={14} className="animate-spin" /> 生成中...</> : <><Globe size={14} /> 生成{targetLang === 'zh' ? '中文' : targetLang === 'en' ? '英文' : targetLang === 'ja' ? '日文' : '韩文'}脚本</>}
-        </PrimaryButton>
-
-        {generatedScripts.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <p style={{ color: '#9CA3AF', fontSize: 11 }}>脚本预览</p>
-            {generatedScripts.map((s, i) => (
-              <div key={i} onClick={() => { setSelectedVariant(i); setTtsText(s); }}
-                className="p-3 rounded-xl cursor-pointer text-sm transition-all"
-                style={{
-                  background: selectedVariant === i ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.03)',
-                  border: selectedVariant === i ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                  color: '#E5E7EB', maxHeight: 100, overflowY: 'auto',
-                }}>
-                <span style={{ color: selectedVariant === i ? '#86EFAC' : '#9CA3AF', fontSize: 10 }}>
-                  变体 {i + 1} {selectedVariant === i ? '✓' : ''}
-                </span>
-                <p className="mt-1 whitespace-pre-wrap" style={{ lineHeight: 1.5 }}>{s}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </GlassCard>
-
-      {selectedVariant >= 0 && generatedScripts[selectedVariant] && (
-        <>
-          <GlassCard>
-            <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-              <span style={{ color: '#8B5CF6' }}>配音 & 生成</span> · {LANGUAGES.find(l => l.key === targetLang)?.label}
-            </p>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 8 }}>
-              提示：当前音色为中文音色，朗读非中文文本时可能带有口音
-            </p>
-            {renderTTSPanel(ttsText, setTtsText)}
-            {renderAudioReady()}
-          </GlassCard>
-
-          <GlassCard>
-            {generatePhase === 'done' ? renderVideoResult(finalVideoUrl!) :
-             generatePhase === 'error' ? (
-              <div className="flex flex-col items-center py-4 gap-2">
-                <XCircle size={30} color="#EF4444" />
-                <p style={{ color: '#FCA5A5', fontSize: 13 }}>{errorMsg || '生成失败'}</p>
-                <PrimaryButton size="sm" onClick={() => { setGeneratePhase('idle'); setErrorMsg(null); }}>
-                  <RefreshCw size={14} /> 重试
-                </PrimaryButton>
-              </div>
-            ) : showProgress ? (
-              <div className="flex flex-col items-center py-4 gap-3">
-                <div className="relative w-10 h-10">
-                  <div className="absolute inset-0 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                </div>
-                <p style={{ color: '#FFFFFF', fontSize: 13 }}>生成中...</p>
-                <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-xs"
-                  style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }}>取消</button>
-              </div>
-            ) : (
-              <PrimaryButton fullWidth size="lg" onClick={handleGenerate} disabled={!imageUrl || !audioUrl}>
-                <Wand2 size={18} /> 生成{targetLang === 'zh' ? '中文' : targetLang === 'en' ? '英文' : targetLang === 'ja' ? '日文' : '韩文'}数字人
-              </PrimaryButton>
-            )}
-          </GlassCard>
-        </>
+        </GlassCard>
       )}
     </>
   );
@@ -2426,11 +2082,7 @@ function DigitalHumanContent() {
         </div>
 
         {/* 模式内容 */}
-        {dhMode === 'manual' && renderManualMode()}
-        {dhMode === 'ai-write' && renderAIWriteMode()}
-        {dhMode === 'one-click' && renderOneClickMode()}
-        {dhMode === 'batch' && renderBatchMode()}
-        {dhMode === 'multi-lang' && renderMultiLangMode()}
+        {dhMode === 's2v' && renderS2VMode()}
         {dhMode === 'animate' && renderAnimateMode()}
         {dhMode === 'avatar' && renderAvatarMode()}
       </div>
