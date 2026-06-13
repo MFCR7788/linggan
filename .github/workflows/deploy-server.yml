@@ -53,10 +53,12 @@ jobs:
             free -m
             # 安装 C++ 编译工具（better-sqlite3 原生模块需要）
             if command -v apt-get &> /dev/null; then
-              apt-get update -qq && apt-get install -y -qq build-essential python3
+              apt-get update -qq && apt-get install -y -qq build-essential python3 ffmpeg
             elif command -v yum &> /dev/null; then
-              yum install -y gcc-c++ make python3
+              yum install -y gcc-c++ make python3 ffmpeg
             fi
+            # 确保 ffmpeg 路径写入 env
+            grep -q "^FFMPEG_PATH=" .env.local || echo "FFMPEG_PATH=$(which ffmpeg)" >> .env.local
             set +e  # npm/build 允许失败，下面有回退逻辑
             # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
             echo "=== npm install ==="
