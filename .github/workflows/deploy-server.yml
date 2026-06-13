@@ -32,10 +32,18 @@ jobs:
             git reset --hard origin/main
             echo "=== git log ==="
             git log --oneline -5
-            # 同步 env var（运行时敏感配置，不存在则追加）
-            grep -q "^VOLC_TTS_APP_ID=" .env.local && sed -i "s#^VOLC_TTS_APP_ID=.*#VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}#" .env.local || echo "VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}" >> .env.local
-            grep -q "^VOLC_TTS_ACCESS_TOKEN=" .env.local && sed -i "s#^VOLC_TTS_ACCESS_TOKEN=.*#VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}#" .env.local || echo "VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}" >> .env.local
-            grep -q "^CRON_SECRET=" .env.local && sed -i "s#^CRON_SECRET=.*#CRON_SECRET=${{ secrets.CRON_SECRET }}" .env.local || echo "CRON_SECRET=${{ secrets.CRON_SECRET }}" >> .env.local
+            # 同步 env var（用 Perl 替代 sed，避免 token 中的 # 等特殊字符破坏命令）
+            write_env_line() {
+              local key="$1" val="$2"
+              if grep -q "^${key}=" .env.local 2>/dev/null; then
+                perl -i -pe "s/^${key}=.*/${key}=${val}/" .env.local
+              else
+                echo "${key}=${val}" >> .env.local
+              fi
+            }
+            write_env_line "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
+            write_env_line "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
+            write_env_line "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
             # 先停应用释放内存
             systemctl stop lingji || true
             # 只删构建缓存，保留 node_modules 避免全量重装 OOM
@@ -51,14 +59,35 @@ jobs:
               swapon /swapfile
             fi
             free -m
-            # 安装 C++ 编译工具（better-sqlite3 原生模块需要）
+            # 安装编译工具（npm native modules 需要）
             if command -v apt-get &> /dev/null; then
-              apt-get update -qq && apt-get install -y -qq build-essential python3 ffmpeg
+              apt-get update -qq && apt-get install -y -qq build-essential python3
             elif command -v yum &> /dev/null; then
-              yum install -y gcc-c++ make python3 ffmpeg
+              yum install -y gcc-c++ make python3
             fi
-            # 确保 ffmpeg 路径写入 env
-            grep -q "^FFMPEG_PATH=" .env.local || echo "FFMPEG_PATH=$(which ffmpeg)" >> .env.local
+            # 安装 ffmpeg（视频合成需要）
+            if ! command -v ffmpeg &> /dev/null; then
+              echo "=== ffmpeg not found, installing ==="
+              if command -v yum &> /dev/null; then
+                # 阿里云 Linux 8 → EPEL
+                yum install -y epel-release 2>/dev/null || true
+                yum install -y ffmpeg 2>/dev/null || true
+              elif command -v apt-get &> /dev/null; then
+                apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
+              fi
+              # EPEL 也没有 → 下载静态二进制
+              if ! command -v ffmpeg &> /dev/null; then
+                echo "=== static ffmpeg fallback ==="
+                curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+                tar -xf /tmp/ffmpeg.tar.xz -C /usr/local/bin/ --strip-components=1 --wildcards '*/ffmpeg'
+                rm -f /tmp/ffmpeg.tar.xz
+              fi
+            fi
+            # 写入 FFMPEG_PATH，优先静态路径
+            grep -q "^FFMPEG_PATH=" .env.local || {
+              FF=$(which ffmpeg 2>/dev/null || echo "/usr/local/bin/ffmpeg")
+              echo "FFMPEG_PATH=${FF}" >> .env.local
+            }
             set +e  # npm/build 允许失败，下面有回退逻辑
             # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
             echo "=== npm install ==="
