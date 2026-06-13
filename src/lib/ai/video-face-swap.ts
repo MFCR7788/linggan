@@ -25,22 +25,113 @@ export interface VideoFaceSwapResult {
   mode?: string;
 }
 
-export async function swapVideoFace(options: VideoFaceSwapOptions): Promise<VideoFaceSwapResult> {
+function getApiKey(): string {
   const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
+  return apiKey;
+}
 
+export async function swapVideoFace(options: VideoFaceSwapOptions): Promise<VideoFaceSwapResult> {
+  const apiKey = getApiKey();
   const mode = options.mode || 'wan-std';
 
-  // Step 1: 提交异步任务
+  const taskId = await submitFaceSwapTask({ imageUrl: options.imageUrl, videoUrl: options.videoUrl, mode, skipCheck: options.skipCheck });
+  const videoUrl = await pollFaceSwapTask(taskId);
+  if (!videoUrl) throw new Error('视频换人超时（任务可能仍在处理中）');
+
+  return { success: true, videoUrl, taskId, mode };
+}
+
+// ── 批量换人（多段视频并行提交+轮询） ──
+
+interface SegmentSwapInput {
+  index: number;
+  imageUrl: string;
+  videoUrl: string;
+  mode: 'wan-std' | 'wan-pro';
+  skipCheck?: boolean;
+}
+
+interface SegmentSwapResult {
+  index: number;
+  success: boolean;
+  videoUrl?: string;
+  error?: string;
+  taskId?: string;
+}
+
+/** 批量换人：并行提交全部任务 → 并行轮询全部结果 */
+export async function batchSwapVideoFace(segments: SegmentSwapInput[]): Promise<SegmentSwapResult[]> {
+  if (segments.length === 0) return [];
+  if (segments.length === 1) {
+    const s = segments[0];
+    try {
+      const result = await swapVideoFace({ imageUrl: s.imageUrl, videoUrl: s.videoUrl, mode: s.mode, skipCheck: s.skipCheck });
+      return [{ index: s.index, success: true, videoUrl: result.videoUrl, taskId: result.taskId }];
+    } catch (e) {
+      return [{ index: s.index, success: false, error: e instanceof Error ? e.message : String(e) }];
+    }
+  }
+
+  const apiKey = getApiKey();
+
+  // Step 1: 并行提交全部任务
+  const submissions = await Promise.all(
+    segments.map(async (seg, idx) => {
+      try {
+        const taskId = await submitFaceSwapTask({
+          imageUrl: seg.imageUrl,
+          videoUrl: seg.videoUrl,
+          mode: seg.mode,
+          skipCheck: seg.skipCheck,
+        });
+        return { index: idx, taskId, success: true };
+      } catch (e) {
+        return { index: idx, taskId: null, success: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    })
+  );
+
+  // Step 2: 并行轮询全部已提交的任务
+  const pollResults = await Promise.all(
+    submissions.map(async (sub) => {
+      if (!sub.success || !sub.taskId) {
+        return { index: sub.index, success: false, error: sub.error || '提交失败' };
+      }
+      try {
+        const videoUrl = await pollFaceSwapTask(sub.taskId);
+        if (!videoUrl) throw new Error('轮询超时');
+        return { index: sub.index, success: true, videoUrl, taskId: sub.taskId };
+      } catch (e) {
+        return { index: sub.index, success: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    })
+  );
+
+  return pollResults;
+}
+
+// ── 底层：提交 / 轮询 ──
+
+interface SubmitInput {
+  imageUrl: string;
+  videoUrl: string;
+  mode: 'wan-std' | 'wan-pro';
+  skipCheck?: boolean;
+}
+
+async function submitFaceSwapTask(input: SubmitInput): Promise<string> {
+  const apiKey = getApiKey();
+
   const submitBody = {
     model: 'wan2.2-animate-mix',
     input: {
-      image_url: options.imageUrl,
-      video_url: options.videoUrl,
+      image_url: input.imageUrl,
+      video_url: input.videoUrl,
     },
     parameters: {
-      mode,
-      ...(options.skipCheck ? { check_image: false } : {}),
+      mode: input.mode,
+      ...(input.skipCheck ? { check_image: false } : {}),
     },
   };
 
@@ -60,23 +151,18 @@ export async function swapVideoFace(options: VideoFaceSwapOptions): Promise<Vide
   }
 
   const submitData = await submitRes.json();
-
-  // 检查是否有错误
   if (submitData.code) {
     throw new Error(submitData.message || `视频换人 API 错误: ${submitData.code}`);
   }
 
   const taskId = submitData.output?.task_id;
   if (!taskId) throw new Error('视频换人失败: 未获取到 task_id');
-
-  // Step 2: 轮询结果（最长 8 分钟）
-  const videoUrl = await pollSwapTask(apiKey, taskId);
-  if (!videoUrl) throw new Error('视频换人超时（任务可能仍在处理中）');
-
-  return { success: true, videoUrl, taskId, mode };
+  return taskId;
 }
 
-async function pollSwapTask(apiKey: string, taskId: string): Promise<string | null> {
+async function pollFaceSwapTask(taskId: string): Promise<string | null> {
+  const apiKey = getApiKey();
+
   for (let i = 0; i < 48; i++) {
     await new Promise((r) => setTimeout(r, 10000)); // 10s 间隔
 
@@ -98,7 +184,7 @@ async function pollSwapTask(apiKey: string, taskId: string): Promise<string | nu
         throw new Error('视频换人任务被取消');
       case 'PENDING':
       case 'RUNNING':
-        continue; // 继续等待
+        continue;
     }
   }
   return null;
