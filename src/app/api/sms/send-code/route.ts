@@ -112,8 +112,10 @@ export async function POST(request: Request) {
       sendError = '未配置 ALIYUN_SMS_ACCESS_KEY_ID / SECRET';
     }
 
-    // 开发环境仅在控制台打印验证码（绝不回传给客户端）
-    if (process.env.NODE_ENV === 'development') {
+    const isDev = process.env.NODE_ENV === 'development';
+
+    // 开发环境打印验证码到控制台（便于本地调试）
+    if (isDev) {
       console.log(`[SMS] 开发模式 验证码: ${code} (手机: ${phone})`);
     }
 
@@ -129,6 +131,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: '验证码已发送',
+      // 开发模式回显验证码（仅 localhost，生产环境绝不返回）
+      ...(isDev ? { code } : {}),
     });
   } catch (error) {
     console.error('短信发送错误:', error);

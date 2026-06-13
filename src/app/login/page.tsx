@@ -65,6 +65,11 @@ function LoginContent() {
         body: JSON.stringify({ phone, captchaToken, type: tab }),
       });
 
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`服务器异常 (${response.status}): ${text.substring(0, 80)}`);
+      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error);
@@ -93,7 +98,12 @@ function LoginContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, code }),
       });
-      
+
+      const loginContentType = response.headers.get('content-type') || '';
+      if (!loginContentType.includes('application/json')) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`服务器异常 (${response.status}): ${text.substring(0, 80)}`);
+      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error);
@@ -130,6 +140,11 @@ function LoginContent() {
         body: JSON.stringify({ phone, code, username }),
       });
 
+      const regContentType = response.headers.get('content-type') || '';
+      if (!regContentType.includes('application/json')) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`服务器异常 (${response.status}): ${text.substring(0, 80)}`);
+      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error);

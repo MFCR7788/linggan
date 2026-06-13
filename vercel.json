@@ -3,6 +3,10 @@
   "buildCommand": "next build",
   "installCommand": "npm install",
   "functions": {
+    "src/app/api/auth/login-with-code/route.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    },
     "src/app/api/ai/video/one-click/route.ts": {
       "maxDuration": 60,
       "memory": 1024
