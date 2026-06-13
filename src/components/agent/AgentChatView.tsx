@@ -170,6 +170,9 @@ export function AgentChatView() {
   // 语音录制
   const voice = useVoiceRecording();
   const { isRecording, recordingTime, liveTranscript, startRecording, stopRecording, cancelRecording } = voice;
+  const [pressingMic, setPressingMic] = useState(false);        // 按住瞬间高亮
+  const [cancelGesture, setCancelGesture] = useState(false);    // 上滑取消状态
+  const pressStartYRef = useRef(0);                              // 按下 Y 坐标，用于检测上滑
 
   // 文件上传
   const fileUpload = useFileUpload();
@@ -557,21 +560,44 @@ export function AgentChatView() {
   const handlePressStart = (e: React.PointerEvent | React.TouchEvent) => {
     if ('button' in e && e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
+    // 立即高亮反馈
+    setPressingMic(true);
+    setCancelGesture(false);
+    // 记录按下 Y 坐标，用于上滑取消检测
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as React.PointerEvent).clientY;
+    pressStartYRef.current = clientY || 0;
+
     pressHandledRef.current = false;
     if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
     pressTimerRef.current = setTimeout(() => {
       if (pressHandledRef.current) return;
       pressHandledRef.current = true;
+      // 录音开始 → 震动反馈
+      if (navigator.vibrate) navigator.vibrate(30);
     }, 300);
     startRecording();
   };
 
   const handlePressEnd = async () => {
+    setPressingMic(false);
+    setCancelGesture(false);
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
     if (pressHandledRef.current) return;
     pressHandledRef.current = true;
+
+    if (cancelGesture) {
+      cancelRecording();
+      return;
+    }
     const transcript = await stopRecording();
     if (transcript) setInput(prev => (prev ? prev + transcript : transcript));
+  };
+
+  // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
+  const handleRecordingPointerMove = (e: React.PointerEvent) => {
+    if (!isRecording) return;
+    const dy = pressStartYRef.current - e.clientY;
+    setCancelGesture(dy > 60);
   };
 
   // 选文件后立即上传，不等发送
@@ -620,6 +646,33 @@ export function AgentChatView() {
     setShowTools(false);
     const file = await pickAudio();
     if (file) attachAndUpload(file);
+  };
+
+  // 相机拍照 — 移动端打开摄像头，桌面端回退到文件选择
+  const handleCameraCapture = () => {
+    setShowTools(false);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    // capture="environment" 在移动端直接打开后置摄像头
+    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+      input.setAttribute('capture', 'environment');
+    }
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      // 预览用本地 URL，上传靠 uploadFile
+      const preview = URL.createObjectURL(file);
+      fileMapRef.current.set(file.name, file);
+      const imageFile: AttachedFile = {
+        id: Date.now().toString(),
+        file,
+        preview,
+        type: 'image' as const,
+      };
+      attachAndUpload(imageFile);
+    };
+    input.click();
   };
 
   const removeAttachedFile = (id: string) => {
@@ -1515,16 +1568,30 @@ export function AgentChatView() {
         {isRecording ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 animate-mic-pulse">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 animate-mic-pulse ${
+                cancelGesture ? 'bg-red-900/60' : 'bg-red-500'
+              }`}>
                 <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
-                  <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  {cancelGesture ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" fill="none" stroke="currentColor" />
+                  ) : (
+                    <>
+                      <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
+                      <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </>
+                  )}
                 </svg>
               </div>
               <div className="flex-1 flex items-center gap-2">
-                <span className="font-mono text-sm tabular-nums text-red-300">{formatTime(recordingTime)}</span>
-                <div className="flex-1 px-3 py-1.5 rounded-xl text-sm min-h-[32px] flex items-center bg-gray-800/80 border border-white/5 text-gray-200">
-                  {liveTranscript ? (
+                <span className={`font-mono text-sm tabular-nums ${cancelGesture ? 'text-gray-500' : 'text-red-300'}`}>{formatTime(recordingTime)}</span>
+                <div className={`flex-1 px-3 py-1.5 rounded-xl text-sm min-h-[32px] flex items-center border ${
+                  cancelGesture
+                    ? 'bg-red-900/20 border-red-800/30 text-red-400'
+                    : 'bg-gray-800/80 border-white/5 text-gray-200'
+                }`}>
+                  {cancelGesture ? (
+                    <span className="text-red-400 text-xs">松手取消</span>
+                  ) : liveTranscript ? (
                     <>
                       <span className="truncate">{liveTranscript}</span>
                       <span className="inline-block w-1 h-4 bg-blue-400 ml-1 animate-pulse flex-shrink-0" />
@@ -1533,12 +1600,14 @@ export function AgentChatView() {
                     <span className="text-gray-500">正在聆听...</span>
                   )}
                 </div>
-                <button onClick={cancelRecording} className="px-3 py-1.5 rounded-full text-xs bg-white/5 text-gray-400 border border-white/10">
+                <button onClick={cancelRecording} className="px-3 py-1.5 rounded-full text-xs bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10">
                   取消
                 </button>
               </div>
             </div>
-            <p className="text-center text-[11px] text-gray-500">松开发送，上滑可取消</p>
+            <p className={`text-center text-[11px] transition-colors ${cancelGesture ? 'text-red-400' : 'text-gray-500'}`}>
+              {cancelGesture ? '松手取消录音' : '松开发送，上滑可取消'}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -1700,6 +1769,18 @@ export function AgentChatView() {
                 )}
               </div>
 
+              {/* 相机拍照按钮 — 移动端打开摄像头 */}
+              <button
+                onClick={handleCameraCapture}
+                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
+                title="拍照"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+                </svg>
+              </button>
+
               <div className="flex-1 bg-white/5 rounded-xl px-3 py-2">
                 <textarea
                   ref={inputRef}
@@ -1784,15 +1865,22 @@ export function AgentChatView() {
                   onPointerDown={handlePressStart}
                   onPointerUp={handlePressEnd}
                   onPointerCancel={handlePressEnd}
+                  onPointerMove={handleRecordingPointerMove}
                   onTouchStart={handlePressStart}
                   onTouchEnd={handlePressEnd}
                   onTouchCancel={handlePressEnd}
                   onContextMenu={(e) => e.preventDefault()}
-                  className="flex-shrink-0 w-12 h-9 rounded-full flex items-center justify-center select-none touch-none active:scale-95 transition-transform"
-                  style={{ background: 'linear-gradient(135deg, #F97316 0%, #EF4444 100%)' }}
+                  className={`flex-shrink-0 h-9 rounded-full flex items-center justify-center select-none touch-none transition-all duration-150 ${
+                    pressingMic ? 'w-12 scale-110 shadow-lg shadow-orange-500/30' : 'w-12'
+                  } active:scale-95`}
+                  style={{
+                    background: pressingMic
+                      ? 'linear-gradient(135deg, #FB923C 0%, #F87171 100%)'
+                      : 'linear-gradient(135deg, #F97316 0%, #EF4444 100%)',
+                  }}
                   title="按住说话"
                 >
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-4 h-4 text-white transition-transform ${pressingMic ? 'scale-110' : ''}`} fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
                     <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
