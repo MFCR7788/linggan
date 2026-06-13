@@ -56,7 +56,7 @@ export async function generateAgnesVideo(options: AgnesVideoOptions): Promise<Ag
   const body: Record<string, unknown> = {
     model: 'agnes-video-v2.0',
     prompt: options.prompt,
-    image: [options.imageUrl],
+    image: options.imageUrl,
     mode: 'keyframes',
     width,
     height,
