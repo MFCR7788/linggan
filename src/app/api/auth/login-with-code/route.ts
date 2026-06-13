@@ -11,6 +11,22 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+// 确保即使 JSON.stringify 失败也返回 JSON（防止 Supabase session 等复杂对象序列化失败）
+function safeJson(body: Record<string, unknown>, status = 200): NextResponse {
+  try {
+    const json = JSON.stringify(body);
+    return new NextResponse(json, {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return new NextResponse(
+      JSON.stringify({ success: false, error: '服务器内部序列化错误' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
 function derivePassword(phone: string): string {
   const salt = process.env.AUTH_SALT;
   if (!salt) {
@@ -72,10 +88,10 @@ export async function POST(request: NextRequest) {
     };
 
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
-      return NextResponse.json({ success: false, error: '请输入正确的手机号' }, { status: 400 });
+      return safeJson({ success: false, error: '请输入正确的手机号' }, 400);
     }
     if (!code || !/^\d{6}$/.test(code)) {
-      return NextResponse.json({ success: false, error: '请输入6位验证码' }, { status: 400 });
+      return safeJson({ success: false, error: '请输入6位验证码' }, 400);
     }
 
     const supabase = createAdminClient();
@@ -91,10 +107,10 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (queryError) {
-      return NextResponse.json({ success: false, error: '服务暂时不可用' }, { status: 500 });
+      return safeJson({ success: false, error: '服务暂时不可用' }, 500);
     }
     if (!verification) {
-      return NextResponse.json({ success: false, error: '验证码无效或已过期' }, { status: 400 });
+      return safeJson({ success: false, error: '验证码无效或已过期' }, 400);
     }
 
     await supabase.from('verification_codes').update({ used: true }).eq('id', verification.id);
@@ -152,20 +168,20 @@ export async function POST(request: NextRequest) {
             isNewUser = true;
             console.log('[login] RPC 创建用户成功:', authUserId);
           } else {
-            return NextResponse.json({
+            return safeJson({
               success: false,
               error: `注册失败: GoTrue 故障且 RPC 兜底也失败。请在 Supabase SQL Editor 确保已创建 create_user_via_sql 函数。RPC 错误: ${rpcResult.error}。GoTrue 错误: ${createError?.message || 'unknown'}`,
-            }, { status: 500 });
+            }, 500);
           }
         }
       }
     }
 
     if (!authUserId) {
-      return NextResponse.json({
+      return safeJson({
         success: false,
         error: '登录失败：未找到用户且无法创建',
-      }, { status: 500 });
+      }, 500);
     }
 
     // ─── 4. 确保 public.users ───
@@ -208,7 +224,7 @@ export async function POST(request: NextRequest) {
     if (!signInResult.error && signInResult.data?.session) {
       // GoTrue 正常：使用 Supabase session
       cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
-      return NextResponse.json({
+      return safeJson({
         success: true,
         message: isNewUser ? '注册成功' : '登录成功',
         session: signInResult.data.session,
@@ -247,14 +263,14 @@ export async function POST(request: NextRequest) {
     });
     cookieStore.set('dev_user_id', '', { path: '/', maxAge: 0 });
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       message: isNewUser ? '注册成功' : '登录成功',
       user: { id: authUserId, phone, username: displayName },
     });
   } catch (error: any) {
     console.error('[login] 未捕获错误:', error);
-    return NextResponse.json({ success: false, error: error.message || '登录失败' }, { status: 500 });
+    return safeJson({ success: false, error: error.message || '登录失败' }, 500);
   }
 }
 
