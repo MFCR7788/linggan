@@ -32,11 +32,11 @@ jobs:
             git reset --hard origin/main
             echo "=== git log ==="
             git log --oneline -5
-            # 同步 env var（用 Perl 替代 sed，避免 token 中的 # 等特殊字符破坏命令）
+            # 同步 env var（Perl ~ 分隔符，避免 / # 等特殊字符破坏正则）
             write_env_line() {
               local key="$1" val="$2"
               if grep -q "^${key}=" .env.local 2>/dev/null; then
-                perl -i -pe "s/^${key}=.*/${key}=${val}/" .env.local
+                perl -i -pe "s~^${key}=.*~${key}=${val}~" .env.local
               else
                 echo "${key}=${val}" >> .env.local
               fi
