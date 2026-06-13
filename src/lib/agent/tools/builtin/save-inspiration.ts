@@ -2,7 +2,7 @@ import type { ToolDefinition } from '../../types';
 
 export const saveToInspirationTool: ToolDefinition = {
   name: 'save_to_inspiration',
-  description: '将对话中生成的内容保存到用户的灵感库。当用户对文案/图片/视频等内容表示满意，或主动要求保存时使用。',
+  description: '将对话中生成的内容保存到用户的灵感库。当用户对文案/图片/视频等内容表示满意，或主动要求保存时使用。保存时必须打标签：tags 参数传 "source:xxx,tool:xxx,topic:xxx"（source: inspiration/web/ai/user, tool: 使用的工具名, topic: 主题关键词）。',
   parameters: {
     type: 'object',
     properties: {

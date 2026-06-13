@@ -183,7 +183,8 @@ export const videoFaceSwapTool: ToolDefinition = {
           saveMediaToInspiration(
             ctx.userId, 'video',
             `换脸段${(r.index ?? 0) + 1}/${segmentCount}`,
-            [r.videoUrl!]
+            [r.videoUrl!],
+            { toolName: 'face_swap' }
           ).catch(() => {});
         }
       }
@@ -243,7 +244,8 @@ export const videoFaceSwapTool: ToolDefinition = {
           saveMediaToInspiration(
             ctx.userId, 'video',
             `换脸合集（${succeeded.length}段 ${duration.toFixed(0)}秒）`,
-            [mergedUrl]
+            [mergedUrl],
+            { toolName: 'face_swap' }
           ).catch(() => {});
         }
       }

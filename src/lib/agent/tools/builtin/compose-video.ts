@@ -290,7 +290,7 @@ export const composeVideoTool: ToolDefinition = {
       // 6. 保存到灵感库
       if (ctx.userId) {
         const totalDuration = scenes.reduce((sum, s) => sum + (s.duration || 3), 0);
-        saveMediaToInspiration(ctx.userId, 'video', `视频合成 ${scenes.length}个场景 ${totalDuration}秒`, [publicUrl]).catch(() => {});
+        saveMediaToInspiration(ctx.userId, 'video', `视频合成 ${scenes.length}个场景 ${totalDuration}秒`, [publicUrl], { toolName: 'compose_video' }).catch(() => {});
       }
 
       // 7. 清理临时文件

@@ -78,7 +78,8 @@ export const generateHyperFramesTool: ToolDefinition = {
         saveMediaToInspiration(
           ctx.userId, 'video',
           `动态图形：${(topic || script).substring(0, 25)}...`,
-          [result.videoUrl]
+          [result.videoUrl],
+          { toolName: 'hyperframes' }
         ).catch(() => {});
       }
 

@@ -46,7 +46,7 @@ export const editImageTool: ToolDefinition = {
     try {
       const result = await editImageAgnes({ image: imageUrl, operation, prompt });
       if (ctx.userId) {
-        saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [result.imageUrl]).catch(() => {});
+        saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [result.imageUrl], { toolName: 'edit_image' }).catch(() => {});
       }
       return {
         success: true,
@@ -61,7 +61,7 @@ export const editImageTool: ToolDefinition = {
       try {
         const resultUrl = await editImageDashScope(imageUrl, dashOp, prompt);
         if (ctx.userId) {
-          saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [resultUrl]).catch(() => {});
+          saveMediaToInspiration(ctx.userId, 'image', prompt || imageUrl, [resultUrl], { toolName: 'edit_image' }).catch(() => {});
         }
         return {
           success: true,

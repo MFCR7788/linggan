@@ -69,7 +69,7 @@ export const generateImageTool: ToolDefinition = {
 
       // 自动保存到灵感库
       if (ctx.userId) {
-        saveMediaToInspiration(ctx.userId, 'image', prompt, urls).catch(() => {});
+        saveMediaToInspiration(ctx.userId, 'image', prompt, urls, { toolName: 'generate_image' }).catch(() => {});
       }
 
       return {

@@ -25,7 +25,7 @@ export const synthesizeSpeechTool: ToolDefinition = {
         return { success: false, output: '语音合成失败，未返回音频数据。' };
       }
       if (ctx.userId) {
-        saveMediaToInspiration(ctx.userId, 'audio', text, []).catch(() => {});
+        saveMediaToInspiration(ctx.userId, 'audio', text, [], { toolName: 'synthesize_speech' }).catch(() => {});
       }
       return {
         success: true,

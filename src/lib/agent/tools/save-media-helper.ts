@@ -12,7 +12,7 @@ export async function saveMediaToInspiration(
   type: 'image' | 'video' | 'audio',
   prompt: string,
   mediaUrls: string[],
-  options?: { sourcePlatform?: string; tags?: string[] }
+  options?: { sourcePlatform?: string; tags?: string[]; toolName?: string }
 ): Promise<void> {
   try {
     const supabase = createAdminClient();
@@ -37,7 +37,15 @@ export async function saveMediaToInspiration(
     }
 
     const title = prompt.length > 50 ? prompt.slice(0, 50) : prompt;
-    const tags = options?.tags || ['AI生成', type === 'image' ? 'AI生图' : type === 'video' ? 'AI视频' : 'AI音频'];
+
+    const mediaTypeLabel = type === 'image' ? 'AI生图' : type === 'video' ? 'AI视频' : 'AI音频';
+    const defaultTags = options?.tags || [
+      'source:ai',
+      options?.toolName ? `tool:${options.toolName}` : `tool:${type}`,
+      mediaTypeLabel,
+      'AI生成',
+    ];
+    const tags = defaultTags;
 
     const { data: item, error } = await supabase
       .from('content_items')

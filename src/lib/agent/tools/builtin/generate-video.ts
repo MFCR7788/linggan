@@ -99,7 +99,7 @@ export const generateVideoTool: ToolDefinition = {
 
         if (status.status === 'succeeded' && status.videoUrl) {
           if (ctx.userId) {
-            saveMediaToInspiration(ctx.userId, 'video', prompt, [status.videoUrl]).catch(() => {});
+            saveMediaToInspiration(ctx.userId, 'video', prompt, [status.videoUrl], { toolName: 'generate_video' }).catch(() => {});
           }
           return {
             success: true,
