@@ -56,12 +56,18 @@ export async function submitSeedanceTask(params: SeedanceParams): Promise<Seedan
 
   const content: SeedanceContentItem[] = [];
 
-  // 图生视频：首帧
+  // 图生视频：首帧 + 参考图（同一张图双角色，保证产品外观一致）
   if (params.imageUrl) {
     content.push({
       type: 'image_url',
       image_url: { url: params.imageUrl },
       role: 'first_frame',
+    });
+    // 同时作为 reference_image 锁定产品外观，防止画面漂移
+    content.push({
+      type: 'image_url',
+      image_url: { url: params.imageUrl },
+      role: 'reference_image',
     });
   }
 

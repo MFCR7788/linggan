@@ -3,8 +3,8 @@
 // 服务端需要安装 ffmpeg
 
 import type { ToolDefinition } from '../../types';
-import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
+import { execFileSync, execSync } from 'child_process';
+import { writeFileSync, mkdirSync, existsSync, readFileSync, copyFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { createAdminClient } from '@/lib/supabase-server';
@@ -51,6 +51,16 @@ const SUBTITLE_POSITIONS: Record<string, string> = {
 };
 
 // ── 工具函数 ──
+
+function ffmpegArgs(args: string[]): void {
+  try {
+    execFileSync(FFMPEG_PATH, args, { stdio: 'pipe', timeout: 300_000 });
+  } catch (e: unknown) {
+    const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
+    const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
+    throw new Error(`ffmpeg 失败: ${detail.substring(0, 300)}`);
+  }
+}
 
 function ffmpeg(cmd: string): void {
   try {
@@ -191,23 +201,24 @@ export const composeVideoTool: ToolDefinition = {
         await downloadFile(scene.imageUrl, imgPath);
 
         // 图片 → 视频片段（静音），缩放+填充到目标分辨率
-        ffmpeg(
-          `${FFMPEG_PATH} -y -loop 1 -i "${imgPath}" ` +
-          `-c:v libx264 -preset fast -t ${dur} -pix_fmt yuv420p -r 30 ` +
-          `-vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black" ` +
-          `-an "${segPath}"`
-        );
+        ffmpegArgs([
+          '-y', '-loop', '1', '-i', imgPath,
+          '-c:v', 'libx264', '-preset', 'fast', '-t', String(dur),
+          '-pix_fmt', 'yuv420p', '-r', '30',
+          '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
+          '-an', segPath,
+        ]);
         segmentPaths.push(segPath);
       }
 
       // 2. 拼接所有片段
       const mergedPath = join(dir, 'merged.mp4');
       if (segmentPaths.length === 1) {
-        execSync(`cp "${segmentPaths[0]}" "${mergedPath}"`);
+        copyFileSync(segmentPaths[0], mergedPath);
       } else {
         const filelist = join(dir, 'filelist.txt');
         writeFileSync(filelist, segmentPaths.map((p) => `file '${p}'`).join('\n'));
-        ffmpeg(`${FFMPEG_PATH} -y -f concat -safe 0 -i "${filelist}" -c copy "${mergedPath}"`);
+        ffmpegArgs(['-y', '-f', 'concat', '-safe', '0', '-i', filelist, '-c', 'copy', mergedPath]);
       }
 
       // 3. 处理音频：口播 + BGM
@@ -250,11 +261,14 @@ export const composeVideoTool: ToolDefinition = {
           mapParts.push('-map "[aout]"');
         }
 
-        ffmpeg(
-          `${FFMPEG_PATH} -y -i "${mergedPath}" ${audioInputs.join(' ')} ` +
-          `-filter_complex "${filterParts.join(';')}" ` +
-          `-map 0:v ${mapParts.join(' ')} -c:v copy -shortest "${withAudioPath}"`
-        );
+        ffmpegArgs([
+          '-y', '-i', mergedPath,
+          ...audioInputs.flatMap(a => ['-i', a]),
+          '-filter_complex', filterParts.join(';'),
+          '-map', '0:v', ...mapParts.flatMap(m => m.split(' ')),
+          '-c:v', 'copy', '-shortest',
+          withAudioPath,
+        ]);
       }
 
       // 4. 字幕

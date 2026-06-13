@@ -3,14 +3,14 @@
 // 视频类 → yt-dlp/douyin-cli 下载 → ffmpeg 提取音频 → FunASR 语音识别
 
 import type { ToolDefinition } from '../../types';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdtemp, rm } from 'fs/promises';
 import { getDouyinPythonPath } from '../douyin-python';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // ── 平台 URL 模式 ──
 
@@ -154,15 +154,24 @@ async function extractViaDirectFetch(url: string): Promise<JinaResult> {
 // ── 方法 2: 视频下载 → ffmpeg 音频 → ASR ──
 
 // yt-dlp 使用 Python 3.11（ECS 默认 3.6 太旧，3.11 才有最新 yt-dlp）
-const YTDLP_CMD = 'python3.11 -m yt_dlp';
+// 安全：使用 execFile 参数数组，不经过 shell（防 URL 命令注入）
 
 async function downloadViaYTDLP(url: string, workDir: string): Promise<string | null> {
   try {
+    // 校验 URL scheme
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { return null; }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+
     const outputPath = join(workDir, '%(id)s.%(ext)s');
-    await execAsync(
-      `${YTDLP_CMD} --no-playlist --max-filesize 300M -f "best[ext=mp4]/best" -o "${outputPath}" "${url}" 2>&1`,
-      { timeout: 120000, maxBuffer: 1024 * 1024 }
-    );
+    await execFileAsync('python3.11', [
+      '-m', 'yt_dlp',
+      '--no-playlist',
+      '--max-filesize', '300M',
+      '-f', 'best[ext=mp4]/best',
+      '-o', outputPath,
+      url,
+    ], { timeout: 120000, maxBuffer: 1024 * 1024 });
 
     const { readdir } = await import('fs/promises');
     const files = await readdir(workDir);
@@ -268,7 +277,7 @@ json.dump(result, sys.stdout, ensure_ascii=False)
 `;
     const scriptPath = join(workDir, 'dy_fetch.py');
     await writeFile(scriptPath, pyScript);
-    const { stdout } = await execAsync(`${python} "${scriptPath}"`, { timeout: 120000, maxBuffer: 1024 * 1024 });
+    const { stdout } = await execFileAsync(python, [scriptPath], { timeout: 120000, maxBuffer: 1024 * 1024 });
     return JSON.parse(stdout) as { desc?: string; videoPath?: string; error?: string };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
@@ -277,10 +286,15 @@ json.dump(result, sys.stdout, ensure_ascii=False)
 
 async function extractAudio(videoPath: string, workDir: string): Promise<string> {
   const audioPath = join(workDir, 'audio.wav');
-  await execAsync(
-    `ffmpeg -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "${audioPath}" 2>&1`,
-    { timeout: 60000 }
-  );
+  await execFileAsync('ffmpeg', [
+    '-i', videoPath,
+    '-vn',
+    '-acodec', 'pcm_s16le',
+    '-ar', '16000',
+    '-ac', '1',
+    '-y',
+    audioPath,
+  ], { timeout: 60000 });
   return audioPath;
 }
 

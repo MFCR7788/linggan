@@ -3,14 +3,14 @@
 // 快速路径：douyin-cli 仅提取描述文案（不下载视频）
 
 import type { ToolDefinition } from '../../types';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { getDouyinPythonPath, resetPythonPathCache } from '../douyin-python';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // ── 调用 douyin-cli 下载视频 + 获取元数据 ──
 
@@ -61,7 +61,7 @@ json.dump(result, sys.stdout, ensure_ascii=False)
   await writeFile(scriptPath, pyScript);
 
   try {
-    const { stdout, stderr } = await execAsync(`${python} "${scriptPath}"`, {
+    const { stdout, stderr } = await execFileAsync(python, [scriptPath], {
       timeout: 120000,
       maxBuffer: 1024 * 1024,
     });
@@ -106,7 +106,7 @@ print(json.dumps({"desc": desc[0]}))
   await writeFile(scriptPath, pyScript);
 
   try {
-    const { stdout } = await execAsync(`${python} "${scriptPath}"`, { timeout: 30000, maxBuffer: 1024 * 1024 });
+    const { stdout } = await execFileAsync(python, [scriptPath], { timeout: 30000, maxBuffer: 1024 * 1024 });
     const data = JSON.parse(stdout);
     return data.desc || '';
   } catch {
@@ -177,10 +177,15 @@ async function extractSingleVideo(url: string, fastOnly: boolean): Promise<Extra
 
     // ffmpeg 提取音频 → 16kHz 单声道 WAV (FunASR 标准格式)
     const audioPath = join(tmpDir, 'audio.wav');
-    await execAsync(
-      `ffmpeg -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "${audioPath}" 2>&1`,
-      { timeout: 60000 }
-    );
+    await execFileAsync('ffmpeg', [
+      '-i', videoPath,
+      '-vn',
+      '-acodec', 'pcm_s16le',
+      '-ar', '16000',
+      '-ac', '1',
+      '-y',
+      audioPath,
+    ], { timeout: 60000 });
 
     // ASR 识别
     const transcript = await recognizeAudioFile(audioPath);

@@ -7,8 +7,8 @@ import { callDoubaoVision, callDeepSeek, synthesizeWithCosyVoice } from '@/lib/a
 import { submitSeedanceTask, getSeedanceTaskStatus } from '@/lib/ai/seedance';
 import { saveMediaToInspiration } from '../save-media-helper';
 import { createAdminClient } from '@/lib/supabase-server';
-import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { writeFileSync, mkdirSync, readFileSync, existsSync, copyFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -137,11 +137,11 @@ function parseStoryboard(raw: string): StoryboardResult | null {
   }
 }
 
-// ── ffmpeg 工具 ──
+// ── ffmpeg 工具（安全：execFileSync 参数数组，不经过 shell）──
 
-function ffmpeg(cmd: string): void {
+function ffmpegArgs(args: string[]): void {
   try {
-    execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
+    execFileSync(FFMPEG, args, { stdio: 'pipe', timeout: 300_000 });
   } catch (e: unknown) {
     const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
     const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
@@ -210,10 +210,12 @@ async function composeFinalVideo(args: {
         // 该镜头失败，生成黑场占位
         const blankPath = join(dir, `blank_${i}.mp4`);
         const dur = shots[i]?.duration || 4;
-        ffmpeg(
-          `${FFMPEG} -hide_banner -y -f lavfi -i color=c=black:s=${width}x${height}:d=${dur} ` +
-          `-c:v libx264 -preset fast -pix_fmt yuv420p -r 30 -an "${blankPath}"`
-        );
+        ffmpegArgs([
+          '-hide_banner', '-y', '-f', 'lavfi',
+          '-i', `color=c=black:s=${width}x${height}:d=${dur}`,
+          '-c:v', 'libx264', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-r', '30', '-an',
+          blankPath,
+        ]);
         segPaths.push(blankPath);
         continue;
       }
@@ -224,23 +226,24 @@ async function composeFinalVideo(args: {
 
       // 统一编码：缩放到目标分辨率 + 静音（去掉 Seedance 自带音频，用 TTS 替代）
       const dur = shots[i]?.duration || 4;
-      ffmpeg(
-        `${FFMPEG} -hide_banner -y -i "${rawPath}" ` +
-        `-c:v libx264 -preset fast -t ${dur} -pix_fmt yuv420p -r 30 ` +
-        `-vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black" ` +
-        `-an "${segPath}"`
-      );
+      ffmpegArgs([
+        '-hide_banner', '-y', '-i', rawPath,
+        '-c:v', 'libx264', '-preset', 'fast', '-t', String(dur),
+        '-pix_fmt', 'yuv420p', '-r', '30',
+        '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        '-an', segPath,
+      ]);
       segPaths.push(segPath);
     }
 
     // 2. 拼接视频片段
     const mergedPath = join(dir, 'merged.mp4');
     if (segPaths.length === 1) {
-      execSync(`cp "${segPaths[0]}" "${mergedPath}"`);
+      copyFileSync(segPaths[0], mergedPath);
     } else {
       const filelist = join(dir, 'filelist.txt');
       writeFileSync(filelist, segPaths.map(p => `file '${p}'`).join('\n'));
-      ffmpeg(`${FFMPEG} -hide_banner -y -f concat -safe 0 -i "${filelist}" -c copy "${mergedPath}"`);
+      ffmpegArgs(['-hide_banner', '-y', '-f', 'concat', '-safe', '0', '-i', filelist, '-c', 'copy', mergedPath]);
     }
 
     // 3. 写入 TTS 音频文件
@@ -266,19 +269,23 @@ async function composeFinalVideo(args: {
       };
       const bgmVol = volMap[bgmStyle] || '0.16';
 
-      ffmpeg(
-        `${FFMPEG} -hide_banner -y -i "${mergedPath}" -i "${ttsPath}" -i "${bgmPath}" ` +
-        `-filter_complex "[1:a]volume=1.5[vo];[2:a]volume=${bgmVol},afade=t=in:d=1.5,afade=t=out:st=9999:d=2[bgm];[vo][bgm]amix=inputs=2:duration=first,volume=1.4[aout]" ` +
-        `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
-      );
+      ffmpegArgs([
+        '-hide_banner', '-y',
+        '-i', mergedPath, '-i', ttsPath, '-i', bgmPath,
+        '-filter_complex', `[1:a]volume=1.5[vo];[2:a]volume=${bgmVol},afade=t=in:d=1.5,afade=t=out:st=9999:d=2[bgm];[vo][bgm]amix=inputs=2:duration=first,volume=1.4[aout]`,
+        '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-shortest',
+        withAudioPath,
+      ]);
     } else {
       // 无 BGM，仅 TTS 口播
       withAudioPath = join(dir, 'with_audio.mp4');
-      ffmpeg(
-        `${FFMPEG} -hide_banner -y -i "${mergedPath}" -i "${ttsPath}" ` +
-        `-filter_complex "[1:a]volume=1.5[aout]" ` +
-        `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
-      );
+      ffmpegArgs([
+        '-hide_banner', '-y',
+        '-i', mergedPath, '-i', ttsPath,
+        '-filter_complex', '[1:a]volume=1.5[aout]',
+        '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-shortest',
+        withAudioPath,
+      ]);
     }
 
     // 6. 烧录字幕
@@ -287,11 +294,12 @@ async function composeFinalVideo(args: {
     const finalPath = join(dir, 'final.mp4');
     const subtitleStyle = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
     const subtitlePos = 'Alignment=2,MarginV=80';
-    ffmpeg(
-      `${FFMPEG} -hide_banner -y -i "${withAudioPath}" ` +
-      `-vf "subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'" ` +
-      `-c:a copy "${finalPath}"`
-    );
+    ffmpegArgs([
+      '-hide_banner', '-y', '-i', withAudioPath,
+      '-vf', `subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'`,
+      '-c:a', 'copy',
+      finalPath,
+    ]);
 
     // 7. 上传到 Supabase Storage
     const supabase = createAdminClient();
@@ -307,7 +315,7 @@ async function composeFinalVideo(args: {
     const { data: urlData } = supabase.storage.from('lingji-media').getPublicUrl(storageKey);
     return urlData.publicUrl;
   } finally {
-    try { execSync(`rm -rf "${dir}"`); } catch {}
+    try { rmSync(dir, { recursive: true, force: true }); } catch {}
   }
 }
 
