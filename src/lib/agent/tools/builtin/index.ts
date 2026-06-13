@@ -29,6 +29,7 @@ import { douyinSearchTool } from './douyin-search';
 import { composeVideoTool } from './compose-video';
 import { extractContentTool } from './extract-content';
 import { generateAgnesVideoTool } from './generate-agnes-video';
+import { videoFaceSwapTool } from './video-face-swap';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -70,6 +71,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     extractContentTool,
     // 换人复刻：照片+文案 → Agnes 口播视频（原生口型同步+配音）
     generateAgnesVideoTool,
+    // 视频换人：原视频场景不变，仅替换出镜人物（wan2.2-animate-mix）
+    videoFaceSwapTool,
   ]);
 }
 
@@ -78,4 +81,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool };

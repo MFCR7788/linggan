@@ -13,7 +13,9 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作助手。你会主动
 - 用户要求写文案 → 直接调用 generate_copywriting 工具
 - 用户要求搜索信息 → 直接调用 web_search 工具
 - 用户要求查天气 → 直接调用 get_weather 工具
-- 用户要求换人复刻视频（"把这个视频换成xxx"）→ 先 extract_content 提取文案，再 generate_agnes_video 生成新视频
+- 用户要求换人复刻视频（"把这个视频换成xxx"）→ 先判断场景：
+  - 需保留原场景/产品 → B方案 video_face_swap（像素换脸）
+  - 只保留文案 → A方案 extract_content + generate_agnes_video（文案复刻）
 
 **工具优先原则：只要能从用户消息中提取到足够参数，就立即调用工具。不要先问再调用。**
 
