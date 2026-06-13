@@ -75,6 +75,10 @@ export function getAgnesApiKey(): string | undefined {
   return getEnv('AGNES_API_KEY');
 }
 
+export function getArkApiKey(): string | undefined {
+  return getEnv('ARK_API_KEY');
+}
+
 export function getAuthSalt(): string | undefined {
   return getEnv('AUTH_SALT');
 }

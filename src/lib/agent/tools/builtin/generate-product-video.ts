@@ -1,21 +1,143 @@
-// 一张图出片 — 产品种草视频一键生成
-// 用户只需提供产品图，其余全自动：识图→文案→场景图→合成→入库
-// 有真人照片走 Agnes 口播路径，无则走 Compose 幻灯片路径
+// 一张图出片 — 产品种草视频一键生成 (Seedance 2.0)
+// 新流水线: 识图 → 分镜脚本(3镜) → Seedance I2V 逐镜生成 → TTS 配音 → 拼接+BGM+字幕 → 入库
+// Seedance 2.0 图生视频带运镜，产品一致性高，是真正的带货视频
 
 import type { ToolDefinition } from '../../types';
-import { callDoubaoVision, callDeepSeek } from '@/lib/ai-services';
-import { generateImageAgnes } from '@/lib/ai/image';
-import { generateAgnesVideo } from '@/lib/ai/agnes-video';
+import { callDoubaoVision, callDeepSeek, synthesizeWithCosyVoice } from '@/lib/ai-services';
+import { submitSeedanceTask, getSeedanceTaskStatus } from '@/lib/ai/seedance';
 import { saveMediaToInspiration } from '../save-media-helper';
 import { createAdminClient } from '@/lib/supabase-server';
 import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync, readFileSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
-// ── SRT 字幕生成 ──
+// ── 类型 ──
+
+interface StoryboardShot {
+  index: number;
+  visualPrompt: string;
+  subtitle: string;
+  duration: number;
+}
+
+interface StoryboardResult {
+  script: string;
+  shots: StoryboardShot[];
+}
+
+// ── 构建分析 prompt ──
+
+function buildAnalyzePrompt(): string {
+  return `请详细分析这张产品图片，提取以下信息：
+1. 品类：这是什么产品？
+2. 外观特征：颜色、材质、形状、设计亮点
+3. 使用场景：在什么场景下使用？
+4. 目标用户：谁会买这个产品？
+5. 核心卖点：最吸引人的 2-3 个特点
+
+请用中文简洁回答，每条 1-2 句话。`;
+}
+
+// ── 构建分镜脚本 prompt ──
+
+function buildStoryboardPrompt(analysis: string, style: string, platform: string): string {
+  const platformGuide: Record<string, string> = {
+    douyin: '抖音带货视频：开头钩子抓眼球（前3秒是关键），中间展示产品亮点，结尾CTA引导互动。短句口语化，每句不超过20字。',
+    xiaohongshu: '小红书种草视频：亲切温和，像在跟闺蜜分享好物。强调真实体验感，带emoji，节奏舒缓自然。',
+  };
+
+  return `你是一个短视频导演，要为一款产品创作 3 镜分镜脚本用于 AI 视频生成。
+
+产品分析：
+${analysis}
+
+风格：${style}
+平台要求：${platformGuide[platform] || platformGuide.douyin}
+
+请输出 JSON（不要 markdown 代码块标记）：
+
+{
+  "script": "完整口播文案，3-4句话，总时长约12秒，纯口语化，短句快节奏，去掉AI味。每句不超过20字。",
+  "shots": [
+    {
+      "index": 1,
+      "visualPrompt": "Seedance视频生成提示词(英文)。镜头1/钩子特写: 产品特写占满画面,从产品中心缓慢向外拉,展示产品细节纹理,专业产品灯光,浅景深,电影质感。Camera slowly pulls back from extreme close-up of the product...",
+      "subtitle": "对应字幕(≤15字，中文)",
+      "duration": 3
+    },
+    {
+      "index": 2,
+      "visualPrompt": "镜头2/环绕展示提示词(英文)。描述运镜+产品+背景...",
+      "subtitle": "对应字幕(≤15字，中文)",
+      "duration": 5
+    },
+    {
+      "index": 3,
+      "visualPrompt": "镜头3/场景展示提示词(英文)。产品在真实使用场景中，自然光...",
+      "subtitle": "对应字幕(≤15字，中文)",
+      "duration": 4
+    }
+  ]
+}
+
+要求：
+1. visualPrompt 必须用英文（Seedance 对英文 prompt 响应更好），包含：主体外观 + 运镜方式 + 场景 + 光影 + 风格
+2. 运镜必须多样：特写→拉远、环绕、推近，每个镜头不同的运镜方式
+3. 3个镜头加起来总时长约12秒
+4. subtitle 每段 ≤15 字，口语化短句
+5. script 是完整 TTS 口播文案，与各镜 subtitle 匹配
+6. 直接输出 JSON，不要 markdown 代码块`;
+}
+
+// ── 解析 LLM 返回的分镜 JSON ──
+
+function parseStoryboard(raw: string): StoryboardResult | null {
+  try {
+    // 去除可能的 markdown 代码块标记
+    let json = raw.trim();
+    if (json.startsWith('```')) {
+      json = json.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```$/, '');
+    }
+    const parsed = JSON.parse(json);
+    if (!parsed.script || !Array.isArray(parsed.shots) || parsed.shots.length === 0) {
+      return null;
+    }
+    return {
+      script: parsed.script,
+      shots: parsed.shots.map((s: Record<string, unknown>, i: number) => ({
+        index: (s.index as number) || i + 1,
+        visualPrompt: s.visualPrompt as string,
+        subtitle: s.subtitle as string,
+        duration: Math.min(Math.max((s.duration as number) || 4, 3), 6),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── ffmpeg 工具 ──
+
+function ffmpeg(cmd: string): void {
+  try {
+    execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
+  } catch (e: unknown) {
+    const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
+    const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
+    throw new Error(`ffmpeg 失败: ${detail.substring(0, 300)}`);
+  }
+}
+
+async function downloadFile(url: string, outputPath: string): Promise<string> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`下载失败 HTTP ${resp.status}`);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  writeFileSync(outputPath, buf);
+  return outputPath;
+}
 
 function formatSrtTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -25,144 +147,73 @@ function formatSrtTime(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
 
-function generateSRT(subtitles: Array<{ text: string; duration: number }>): string {
+function generateSRT(shots: StoryboardShot[]): string {
   const lines: string[] = [];
   let cursor = 0;
-  subtitles.forEach((sub, i) => {
+  shots.forEach((shot, i) => {
     const start = cursor;
-    const end = cursor + sub.duration;
+    const end = cursor + shot.duration;
     cursor = end;
-    lines.push(`${i + 1}`);
-    lines.push(`${formatSrtTime(start)} --> ${formatSrtTime(end)}`);
-    lines.push(sub.text);
-    lines.push('');
+    if (shot.subtitle) {
+      lines.push(`${i + 1}`);
+      lines.push(`${formatSrtTime(start)} --> ${formatSrtTime(end)}`);
+      lines.push(shot.subtitle);
+      lines.push('');
+    }
   });
   return lines.join('\n');
 }
 
-// ── 把文案拆成字幕短句 ──
+// ── 合成最终视频（视频片段 + TTS + BGM + 字幕）──
 
-function splitToSubtitles(script: string, totalDuration: number): Array<{ text: string; duration: number }> {
-  const sentences = script
-    .split(/(?<=[。！？，、\n])/g)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
-
-  if (sentences.length === 0) return [{ text: script, duration: totalDuration }];
-
-  // 按字数分配时长
-  const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
-  return sentences.map(s => ({
-    text: s,
-    duration: Math.max(1.5, (s.length / totalChars) * totalDuration),
-  }));
-}
-
-// ── 构建分析 prompt ──
-
-function buildAnalyzePrompt(productName: string): string {
-  return `请详细分析这张产品图片，提取以下信息用于创作短视频：
-1. 品类：这是什么产品？
-2. 外观特征：颜色、材质、形状、设计亮点
-3. 使用场景：在什么场景下使用？
-4. 目标用户：谁会买这个产品？
-5. 核心卖点：最吸引人的 2-3 个特点
-
-请用中文简洁回答，每条 1-2 句话。不要用"首先/其次/总而言之"等模板词。`;
-}
-
-// ── 构建文案 prompt ──
-
-function buildCopyPrompt(analysis: string, style: string, platform: string): string {
-  const styleGuide: Record<string, string> = {
-    recommend: '种草推荐风格：真诚分享使用体验，突出产品亮点，带个人感受，让人想买',
-    review: '深度测评风格：客观分析优缺点，数据说话，专业可信',
-    tutorial: '实用教程风格：教别人怎么用这个产品，步骤清晰，解决问题',
-  };
-
-  const platformGuide: Record<string, string> = {
-    douyin: '抖音口播风格：前3秒必须抓眼球（抛出问题或惊人发现），短句快节奏，多用"你"，结尾引导互动（评论区扣1/点赞收藏）。纯口语，不要书面语。100-150字。',
-    xiaohongshu: '小红书口播风格：亲切温和，像在跟闺蜜分享好物。强调个人真实体验，"我用了一段时间发现…"。带emoji，短段落。80-120字。',
-  };
-
-  const s = styleGuide[style] || styleGuide.recommend;
-  const p = platformGuide[platform] || platformGuide.douyin;
-
-  return `你是一个短视频创作者，要为一款产品写口播脚本。
-
-${p}
-
-风格要求：${s}
-
-产品分析信息：
-${analysis}
-
-要求：
-1. 纯口播文字，适合朗读，不要任何格式标记
-2. 短句，每句不超过20字
-3. 去掉AI味：不要"首先/其次/总而言之/综上所述/此外/值得注意的是"
-4. 有个人语气和态度
-5. 直接输出脚本，不要前缀说明`;
-}
-
-// ── 构建场景图 prompt ──
-
-function buildScenePrompt(analysis: string): string {
-  return `Generate a beautiful product photography background for social media short video.
-Based on the product context: ${analysis}
-
-Requirements:
-- Clean, aesthetic lifestyle scene that complements the product
-- Soft natural lighting, shallow depth of field
-- Warm and inviting atmosphere
-- Suitable as background for a vertical 9:16 short video
-- No text, no watermark, no people
-- High quality, photorealistic`;
-}
-
-// ── 视频合成（Compose 路径）──
-
-async function composeProductVideo(args: {
-  productImageUrl: string;
-  sceneImageUrls: string[];
-  subtitles: Array<{ text: string; duration: number }>;
+async function composeFinalVideo(args: {
+  shotVideoUrls: (string | null)[];
+  shots: StoryboardShot[];
+  ttsBuffer: Buffer;
   bgmStyle: string;
+  ratio: string;
   userId: string;
 }): Promise<string> {
-  const { productImageUrl, sceneImageUrls, subtitles, bgmStyle } = args;
+  const { shotVideoUrls, shots, ttsBuffer, bgmStyle, ratio, userId } = args;
 
-  const width = 1080;
-  const height = 1920;
-  const dir = join(tmpdir(), `pv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const resolution = ratio === '16:9' ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 };
+  const { width, height } = resolution;
+  const dir = join(tmpdir(), `pv-seedance-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
   mkdirSync(dir, { recursive: true });
 
   try {
-    // 每个场景持续时长
-    const sceneDuration = subtitles.reduce((s, sub) => s + sub.duration, 0);
-    const sceneCount = 1 + sceneImageUrls.length;
-    const perSceneDuration = sceneDuration / sceneCount;
-
-    // 把字幕分配给各场景
-    const scenes = buildScenes(subtitles, sceneCount);
-
-    // 下载并转换每张图为视频片段
-    const allImages = [productImageUrl, ...sceneImageUrls];
+    // 1. 下载所有 Seedance 视频片段并统一编码
     const segPaths: string[] = [];
+    for (let i = 0; i < shotVideoUrls.length; i++) {
+      const url = shotVideoUrls[i];
+      if (!url) {
+        // 该镜头失败，生成黑场占位
+        const blankPath = join(dir, `blank_${i}.mp4`);
+        const dur = shots[i]?.duration || 4;
+        ffmpeg(
+          `${FFMPEG} -y -f lavfi -i color=c=black:s=${width}x${height}:d=${dur} ` +
+          `-c:v libx264 -preset fast -pix_fmt yuv420p -r 30 -an "${blankPath}"`
+        );
+        segPaths.push(blankPath);
+        continue;
+      }
 
-    for (let i = 0; i < allImages.length; i++) {
-      const imgPath = join(dir, `img_${i}.jpg`);
-      const segPath = join(dir, `seg_${i}.mp4`);
-      await downloadFile(allImages[i], imgPath);
+      const rawPath = join(dir, `shot_raw_${i}.mp4`);
+      const segPath = join(dir, `shot_${i}.mp4`);
+      await downloadFile(url, rawPath);
+
+      // 统一编码：缩放到目标分辨率 + 静音（去掉 Seedance 自带音频，用 TTS 替代）
+      const dur = shots[i]?.duration || 4;
       ffmpeg(
-        `${FFMPEG} -y -loop 1 -i "${imgPath}" ` +
-        `-c:v libx264 -preset fast -t ${perSceneDuration} -pix_fmt yuv420p -r 30 ` +
+        `${FFMPEG} -y -i "${rawPath}" ` +
+        `-c:v libx264 -preset fast -t ${dur} -pix_fmt yuv420p -r 30 ` +
         `-vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black" ` +
         `-an "${segPath}"`
       );
       segPaths.push(segPath);
     }
 
-    // 拼接片段
+    // 2. 拼接视频片段
     const mergedPath = join(dir, 'merged.mp4');
     if (segPaths.length === 1) {
       execSync(`cp "${segPaths[0]}" "${mergedPath}"`);
@@ -172,53 +223,60 @@ async function composeProductVideo(args: {
       ffmpeg(`${FFMPEG} -y -f concat -safe 0 -i "${filelist}" -c copy "${mergedPath}"`);
     }
 
-    // BGM 混音
-    let withAudioPath = mergedPath;
-    const bgmFileMap: Record<string, string> = { tech: 'tech.mp3', chill: 'chill.mp3', hype: 'hype.mp3', elegant: 'chill.mp3', energetic: 'hype.mp3', auto: 'chill.mp3' };
+    // 3. 写入 TTS 音频文件
+    const ttsPath = join(dir, 'tts.mp3');
+    writeFileSync(ttsPath, ttsBuffer);
+
+    // 4. BGM
+    const bgmFileMap: Record<string, string> = {
+      tech: 'tech.mp3', chill: 'chill.mp3', hype: 'hype.mp3',
+      elegant: 'chill.mp3', energetic: 'hype.mp3', auto: 'chill.mp3',
+    };
     const bgmFile = bgmFileMap[bgmStyle] || 'chill.mp3';
     const bgmPath = join(process.cwd(), 'public', 'bgm', bgmFile);
+    const hasBgm = existsSync(bgmPath);
 
-    const fs = await import('fs');
-    if (fs.existsSync(bgmPath)) {
+    // 5. 混音：TTS 口播 + BGM 背景
+    let withAudioPath = mergedPath;
+    if (hasBgm) {
       withAudioPath = join(dir, 'with_audio.mp4');
-      const volMap: Record<string, string> = { tech: '0.18', chill: '0.22', hype: '0.15', elegant: '0.18', energetic: '0.18', auto: '0.2' };
-      const vol = volMap[bgmStyle] || '0.2';
+      const volMap: Record<string, string> = {
+        tech: '0.15', chill: '0.18', hype: '0.12',
+        elegant: '0.15', energetic: '0.12', auto: '0.16',
+      };
+      const bgmVol = volMap[bgmStyle] || '0.16';
+
       ffmpeg(
-        `${FFMPEG} -y -i "${mergedPath}" -i "${bgmPath}" ` +
-        `-filter_complex "[1:a]volume=${vol},afade=t=in:d=2,afade=t=out:st=9999:d=2[aout]" ` +
+        `${FFMPEG} -y -i "${mergedPath}" -i "${ttsPath}" -i "${bgmPath}" ` +
+        `-filter_complex "[1:a]volume=1.5[vo];[2:a]volume=${bgmVol},afade=t=in:d=1.5,afade=t=out:st=9999:d=2[bgm];[vo][bgm]amix=inputs=2:duration=first,volume=1.4[aout]" ` +
+        `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
+      );
+    } else {
+      // 无 BGM，仅 TTS 口播
+      withAudioPath = join(dir, 'with_audio.mp4');
+      ffmpeg(
+        `${FFMPEG} -y -i "${mergedPath}" -i "${ttsPath}" ` +
+        `-filter_complex "[1:a]volume=1.5[aout]" ` +
         `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
       );
     }
 
-    // 烧录字幕
-    const hasSubtitles = scenes.some(s => s.subtitles.length > 0);
-    let finalPath = withAudioPath;
+    // 6. 烧录字幕
+    const srtPath = join(dir, 'subtitle.srt');
+    writeFileSync(srtPath, generateSRT(shots));
+    const finalPath = join(dir, 'final.mp4');
+    const subtitleStyle = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
+    const subtitlePos = 'Alignment=2,MarginV=80';
+    ffmpeg(
+      `${FFMPEG} -y -i "${withAudioPath}" ` +
+      `-vf "subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'" ` +
+      `-c:a copy "${finalPath}"`
+    );
 
-    if (hasSubtitles && scenes.some(s => s.subtitles.length > 0)) {
-      // 重新生成整体 SRT（按场景顺序拼接）
-      const allSubs: Array<{ text: string; duration: number }> = [];
-      scenes.forEach(s => {
-        s.subtitles.forEach(sub => allSubs.push(sub));
-      });
-
-      if (allSubs.length > 0) {
-        const srtPath = join(dir, 'subs.srt');
-        writeFileSync(srtPath, generateSRT(allSubs));
-        finalPath = join(dir, 'final.mp4');
-        const style = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
-        const pos = 'Alignment=2,MarginV=80';
-        ffmpeg(
-          `${FFMPEG} -y -i "${withAudioPath}" ` +
-          `-vf "subtitles=${srtPath}:force_style='${style},${pos}'" ` +
-          `-c:a copy "${finalPath}"`
-        );
-      }
-    }
-
-    // 上传到 Supabase Storage
+    // 7. 上传到 Supabase Storage
     const supabase = createAdminClient();
     const videoBuffer = readFileSync(finalPath);
-    const storageKey = `product-video/${args.userId || 'anon'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
+    const storageKey = `product-video/${userId || 'anon'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`;
 
     const { error: uploadErr } = await supabase.storage
       .from('lingji-media')
@@ -233,69 +291,28 @@ async function composeProductVideo(args: {
   }
 }
 
-function buildScenes(
-  subtitles: Array<{ text: string; duration: number }>,
-  sceneCount: number
-): Array<{ subtitles: Array<{ text: string; duration: number }> }> {
-  // 把字幕均匀分配给场景
-  const scenes: Array<{ subtitles: Array<{ text: string; duration: number }> }> = [];
-  const perScene = Math.ceil(subtitles.length / sceneCount);
-
-  for (let i = 0; i < sceneCount; i++) {
-    scenes.push({
-      subtitles: subtitles.slice(i * perScene, (i + 1) * perScene),
-    });
-  }
-
-  return scenes;
-}
-
-async function downloadFile(url: string, outputPath: string): Promise<string> {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`下载失败 HTTP ${resp.status}`);
-  const buf = Buffer.from(await resp.arrayBuffer());
-  writeFileSync(outputPath, buf);
-  return outputPath;
-}
-
-function ffmpeg(cmd: string): void {
-  try {
-    execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
-  } catch (e: unknown) {
-    const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
-    const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
-    throw new Error(`ffmpeg 失败: ${detail.substring(0, 300)}`);
-  }
-}
-
 // ── Tool Definition ──
 
 export const generateProductVideoTool: ToolDefinition = {
   name: 'generate_product_video',
   isLongRunning: true,
   description: `一张图出片：产品图 → 种草短视频，全自动生成。
-上传一张产品图片，AI 自动识图理解产品 → 写口播脚本 → 生成场景图 → 合成带字幕+BGM的竖屏视频。
+上传一张产品图片，AI 自动: 识图理解产品 → 写3镜分镜脚本 → Seedance 2.0 图生视频（逐镜运镜拍摄）→ TTS配音 → 合成+BGM+字幕 → 入库。
 
 适用场景：
 - 产品种草视频：拍个产品图，一键生成带货短视频
 - 好物分享：拍个开箱/好物图，自动出分享视频
 - 上新预告：拍个新品图，生成发布预告短视频
 
-两条路径：
-- 有真人照片 → AI 口播视频（人物讲解产品），更自然、更有说服力
-- 无真人照片 → 产品幻灯片视频（产品图+场景图+字幕+BGM），纯产品展示
+核心引擎：Seedance 2.0（火山引擎），图生视频+专业运镜（推/拉/摇/移/跟），产品一致性高。
 
-输出：9:16 竖屏短视频，已自动保存到灵感库。`,
+输出：9:16 竖屏短视频，带配音+字幕+BGM，已自动保存到灵感库。`,
   parameters: {
     type: 'object',
     properties: {
       imageUrl: {
         type: 'string',
         description: '产品图片 URL（必填）。拍一张产品照片或从灵感库选择。',
-      },
-      personImageUrl: {
-        type: 'string',
-        description: '真人照片 URL（可选）。有真人照片时走口播路径，生成人物讲解产品的视频，更有说服力。',
       },
       style: {
         type: 'string',
@@ -317,169 +334,219 @@ export const generateProductVideoTool: ToolDefinition = {
   },
   async handler(params, ctx) {
     const imageUrl = params.imageUrl as string;
-    const personImageUrl = params.personImageUrl as string | undefined;
     const style = (params.style as string) || 'recommend';
     const platform = (params.platform as string) || 'douyin';
     const bgmStyle = (params.bgmStyle as string) || 'auto';
-
-    const errors: string[] = [];
-
-    // Step 1: 分析产品图
-    let analysis = '';
-    try {
-      const result = await callDoubaoVision(imageUrl, buildAnalyzePrompt('产品'));
-      analysis = result.description || result.text || '';
-    } catch (e) {
-      errors.push(`图片分析失败: ${e instanceof Error ? e.message : String(e)}`);
-    }
-
-    // Step 2: 写口播脚本
-    let script = '';
-    try {
-      script = await callDeepSeek(buildCopyPrompt(analysis || '一款创意产品', style, platform), {
-        temperature: 0.8,
-        maxTokens: 800,
-      });
-    } catch (e) {
-      errors.push(`文案生成失败: ${e instanceof Error ? e.message : String(e)}`);
-    }
-
-    if (!script.trim()) {
-      return {
-        success: false,
-        output: '',
-        error: `产品视频生成失败: ${errors.join('; ')}`,
-      };
-    }
-
-    // Step 3: 判断路径
-    const hasPersonPhoto = !!personImageUrl;
-    let videoUrl = '';
-    const stepLog: string[] = [];
+    const ratio = '9:16'; // 带货视频固定竖屏
 
     const styleLabel: Record<string, string> = {
       recommend: '种草推荐', review: '深度测评', tutorial: '使用教程',
     };
-    const platformLabel: Record<string, string> = {
-      douyin: '抖音', xiaohongshu: '小红书',
-    };
+    const errors: string[] = [];
+    const stepLog: string[] = [];
 
-    if (hasPersonPhoto) {
-      // Path A: Agnes 口播视频
-      stepLog.push('已分析产品 → 已写口播脚本 → 走口播路径（真人讲解）');
-
-      try {
-        const videoPrompt = [
-          'A person introduces and reviews a product enthusiastically.',
-          '',
-          `Product context: ${analysis || 'a lifestyle product'}`,
-          `Speech script: ${script.trim()}`,
-          '',
-          'The person speaks directly to camera with natural expressions.',
-          'Warm, inviting tone. Genuine product recommendation style.',
-          'Shallow depth of field, soft lighting, cinematic look.',
-        ].join('\n');
-
-        const agnesResult = await generateAgnesVideo({
-          imageUrl: personImageUrl,
-          prompt: videoPrompt,
-          numFrames: 201,
-        });
-
-        if (agnesResult.videoUrl) {
-          videoUrl = agnesResult.videoUrl;
-          stepLog.push('Agnes 口播视频生成完成');
-        } else {
-          errors.push('Agnes 视频生成未返回 URL');
-        }
-      } catch (e) {
-        errors.push(`口播视频生成失败: ${e instanceof Error ? e.message : String(e)}`);
-      }
+    // Step 1: 识图分析
+    let analysis = '';
+    try {
+      const result = await callDoubaoVision(imageUrl, buildAnalyzePrompt());
+      analysis = result.description || result.text || '';
+    } catch (e) {
+      errors.push(`图片分析失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    if (!analysis) {
+      analysis = '一款创意生活产品，外观精致，适合日常使用。';
+      stepLog.push('图片分析降级为默认描述');
+    } else {
+      stepLog.push('已分析产品特征');
     }
 
-    // Path B: Compose 路径（无真人照片 或 Agnes 失败）
-    if (!videoUrl) {
-      stepLog.push('已分析产品 → 已写口播脚本 → 走合成路径（产品图+场景图+字幕+BGM）');
+    // Step 2: 写分镜脚本
+    let storyboard: StoryboardResult | null = null;
+    try {
+      const raw = await callDeepSeek(
+        buildStoryboardPrompt(analysis, styleLabel[style] || '种草推荐', platform),
+        { temperature: 0.8, maxTokens: 1200 }
+      );
+      storyboard = parseStoryboard(raw);
+    } catch (e) {
+      errors.push(`分镜生成失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
-      // Step 3b: 生成 1-2 张场景背景图
-      const sceneUrls: string[] = [];
-      try {
-        const scenePrompt = buildScenePrompt(analysis || 'aesthetic lifestyle product photography');
-        const sceneResult = await generateImageAgnes(scenePrompt, {
+    if (!storyboard || storyboard.shots.length === 0) {
+      return {
+        success: false,
+        output: '',
+        error: `分镜脚本生成失败: ${errors.join('; ')}`,
+      };
+    }
+    stepLog.push(`已生成 ${storyboard.shots.length} 镜分镜`);
+
+    // Step 3: 逐镜 Seedance I2V 生成（并行提交，串行轮询）
+    const shotVideoUrls: (string | null)[] = [];
+    const shotTaskIds: string[] = [];
+
+    // 3a. 并行提交所有镜头
+    const submitResults = await Promise.allSettled(
+      storyboard.shots.map(async (shot) => {
+        const result = await submitSeedanceTask({
+          prompt: shot.visualPrompt,
+          imageUrl,
+          duration: shot.duration,
           ratio: '9:16',
-          quality: 'standard',
-          n: 1,
+          resolution: '720p',
+          generateAudio: false, // 用 TTS 替代
         });
-        const imgs = Array.isArray(sceneResult) ? sceneResult : [sceneResult];
-        sceneUrls.push(...imgs.map(img => img.imageUrl).filter(Boolean).slice(0, 2));
-        stepLog.push(`生成 ${sceneUrls.length} 张场景图`);
-      } catch (e) {
-        // 场景图失败不阻塞，只用产品图
-        stepLog.push(`场景图生成失败，仅用产品图: ${e instanceof Error ? e.message : String(e)}`);
-      }
+        return result;
+      })
+    );
 
-      // Step 4b: 拆字幕 + 合成视频
-      const totalDuration = Math.max(8, script.length / 6); // ~6 字/秒，最少 8 秒
-      const subtitles = splitToSubtitles(script, totalDuration);
-
-      try {
-        videoUrl = await composeProductVideo({
-          productImageUrl: imageUrl,
-          sceneImageUrls: sceneUrls,
-          subtitles,
-          bgmStyle,
-          userId: ctx.userId || 'anon',
-        });
-        stepLog.push('视频合成完成');
-      } catch (e) {
-        return {
-          success: false,
-          output: '',
-          error: `视频合成失败: ${e instanceof Error ? e.message : String(e)}`,
-        };
+    for (let i = 0; i < submitResults.length; i++) {
+      const r = submitResults[i];
+      if (r.status === 'fulfilled' && r.value.taskId) {
+        shotTaskIds.push(r.value.taskId);
+        stepLog.push(`镜头${i + 1} Seedance 已提交`);
+      } else {
+        shotTaskIds.push('');
+        const errMsg = r.status === 'rejected'
+          ? (r.reason instanceof Error ? r.reason.message : String(r.reason))
+          : (r.value.message || '提交失败');
+        errors.push(`镜头${i + 1}: ${errMsg}`);
+        stepLog.push(`镜头${i + 1} 提交失败: ${errMsg}`);
       }
     }
 
-    // Step 5: 保存到灵感库
+    // 3b. 串行轮询所有镜头
+    for (let i = 0; i < shotTaskIds.length; i++) {
+      const taskId = shotTaskIds[i];
+      if (!taskId) {
+        shotVideoUrls.push(null);
+        continue;
+      }
+
+      let shotUrl: string | null = null;
+      const startTime = Date.now();
+      const timeoutMs = 360_000; // 6 分钟每镜
+
+      while (Date.now() - startTime < timeoutMs) {
+        await sleep(3000);
+        try {
+          const status = await getSeedanceTaskStatus(taskId);
+          if (status.status === 'succeeded' && status.videoUrl) {
+            shotUrl = status.videoUrl;
+            stepLog.push(`镜头${i + 1} 已完成`);
+            break;
+          }
+          if (status.status === 'failed') {
+            errors.push(`镜头${i + 1}: ${status.message || '生成失败'}`);
+            stepLog.push(`镜头${i + 1} 失败: ${status.message || '未知错误'}`);
+            break;
+          }
+        } catch {
+          // 查询异常不中断
+        }
+      }
+
+      shotVideoUrls.push(shotUrl);
+    }
+
+    // 至少需要一个成功的镜头
+    const successCount = shotVideoUrls.filter(Boolean).length;
+    if (successCount === 0) {
+      return {
+        success: false,
+        output: '',
+        error: `所有镜头生成失败: ${errors.join('; ')}`,
+      };
+    }
+
+    // Step 4: TTS 配音
+    let ttsBuffer: Buffer | null = null;
+    try {
+      ttsBuffer = await synthesizeWithCosyVoice({
+        text: storyboard.script,
+        options: { speed: 1.0, voice: 'longxiaochun_v2' },
+      });
+      if (ttsBuffer) {
+        stepLog.push('TTS 配音完成');
+      } else {
+        errors.push('TTS 配音返回空');
+      }
+    } catch (e) {
+      errors.push(`TTS 配音失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    if (!ttsBuffer) {
+      // 降级：生成静音占位
+      ttsBuffer = Buffer.alloc(0);
+      stepLog.push('TTS 降级为静音');
+    }
+
+    // Step 5: 合成最终视频
+    let videoUrl: string;
+    try {
+      videoUrl = await composeFinalVideo({
+        shotVideoUrls,
+        shots: storyboard.shots,
+        ttsBuffer,
+        bgmStyle,
+        ratio,
+        userId: ctx.userId || 'anon',
+      });
+      stepLog.push('视频合成完成');
+    } catch (e) {
+      return {
+        success: false,
+        output: '',
+        error: `视频合成失败: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+
+    // Step 6: 保存到灵感库
     if (ctx.userId) {
       saveMediaToInspiration(
         ctx.userId, 'video',
-        script.substring(0, 50),
+        storyboard.script.substring(0, 50),
         [videoUrl],
         { toolName: 'product_video' }
       ).catch(() => {});
     }
 
-    const pathLabel = hasPersonPhoto ? 'AI口播' : '产品幻灯片';
-    const sceneInfo = hasPersonPhoto
-      ? '人物讲解产品'
-      : `${1}张产品图 + 场景图 + 字幕 + BGM`;
+    const totalDuration = storyboard.shots.reduce((s, shot) => s + shot.duration, 0);
 
     return {
       success: true,
       output: [
-        `已生成产品视频 ✨`,
+        `已生成产品种草视频 ✨`,
         ``,
-        `【方案】${pathLabel} · ${platformLabel[platform] || platform} · ${styleLabel[style] || style}`,
-        `【组成】${sceneInfo}`,
-        `【文案】(${script.length}字)`,
-        script.trim(),
+        `【方案】Seedance 2.0 运镜拍摄 · ${styleLabel[style] || style} · ${platform === 'xiaohongshu' ? '小红书' : '抖音'}`,
+        `【分镜】${storyboard.shots.length} 镜 · 共 ${totalDuration} 秒`,
+        storyboard.shots.map(s => `  镜头${s.index}: ${s.subtitle} (${s.duration}s)`).join('\n'),
+        ``,
+        `【文案】(${storyboard.script.length}字)`,
+        storyboard.script.trim(),
         ``,
         `【视频】${videoUrl}`,
         ``,
         `💡 已自动保存到灵感库，可直接下载使用。`,
-        stepLog.length > 0 ? `\n📋 流程: ${stepLog.join(' → ')}` : '',
+        errors.length > 0 ? `\n⚠️ 部分步骤出现问题: ${errors.join('; ')}` : '',
+        `\n📋 流程: ${stepLog.join(' → ')}`,
       ].join('\n'),
       data: {
         videoUrl,
-        script,
+        script: storyboard.script,
+        shots: storyboard.shots,
         style,
         platform,
-        path: hasPersonPhoto ? 'agnes' : 'compose',
+        ratio,
         bgmStyle,
         stepLog,
+        errors: errors.length > 0 ? errors : undefined,
         autoSaved: true,
       },
     };
   },
 };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

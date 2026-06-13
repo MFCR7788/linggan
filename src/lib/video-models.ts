@@ -1,6 +1,10 @@
-// 视频模型注册表 — 全部使用百炼 DashScope Wan 系列
+// 视频模型注册表 — 百炼 DashScope Wan 系列 + 火山引擎 Seedance 2.0
 
-export type VideoProvider = 'dashscope';
+export type VideoProvider = 'dashscope' | 'seedance';
+
+// Seedance 2.0 模型常量
+export const SEEDANCE_STANDARD = 'doubao-seedance-2-0-260128';
+export const SEEDANCE_FAST = 'doubao-seedance-2-0-fast-260128';
 
 export interface VideoModelConfig {
   provider: VideoProvider;
