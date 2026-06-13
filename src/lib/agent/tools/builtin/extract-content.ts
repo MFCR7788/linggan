@@ -70,7 +70,7 @@ function extractUrls(text: string): string[] {
   return [...new Set(matches)];
 }
 
-// ── 方法 1: jina.ai Reader（文字内容提取）──
+// ── 方法 1: jina.ai Reader（文字内容提取）+ 直接抓取兜底 ──
 
 interface JinaResult {
   success: boolean;
@@ -80,22 +80,73 @@ interface JinaResult {
 }
 
 async function extractViaJina(url: string): Promise<JinaResult> {
+  // 先试 jina.ai（国外服务，国内 ECS 可能不通）
   try {
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const res = await fetch(jinaUrl, {
       headers: { Accept: 'text/plain' },
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      const lines = text.split('\n').filter(Boolean);
+      const title = lines[0]?.startsWith('Title:') ? lines[0].replace('Title:', '').trim() : '';
+      return { success: true, content: text.substring(0, 8000), title };
+    }
+  } catch { /* jina.ai 不可用，降级直接抓取 */ }
+
+  // 降级：直接 fetch 目标 URL + 简易 HTML 提取
+  return extractViaDirectFetch(url);
+}
+
+/** 直接抓取网页 + 提取正文（国内 ECS 可用，无需代理） */
+async function extractViaDirectFetch(url: string): Promise<JinaResult> {
+  try {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const res = await fetch(url, {
+      headers: { 'User-Agent': ua, 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(15000),
+      redirect: 'follow',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
 
-    // 尝试提取标题（jina.ai 会返回 Markdown 格式，第一行是标题）
-    const lines = text.split('\n').filter(Boolean);
-    const title = lines[0]?.startsWith('Title:') ? lines[0].replace('Title:', '').trim() : '';
+    const html = await res.text();
+
+    // 提取 <title>
+    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const title = titleMatch?.[1]?.trim() || '';
+
+    // 移除 script/style/noscript/head
+    let text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+
+    // 移除所有 HTML 标签，保留文字
+    text = text.replace(/<[^>]+>/g, ' ');
+
+    // 解码 HTML entities
+    text = text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x[\da-f]+;/gi, '')
+      .replace(/&#\d+;/g, '');
+
+    // 合并空白
+    text = text.replace(/\s+/g, ' ').trim();
+
+    if (!text || text.length < 50) {
+      return { success: false, error: '直接抓取内容过短或为空' };
+    }
 
     return { success: true, content: text.substring(0, 8000), title };
   } catch (e) {
-    return { success: false, error: `jina.ai 提取失败: ${e instanceof Error ? e.message : String(e)}` };
+    return { success: false, error: `网页抓取失败: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
 
@@ -245,16 +296,41 @@ async function extractAudio(videoPath: string, workDir: string): Promise<string>
 // ── 方法 3: jina.ai 快速描述（仅获取页面标题/摘要，不下载视频）──
 
 async function extractTextFast(url: string): Promise<string> {
+  // 先试 jina.ai
   try {
     const jinaUrl = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const res = await fetch(jinaUrl, {
       headers: { Accept: 'text/plain' },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      return text.substring(0, 500).trim();
+    }
+  } catch { /* 降级直接抓取 */ }
+
+  // 降级：直接 fetch + 提取 title/meta description
+  try {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const res = await fetch(url, {
+      headers: { 'User-Agent': ua },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'follow',
     });
     if (!res.ok) return '';
-    const text = await res.text();
-    // 取前 500 字符作为摘要
-    return text.substring(0, 500).trim();
+    const html = await res.text();
+
+    // 提取 title
+    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const title = titleMatch?.[1]?.trim() || '';
+
+    // 提取 meta description
+    const descMatch = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/i)
+      || html.match(/<meta[^>]*content="([^"]*)"[^>]*name="description"[^>]*>/i);
+    const desc = descMatch?.[1]?.trim() || '';
+
+    const combined = [title, desc].filter(Boolean).join(' — ');
+    return combined.substring(0, 500);
   } catch {
     return '';
   }
