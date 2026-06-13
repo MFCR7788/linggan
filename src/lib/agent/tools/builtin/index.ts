@@ -28,6 +28,7 @@ import { douyinTranscriptTool } from './douyin-transcript';
 import { douyinSearchTool } from './douyin-search';
 import { composeVideoTool } from './compose-video';
 import { extractContentTool } from './extract-content';
+import { generateAgnesVideoTool } from './generate-agnes-video';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -67,6 +68,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     composeVideoTool,
     // 多平台内容提取（抖音/小红书/B站/头条/腾讯新闻 等）
     extractContentTool,
+    // 换人复刻：照片+文案 → Agnes 口播视频（原生口型同步+配音）
+    generateAgnesVideoTool,
   ]);
 }
 
@@ -75,4 +78,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool };
