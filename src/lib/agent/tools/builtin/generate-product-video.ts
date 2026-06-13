@@ -38,12 +38,22 @@ function buildAnalyzePrompt(): string {
 4. 目标用户：谁会买这个产品？
 5. 核心卖点：最吸引人的 2-3 个特点
 
-请用中文简洁回答，每条 1-2 句话。`;
+请用中文简洁回答，每条 1-2 句话。
+
+最后，请用一句英文描述产品的外观用于视频生成（例如："A sleek white ceramic coffee mug with gold handle, matte finish, minimalist design"），标记为 [PRODUCT_DESC]: ...`;
+}
+
+// 从分析结果中提取产品外观描述
+function extractProductDesc(analysis: string): string {
+  const match = analysis.match(/\[PRODUCT_DESC\]:\s*(.+)/i);
+  if (match) return match[1].trim();
+  // 降级：用分析原文前 80 字
+  return analysis.substring(0, 80);
 }
 
 // ── 构建分镜脚本 prompt ──
 
-function buildStoryboardPrompt(analysis: string, style: string, platform: string): string {
+function buildStoryboardPrompt(analysis: string, productDesc: string, style: string, platform: string): string {
   const platformGuide: Record<string, string> = {
     douyin: '抖音带货视频：开头钩子抓眼球（前3秒是关键），中间展示产品亮点，结尾CTA引导互动。短句口语化，每句不超过20字。',
     xiaohongshu: '小红书种草视频：亲切温和，像在跟闺蜜分享好物。强调真实体验感，带emoji，节奏舒缓自然。',
@@ -54,42 +64,46 @@ function buildStoryboardPrompt(analysis: string, style: string, platform: string
 产品分析：
 ${analysis}
 
+产品外观（必须原样出现在每个镜头的 visualPrompt 中）：
+${productDesc}
+
 风格：${style}
 平台要求：${platformGuide[platform] || platformGuide.douyin}
 
 请输出 JSON（不要 markdown 代码块标记）：
 
 {
-  "script": "完整口播文案，3-4句话，总时长约12秒，纯口语化，短句快节奏，去掉AI味。每句不超过20字。",
+  "script": "完整口播文案...",
   "shots": [
     {
       "index": 1,
-      "visualPrompt": "Seedance视频生成提示词(英文)。镜头1/钩子特写: 产品特写占满画面,从产品中心缓慢向外拉,展示产品细节纹理,专业产品灯光,浅景深,电影质感。Camera slowly pulls back from extreme close-up of the product...",
-      "subtitle": "对应字幕(≤15字，中文)",
+      "visualPrompt": "必须以 "${productDesc}" 开头，然后描述镜头1/钩子特写的运镜+场景...",
+      "subtitle": "对应字幕",
       "duration": 3
     },
     {
       "index": 2,
-      "visualPrompt": "镜头2/环绕展示提示词(英文)。描述运镜+产品+背景...",
-      "subtitle": "对应字幕(≤15字，中文)",
+      "visualPrompt": "必须以 "${productDesc}" 开头，然后描述镜头2/环绕展示的运镜+场景...",
+      "subtitle": "对应字幕",
       "duration": 5
     },
     {
       "index": 3,
-      "visualPrompt": "镜头3/场景展示提示词(英文)。产品在真实使用场景中，自然光...",
-      "subtitle": "对应字幕(≤15字，中文)",
+      "visualPrompt": "必须以 "${productDesc}" 开头，然后描述镜头3/场景展示的运镜+场景...",
+      "subtitle": "对应字幕",
       "duration": 4
     }
   ]
 }
 
 要求：
-1. visualPrompt 必须用英文（Seedance 对英文 prompt 响应更好），包含：主体外观 + 运镜方式 + 场景 + 光影 + 风格
-2. 运镜必须多样：特写→拉远、环绕、推近，每个镜头不同的运镜方式
-3. 3个镜头加起来总时长约12秒
-4. subtitle 每段 ≤15 字，口语化短句
-5. script 是完整 TTS 口播文案，与各镜 subtitle 匹配
-6. 直接输出 JSON，不要 markdown 代码块`;
+1. 每个 visualPrompt 必须以 "${productDesc}" 开头 — 这是产品外观描述，3 个镜头必须用完全相同的产品描述保证一致性
+2. visualPrompt 用英文，格式: 产品外观 + 运镜方式 + 场景 + 光影 + 风格
+3. 运镜必须多样：特写→拉远、环绕、推近，每个镜头不同的运镜方式
+4. 3个镜头加起来总时长约12秒
+5. subtitle 每段 ≤15 字，口语化短句
+6. script 是完整 TTS 口播文案，与各镜 subtitle 匹配
+7. 直接输出 JSON，不要 markdown 代码块`;
 }
 
 // ── 解析 LLM 返回的分镜 JSON ──
@@ -362,11 +376,14 @@ export const generateProductVideoTool: ToolDefinition = {
       stepLog.push('已分析产品特征');
     }
 
+    // 提取产品外观描述，后续注入到每个镜头 prompt 保证一致性
+    const productDesc = extractProductDesc(analysis);
+
     // Step 2: 写分镜脚本
     let storyboard: StoryboardResult | null = null;
     try {
       const raw = await callDeepSeek(
-        buildStoryboardPrompt(analysis, styleLabel[style] || '种草推荐', platform),
+        buildStoryboardPrompt(analysis, productDesc, styleLabel[style] || '种草推荐', platform),
         { temperature: 0.8, maxTokens: 1200 }
       );
       storyboard = parseStoryboard(raw);
@@ -384,6 +401,8 @@ export const generateProductVideoTool: ToolDefinition = {
     stepLog.push(`已生成 ${storyboard.shots.length} 镜分镜`);
 
     // Step 3: 逐镜 Seedance I2V 生成（并行提交，串行轮询）
+    // 用同一个 seed 保证 3 镜产品外观一致
+    const shotSeed = Math.floor(Math.random() * 2147483647);
     const shotVideoUrls: (string | null)[] = [];
     const shotTaskIds: string[] = [];
 
@@ -396,7 +415,8 @@ export const generateProductVideoTool: ToolDefinition = {
           duration: shot.duration,
           ratio: '9:16',
           resolution: '720p',
-          generateAudio: false, // 用 TTS 替代
+          generateAudio: false,
+          seed: shotSeed,
         });
         return result;
       })
