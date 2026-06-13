@@ -7,7 +7,7 @@ import {
   BookOpen, TrendingUp, Calendar, MessageCircle, Send,
   HelpCircle, Lightbulb, Settings, ExternalLink, CheckCircle2,
   Loader2, Sparkles, Globe, Layers, Zap, Bot, Bell, Grid3x3, BarChart3,
-  Wand2, Wallet, Brain, Search,
+  Wand2, Wallet, Brain, Search, ShoppingBag,
 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -393,6 +393,21 @@ const features: FeatureEntry[] = [
     path: '/agent',
   },
   {
+    icon: <ShoppingBag size={20} />,
+    title: '一张图出片',
+    desc: '拍一张产品图，AI 自动识图理解产品 → 写口播脚本 → 生成场景图 → 合成带字幕+BGM的竖屏种草短视频，30 秒出片。有真人照片时可走口播路径。',
+    color: '#EC4899',
+    highlights: [
+      '在 Agent 对话中发一张产品图 + 说"帮我把这个做成种草视频"/"一张图出片"',
+      'AI 自动分析产品（品类/外观/卖点/使用场景）→ 写口语化口播脚本',
+      '有真人照片 → 走 AI 口播路径（人物讲解产品），更有说服力',
+      '无真人照片 → 走合成路径（产品图+场景图+字幕+BGM），纯产品展示',
+      '支持种草推荐/深度测评/使用教程 3 种风格，抖音/小红书双平台适配',
+      '视频自动保存到灵感库，可下载直接发布',
+    ],
+    path: '/agent',
+  },
+  {
     icon: <Wallet size={20} />,
     title: '灵力 + 加油包 + 订阅',
     desc: 'V2.0.3 全新计费系统:统一「灵力」计量,加油包(一次性) + 订阅(月度赠送)双轨。',
@@ -696,6 +711,10 @@ const faqs: FAQEntry[] = [
     q: '今日创作提案怎么使用？',
     a: '在 Agent 对话中直接说「今天做什么」或「有什么好点子」即可触发提案功能。\n\nAI 会自动分析你的账号类型、最近 7 天的热点趋势、以及你的创作偏好，生成 3 个差异化的内容选题。每个选题都包含：\n\n- 选题角度（10 字以内标题）\n- 一句话说明（为什么这个选题现在做合适）\n- 推荐生成流程（如：文案 → 口播视频）\n\n点击选择一个选题后，Agent 会按推荐的流程自动调用生成工具，全程无需你手动操作。生成的文案/图片/视频会自动保存到灵感库。\n\n提示：如果还没设置账号类型，建议先去「个人中心 → 账号类型」选择你的身份（如知识IP、电商品牌等），提案会更精准。',
   },
+  {
+    q: '一张图出片怎么使用？',
+    a: '在 Agent 对话中直接发一张产品照片，说「帮我把这个做成种草视频」即可。\n\nAI 全自动完成以下流程：\n\n1. 识图理解产品（品类、外观、卖点、使用场景）\n2. 写口播脚本（口语化、去 AI 味、适配平台风格）\n3. 生成场景背景图（美观的生活场景）\n4. 合成竖屏视频（产品图+场景图+字幕+BGM）\n5. 自动保存到灵感库\n\n如果你有真人出镜照片，发给 Agent 后可走「口播路径」—— AI 用你的形象做人物讲解产品视频，更有说服力。\n\n支持的风格：种草推荐、深度测评、使用教程。支持的平台：抖音、小红书。',
+  },
 ];
 
 // ─── 操作指南 ──────────────────────────────────────────────
@@ -883,6 +902,19 @@ const guides: GuideSection[] = [
       { step: 4, content: '点击选择一个选题，Agent 按推荐流程自动依次调用生成工具，全程无需手动操作' },
       { step: 5, content: '生成的文案/图片/视频自动保存到灵感库，直接可用' },
       { step: 6, content: '如果没有设置账号类型，在「个人中心 → 账号类型」中选择，提案会更精准' },
+    ],
+  },
+  {
+    title: '一张图出片：拍产品图一键生成种草视频',
+    icon: <ShoppingBag size={18} />,
+    color: '#EC4899',
+    steps: [
+      { step: 1, content: '在 Agent 对话中发一张产品照片，说"帮我把这个做成种草视频"/"一张图出片"/"产品种草"' },
+      { step: 2, content: 'AI 自动识图理解产品（品类、外观、卖点、使用场景），然后写口播脚本' },
+      { step: 3, content: '有真人出镜照片：发 personImageUrl → 走 AI 口播路径（人物讲解产品，更有说服力）' },
+      { step: 4, content: '无真人照片：自动生成 1-2 张场景背景图 → 合成产品图+场景图+字幕+BGM 的竖屏视频' },
+      { step: 5, content: '支持 3 种风格（种草/测评/教程）+ 双平台适配（抖音 100-150字快节奏 / 小红书 80-120字亲切风）' },
+      { step: 6, content: '视频自动保存到灵感库（标签 tool:product_video），可下载直接发布' },
     ],
   },
   {

@@ -70,6 +70,7 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作合伙人。你的职
 6. 照片 + 音频 → generate_digital_human（数字人口播，≤20s）
 7. 照片 + 参考视频 → generate_animate_video（角色动作迁移）
 8. 要做片头 → generate_video_template（模板渲染，非AI生成）
+9. 产品图（单张）→ generate_product_video（一张图出片：识图→文案→场景图→合成→入库）
 
 关键词触发（用户说... → 用什么）：
 - "口播"/"照片做成视频"/"出镜说话" → generate_agnes_video
@@ -78,6 +79,7 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作合伙人。你的职
 - "合成"/"加BGM"/"加字幕"/"图片做成视频" → compose_video
 - "生成一段视频"/"做一个xxx视频" → generate_video
 - "数字人"/"让照片说话"/"虚拟主播" → generate_digital_human
+- "产品种草"/"种草视频"/"产品视频"/"帮我把这个做成视频"/"一张图出片"/"带货视频"/"好物分享" → generate_product_video
 
 **其他工具路由：**
 - 生图 → generate_image | 写文案 → generate_copywriting
@@ -152,6 +154,7 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作合伙人。你的职
 🎬 AI 视频生成: 描述画面，AI 生成视频（文生视频/图生视频）
 🎭 视频换脸: 给原视频+新照片，像素级换脸保留场景
 🎵 图片合成视频: 多张图+BGM+字幕合成完整视频
+🛍️ 一张图出片: 拍一张产品图，AI 自动识图→写文案→做场景→合成种草视频
 🖼️ AI 图片生成: 描述画面，AI 生成高质量图片
 ✍️ AI 文案: 选平台+风格，AI 写爆款文案
 🤖 数字人: 照片+音频，生成口型同步视频

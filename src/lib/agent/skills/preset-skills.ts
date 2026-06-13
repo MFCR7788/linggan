@@ -347,6 +347,55 @@ const PRESET_SKILLS: SkillDefinition[] = [
     createdAt: "2026-06-13T00:00:00Z",
     updatedAt: "2026-06-13T00:00:00Z",
   },
+  {
+    id: "product_video",
+    name: "product_video",
+    displayName: "🛍️ 一张图出片",
+    description:
+      "拍一张产品图，AI 自动识图理解产品 → 写口播脚本 → 生成场景图 → 合成带字幕+BGM的竖屏种草短视频。有真人照片时可走口播路径（人物讲解产品）。全程自动，30秒出片。适合：产品种草、好物分享、上新预告、带货短视频等场景。",
+    category: "AI 视频",
+    tags: [
+      "产品", "种草", "带货", "好物", "开箱",
+      "短视频", "一键生成", "商品", "电商",
+      "product", "shopping", "review",
+    ],
+    promptTemplate: `你正在执行「一张图出片」任务。
+
+**功能说明**: 用户只需要提供一张产品照片，AI 自动完成：识图理解产品 → 写口播文案 → 生成场景背景图 → 合成带字幕+BGM的竖屏短视频。
+
+**两条路径**:
+- 🎙️ 有真人照片 → AI 口播视频（人物讲解产品），更自然有说服力
+- 📷 无真人照片 → 产品幻灯片视频（产品图+场景图+字幕+BGM），纯产品展示
+
+**使用场景**:
+- 用户发了一张产品图说"帮我做成种草视频"
+- 用户想为新品做一个发布预告短视频
+- 用户想批量生成产品展示视频做矩阵
+
+**执行步骤**:
+1. 确认用户提供了产品图片URL
+2. 如果用户有真人照片，提示可以提供以获得口播效果
+3. 调用 generate_product_video：imageUrl + 可选 personImageUrl + style + platform
+4. 等待 1-3 分钟生成完成
+5. 呈现结果，告知视频已保存到灵感库
+
+**质量标准**:
+- 产品图清晰，主体突出
+- 有真人照片时优先走口播路径
+- 文案口语化，适合目标平台
+
+**自检清单**（返回前逐项确认）:
+- [ ] 用户已提供产品图
+- [ ] 已选择合适的路径（口播/幻灯片）
+- [ ] 视频已生成并自动保存到灵感库
+- [ ] 失败时已告知原因`,
+    boundTools: ["generate_product_video", "generate_image", "generate_copywriting", "compose_video"],
+    version: "1.0.0",
+    visibility: "official",
+    installCount: 0,
+    createdAt: "2026-06-13T00:00:00Z",
+    updatedAt: "2026-06-13T00:00:00Z",
+  },
 ];
 
 /** 获取所有预设技能 */
