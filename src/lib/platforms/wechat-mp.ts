@@ -9,6 +9,7 @@ import type {
   PlatformMetrics,
   OAuthTokens,
 } from './types';
+import { getWechatMpAppSecret } from '@/lib/runtime-config';
 
 const API_BASE = 'https://api.weixin.qq.com';
 const AUTH_BASE = 'https://open.weixin.qq.com/connect';
@@ -32,7 +33,7 @@ export class WeChatMPAdapter implements PlatformAdapter {
   readonly id = 'wechat_mp' as const;
 
   private get appId() { return process.env.WECHAT_MP_APP_ID || ''; }
-  private get appSecret() { return process.env.WECHAT_MP_APP_SECRET || ''; }
+  private get appSecret() { return getWechatMpAppSecret() || ''; }
 
   buildAuthorizeUrl(state: string, redirectUri: string): string {
     const params = new URLSearchParams({

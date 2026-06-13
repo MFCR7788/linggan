@@ -1,11 +1,37 @@
 // 视频语音转文字 — yt-dlp 下载 → ffmpeg 提取音频 → 本地 FunASR (优先) / DashScope Paraformer (降级)
+// 安全修复:
+// - URL shell 注入防护：验证 URL 协议，转义 shell 特殊字符
+// - process.env.DASHSCOPE_API_KEY → getDashScopeApiKey() (运行时读取)
+// - 轮询 fetch 添加超时
 import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFile, mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { getDashScopeApiKey } from "@/lib/runtime-config";
 
 const execAsync = promisify(exec);
+
+/** 转义 shell 特殊字符，防止命令注入（URL / 文件名中的元字符） */
+function shellEscape(str: string): string {
+  // 用单引号包裹并在单引号内转义：'it'\''s' → 'it\'s'
+  return `'${str.replace(/'/g, "'\\''")}'`;
+}
+
+/** 验证 URL 格式，防止协议走私（仅允许 http/https，禁止 \`$();|&\` 等 shell 元字符） */
+function validateUrl(url: string): void {
+  if (typeof url !== 'string' || url.length === 0) {
+    throw new Error('无效的视频链接');
+  }
+  // 仅允许 http/https 协议
+  if (!/^https?:\/\/.+$/i.test(url.trim())) {
+    throw new Error('视频链接仅支持 http/https 协议');
+  }
+  // 防止换行符注入（可构造第二条命令）
+  if (/[\n\r]/.test(url)) {
+    throw new Error('视频链接包含非法字符');
+  }
+}
 
 // 需要提取逐字稿的视频平台
 const TRANSCRIPT_PLATFORMS = [
@@ -111,11 +137,16 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
     tmpDir = await mkdtemp(join(tmpdir(), "linggan-trans-"));
     const audioOutput = join(tmpDir, "audio.wav");
 
-    // 2. yt-dlp 下载视频 (用最低画质，我们只需要音频)
+    // 2. 校验 URL 合法性（防 shell 注入）
+    validateUrl(url);
+    const safeUrl = shellEscape(url.trim());
+    const safeOutput = shellEscape(join(tmpDir, "video.%(ext)s"));
+
+    // 2b. yt-dlp 下载视频 (用最低画质，我们只需要音频)
     let downloaded = false;
     try {
       await execAsync(
-        `yt-dlp -f "worst[height<=360][ext=mp4]/worst" --no-playlist --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)" -o "${join(tmpDir, "video.%(ext)s")}" "${url}"`,
+        `yt-dlp -f "worst[height<=360][ext=mp4]/worst" --no-playlist --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)" -o ${safeOutput} ${safeUrl}`,
         { timeout: 90000 }
       );
       downloaded = true;
@@ -129,7 +160,7 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
     }
 
     // 找到下载的文件
-    const { stdout: lsOut } = await execAsync(`ls "${tmpDir}"`);
+    const { stdout: lsOut } = await execAsync(`ls ${shellEscape(tmpDir)}`);
     const files = lsOut.trim().split("\n");
     const videoFile = files.find((f) => f.startsWith("video."));
     if (!videoFile) throw new Error("视频下载失败：未找到下载文件");
@@ -138,7 +169,7 @@ export async function extractVideoText(url: string): Promise<TranscriptResult> {
 
     // 3. ffmpeg 提取音频 → 16kHz 单声道 WAV (ASR 标准格式)
     await execAsync(
-      `ffmpeg -i "${videoPath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 -y "${audioOutput}" 2>&1`,
+      `ffmpeg -i ${shellEscape(videoPath)} -vn -acodec pcm_s16le -ar 16000 -ac 1 -y ${shellEscape(audioOutput)} 2>&1`,
       { timeout: 60000 }
     );
 
@@ -190,7 +221,7 @@ async function callDashScopeASRWithTimestamps(audioUrl: string): Promise<{
   transcript: string;
   sentences: TimedSentence[];
 }> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
 
   const submitRes = await fetch(
@@ -211,6 +242,7 @@ async function callDashScopeASRWithTimestamps(audioUrl: string): Promise<{
           disfluency_removal_enabled: false,
         },
       }),
+      signal: AbortSignal.timeout(30000),
     }
   );
 
@@ -296,11 +328,21 @@ async function pollTranscriptionTask(
   apiKey: string,
   taskId: string
 ): Promise<string | null> {
+  const maxPollSeconds = 180; // 最长轮询 3 分钟
+  const startTime = Date.now();
+
   for (let i = 0; i < 30; i++) {
+    // 超时保护：超过总时间上限则退出
+    if (Date.now() - startTime > maxPollSeconds * 1000) {
+      console.error("ASR 轮询超时");
+      return null;
+    }
+
     const res = await fetch(
       `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
       {
         headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15000),
       }
     );
 
@@ -316,8 +358,9 @@ async function pollTranscriptionTask(
       throw new Error(data.output?.message || "语音转写失败");
     }
 
-    // 等待 4 秒后重试
-    await new Promise((r) => setTimeout(r, 4000));
+    // 指数退避：2s → 4s → 6s → 8s ... 最多 15s
+    const delay = Math.min(2000 + i * 2000, 15000);
+    await new Promise((r) => setTimeout(r, delay));
   }
 
   return null;

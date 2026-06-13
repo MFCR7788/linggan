@@ -1,5 +1,6 @@
 // AI Services - 百炼 CosyVoice TTS
 
+import { fetchWithTimeout, getDashScopeApiKey } from './constants';
 import type {
   CosyVoiceId,
   CosyVoiceModel,
@@ -15,7 +16,7 @@ export async function synthesizeWithCosyVoice(params: {
   text: string;
   options?: CosyVoiceOptions;
 }): Promise<Buffer | null> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     console.warn('[CosyVoice] DASHSCOPE_API_KEY 未配置');
     return null;
@@ -30,7 +31,7 @@ export async function synthesizeWithCosyVoice(params: {
   } = params.options || {};
 
   try {
-    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer', {
+    const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -48,7 +49,7 @@ export async function synthesizeWithCosyVoice(params: {
           volume,
         },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
@@ -68,7 +69,7 @@ export async function synthesizeWithCosyVoice(params: {
       return null;
     }
 
-    const audioResp = await fetch(audioUrl);
+    const audioResp = await fetchWithTimeout(audioUrl, {}, 30000);
     if (!audioResp.ok) {
       console.error(`[CosyVoice] 下载音频失败 HTTP ${audioResp.status}`);
       return null;

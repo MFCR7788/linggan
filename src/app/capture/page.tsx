@@ -181,6 +181,15 @@ function CaptureContent() {
     return () => { urls.forEach(u => URL.revokeObjectURL(u)); };
   }, [objectUrlsRef]);
 
+  // 组件卸载时清理所有视频轮询定时器
+  useEffect(() => {
+    const refs = pollingRefs.current;
+    return () => {
+      refs.forEach(timer => clearInterval(timer));
+      refs.clear();
+    };
+  }, []);
+
   // 加载会话列表
   useEffect(() => {
     if (sessionLoadedRef.current) return;
@@ -238,7 +247,8 @@ function CaptureContent() {
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, aiMsg]);
-      } catch {
+      } catch (e) {
+        console.error('[Capture] 视频分析失败:', e);
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), type: 'ai', content: '视频分析失败，请重试。', timestamp: new Date() }]);
       } finally {
         setIsAnalyzingVideo(false);
@@ -257,7 +267,17 @@ function CaptureContent() {
     const existing = pollingRefs.current.get(msgId);
     if (existing) clearInterval(existing);
 
+    let iteration = 0;
+    const maxIterations = 120; // 最多轮询 120 次 (6 分钟)，防止无限轮询
+
     const timer = setInterval(async () => {
+      iteration++;
+      if (iteration > maxIterations) {
+        clearInterval(timer);
+        pollingRefs.current.delete(msgId);
+        return;
+      }
+
       try {
         const data: any = await apiClient.get(`/ai/chat?action=video_status&taskId=${taskId}`);
         if (!data.success) return;
@@ -328,7 +348,8 @@ function CaptureContent() {
           { type: 'ai', content: aiContent, content_type: 'text', metadata: data.generatedImage ? { generatedImage: data.generatedImage } : undefined },
         ]);
       }
-    } catch {
+    } catch (e) {
+      console.error('[Capture] 生成失败:', e);
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), type: 'ai', content: '生成失败，请重试', timestamp: new Date() }]);
     } finally {
       setGeneratingId(null);
@@ -393,7 +414,8 @@ function CaptureContent() {
           timestamp: new Date(),
         }]);
       }
-    } catch {
+    } catch (e) {
+      console.error('[Capture] 改写失败:', e);
       showToast('改写失败，请重试', 'error');
     } finally {
       setIsRewriting(false);
@@ -402,8 +424,10 @@ function CaptureContent() {
 
   // ====== 发送消息 ======
 
+  const sendingRef = useRef(false); // 防止重复提交（ref 比 state 更可靠）
+
   const sendMessage = async () => {
-    if (isAnalyzing) return; // 防止重复提交
+    if (sendingRef.current) return; // ref 锁防止快速双击重复发送
     const text = inputText.trim();
     const files = attachedFiles;
     if (!text && files.length === 0) return;
@@ -413,6 +437,7 @@ function CaptureContent() {
 
     const uploadedImages: { url: string; name: string }[] = [];
     const uploadedDocs: { url: string; name: string; type: string }[] = [];
+    sendingRef.current = true;
     setIsAnalyzing(true);
 
     for (const af of files) {
@@ -530,10 +555,12 @@ function CaptureContent() {
           ]);
         }
       }
-    } catch {
+    } catch (e) {
+      console.error('[Capture] 对话处理失败:', e);
       const errorMsg: Message = { id: (Date.now() + 1).toString(), type: 'ai', content: '抱歉，处理失败，请重试。', timestamp: new Date() };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
+      sendingRef.current = false;
       setIsAnalyzing(false);
     }
   };

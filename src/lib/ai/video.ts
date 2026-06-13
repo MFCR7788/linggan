@@ -1,7 +1,8 @@
 // AI Services - Video Generation (百炼 DashScope Wan 系列)
 
 import { optimizePrompt } from './image';
-import { DASHSCOPE_VIDEO_BASE, HAPPYHORSE_API_KEY } from './constants';
+import { DASHSCOPE_VIDEO_BASE, getHappyHorseApiKey, fetchWithTimeout, safeErrorText } from './constants';
+import { getAgnesApiKey } from '@/lib/runtime-config';
 import { QUALITY_TIERS } from './types';
 import type { VideoTaskResult, I2VTaskResult } from './types';
 import type { VideoProvider, VideoModelConfig } from './types';
@@ -18,11 +19,11 @@ export async function submitVideoTask(
   console.log(`[Video] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
 
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -35,7 +36,7 @@ export async function submitVideoTask(
           watermark: false,
         },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -66,11 +67,11 @@ export async function submitI2VTask(
   console.log(`[I2V] 图生视频: "${finalPrompt.substring(0, 60)}..."`);
 
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -85,7 +86,7 @@ export async function submitI2VTask(
           watermark: false,
         },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -109,9 +110,9 @@ export async function getVideoTaskStatus(
   taskId: string
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
-    });
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
+    }, 10000);
 
     if (!response.ok) {
       return { status: 'error', message: '查询失败' };
@@ -176,15 +177,15 @@ async function submitDashScopeVideoTask(
   }
 
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/services/aigc/video-generation/video-synthesis`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({ model: config.model, input, parameters }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -282,7 +283,7 @@ export async function submitAgnesVideoTask(
   prompt: string,
   options: AgnesVideoOptions = {}
 ): Promise<AgnesVideoResult> {
-  const apiKey = process.env.AGNES_API_KEY;
+  const apiKey = getAgnesApiKey();
   if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
 
   const duration = Math.min(Math.max(options.duration || 5, MIN_DURATION), MAX_DURATION);
@@ -303,14 +304,14 @@ export async function submitAgnesVideoTask(
   }
 
   try {
-    const res = await fetch(AGNES_VIDEO_BASE, {
+    const res = await fetchWithTimeout(AGNES_VIDEO_BASE, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    });
+    }, 30000);
 
     if (!res.ok) {
       const err = await res.text().catch(() => '');
@@ -336,13 +337,13 @@ export async function submitAgnesVideoTask(
 }
 
 export async function getAgnesVideoTaskStatus(taskId: string): Promise<AgnesVideoResult> {
-  const apiKey = process.env.AGNES_API_KEY;
+  const apiKey = getAgnesApiKey();
   if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
 
   try {
-    const res = await fetch(`${AGNES_VIDEO_BASE}/${taskId}`, {
+    const res = await fetchWithTimeout(`${AGNES_VIDEO_BASE}/${taskId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    }, 10000);
 
     if (!res.ok) {
       return { taskId, status: 'running', model: 'agnes-video-v2.0', message: '查询中...' };

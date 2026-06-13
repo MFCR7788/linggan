@@ -5,20 +5,23 @@
 
 import { NextResponse } from 'next/server';
 import { runWorker } from '@/lib/jobs/task-worker';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 const WORKER_ID_PREFIX = 'vercel-cron';
 
 export async function POST(request: Request): Promise<NextResponse> {
-  // 1) CRON_SECRET 鉴权
+  // 1) CRON_SECRET 鉴权（必须配置，不可降级到其他密钥）
+  const cronSecret = getCronSecret();
+  if (!cronSecret) {
+    console.error('[jobs/claim] CRON_SECRET 未配置，拒绝请求');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
-  if (cronSecret) {
-    const expected = `Bearer ${cronSecret}`;
-    if (authHeader !== expected) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const expected = `Bearer ${cronSecret}`;
+  if (authHeader !== expected) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // 2) 可选 limit 参数

@@ -7,7 +7,7 @@
 //   3. 释放鼠标 → POST /api/captcha/slider 验证
 //   4. 验证通过 → 调 onSuccess(captchaToken), 父组件拿 token 调 send-code
 //   5. 验证失败 → 抖动 + 自动刷新
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { X, RefreshCw, CheckCircle2 } from "lucide-react";
 
 interface SliderCaptchaProps {
@@ -40,7 +40,7 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
   const startOffsetRef = useRef(0);
 
   // 加载新验证码
-  const loadCaptcha = async () => {
+  const loadCaptcha = useCallback(async () => {
     setStatus("loading");
     setError("");
     setOffset(0);
@@ -54,7 +54,7 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
       setError(e instanceof Error ? e.message : "加载失败");
       setStatus("error");
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (open && !data) loadCaptcha();
@@ -63,7 +63,7 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
       setStatus("loading");
       setOffset(0);
     }
-  }, [open]);
+  }, [open, data, loadCaptcha]);
 
   // 拖动
   const onPointerDown = (e: React.PointerEvent) => {

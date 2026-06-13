@@ -1,13 +1,14 @@
 // 定时清理 7 天以上的 chat_messages（AI Chat 自动保存的临时历史）
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
+  const expectedSecret = getCronSecret();
   if (!expectedSecret) {
-    return createApiError('SUPABASE_SERVICE_ROLE_KEY / CRON_SECRET 未配置', 500);
+    return createApiError('CRON_SECRET 未配置', 500);
   }
   const { searchParams } = new URL(request.url);
   const secret =

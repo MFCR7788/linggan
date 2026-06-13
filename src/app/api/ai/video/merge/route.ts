@@ -215,7 +215,7 @@ export const POST = withAuth(async ({ request, user }) => {
     let thumbnailUrl: string | null = null;
     const thumbPath = `${dir}/thumb.jpg`;
     try {
-      extractThumbnail(finalPath, thumbPath);
+      await extractThumbnail(finalPath, thumbPath);
       const thumbName = `thumb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
       thumbnailUrl = await uploadToStorage(thumbPath, user.id, thumbName);
     } catch (e) {

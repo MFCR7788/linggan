@@ -7,6 +7,8 @@ import type { TranscriptResult } from '@/lib/video-transcriber';
 import { withAuth } from '@/lib/api-handler';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
+import { getJinaApiKey } from '@/lib/runtime-config';
+import { validatePublicUrl } from '@/lib/url-validator';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,12 +95,14 @@ function extractText(html: string): string {
 // 上传图片到 Supabase Storage
 async function uploadImageFromUrl(imageUrl: string): Promise<string | null> {
   try {
+    const urlCheck = await validatePublicUrl(imageUrl);
+    if (!urlCheck.valid) return null;
     const response = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
     if (!response.ok) return null;
     const buffer = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const ext = contentType.split('/')[1] || 'jpg';
-    const fileName = `link-import/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const fileName = `link-import/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
 
     const supabase = createAdminClient();
     const { error } = await supabase.storage
@@ -213,7 +217,7 @@ async function analyzeVideoLink(url: string, html: string, transcript?: string) 
 // 返回纯文本(已渲染 JS 后的页面内容)
 async function fetchWithJinaReader(url: string): Promise<string | null> {
   try {
-    const apiKey = process.env.JINA_API_KEY;
+    const apiKey = getJinaApiKey();
     const headers: Record<string, string> = {
       'Accept': 'text/plain',
       'X-Return-Format': 'text',
@@ -310,6 +314,12 @@ export const POST = withAuth(async ({ request, user }) => {
     const { url } = await request.json();
     if (!url) {
       return NextResponse.json({ success: false, error: '缺少 URL' }, { status: 400 });
+    }
+
+    // SSRF 防护：校验 URL 协议和 DNS 解析结果
+    const urlCheck = await validatePublicUrl(url);
+    if (!urlCheck.valid) {
+      return NextResponse.json({ success: false, error: urlCheck.reason || 'URL 无效' }, { status: 400 });
     }
 
     // 1. 获取页面

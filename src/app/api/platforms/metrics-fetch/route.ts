@@ -7,12 +7,13 @@ import { createAdminClient } from '@/lib/supabase-server';
 import { getAdapter } from '@/lib/platforms/registry';
 import { decryptTokenUnsafe } from '@/lib/platforms/encryption';
 import { PLATFORMS, type PlatformId } from '@/lib/platforms/types';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 function checkAuth(request: Request): boolean {
-  const secret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
+  const secret = getCronSecret();
   if (!secret) return false;
   const url = new URL(request.url);
   return request.headers.get('authorization') === `Bearer ${secret}`

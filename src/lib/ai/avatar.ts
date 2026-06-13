@@ -1,6 +1,6 @@
 // AI Services - Digital Avatar Training & Generation (HeyGen)
 
-import { HEYGEN_BASE, HEYGEN_API_KEY } from './constants';
+import { HEYGEN_BASE, getHeyGenApiKey, fetchWithTimeout } from './constants';
 import type { AvatarTrainingStatus, AvatarTrainingResult, AvatarTrainingStatusResult } from './types';
 
 /** 提交数字分身训练 — 上传 5-10 分钟清晰人声视频 */
@@ -9,18 +9,16 @@ export async function trainAvatar(params: {
   name: string;
   lookalike?: boolean; // true=Digital Twin(视频), false=Photo Avatar(单图)
 }): Promise<AvatarTrainingResult> {
-  if (!HEYGEN_API_KEY) {
+  const apiKey = getHeyGenApiKey();
+  if (!apiKey) {
     return { ok: false, avatarId: null, status: 'failed', error: 'HEYGEN_API_KEY 未配置,数字分身功能不可用' };
   }
 
   try {
-    // HeyGen: POST /v1/photo_avatar/lookalike (单图)
-    // 或 POST /v1/video_avatar/training/upload (Digital Twin 视频)
-    // 这里用 lookalike 端点(更普适,支持单图/视频)
-    const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike`, {
+    const response = await fetchWithTimeout(`${HEYGEN_BASE}/v1/photo_avatar/lookalike`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': HEYGEN_API_KEY,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -28,7 +26,7 @@ export async function trainAvatar(params: {
         video_url: params.videoUrl,
         lookalike: params.lookalike ?? true,
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -55,14 +53,15 @@ export async function trainAvatar(params: {
 
 /** 查询数字分身训练状态 */
 export async function getAvatarTrainingStatus(avatarId: string): Promise<AvatarTrainingStatusResult> {
-  if (!HEYGEN_API_KEY) {
+  const apiKey = getHeyGenApiKey();
+  if (!apiKey) {
     return { avatarId, status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
-    const response = await fetch(`${HEYGEN_BASE}/v1/photo_avatar/lookalike/${avatarId}`, {
-      headers: { 'X-Api-Key': HEYGEN_API_KEY },
-    });
+    const response = await fetchWithTimeout(`${HEYGEN_BASE}/v1/photo_avatar/lookalike/${avatarId}`, {
+      headers: { 'X-Api-Key': apiKey },
+    }, 10000);
 
     if (!response.ok) {
       return { avatarId, status: 'failed', error: `查询失败 (HTTP ${response.status})` };
@@ -96,16 +95,17 @@ export async function generateAvatarVideo(params: {
   voiceId?: string; // 可选 TTS 音色
   backgroundColor?: string;
 }): Promise<{ ok: boolean; videoId?: string; videoUrl?: string; error?: string }> {
-  if (!HEYGEN_API_KEY) {
+  const apiKey = getHeyGenApiKey();
+  if (!apiKey) {
     return { ok: false, error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
     // POST /v1/video/generate
-    const response = await fetch(`${HEYGEN_BASE}/v1/video/generate`, {
+    const response = await fetchWithTimeout(`${HEYGEN_BASE}/v1/video/generate`, {
       method: 'POST',
       headers: {
-        'X-Api-Key': HEYGEN_API_KEY,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -129,7 +129,7 @@ export async function generateAvatarVideo(params: {
         ],
         dimension: { width: 1280, height: 720 },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -151,14 +151,15 @@ export async function getAvatarVideoStatus(videoId: string): Promise<{
   videoUrl?: string;
   error?: string;
 }> {
-  if (!HEYGEN_API_KEY) {
+  const apiKey = getHeyGenApiKey();
+  if (!apiKey) {
     return { status: 'failed', error: 'HEYGEN_API_KEY 未配置' };
   }
 
   try {
-    const response = await fetch(`${HEYGEN_BASE}/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
-      headers: { 'X-Api-Key': HEYGEN_API_KEY },
-    });
+    const response = await fetchWithTimeout(`${HEYGEN_BASE}/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
+      headers: { 'X-Api-Key': apiKey },
+    }, 10000);
     if (!response.ok) return { status: 'failed', error: '查询失败' };
 
     const data = await response.json();

@@ -3,6 +3,7 @@
 
 import type { ToolDefinition } from '../../types';
 import { execSync } from 'child_process';
+import { getExaApiKey } from '@/lib/runtime-config';
 
 const SEARCH_TIMEOUT = 15000;
 
@@ -30,7 +31,7 @@ function hasCli(name: string): boolean {
 
 /** Exa 语义搜索（直接调用 REST API） */
 async function exaSearch(query: string, limit = 5): Promise<string> {
-  const apiKey = process.env.EXA_API_KEY;
+  const apiKey = getExaApiKey();
   if (!apiKey) return 'Exa 搜索不可用：未配置 EXA_API_KEY 环境变量。';
 
   const body = JSON.stringify({

@@ -1,5 +1,7 @@
 // AI Services - 百炼 wan2.2-image 图片生成
 
+import { fetchWithTimeout, getDashScopeApiKey } from './constants';
+import { getAgnesApiKey } from '@/lib/runtime-config';
 import type { ImageResult } from './types';
 
 // ====== Prompt 优化（生图/生视频前调用） ======
@@ -7,7 +9,7 @@ import type { ImageResult } from './types';
 export async function optimizePrompt(rawPrompt: string, type: 'image' | 'video'): Promise<string> {
   if (!rawPrompt || rawPrompt.length < 5) return rawPrompt;
 
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) return rawPrompt;
 
   const systemPrompt = type === 'image'
@@ -34,7 +36,7 @@ Enhance the given prompt by adding:
 Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanations or markdown.`;
 
   try {
-    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +51,7 @@ Keep it under 200 words. Output ONLY the enhanced prompt in English, no explanat
         temperature: 0.7,
         max_tokens: 400,
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       console.warn('Prompt optimization API error:', response.status);
@@ -95,7 +97,7 @@ export async function generateImage(
   const finalPrompt = await optimizePrompt(prompt, 'image');
   console.log(`[Image] 优化前: "${prompt.substring(0, 60)}..." → 优化后: "${finalPrompt.substring(0, 60)}..."`);
 
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
 
   const size = getSizeForRatio(options.ratio || '1:1');
@@ -117,7 +119,7 @@ export async function generateImage(
   }
 
   // 提交异步任务
-  const submitRes = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
+  const submitRes = await fetchWithTimeout('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -125,7 +127,7 @@ export async function generateImage(
       'X-DashScope-Async': 'enable',
     },
     body: JSON.stringify(requestBody),
-  });
+  }, 30000);
 
   if (!submitRes.ok) {
     const errorText = await submitRes.text();
@@ -148,9 +150,9 @@ export async function generateImage(
 async function pollImageTask(apiKey: string, taskId: string): Promise<string | null> {
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 2000));
-    const res = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+    const res = await fetchWithTimeout(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    }, 10000);
     const data = await res.json();
     if (data.output?.task_status === 'SUCCEEDED') {
       return data.output?.results?.[0]?.url || null;
@@ -211,7 +213,7 @@ export async function generateImageAgnes(
   prompt: string,
   options: AgnesImageOptions = {}
 ): Promise<ImageResult> {
-  const apiKey = process.env.AGNES_API_KEY;
+  const apiKey = getAgnesApiKey();
   if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
 
   const size = calcAgnesSize(options.ratio || '1:1', options.quality || 'standard');
@@ -276,7 +278,7 @@ export interface AgnesEditOptions {
 }
 
 export async function editImageAgnes(options: AgnesEditOptions): Promise<ImageResult> {
-  const apiKey = process.env.AGNES_API_KEY;
+  const apiKey = getAgnesApiKey();
   if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
 
   const basePrompt = EDIT_PROMPTS[options.operation];
@@ -345,13 +347,13 @@ export async function editImageDashScope(
   operation: string,
   customPrompt?: string
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY 未配置');
 
   const defaults = DASHSCOPE_EDIT_PROMPTS[operation] || DASHSCOPE_EDIT_PROMPTS.enhance;
   const instruction = customPrompt || defaults.prompt;
 
-  const res = await fetch(DASHSCOPE_MM_BASE, {
+  const res = await fetchWithTimeout(DASHSCOPE_MM_BASE, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -1,22 +1,29 @@
 // FFmpeg 视频处理工具
-import { execSync } from 'child_process';
-import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
+// 安全修复:
+// - execSync → 异步 exec (避免阻塞事件循环)
+// - shell rm/cp → fs API (避免命令注入)
+// - Date.now() → crypto.randomUUID() (避免并发文件名冲突)
+// - subtitle 参数校验 (避免 ffmpeg filter 注入)
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { writeFileSync, mkdirSync, existsSync, unlinkSync, copyFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
+
+const execAsync = promisify(exec);
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 
-/** 执行 ffmpeg 命令，捕获 stderr 便于排查 */
-function ffmpegExec(cmd: string): void {
+/** 异步执行 ffmpeg 命令 */
+async function ffmpegExec(cmd: string): Promise<void> {
   try {
-    execSync(cmd, { stdio: 'pipe', timeout: 300_000 });
+    await execAsync(cmd, { timeout: 300_000 });
   } catch (e: unknown) {
-    const execError = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
-    const stderr = execError.stderr?.toString() || '';
-    const stdout = execError.stdout?.toString() || '';
-    const detail = (stderr + stdout).trim() || (e instanceof Error ? e.message : String(e));
+    const execError = e as { stderr?: string; stdout?: string; message?: string };
+    const detail = (execError.stderr || '') + (execError.stdout || '') || (e instanceof Error ? e.message : String(e));
     console.error('[ffmpeg] 命令失败:', cmd.substring(0, 120));
-    console.error('[ffmpeg] 错误:', detail);
+    console.error('[ffmpeg] 错误:', detail.substring(0, 300));
     throw new Error(`ffmpeg 执行失败: ${detail.substring(0, 300)}`);
   }
 }
@@ -35,6 +42,16 @@ const SUBTITLE_POSITION_MAP: Record<string, string> = {
   '中部': 'Alignment=5,MarginV=0',
   '顶部': 'Alignment=8,MarginV=50',
 };
+
+/** 安全获取字幕样式，仅允许预定义映射中的值 */
+function getSubtitleStyle(style: string): string {
+  return SUBTITLE_STYLE_MAP[style] || SUBTITLE_STYLE_MAP['白色粗体'];
+}
+
+/** 安全获取字幕位置，仅允许预定义映射中的值 */
+function getSubtitlePosition(position: string): string {
+  return SUBTITLE_POSITION_MAP[position] || SUBTITLE_POSITION_MAP['底部'];
+}
 
 // ─── 类型 ────────────────────────────────────────────────
 
@@ -58,7 +75,9 @@ export interface MergeOptions {
 // ─── 工具函数 ──────────────────────────────────────────────
 
 export function getTempDir(label: string = 'video'): string {
-  const dir = join(tmpdir(), `linggan-${label}-${Date.now()}`);
+  // 安全: label 仅用于目录名前缀，随机UUID防并发冲突
+  const safeLabel = label.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 30) || 'video';
+  const dir = join(tmpdir(), `linggan-${safeLabel}-${randomUUID()}`);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -67,7 +86,7 @@ export function getTempDir(label: string = 'video'): string {
 
 export function cleanupTempDir(dir: string): void {
   try {
-    execSync(`rm -rf "${dir}"`);
+    rmSync(dir, { recursive: true, force: true });
   } catch {}
 }
 
@@ -85,13 +104,13 @@ export async function downloadVideo(url: string, outputPath: string): Promise<st
 }
 
 /** 拼接多个视频 */
-export function concatVideos(inputPaths: string[], outputPath: string): string {
-  const filelistPath = join(tmpdir(), `filelist-${Date.now()}.txt`);
+export async function concatVideos(inputPaths: string[], outputPath: string): Promise<string> {
+  const filelistPath = join(tmpdir(), `filelist-${randomUUID()}.txt`);
   const content = inputPaths.map((p) => `file '${p}'`).join('\n');
   writeFileSync(filelistPath, content);
 
   try {
-    ffmpegExec(
+    await ffmpegExec(
       `${FFMPEG_PATH} -y -f concat -safe 0 -i "${filelistPath}" -c copy "${outputPath}"`
     );
     return outputPath;
@@ -118,12 +137,11 @@ export function generateSRT(storyboard: StoryboardScene[], outputPath: string): 
 }
 
 /** 混入背景音乐 */
-export function addBGM(
+export async function addBGM(
   videoPath: string,
   bgmStyle: string,
   outputPath: string
-): string {
-  // 风格降级映射: 若目标 mp3 不存在, 用最接近的本地 mp3 替代
+): Promise<string> {
   const BGM_FALLBACK: Record<string, string> = {
     elegant: 'chill',
     energetic: 'hype',
@@ -136,15 +154,15 @@ export function addBGM(
   }
   if (!existsSync(bgmPath)) {
     console.warn(`[ffmpeg] BGM 文件不存在: ${bgmPath}，跳过BGM合成`);
-    // 没有 BGM 文件时直接复制
-    execSync(`cp "${videoPath}" "${outputPath}"`);
+    // 使用 fs.copyFileSync 替代 shell cp，避免命令注入
+    copyFileSync(videoPath, outputPath);
     return outputPath;
   }
 
   const volumeMap: Record<string, string> = { tech: '0.25', chill: '0.3', hype: '0.2', elegant: '0.22', energetic: '0.25' };
   const volume = volumeMap[bgmStyle] || '0.25';
 
-  ffmpegExec(
+  await ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" -i "${bgmPath}" ` +
     `-filter_complex "[1:a]volume=${volume},afade=t=in:d=2,afade=t=out:st=9999:d=2[a]" ` +
     `-map 0:v -map "[a]" -c:v copy -shortest "${outputPath}"`
@@ -152,18 +170,18 @@ export function addBGM(
   return outputPath;
 }
 
-/** 烧录字幕到视频 */
-export function burnSubtitles(
+/** 烧录字幕到视频 — 仅接受预定义映射中的样式值，防止 ffmpeg filter 注入 */
+export async function burnSubtitles(
   videoPath: string,
   srtPath: string,
   subtitleStyle: string,
   subtitlePosition: string,
   outputPath: string
-): string {
-  const styleStr = SUBTITLE_STYLE_MAP[subtitleStyle] || SUBTITLE_STYLE_MAP['白色粗体'];
-  const positionStr = SUBTITLE_POSITION_MAP[subtitlePosition] || SUBTITLE_POSITION_MAP['底部'];
+): Promise<string> {
+  const styleStr = getSubtitleStyle(subtitleStyle);
+  const positionStr = getSubtitlePosition(subtitlePosition);
 
-  ffmpegExec(
+  await ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" ` +
     `-vf "subtitles=${srtPath}:force_style='${styleStr},${positionStr}'" ` +
     `-c:a copy "${outputPath}"`
@@ -172,8 +190,8 @@ export function burnSubtitles(
 }
 
 /** 从视频中提取缩略图（第1秒帧） */
-export function extractThumbnail(videoPath: string, outputPath: string): string {
-  ffmpegExec(
+export async function extractThumbnail(videoPath: string, outputPath: string): Promise<string> {
+  await ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -q:v 2 "${outputPath}"`
   );
   return outputPath;
@@ -188,12 +206,11 @@ export async function mergeVideoSegments(options: MergeOptions): Promise<string>
   const srtPath = join(dir, 'subtitle.srt');
   const finalPath = join(dir, 'final.mp4');
 
-  // 1. 拼接
+  // 1. 拼接 — 单段直接复制，避免不必要的 ffmpeg 调用
   if (segmentPaths.length === 1) {
-    // 单段直接复制，不需要 concat
-    execSync(`cp "${segmentPaths[0]}" "${mergedPath}"`);
+    copyFileSync(segmentPaths[0], mergedPath);
   } else {
-    concatVideos(segmentPaths, mergedPath);
+    await concatVideos(segmentPaths, mergedPath);
   }
 
   // 2. 生成并重新计算字幕时间轴（基于拼接后的累积时间）
@@ -201,10 +218,10 @@ export async function mergeVideoSegments(options: MergeOptions): Promise<string>
   generateSRT(adjustedStoryboard, srtPath);
 
   // 3. BGM
-  addBGM(mergedPath, bgmStyle, withBgmPath);
+  await addBGM(mergedPath, bgmStyle, withBgmPath);
 
   // 4. 字幕
-  burnSubtitles(withBgmPath, srtPath, subtitleStyle, subtitlePosition, finalPath);
+  await burnSubtitles(withBgmPath, srtPath, subtitleStyle, subtitlePosition, finalPath);
 
   return finalPath;
 }

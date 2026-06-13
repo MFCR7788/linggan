@@ -189,7 +189,8 @@ function AIVideoContent() {
       } else {
         setToast({ message: res.error || '保存失败', type: 'error' });
       }
-    } catch {
+    } catch (e) {
+      console.error('[Video] 保存动态图形失败:', e);
       setToast({ message: '保存失败', type: 'error' });
     }
   };
@@ -226,7 +227,7 @@ function AIVideoContent() {
     setInspirationsLoading(true);
     apiClient.get<InspirationItem[]>('/inspiration?limit=50')
       .then((res) => { if (res.success) setInspirations(res.data || []); })
-      .catch(() => {})
+      .catch((e) => { console.error('[Video] 灵感加载失败:', e); })
       .finally(() => setInspirationsLoading(false));
   }, []);
 
@@ -333,7 +334,8 @@ function AIVideoContent() {
         setSubtitlePos(styleDefaults.subtitlePos);
       }
       setCurrentStep(2);
-    } catch {
+    } catch (e) {
+      console.error('[Video] 分镜生成失败:', e);
       setToast({ message: '网络错误，请重试', type: 'error' });
     }
     setIsGenerating(false);
@@ -414,7 +416,8 @@ function AIVideoContent() {
       } else {
         setToast({ message: res.error || '保存失败', type: 'error' });
       }
-    } catch {
+    } catch (e) {
+      console.error('[Video] 保存片段失败:', e);
       setToast({ message: '保存失败，请重试', type: 'error' });
     }
   };
@@ -432,7 +435,8 @@ function AIVideoContent() {
       a.download = `segment-${seg.index + 1}-${Date.now()}.mp4`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
+    } catch (e) {
+      console.error('[Video] 下载失败:', e);
       setToast({ message: '下载失败', type: 'error' });
     }
   };
@@ -468,7 +472,8 @@ function AIVideoContent() {
       } else {
         setToast({ message: res.error || '优化失败', type: 'error' });
       }
-    } catch {
+    } catch (e) {
+      console.error('[Video] 自动字幕失败:', e);
       setToast({ message: '网络错误', type: 'error' });
     }
     setIsAutoSubtitling(false);
@@ -482,8 +487,8 @@ function AIVideoContent() {
     setGeneratingFrameIndices(new Set(targetIndices));
     try {
       await generateFirstFramesBatch({ storyboard, sceneIndices: indices });
-    } catch {
-      // error handled by hook
+    } catch (e) {
+      console.error('[Video] 首帧生成失败:', e);
     } finally {
       setGeneratingFrameIndices(new Set());
     }

@@ -8,6 +8,17 @@ export const POST = withAuth(async ({ request, user }) => {
   try {
     const { content, contentType } = await request.json();
 
+    // 输入验证（在扣点前校验，避免无效请求浪费 credits）
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      return NextResponse.json({ success: false, error: '内容不能为空' }, { status: 400 });
+    }
+    if (content.length > 10000) {
+      return NextResponse.json({ success: false, error: '内容过长（最大 10000 字符）' }, { status: 400 });
+    }
+    if (!contentType || typeof contentType !== 'string') {
+      return NextResponse.json({ success: false, error: '内容类型无效' }, { status: 400 });
+    }
+
     // ─── Credit 扣点 ──────────────────────────────────
     const creditCost = CREDIT_COSTS.ai_text.perCall;
     try {

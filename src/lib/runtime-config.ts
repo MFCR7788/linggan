@@ -28,11 +28,11 @@ function loadEnvFile(): Record<string, string> {
   return _envCache;
 }
 
-/** 读取 env var，优先 process.env（build 时已设置），其次 .env.local 运行时文件 */
+/** 读取 env var，优先 .env.local 运行时文件（绕过 Next.js build 时内联），其次 process.env */
 function getEnv(key: string): string | undefined {
-  if (process.env[key]) return process.env[key];
   const fileEnv = loadEnvFile();
-  return fileEnv[key] || undefined;
+  if (fileEnv[key]) return fileEnv[key];
+  return process.env[key] || undefined;
 }
 
 let _cachedCronSecret: string | undefined;
@@ -69,6 +69,54 @@ export function getDoubaoEndpointId(): string | undefined {
 
 export function getOpenRouterApiKey(): string | undefined {
   return getEnv('OPENROUTER_API_KEY');
+}
+
+export function getAgnesApiKey(): string | undefined {
+  return getEnv('AGNES_API_KEY');
+}
+
+export function getAuthSalt(): string | undefined {
+  return getEnv('AUTH_SALT');
+}
+
+export function getDevAuthSecret(): string | undefined {
+  return getEnv('DEV_AUTH_SECRET');
+}
+
+export function getPlatformEncryptionKey(): string | undefined {
+  return getEnv('PLATFORM_ENCRYPTION_KEY');
+}
+
+export function getWechatPayApiV3Key(): string | undefined {
+  return getEnv('WECHAT_PAY_API_V3_KEY');
+}
+
+export function getWechatPayPrivateKey(): string | undefined {
+  return getEnv('WECHAT_PAY_PRIVATE_KEY');
+}
+
+export function getWechatMpAppSecret(): string | undefined {
+  return getEnv('WECHAT_MP_APP_SECRET');
+}
+
+export function getWeiboAppSecret(): string | undefined {
+  return getEnv('WEIBO_APP_SECRET');
+}
+
+export function getJinaApiKey(): string | undefined {
+  return getEnv('JINA_API_KEY');
+}
+
+export function getExaApiKey(): string | undefined {
+  return getEnv('EXA_API_KEY');
+}
+
+export function getAliyunSmsAccessKeyId(): string | undefined {
+  return getEnv('ALIYUN_SMS_ACCESS_KEY_ID') || getEnv('ALIYUN_ACCESS_KEY_ID');
+}
+
+export function getAliyunSmsAccessKeySecret(): string | undefined {
+  return getEnv('ALIYUN_SMS_ACCESS_KEY_SECRET') || getEnv('ALIYUN_ACCESS_KEY_SECRET');
 }
 
 export { getEnv };

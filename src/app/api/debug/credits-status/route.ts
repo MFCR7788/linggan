@@ -5,14 +5,22 @@ import { getBalance, getTransactions, getPackages, getTiers } from '@/lib/credit
 
 export const dynamic = 'force-dynamic';
 
-const DEBUG_SECRET = process.env.CRON_SECRET || process.env.AUTH_SALT || 'debug';
-
 export async function GET(request: NextRequest) {
+  // 生产环境完全禁用 debug 端点
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
+
+  const debugSecret = process.env.DEBUG_SECRET;
+  if (!debugSecret) {
+    return NextResponse.json({ error: 'Debug 端点未配置' }, { status: 404 });
+  }
+
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret');
   const userId = searchParams.get('userId') || '4bd17fdf-dfe9-4a15-8e3f-9f3a70be74a6';
 
-  if (secret !== DEBUG_SECRET && secret !== 'lingji-dev-2026') {
+  if (secret !== debugSecret) {
     return NextResponse.json({ error: '需要有效 secret 参数' }, { status: 401 });
   }
 

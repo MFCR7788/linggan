@@ -3,13 +3,14 @@
 // 密钥从 PLATFORM_ENCRYPTION_KEY 读(32 字节 hex)
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { getPlatformEncryptionKey } from '@/lib/runtime-config';
 
 const ALGO = 'aes-256-gcm';
 const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
 
 function getKey(): Buffer {
-  const raw = process.env.PLATFORM_ENCRYPTION_KEY;
+  const raw = getPlatformEncryptionKey();
   if (!raw) {
     throw new Error('PLATFORM_ENCRYPTION_KEY 未配置(在 .env.local 写入 32 字节 hex 字符串)');
   }
@@ -55,7 +56,7 @@ export function decryptToken(encrypted: string): string {
  * 用于开发/测试环境:如果没配密钥,返回原值(警告)
  */
 export function encryptTokenUnsafe(plain: string): string {
-  if (!process.env.PLATFORM_ENCRYPTION_KEY) {
+  if (!getPlatformEncryptionKey()) {
     console.warn('[encryption] PLATFORM_ENCRYPTION_KEY 未配置, 使用明文存储 (仅供开发)');
     return `plain:${plain}`;
   }

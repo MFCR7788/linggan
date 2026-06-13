@@ -2,7 +2,7 @@
 
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { ExternalLink, TrendingUp, CheckCircle, XCircle, ArrowLeft, Clock, Eye, MessageSquare, ThumbsUp, Share2, Copy, Check } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -78,11 +78,12 @@ function HotspotDetailContent() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ is_read: true }),
-          }).catch(() => {});
+          }).catch((e) => { console.error('[Hotspot] 标记已读失败:', e); });
         } else {
           setError(data.error || '获取热点详情失败');
         }
-      } catch {
+      } catch (e) {
+        console.error('[Hotspot] 获取详情失败:', e);
         setError('网络请求失败');
       } finally {
         setLoading(false);
@@ -440,7 +441,7 @@ function HotspotDetailContent() {
                 body: JSON.stringify({ status: 'confirmed' }),
               });
               showToast('已标记为有用', 'success');
-            } catch {}
+            } catch (e) { console.error('[Hotspot] 标记有用失败:', e); }
           }}
           className="!px-3"
           style={{
@@ -462,7 +463,7 @@ function HotspotDetailContent() {
                 body: JSON.stringify({ status: 'dismissed' }),
               });
               showToast('已忽略该热点', 'info');
-            } catch {}
+            } catch (e) { console.error('[Hotspot] 忽略热点失败:', e); }
           }}
           className="!px-3"
           style={{
@@ -483,7 +484,9 @@ function HotspotDetailContent() {
 export default function HotspotDetailPage() {
   return (
     <ProtectedRoute>
-      <HotspotDetailContent />
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><LoadingSpinner text="加载中..." /></div>}>
+        <HotspotDetailContent />
+      </Suspense>
     </ProtectedRoute>
   );
 }

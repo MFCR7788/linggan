@@ -1,6 +1,9 @@
 // Agnes Video V2.0 API — 图+文字 → 口播视频（原生口型同步+配音）
 // 用于换人复刻：照片 + 口播文案 → 新人物口播视频
 
+import { fetchWithTimeout } from './constants';
+import { getAgnesApiKey } from '@/lib/runtime-config';
+
 const AGNES_VIDEO_BASE = 'https://apihub.agnes-ai.com/v1/videos';
 
 export interface AgnesVideoOptions {
@@ -42,7 +45,7 @@ function clampFrames(n: number): number {
 }
 
 export async function generateAgnesVideo(options: AgnesVideoOptions): Promise<AgnesVideoResult> {
-  const apiKey = process.env.AGNES_API_KEY;
+  const apiKey = getAgnesApiKey();
   if (!apiKey) throw new Error('AGNES_API_KEY is not configured');
 
   const numFrames = clampFrames(options.numFrames || 161);
@@ -65,14 +68,14 @@ export async function generateAgnesVideo(options: AgnesVideoOptions): Promise<Ag
   if (options.negativePrompt) body.negative_prompt = options.negativePrompt;
 
   // Step 1: 创建任务
-  const createRes = await fetch(AGNES_VIDEO_BASE, {
+  const createRes = await fetchWithTimeout(AGNES_VIDEO_BASE, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
-  });
+  }, 30000);
 
   if (!createRes.ok) {
     const err = await createRes.text().catch(() => '');
@@ -99,9 +102,9 @@ async function pollAgnesVideoTask(apiKey: string, taskId: string): Promise<strin
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 5000));
 
-    const res = await fetch(`${AGNES_VIDEO_BASE}/${taskId}`, {
+    const res = await fetchWithTimeout(`${AGNES_VIDEO_BASE}/${taskId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    }, 10000);
 
     if (!res.ok) continue;
 

@@ -828,7 +828,9 @@ function AdsContent() {
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
           <div className="space-y-3">
             {historyItems.map((item) => {
-              const cells = item.metadata?.generatedAds?.cells as Array<{ imageUrl: string; title: string; visualAngle?: string }> | undefined;
+              const meta = item.metadata as Record<string, unknown> | undefined;
+              const generatedAds = meta?.generatedAds as Record<string, unknown> | undefined;
+              const cells = generatedAds?.cells as Array<{ imageUrl: string; title: string; visualAngle?: string }> | undefined;
               const firstImage = cells?.[0]?.imageUrl || item.imageUrl;
               const totalCells = cells?.length || 0;
               return (
@@ -838,7 +840,7 @@ function AdsContent() {
                   className="!p-3 cursor-pointer"
                   onClick={() => {
                     if (item.title) setProduct(item.title);
-                    const sceneFromMeta = item.metadata?.generatedAds?.scene;
+                    const sceneFromMeta = generatedAds?.scene as string | undefined;
                     if (sceneFromMeta) setScene(sceneFromMeta);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}

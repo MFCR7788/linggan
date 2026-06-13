@@ -1389,7 +1389,27 @@ export async function fetchWeather(city: string): Promise<WeatherData | null> {
   }
 }
 
-function parseWeatherResponse(city: string, data: any): WeatherData | null {
+interface WeatherApiDay {
+  date: string;
+  maxtempC: string;
+  mintempC: string;
+  hourly?: Array<{ weatherDesc?: Array<{ value: string }> }>;
+  astronomy?: Array<{ sunrise: string; sunset: string }>;
+}
+
+interface WeatherApiResponse {
+  current_condition?: Array<{
+    temp_C: string;
+    FeelsLikeC: string;
+    weatherDesc?: Array<{ value: string }>;
+    humidity: string;
+    windspeedKmph: string;
+    cloudcover: string;
+  }>;
+  weather?: WeatherApiDay[];
+}
+
+function parseWeatherResponse(city: string, data: WeatherApiResponse): WeatherData | null {
   const current = data.current_condition?.[0];
   const weather = data.weather;
   if (!current) return null;
@@ -1404,7 +1424,7 @@ function parseWeatherResponse(city: string, data: any): WeatherData | null {
       windSpeed: Number(current.windspeedKmph),
       cloudCover: Number(current.cloudcover),
     },
-    forecast: (weather || []).slice(0, 3).map((day: any) => ({
+    forecast: (weather || []).slice(0, 3).map((day: WeatherApiDay) => ({
       date: day.date,
       maxTemp: Number(day.maxtempC),
       minTemp: Number(day.mintempC),

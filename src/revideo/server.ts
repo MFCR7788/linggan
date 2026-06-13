@@ -27,9 +27,10 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 const server = createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', process.env.LINGJI_APP_ORIGIN || 'https://ai.zjsifan.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -75,7 +76,7 @@ const server = createServer(async (req, res) => {
       console.error('[Revideo Server] 渲染失败:', err);
       jsonResponse(res, 500, {
         success: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: '渲染失败，请稍后重试',
       });
     }
     return;

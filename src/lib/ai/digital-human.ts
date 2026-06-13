@@ -1,6 +1,6 @@
 // AI Services - Digital Human (Audio2Video S2V / Animate)
 
-import { DASHSCOPE_VIDEO_BASE, DASHSCOPE_S2V_BASE, HAPPYHORSE_API_KEY } from './constants';
+import { DASHSCOPE_VIDEO_BASE, DASHSCOPE_S2V_BASE, getHappyHorseApiKey, fetchWithTimeout } from './constants';
 import type { VideoTaskResult, AnimateSubmitResult } from './types';
 
 // ====== 数字人 Audio2Video（wan2.2-s2v） ======
@@ -14,11 +14,11 @@ export async function submitDigitalHumanTask(params: {
   const { imageUrl, audioUrl, resolution = '720P' } = params;
 
   try {
-    const response = await fetch(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
+    const response = await fetchWithTimeout(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${HAPPYHORSE_API_KEY}`,
+        Authorization: `Bearer ${getHappyHorseApiKey()}`,
         'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify({
@@ -31,7 +31,7 @@ export async function submitDigitalHumanTask(params: {
           resolution,
         },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -55,9 +55,9 @@ export async function getDigitalHumanTaskStatus(
   taskId: string
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${HAPPYHORSE_API_KEY}` },
-    });
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
+    }, 10000);
 
     if (!response.ok) {
       return { status: 'error', message: '查询失败' };
@@ -96,13 +96,13 @@ export async function submitAnimateTask(params: {
 }): Promise<AnimateSubmitResult> {
   const { imageUrl, videoUrl, mode = 'animate', resolution = '720P' } = params;
 
-  const apiKey = process.env.HAPPYHORSE_API_KEY;
+  const apiKey = getHappyHorseApiKey();
   if (!apiKey) {
-    return { taskId: null, status: 'error', message: 'HAPPYHORSE_API_KEY 未配置' };
+    return { taskId: null, status: 'error', message: 'getHappyHorseApiKey() 未配置' };
   }
 
   try {
-    const response = await fetch(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
+    const response = await fetchWithTimeout(`${DASHSCOPE_S2V_BASE}/services/aigc/image2video/video-synthesis/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ export async function submitAnimateTask(params: {
         },
         parameters: { resolution },
       }),
-    });
+    }, 30000);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -146,9 +146,9 @@ export async function getAnimateTaskStatus(
   taskId: string
 ): Promise<{ status: string; videoUrl?: string; message?: string }> {
   try {
-    const response = await fetch(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${process.env.HAPPYHORSE_API_KEY}` },
-    });
+    const response = await fetchWithTimeout(`${DASHSCOPE_VIDEO_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${getHappyHorseApiKey()}` },
+    }, 10000);
     if (!response.ok) return { status: 'error', message: '查询失败' };
     const data = await response.json();
     const taskStatus = data.output?.task_status;

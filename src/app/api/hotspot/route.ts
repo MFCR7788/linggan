@@ -104,6 +104,9 @@ export const POST = withAuth(async ({ request, user }) => {
   if (!platform || !title || !original_url) {
     return createApiError('platform, title, original_url 为必填项', 400);
   }
+  if (typeof platform !== 'string' || platform.length > 50) {
+    return createApiError('platform 格式无效', 400);
+  }
 
   // 校验 URL 格式
   try {

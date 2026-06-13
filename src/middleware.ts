@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 const protectedPaths = [
   '/home',
@@ -27,9 +28,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // API 路由由 withAuth 自行处理认证
+  // API 路由频率限制
   if (pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    const ipHeader = request.headers.get('x-forwarded-for');
+    const { allowed, remaining, resetAt } = checkRateLimit(ipHeader, pathname);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: '请求过于频繁，请稍后再试', retryAfter: Math.ceil((resetAt - Date.now()) / 1000) },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
+    }
+    const res = NextResponse.next();
+    res.headers.set('X-RateLimit-Remaining', String(remaining));
+    res.headers.set('X-RateLimit-Reset', String(resetAt));
+    return res;
   }
 
   // 检查是否需要保护
@@ -38,39 +50,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 开发模式认证（仅 localhost 或配置了 DEV_AUTH_SECRET 时可用）
-  // 生产环境 (NODE_ENV=production) 下此代码块永不执行，
-  // 双重保护：可通过 ENABLE_DEV_AUTH=false 在开发构建中强制禁用
-  const isDev = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_AUTH !== 'false';
+  // 开发模式认证（仅 NODE_ENV=development 且配置了 DEV_AUTH_SECRET 时可用）
+  // x-forwarded-for / x-real-ip 可被伪造，不再信任这些 header
+  const isDev = process.env.NODE_ENV === 'development' && process.env.ENABLE_DEV_AUTH !== 'false';
   if (isDev) {
     const devAuthSecret = process.env.DEV_AUTH_SECRET;
     if (devAuthSecret) {
-      // 配置了 DEV_AUTH_SECRET 时验证 cookie 中的密钥
       const cookieSecret = request.cookies.get('dev_auth_secret')?.value;
       if (cookieSecret === devAuthSecret) {
-        const devUserId = request.cookies.get('dev_user_id')?.value;
-        if (devUserId) return NextResponse.next();
-      }
-    } else {
-      // 未配置时仅允许 localhost
-      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-        || request.headers.get('x-real-ip')
-        || '';
-      const isLocalhost = !clientIp ||
-        clientIp === '127.0.0.1' ||
-        clientIp === '::1' ||
-        clientIp === 'localhost';
-      if (isLocalhost) {
         const devUserId = request.cookies.get('dev_user_id')?.value;
         if (devUserId) return NextResponse.next();
       }
     }
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[middleware] Supabase 环境变量缺失，重定向到登录');
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = '/login';
+    return NextResponse.redirect(loginUrl);
+  }
+
   const response = NextResponse.next();
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get(name: string) { return request.cookies.get(name)?.value; },
@@ -89,9 +95,12 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (!user) {
-    // 降级：GoTrue 故障时检查自定义 auth cookie
+    // 降级：GoTrue 故障时检查自定义 auth cookie（记录日志便于监控）
+    if (authError) {
+      console.warn('[middleware] Supabase Auth 错误，启用降级:', authError.message?.substring(0, 100));
+    }
     const lingjiUserId = request.cookies.get('lingji_auth_user_id')?.value;
     if (lingjiUserId) {
       return response;

@@ -7,11 +7,15 @@ import { createHash } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { createAdminClient } from '@/lib/supabase-server';
 import { grant } from '@/lib/credits';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 function derivePassword(phone: string): string {
-  const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-default-salt-please-set-AUTH_SALT';
+  const salt = process.env.AUTH_SALT;
+  if (!salt) {
+    throw new Error('FATAL: AUTH_SALT 未配置！生产环境必须设置 AUTH_SALT 环境变量。此值首次上线后不可变更。用 openssl rand -hex 64 生成。');
+  }
   return createHash('sha256').update(`${phone}|${salt}`).digest('hex').slice(0, 48);
 }
 
@@ -20,12 +24,15 @@ function toAuthEmail(phone: string): string {
 }
 
 function deriveJwtSecret(): string {
-  const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-jwt-fallback';
+  const salt = process.env.AUTH_SALT;
+  if (!salt) {
+    throw new Error('FATAL: AUTH_SALT 未配置，无法派生 JWT 密钥。');
+  }
   return createHash('sha256').update(`jwt:${salt}`).digest('hex');
 }
 
 /** 通过 RPC 查找 auth.users 中的用户（绕过 GoTrue） */
-async function rpcFindUser(supabase: any, email: string): Promise<{ id: string } | null> {
+async function rpcFindUser(supabase: SupabaseClient, email: string): Promise<{ id: string } | null> {
   try {
     const { data, error } = await supabase.rpc('find_user_by_email', { p_email: email });
     if (error || !data?.found) return null;
@@ -36,7 +43,7 @@ async function rpcFindUser(supabase: any, email: string): Promise<{ id: string }
 }
 
 /** 通过 RPC 创建用户（绕过 GoTrue，走 PostgREST → auth.users） */
-async function rpcCreateUser(supabase: any, email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
+async function rpcCreateUser(supabase: SupabaseClient, email: string, password: string, phone: string, username: string): Promise<{ id: string } | { error: string }> {
   try {
     const { data, error } = await supabase.rpc('create_user_via_sql', {
       p_email: email,
@@ -251,7 +258,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function ensureUserProfile(userId: string, phone: string, username: string, supabase: any) {
+async function ensureUserProfile(userId: string, phone: string, username: string, supabase: SupabaseClient) {
   const { data: exist } = await supabase.from('users').select('id, username').eq('id', userId).maybeSingle();
   if (exist) {
     if (username && exist.username !== username) {
@@ -280,7 +287,7 @@ async function ensureUserProfile(userId: string, phone: string, username: string
       { name: '视频素材', icon: '🎬', color: '#10B981', sort_order: 3, is_default: true },
     ];
     for (const cat of cats) {
-      await supabase.from('categories').insert({ user_id: userId, ...cat }).catch(() => {});
+      try { await supabase.from('categories').insert({ user_id: userId, ...cat }); } catch { /* ignore duplicate */ }
     }
   }
 }

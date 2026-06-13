@@ -38,7 +38,7 @@ export const CLAIM_TIMEOUT_SECONDS = 180;
 
 export interface EnqueueBatchItem {
   prompt: string;
-  params: Record<string, any>;
+  params: Record<string, unknown>;
   inspirationId?: string;
   contentId?: string;
 }
@@ -191,7 +191,7 @@ export async function updateProgress(taskId: string, progress: number, workerId?
     throw new Error(`updateProgress: progress 必须在 0-100, 收到 ${progress}`);
   }
   const supabase = createAdminClient();
-  const update: Record<string, any> = { progress };
+  const update: Record<string, unknown> = { progress };
   if (workerId) update.worker_id = workerId;
   const { error } = await supabase
     .from('ai_tasks')

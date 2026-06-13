@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { verifyNotifySignature, aesGcmDecrypt } from '@/lib/wechat-pay';
 import { grant } from '@/lib/credits';
+import { getWechatPayApiV3Key } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ code: 'FAIL', message: '不支持的加密算法' }, { status: 400 });
     }
 
-    const apiV3Key = process.env.WECHAT_PAY_API_V3_KEY;
+    const apiV3Key = getWechatPayApiV3Key();
     if (!apiV3Key) {
       console.error('[Pay/notify] API V3 Key 未配置');
       return NextResponse.json({ code: 'FAIL', message: '服务未配置' }, { status: 500 });

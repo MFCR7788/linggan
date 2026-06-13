@@ -127,10 +127,11 @@ export const POST = withAuth(async ({ request, user }) => {
   const supabase = createAdminClient();
 
   if (action === 'create_session') {
+    const title = typeof body.title === 'string' ? body.title.substring(0, 200) : '新对话';
     // 先尝试带 metadata 插入（新表结构），失败则降级不带 metadata
     let { data, error } = await supabase
       .from('chat_sessions')
-      .insert({ user_id: user.id, title: body.title || '新对话', metadata: body.metadata || {} })
+      .insert({ user_id: user.id, title, metadata: body.metadata || {} })
       .select()
       .single();
 
@@ -138,7 +139,7 @@ export const POST = withAuth(async ({ request, user }) => {
     if (error && body.metadata) {
       const fallback = await supabase
         .from('chat_sessions')
-        .insert({ user_id: user.id, title: body.title || '新对话' })
+        .insert({ user_id: user.id, title })
         .select()
         .single();
       if (!fallback.error) {
@@ -153,6 +154,13 @@ export const POST = withAuth(async ({ request, user }) => {
   if (action === 'save_messages') {
     const { session_id, messages } = body;
     if (!session_id || !messages?.length) return createApiError('参数不足', 400);
+    if (!Array.isArray(messages) || messages.length > 50) return createApiError('消息数量异常（最大 50 条）', 400);
+
+    // 逐条校验消息格式
+    for (const m of messages) {
+      if (!m.type || typeof m.type !== 'string') return createApiError('消息类型无效', 400);
+      if (typeof m.content !== 'string' || m.content.length > 50000) return createApiError('消息内容异常', 400);
+    }
 
     const { error } = await supabase.from('chat_messages').insert(
       messages.map((m: any) => ({
@@ -192,7 +200,8 @@ export const POST = withAuth(async ({ request, user }) => {
   if (action === 'update_title') {
     const { session_id, title } = body;
     if (!session_id || !title) return createApiError('参数不足', 400);
-    await supabase.from('chat_sessions').update({ title }).eq('id', session_id).eq('user_id', user.id);
+    if (typeof title !== 'string' || title.length > 200) return createApiError('标题过长（最大 200 字符）', 400);
+    await supabase.from('chat_sessions').update({ title: title.substring(0, 200) }).eq('id', session_id).eq('user_id', user.id);
     return createApiResponse({ success: true });
   }
 

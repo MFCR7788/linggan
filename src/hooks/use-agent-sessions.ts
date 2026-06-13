@@ -97,7 +97,8 @@ export function useAgentSessions() {
   }, [currentSessionId]);
 
   const updateTitle = useCallback(async (sessionId: string, title: string) => {
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title } : s));
+    const prev = sessions.find(s => s.id === sessionId)?.title;
+    setSessions(prev2 => prev2.map(s => s.id === sessionId ? { ...s, title } : s));
     try {
       syncDevAuthCookie();
       await fetch('/api/chat/history', {
@@ -107,11 +108,13 @@ export function useAgentSessions() {
       });
     } catch (e) {
       console.error('更新标题失败:', e);
+      if (prev) setSessions(prev2 => prev2.map(s => s.id === sessionId ? { ...s, title: prev } : s));
     }
-  }, []);
+  }, [sessions]);
 
   const updateMetadata = useCallback(async (sessionId: string, metadata: Record<string, unknown>) => {
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, metadata } : s));
+    const prev = sessions.find(s => s.id === sessionId)?.metadata;
+    setSessions(prev2 => prev2.map(s => s.id === sessionId ? { ...s, metadata } : s));
     try {
       syncDevAuthCookie();
       await fetch('/api/chat/history', {
@@ -121,8 +124,9 @@ export function useAgentSessions() {
       });
     } catch (e) {
       console.error('更新会话元数据失败:', e);
+      if (prev) setSessions(prev2 => prev2.map(s => s.id === sessionId ? { ...s, metadata: prev } : s));
     }
-  }, []);
+  }, [sessions]);
 
   return {
     sessions, currentSessionId, setCurrentSessionId,

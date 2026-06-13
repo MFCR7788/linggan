@@ -1,6 +1,7 @@
 // AI Services - Chat APIs (百炼 DeepSeek, Qwen/DashScope)
 
 import type { ChatMessage, ChatOptions } from './types';
+import { getDashScopeApiKey, getDoubaoEndpointId } from '@/lib/runtime-config';
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 60000): Promise<Response> {
   const controller = new AbortController();
@@ -21,7 +22,7 @@ export async function callDeepSeek(
   prompt: string,
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
@@ -66,7 +67,7 @@ export async function callQwen(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY || process.env.QWEN_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
@@ -119,12 +120,12 @@ export async function callDoubaoChat(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) {
     throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  const rawModel = options.model || process.env.DOUBAO_ENDPOINT_ID || 'doubao-seed-2.0-241215';
+  const rawModel = options.model || getDoubaoEndpointId() || 'doubao-seed-2.0-241215';
   const model = mapDoubaoModel(rawModel);
 
   const response = await fetchWithTimeout(`${BAILIAN_BASE}/chat/completions`, {

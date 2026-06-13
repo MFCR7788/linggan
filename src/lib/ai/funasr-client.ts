@@ -1,6 +1,7 @@
 // FunASR 本地语音识别客户端 — 优先本地 Docker，降级 DashScope Paraformer
 import { readFile } from "fs/promises";
 import { getDashScopeApiKey } from "@/lib/runtime-config";
+import { fetchWithTimeout } from "./constants";
 
 const FUNASR_URL = process.env.FUNASR_URL || "http://localhost:10096/asr";
 
@@ -101,7 +102,7 @@ async function recognizeViaDashScope(audioPath: string): Promise<FunASRResult> {
 
   try {
     // 提交任务
-    const submitRes = await fetch(
+    const submitRes = await fetchWithTimeout(
       "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
       {
         method: "POST",
@@ -119,7 +120,8 @@ async function recognizeViaDashScope(audioPath: string): Promise<FunASRResult> {
             disfluency_removal_enabled: false,
           },
         }),
-      }
+      },
+      30000
     );
 
     const submitData = await submitRes.json();
@@ -130,9 +132,10 @@ async function recognizeViaDashScope(audioPath: string): Promise<FunASRResult> {
 
     // 轮询结果
     for (let i = 0; i < 30; i++) {
-      const pollRes = await fetch(
+      const pollRes = await fetchWithTimeout(
         `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
-        { headers: { Authorization: `Bearer ${apiKey}` } }
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+        10000
       );
       const pollData = await pollRes.json();
       const status = pollData.output?.task_status;
@@ -140,7 +143,7 @@ async function recognizeViaDashScope(audioPath: string): Promise<FunASRResult> {
       if (status === "SUCCEEDED") {
         const transcriptionUrl = pollData.output?.results?.[0]?.transcription_url;
         if (!transcriptionUrl) throw new Error("转录结果 URL 为空");
-        const transcriptRes = await fetch(transcriptionUrl);
+        const transcriptRes = await fetchWithTimeout(transcriptionUrl, {}, 10000);
         const transcriptData = await transcriptRes.json();
         const parts: string[] = [];
         for (const ch of transcriptData.transcripts || []) {

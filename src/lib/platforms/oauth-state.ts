@@ -2,6 +2,7 @@
 // state 是随机字符串,临时存到 KV/cookie 用来验证回调是用户本人发起的
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { getPlatformEncryptionKey } from '@/lib/runtime-config';
 
 const STATE_TTL_SEC = 600; // 10 分钟
 
@@ -13,7 +14,11 @@ interface StatePayload {
 }
 
 function getSecret(): string {
-  return process.env.PLATFORM_ENCRYPTION_KEY || process.env.JWT_SECRET || 'dev-state-secret';
+  const key = getPlatformEncryptionKey() || process.env.JWT_SECRET;
+  if (!key) {
+    throw new Error('PLATFORM_ENCRYPTION_KEY 或 JWT_SECRET 未配置，无法签名 OAuth state。请在 .env.local 中设置 PLATFORM_ENCRYPTION_KEY。');
+  }
+  return key;
 }
 
 function sign(payload: string): string {

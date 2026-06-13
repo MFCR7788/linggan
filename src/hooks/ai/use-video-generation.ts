@@ -182,8 +182,8 @@ export function useVideoGeneration() {
 
       // 1. Call one-click API to generate storyboard + submit segments
       const ocRes = await apiClient.post<{
-        storyboard: any[];
-        segments: any[];
+        storyboard: StoryboardScene[];
+        segments: SegmentState[];
         taskIds: string;
         providers: string;
       }>('/ai/video/one-click', {
@@ -230,8 +230,8 @@ export function useVideoGeneration() {
 
       // 3. Collect video URLs and merge
       const videoUrls = Object.values(segResults)
-        .filter((s: any) => s.status === 'succeeded' && s.videoUrl)
-        .map((s: any) => s.videoUrl);
+        .filter((s) => s.status === 'succeeded' && s.videoUrl)
+        .map((s) => s.videoUrl);
 
       if (videoUrls.length === 0) throw new Error('没有成功生成的视频片段');
 
@@ -242,7 +242,7 @@ export function useVideoGeneration() {
         bgmStyle: params.bgmStyle || 'tech',
         subtitleStyle: 'modern',
         subtitlePosition: 'bottom',
-        storyboard: (storyboard as any[]).map((s: any) => ({
+        storyboard: (storyboard as StoryboardScene[]).map((s: StoryboardScene) => ({
           index: s.index,
           timeStart: s.timeStart,
           timeEnd: s.timeEnd,
@@ -272,7 +272,7 @@ export function useVideoGeneration() {
     setGeneratingStoryboard(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ storyboard: any[]; styleDefaults?: { bgm: string; subtitle: string; subtitlePos: string } }>('/ai/video/storyboard-v2', {
+      const res = await apiClient.post<{ storyboard: StoryboardScene[]; styleDefaults?: { bgm: string; subtitle: string; subtitlePos: string } }>('/ai/video/storyboard-v2', {
         inspirations: params.inspirations,
         stylePreset: params.stylePreset,
         duration: params.duration,
@@ -304,7 +304,7 @@ export function useVideoGeneration() {
     cancelPolling();
 
     try {
-      const res = await apiClient.post<{ segments: any[] }>('/ai/video/generate', {
+      const res = await apiClient.post<{ segments: SegmentState[] }>('/ai/video/generate', {
         storyboard: params.storyboard,
         inspirations: params.inspirations,
         qualityTier: params.qualityTier,
@@ -319,7 +319,7 @@ export function useVideoGeneration() {
       });
       if (!res.success) throw new Error(res.error || '提交失败');
 
-      const segs: SegmentState[] = res.data!.segments.map((s: any) => ({
+      const segs: SegmentState[] = res.data!.segments.map((s: SegmentState) => ({
         ...s,
         status: s.taskId ? 'queued' : (s.status === 'error' ? 'failed' : 'skipped'),
       }));
@@ -406,7 +406,7 @@ export function useVideoGeneration() {
       }));
       setStoryboard(sb);
 
-      const segs: SegmentState[] = res.data!.segments.map((s: any) => ({
+      const segs: SegmentState[] = res.data!.segments.map((s: SegmentState) => ({
         ...s,
         status: s.taskId ? 'queued' : 'failed',
       }));

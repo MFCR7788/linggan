@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 const MAX_HISTORY = 50;
 
@@ -17,15 +17,17 @@ export function useInputHistory(
   const stateRef = useRef<InputHistoryState>({ past: [], present: value, future: [] });
   const ignoreRef = useRef(false);
 
-  // Sync external value changes (e.g. voice input) into history
-  if (!ignoreRef.current && value !== stateRef.current.present) {
-    stateRef.current = {
-      past: [...stateRef.current.past, stateRef.current.present].slice(-MAX_HISTORY),
-      present: value,
-      future: [],
-    };
-  }
-  ignoreRef.current = false;
+  // Sync external value changes (e.g. voice input) into history — useEffect avoids render-phase mutation
+  useEffect(() => {
+    if (!ignoreRef.current && value !== stateRef.current.present) {
+      stateRef.current = {
+        past: [...stateRef.current.past, stateRef.current.present].slice(-MAX_HISTORY),
+        present: value,
+        future: [],
+      };
+    }
+    ignoreRef.current = false;
+  }, [value]);
 
   const undo = useCallback(() => {
     const s = stateRef.current;

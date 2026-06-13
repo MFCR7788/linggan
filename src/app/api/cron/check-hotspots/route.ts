@@ -1,13 +1,14 @@
 // 后台定时热点检查 - 供外部定时服务调用
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { runHotspotCheck } from '@/lib/jobs/hotspot-checker';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const expectedSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['CRON_SECRET'];
+  const expectedSecret = getCronSecret();
   if (!expectedSecret) {
-    return createApiError('SUPABASE_SERVICE_ROLE_KEY / CRON_SECRET 未配置,拒绝执行', 500);
+    return createApiError('CRON_SECRET 未配置,拒绝执行', 500);
   }
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret') || request.headers.get('authorization')?.replace('Bearer ', '');

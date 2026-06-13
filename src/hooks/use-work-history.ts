@@ -13,7 +13,7 @@ export interface HistoryWork {
   content?: string;
   fullContent?: string;
   prompt?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export function useWorkHistory(workType: string, sourcePlatform?: string) {

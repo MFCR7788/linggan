@@ -107,14 +107,7 @@ export async function consume(
 
   const supabase = createAdminClient();
 
-  // 1. 查当前余额
-  const before = await getBalance(userId);
-  if (before.balance < amount) {
-    throw new InsufficientCreditsError(amount, before.balance);
-  }
-
-  // 2. CAS 扣减(用 balance >= amount 守卫,防止 TOCTOU)
-  // 注:这里走 raw SQL,因为 Supabase JS 客户端不便做原子条件 update
+  // 原子 RPC 扣减（移除前置余额查询，避免 TOCTOU 误判）
   const { data: updated, error: updateError } = await supabase
     .rpc('consume_credits_atomic', {
       p_user_id: userId,
@@ -122,16 +115,27 @@ export async function consume(
     })
     .single();
 
-  // 若 RPC 不存在,降级到客户端两步
+  // RPC 不存在 → 降级到客户端两步
   if (updateError && /function.*consume_credits_atomic.*does not exist/i.test(updateError.message)) {
+    console.warn('[credits] RPC consume_credits_atomic 不存在，使用降级方案。请执行 SQL 迁移创建该函数。');
     return await consumeCreditsFallback(userId, amount, source, description, metadata);
   }
-  if (updateError) throw updateError;
+  if (updateError) {
+    // RPC 可能返回余额不足错误
+    if (/INSUFFICIENT_CREDITS/i.test(updateError.message)) {
+      const before = await getBalance(userId);
+      throw new InsufficientCreditsError(amount, before.balance);
+    }
+    throw updateError;
+  }
 
-  const balanceAfter = (updated as { balance_after?: number } | null)?.balance_after ?? before.balance - amount;
+  const balanceAfter = (updated as { balance_after?: number } | null)?.balance_after;
+  if (balanceAfter === undefined || balanceAfter === null) {
+    throw new Error('RPC consume_credits_atomic 未返回 balance_after');
+  }
 
-  // 3. 写流水
-  await supabase.from('credit_transactions').insert({
+  // 写流水（异步发起，不阻塞主流程；失败不影响扣点结果）
+  supabase.from('credit_transactions').insert({
     user_id: userId,
     amount: -amount,
     type: 'consume',
@@ -139,6 +143,8 @@ export async function consume(
     source,
     description,
     metadata,
+  }).then(({ error }) => {
+    if (error) console.error('[credits] 流水写入失败:', error.message);
   });
 
   return { balanceAfter };
@@ -436,20 +442,28 @@ export async function getTiers(): Promise<SubscriptionTier[]> {
 }
 
 /**
- * 月底清零订阅赠送的 credits(由 cron 调用)
- * 只清"订阅本月赠送但未消耗"的部分,加油包余额不清零(6-12 个月有效)
+ * 月底清零订阅赠送的 credits（由 cron 调用）
  *
- * 实现思路:每条 subscription_grant 流水记录"赠送时是哪个月",清零时只扣这个月没消耗的。
- * 简化方案:每月 1 号 0 点统一把"上个月属于订阅档位的余额"清零。
- * 这里采用更简单的方案:每月扣减固定值 = 上月订阅赠送额度
+ * 安全规则：
+ * - 订阅到期时仅降级 tier → 'free'，清零 tier_expires_at
+ * - 不触及 balance：加油包余额（6-12 个月有效）不清零
+ * - 按订阅档位扣除本月赠送额度，保留用户自购点数
+ *
+ * TODO: 实现 ledger 区分「订阅余额」vs「加油包余额」，只扣减订阅赠送未消耗部分
  */
 export async function resetMonthlyCredits(): Promise<{ processed: number; totalReset: number }> {
   const supabase = createAdminClient();
 
-  // 找所有订阅到期的用户(tier_expires_at <= now)
-  // 简化:对所有 active 订阅用户,重置其 credits 至新订阅赠送额度
-  // 注意:本实现不区分"加油包余额 vs 订阅余额",会一刀切清零
-  // 生产环境应:用 ledger(流水)区分,只扣减本月订阅赠送未消耗部分
+  // 订阅档位月赠点数额度映射
+  const TIER_MONTHLY_CREDITS: Record<string, number> = {
+    free: 0,
+    basic: 100,
+    pro: 500,
+    studio: 2000,
+    enterprise: 10000,
+  };
+
+  // 找所有订阅到期的用户（tier_expires_at <= now）
   const { data: expiringUsers, error } = await supabase
     .from('user_credits')
     .select('user_id, balance, tier')
@@ -463,25 +477,41 @@ export async function resetMonthlyCredits(): Promise<{ processed: number; totalR
 
   let totalReset = 0;
   for (const u of expiringUsers) {
-    // 写清零流水
-    await supabase.from('credit_transactions').insert({
-      user_id: u.user_id,
-      amount: -u.balance,
-      type: 'reset',
-      balance_after: 0,
-      source: 'cron',
-      description: '订阅周期到期,余额清零',
-      metadata: { tier: u.tier, previousBalance: u.balance },
-    });
+    const monthlyGrant = TIER_MONTHLY_CREDITS[u.tier] || 0;
+    // 安全上限：最多扣除本月赠送额度，不低于当前余额，保留用户自购点数
+    const deductAmount = Math.min(monthlyGrant, u.balance);
 
-    // 余额置 0,过期时间清空
-    await supabase.from('user_credits').update({
-      balance: 0,
-      last_reset_at: new Date().toISOString(),
-      tier_expires_at: null,
-    }).eq('user_id', u.user_id);
+    if (deductAmount > 0) {
+      const newBalance = u.balance - deductAmount;
 
-    totalReset += u.balance;
+      // 写清零流水
+      await supabase.from('credit_transactions').insert({
+        user_id: u.user_id,
+        amount: -deductAmount,
+        type: 'reset',
+        balance_after: newBalance,
+        source: 'cron',
+        description: `订阅到期(${u.tier})，扣除本月赠送额度 ${deductAmount}，保留余额 ${newBalance}`,
+        metadata: { tier: u.tier, previousBalance: u.balance, deductedAmount: deductAmount },
+      });
+
+      // 更新余额和过期时间
+      await supabase.from('user_credits').update({
+        balance: newBalance,
+        tier: 'free',
+        last_reset_at: new Date().toISOString(),
+        tier_expires_at: null,
+      }).eq('user_id', u.user_id);
+    } else {
+      // 无赠送额度可扣，仅降级 tier
+      await supabase.from('user_credits').update({
+        tier: 'free',
+        last_reset_at: new Date().toISOString(),
+        tier_expires_at: null,
+      }).eq('user_id', u.user_id);
+    }
+
+    totalReset += deductAmount;
   }
 
   return { processed: expiringUsers.length, totalReset };

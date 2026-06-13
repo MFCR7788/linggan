@@ -8,6 +8,7 @@ import { WorkflowStepCard } from '@/components/workflow/WorkflowStepCard';
 import { WorkflowCompletion } from '@/components/workflow/WorkflowCompletion';
 import { getStepWidget } from '@/components/workflow/StepWidgetRegistry';
 import { TopNav } from '@/components/TopNav';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import type { LingjiEntry } from '@/lib/account-presets';
 import { getStepRole } from '@/lib/account-presets';
@@ -19,7 +20,7 @@ interface StepDef {
   role?: string;
 }
 
-export default function WorkflowPage() {
+function WorkflowPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { session, isLoading, error, completeCurrentStep, isCompleting } =
     useWorkflowSession(sessionId);
@@ -218,5 +219,13 @@ export default function WorkflowPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function WorkflowPageWrapper() {
+  return (
+    <ProtectedRoute>
+      <WorkflowPage />
+    </ProtectedRoute>
   );
 }

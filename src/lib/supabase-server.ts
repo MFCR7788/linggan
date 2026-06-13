@@ -1,10 +1,12 @@
 // Supabase 服务端工具
+import 'server-only';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import { createHash } from 'crypto';
+import { getAuthSalt, getDevAuthSecret } from '@/lib/runtime-config';
 
 // 简单的服务端客户端 - 用于 API routes（不需要 cookie 处理）
 export function createClient() {
@@ -36,17 +38,22 @@ export function createAdminClient() {
 
 // 服务端客户端 - 用于 API routes（带 cookie 处理）
 // 直连 Postgres 的连接池(走 DATABASE_URL,可读 auth schema 等 PostgREST 禁的表)
-// 用完即关,适合一次性 SQL(如清 refresh_tokens / 列 sessions)
+// 单例缓存，避免每次调用创建新连接池导致连接泄漏
+let _pgPool: Pool | null = null;
 export function createPgPool(): Pool {
+  if (_pgPool) return _pgPool;
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL 未配置,无法直连 Postgres');
   }
   const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== 'false';
-  return new Pool({
+  _pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized },
-    max: 1,
+    max: 3,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
   });
+  return _pgPool;
 }
 
 export function createSupabaseServerClient() {
@@ -102,20 +109,32 @@ export async function saveWorkHistory(
 ): Promise<void> {
   const supabase = createAdminClient();
   try {
-    // 获取或创建"AI创作"会话
-    const { data: session } = await supabase
+    // 获取或创建"AI创作"会话 — 使用 upsert + onConflict 防止并发重复创建
+    const { data: session, error: upsertErr } = await supabase
       .from('chat_sessions')
+      .upsert({ user_id: userId, title: 'AI创作' }, { onConflict: 'user_id,title', ignoreDuplicates: false })
       .select('id')
-      .eq('user_id', userId)
-      .eq('title', 'AI创作')
-      .maybeSingle();
+      .single();
 
-    const sessionId = session?.id || (await supabase
-      .from('chat_sessions')
-      .insert({ user_id: userId, title: 'AI创作' })
-      .select('id')
-      .single()
-    ).data?.id;
+    // upsert 可能因约束不存在而失败，降级为 select + insert
+    let sessionId = session?.id;
+    if (!sessionId || upsertErr) {
+      const { data: existing } = await supabase
+        .from('chat_sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('title', 'AI创作')
+        .maybeSingle();
+      sessionId = existing?.id;
+      if (!sessionId) {
+        const { data: created } = await supabase
+          .from('chat_sessions')
+          .insert({ user_id: userId, title: 'AI创作' })
+          .select('id')
+          .single();
+        sessionId = created?.id;
+      }
+    }
 
     if (!sessionId) return;
 
@@ -128,12 +147,12 @@ export async function saveWorkHistory(
       metadata: { source: 'ai_creation', ...metadata },
     });
 
-    // 只保留最近 20 条 AI 创作记录
+    // 只保留最近 20 条 AI 创作记录 — 使用 metadata->>source 精确匹配
     const { data: allRecords } = await supabase
       .from('chat_messages')
       .select('id')
       .eq('user_id', userId)
-      .contains('metadata', { source: 'ai_creation' })
+      .eq('metadata->>source', 'ai_creation')
       .order('created_at', { ascending: false });
 
     if (allRecords && allRecords.length > 20) {
@@ -146,73 +165,47 @@ export async function saveWorkHistory(
 }
 
 function deriveJwtSecret(): string {
-  const salt = process.env.AUTH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || 'lingji-jwt-fallback';
+  const salt = getAuthSalt();
+  if (!salt) {
+    throw new Error('AUTH_SALT 未配置，无法派生 JWT 密钥。请在 .env.local 中设置 AUTH_SALT');
+  }
   return createHash('sha256').update(`jwt:${salt}`).digest('hex');
 }
 
 // 获取当前用户
 export async function getCurrentUser() {
-  // 生产环境: 跳过 dev 短路, 只信任真实 Supabase 会话
-  // 开发环境: dev header/cookie 用于无密码本地调试，需密钥校验或 localhost 限制
-  const isDev = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_AUTH !== 'false';
+  // 开发模式认证: 仅当 NODE_ENV=development 且 ENABLE_DEV_AUTH 未显式禁用时启用
+  // 安全加固: 必须配置 DEV_AUTH_SECRET 才能使用 dev auth
+  // x-forwarded-for / x-real-ip 可被客户端伪造，不再信任这些 header 做认证判断
+  const isDev = process.env.NODE_ENV === 'development' && process.env.ENABLE_DEV_AUTH !== 'false';
 
   if (isDev) {
-    const devAuthSecret = process.env.DEV_AUTH_SECRET;
+    const devAuthSecret = getDevAuthSecret();
 
-    // 如果配置了 DEV_AUTH_SECRET，则验证密钥
-    if (devAuthSecret) {
+    if (!devAuthSecret) {
+      // 未配置 DEV_AUTH_SECRET：dev auth 完全禁用
+      // 开发者需在 .env.local 中设置 DEV_AUTH_SECRET 才能使用 dev auth
+      console.warn('[getCurrentUser] DEV_AUTH_SECRET 未配置，开发模式认证已禁用。请设置 DEV_AUTH_SECRET 后重启。');
+    } else {
       try {
         const headersList = headers();
         const headerSecret = headersList.get('x-dev-auth-secret');
-        if (headerSecret !== devAuthSecret) {
+        if (headerSecret === devAuthSecret) {
+          const headerUserId = headersList.get('x-dev-user-id');
+          if (headerUserId) {
+            await ensureDevUserProfile(headerUserId);
+            return createDevUser(headerUserId);
+          }
+          try {
+            const cookieStore = cookies();
+            const devUserId = cookieStore.get('dev_user_id');
+            if (devUserId?.value) {
+              await ensureDevUserProfile(devUserId.value);
+              return createDevUser(devUserId.value);
+            }
+          } catch (_) {}
+        } else if (headerSecret) {
           console.warn('[getCurrentUser] DEV_AUTH_SECRET 不匹配，拒绝开发模式认证');
-          // 继续走真实 Supabase 会话
-        } else {
-          const headerUserId = headersList.get('x-dev-user-id');
-          if (headerUserId) {
-            await ensureDevUserProfile(headerUserId);
-            return createDevUser(headerUserId);
-          }
-          try {
-            const cookieStore = cookies();
-            const devUserId = cookieStore.get('dev_user_id');
-            if (devUserId?.value) {
-              await ensureDevUserProfile(devUserId.value);
-              return createDevUser(devUserId.value);
-            }
-          } catch (_) {}
-        }
-      } catch (_) {
-        // headers() 不可用时走真实会话
-      }
-    } else {
-      // 未配置 DEV_AUTH_SECRET 时，仅允许 localhost IP（开发安全兜底）
-      try {
-        const headersList = headers();
-        const forwardedFor = headersList.get('x-forwarded-for');
-        const realIp = headersList.get('x-real-ip');
-        const clientIp = (forwardedFor?.split(',')[0]?.trim() || realIp || '').replace(/^::ffff:/, '');
-        const isLocalhost = !clientIp ||
-          clientIp === '127.0.0.1' ||
-          clientIp === '::1' ||
-          clientIp === 'localhost';
-
-        if (!isLocalhost) {
-          console.warn(`[getCurrentUser] 非 localhost 请求(${clientIp})，开发模式认证被拒绝。请配置 DEV_AUTH_SECRET`);
-        } else {
-          const headerUserId = headersList.get('x-dev-user-id');
-          if (headerUserId) {
-            await ensureDevUserProfile(headerUserId);
-            return createDevUser(headerUserId);
-          }
-          try {
-            const cookieStore = cookies();
-            const devUserId = cookieStore.get('dev_user_id');
-            if (devUserId?.value) {
-              await ensureDevUserProfile(devUserId.value);
-              return createDevUser(devUserId.value);
-            }
-          } catch (_) {}
         }
       } catch (_) {
         // headers() 不可用时走真实会话

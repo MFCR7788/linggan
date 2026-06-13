@@ -45,11 +45,12 @@
     "https-proxy-agent": "^5.0.1",
     "lucide-react": "^0.487.0",
     "mammoth": "^1.12.0",
-    "next": "^14.2.0",
+    "next": "^14.2.21",
     "pdf-parse": "^2.4.5",
     "pg": "^8.21.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

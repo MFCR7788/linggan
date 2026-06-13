@@ -66,7 +66,7 @@ function HomeContent() {
           })));
         }
       })
-      .catch(() => {})
+      .catch((e) => { console.error('[Home] 热点加载失败:', e); })
       .finally(() => setHotLoading(false));
   }, []);
 
@@ -80,8 +80,8 @@ function HomeContent() {
     const now = new Date();
     return pending
       .sort((a, b) => {
-        const aTime = new Date(a.scheduled_at).getTime();
-        const bTime = new Date(b.scheduled_at).getTime();
+        const aTime = new Date(a.scheduled_at || 0).getTime();
+        const bTime = new Date(b.scheduled_at || 0).getTime();
         const aIsFuture = aTime >= now.getTime();
         const bIsFuture = bTime >= now.getTime();
         // 未来的排在前（升序），过去的排在后（降序，最近过去优先）

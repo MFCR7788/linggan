@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import Dysmsapi, * as $Dysmsapi from '@alicloud/dysmsapi20170525';
 import { Config } from '@alicloud/openapi-client';
+import { getAliyunSmsAccessKeyId, getAliyunSmsAccessKeySecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
-const CODE_EXPIRY_MINUTES = 30;
+const CODE_EXPIRY_MINUTES = 5;
 const SMS_TEMPLATE_CODE = process.env.ALIYUN_SMS_TEMPLATE_CODE || 'SMS_506745050';
 const SMS_SIGN_NAME = process.env.ALIYUN_SMS_SIGN_NAME || '魔法超人';
 
@@ -77,8 +78,8 @@ export async function POST(request: Request) {
 
     // 5. 发送短信 (阿里云)
     const regionId = process.env.ALIYUN_SMS_REGION_ID || 'cn-hangzhou';
-    const accessKeyId = process.env.ALIYUN_SMS_ACCESS_KEY_ID || process.env.ALIYUN_ACCESS_KEY_ID;
-    const accessKeySecret = process.env.ALIYUN_SMS_ACCESS_KEY_SECRET || process.env.ALIYUN_ACCESS_KEY_SECRET;
+    const accessKeyId = getAliyunSmsAccessKeyId();
+    const accessKeySecret = getAliyunSmsAccessKeySecret();
 
     let sent = false;
     let sendError: string | undefined;
@@ -111,22 +112,23 @@ export async function POST(request: Request) {
       sendError = '未配置 ALIYUN_SMS_ACCESS_KEY_ID / SECRET';
     }
 
-    // 即使短信发送失败, 验证码已存; 生产环境考虑告警
+    // 开发环境仅在控制台打印验证码（绝不回传给客户端）
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[SMS] 开发模式 验证码: ${code} (手机: ${phone})`);
+    }
+
+    // 短信发送失败时返回错误（不泄露验证码）
     if (!sent) {
       console.error('[SMS] 发送失败:', sendError);
       return NextResponse.json({
-        success: true,
-        message: `验证码已生成 (短信发送失败: ${sendError})`,
-        // 开发/排错时把验证码回显
-        code: process.env.NODE_ENV === 'development' ? code : undefined,
-      });
+        success: false,
+        error: '短信发送失败，请稍后重试',
+      }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       message: '验证码已发送',
-      // 开发模式回显
-      code: process.env.NODE_ENV === 'development' ? code : undefined,
     });
   } catch (error) {
     console.error('短信发送错误:', error);

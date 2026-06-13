@@ -13,6 +13,7 @@
 
 import crypto from 'node:crypto';
 import axios, { type AxiosResponse } from 'axios';
+import { getWechatPayApiV3Key, getWechatPayPrivateKey } from '@/lib/runtime-config';
 
 const API_BASE = 'https://api.mch.weixin.qq.com';
 
@@ -20,11 +21,11 @@ const API_BASE = 'https://api.mch.weixin.qq.com';
 function getEnv() {
   const mchid = process.env.WECHAT_PAY_MCHID;
   const appid = process.env.WECHAT_PAY_APPID;
-  const apiV3Key = process.env.WECHAT_PAY_API_V3_KEY;
+  const apiV3Key = getWechatPayApiV3Key();
   const serialNo = process.env.WECHAT_PAY_MCH_SERIAL_NO;
   const notifyUrl = process.env.WECHAT_PAY_NOTIFY_URL;
   const h5Domain = process.env.WECHAT_PAY_H5_DOMAIN;
-  const privateKey = process.env.WECHAT_PAY_PRIVATE_KEY;
+  const privateKey = getWechatPayPrivateKey();
   if (!mchid || !appid || !apiV3Key || !serialNo || !notifyUrl || !h5Domain || !privateKey) {
     throw new Error('WeChat Pay 环境变量未完整配置(检查 7 个 WECHAT_PAY_* 变量)');
   }

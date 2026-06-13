@@ -72,11 +72,10 @@ export function useToast() {
   return ctx;
 }
 
-let nextId = 0;
-
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
+  const nextIdRef = useRef(0);
 
   const removeToast = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -88,7 +87,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
-    const id = ++nextId;
+    const id = ++nextIdRef.current;
     setToasts(prev => [...prev.slice(-4), { id, message, type }]); // 最多 5 条
     const timer = setTimeout(() => {
       removeToast(id);

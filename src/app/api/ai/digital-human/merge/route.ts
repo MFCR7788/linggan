@@ -37,7 +37,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // 拼接
     const mergedPath = join(tempDir, 'merged.mp4');
-    concatVideos(localPaths, mergedPath);
+    await concatVideos(localPaths, mergedPath);
 
     // 上传到 Supabase
     const buffer = readFileSync(mergedPath);

@@ -15,15 +15,18 @@ function isValidDevUser(obj: unknown): obj is DevUser {
   return typeof u.id === 'string' && u.id.length > 0;
 }
 
-/** 从 localStorage 同步 dev_user_id 到 cookie */
+let _synced = false;
+
+/** 从 localStorage 同步 dev_user_id 到 cookie（仅首次调用时执行，后续调用为 no-op） */
 export function syncDevAuthCookie(): void {
-  if (typeof window === 'undefined') return;
+  if (_synced || typeof window === 'undefined') return;
   try {
     const stored = localStorage.getItem(DEV_USER_KEY);
     if (!stored) return;
     const user = JSON.parse(stored);
     if (isValidDevUser(user)) {
       document.cookie = `${DEV_COOKIE_NAME}=${encodeURIComponent(user.id)}; path=/; max-age=${COOKIE_MAX_AGE}; sameSite=lax`;
+      _synced = true;
     }
   } catch {
     // localStorage 可能不可用

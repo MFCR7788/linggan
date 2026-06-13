@@ -110,8 +110,11 @@ export function withHandler(
       let user: Awaited<ReturnType<typeof getCurrentUser>> = null;
       try {
         user = await getCurrentUser();
-      } catch {
-        // 公开路由忽略认证错误
+      } catch (e) {
+        // 公开路由忽略认证错误，但记录日志便于监控 Supabase Auth 健康状态
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[withHandler] 认证检查失败（公开路由忽略）:', e);
+        }
       }
 
       return await handler({

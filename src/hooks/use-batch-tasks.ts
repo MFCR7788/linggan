@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { BatchProgress } from '@/types';
 
 interface UseBatchProgressResult {
@@ -26,7 +26,7 @@ export function useBatchProgress(batchId: string | null): UseBatchProgressResult
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const stoppedRef = useRef(false);
 
-  const fetchOnce = async (): Promise<BatchProgress | null> => {
+  const fetchOnce = useCallback(async (): Promise<BatchProgress | null> => {
     if (!batchId) return null;
     try {
       const res = await fetch(`/api/jobs/${batchId}`);
@@ -38,7 +38,7 @@ export function useBatchProgress(batchId: string | null): UseBatchProgressResult
       setError(e.message || '网络错误');
       return null;
     }
-  };
+  }, [batchId]);
 
   const refresh = async () => {
     const d = await fetchOnce();

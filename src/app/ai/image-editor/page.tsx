@@ -293,10 +293,10 @@ function ImageEditorContent() {
             <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>历史生成</p>
             <div className="grid grid-cols-3 gap-2">
               {historyItems.map((item) => {
-                const meta = item.metadata?.generatedImage;
-                const imgUrl = item.imageUrl || meta?.imageUrl;
-                const itemAction = meta?.action as EditAction || 'enhance';
-                const itemActionLabel = meta?.actionLabel || '画质增强';
+                const meta = item.metadata?.generatedImage as Record<string, unknown> | undefined;
+                const imgUrl = item.imageUrl || (meta?.imageUrl as string | undefined);
+                const itemAction = (meta?.action as EditAction) || 'enhance';
+                const itemActionLabel = (meta?.actionLabel as string) || '画质增强';
                 return (
                   <button
                     key={item.id}

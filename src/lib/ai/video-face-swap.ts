@@ -2,6 +2,8 @@
 // 原视频场景/运镜/产品不变，仅替换出镜人物
 // 异步 API：提交 → 轮询 → 获取结果
 
+import { fetchWithTimeout, getDashScopeApiKey } from './constants';
+
 const DASHSCOPE_VIDEO_BASE = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/image2video/video-synthesis';
 const DASHSCOPE_TASK_BASE = 'https://dashscope.aliyuncs.com/api/v1/tasks';
 
@@ -26,7 +28,7 @@ export interface VideoFaceSwapResult {
 }
 
 function getApiKey(): string {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = getDashScopeApiKey();
   if (!apiKey) throw new Error('DASHSCOPE_API_KEY is not configured');
   return apiKey;
 }
@@ -135,7 +137,7 @@ async function submitFaceSwapTask(input: SubmitInput): Promise<string> {
     },
   };
 
-  const submitRes = await fetch(DASHSCOPE_VIDEO_BASE, {
+  const submitRes = await fetchWithTimeout(DASHSCOPE_VIDEO_BASE, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -143,7 +145,7 @@ async function submitFaceSwapTask(input: SubmitInput): Promise<string> {
       'X-DashScope-Async': 'enable',
     },
     body: JSON.stringify(submitBody),
-  });
+  }, 30000);
 
   if (!submitRes.ok) {
     const errText = await submitRes.text().catch(() => '');
@@ -166,9 +168,9 @@ async function pollFaceSwapTask(taskId: string): Promise<string | null> {
   for (let i = 0; i < 48; i++) {
     await new Promise((r) => setTimeout(r, 10000)); // 10s 间隔
 
-    const res = await fetch(`${DASHSCOPE_TASK_BASE}/${taskId}`, {
+    const res = await fetchWithTimeout(`${DASHSCOPE_TASK_BASE}/${taskId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    }, 10000);
 
     if (!res.ok) continue;
 
