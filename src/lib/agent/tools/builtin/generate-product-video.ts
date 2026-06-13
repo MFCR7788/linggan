@@ -12,7 +12,11 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
+const FFMPEG = (() => {
+  const env = process.env.FFMPEG_PATH;
+  if (env && existsSync(env)) return env;
+  return 'ffmpeg';
+})();
 
 // ── 类型 ──
 

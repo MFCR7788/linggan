@@ -104,9 +104,9 @@ jobs:
                 rm -f /usr/local/bin/ffmpeg 2>/dev/null || true
               fi
             fi
-            # 写入 FFMPEG_PATH
+            # 写入 FFMPEG_PATH（每次更新，不要只写一次）
             FF=$(command -v ffmpeg 2>/dev/null || echo "/usr/local/bin/ffmpeg")
-            grep -q "^FFMPEG_PATH=" .env.local || echo "FFMPEG_PATH=${FF}" >> .env.local
+            write_env_line "FFMPEG_PATH" "${FF}"
             set +e  # npm/build 允许失败，下面有回退逻辑
             # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
             echo "=== npm install ==="
