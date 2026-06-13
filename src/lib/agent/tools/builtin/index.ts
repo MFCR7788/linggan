@@ -30,6 +30,7 @@ import { composeVideoTool } from './compose-video';
 import { extractContentTool } from './extract-content';
 import { generateAgnesVideoTool } from './generate-agnes-video';
 import { videoFaceSwapTool } from './video-face-swap';
+import { generateHyperFramesTool } from './generate-hyperframes';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -73,6 +74,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     generateAgnesVideoTool,
     // 视频换人：原视频场景不变，仅替换出镜人物（wan2.2-animate-mix）
     videoFaceSwapTool,
+    // 动态图形：脚本 → HTML+GSAP 动画 → 竖屏视频
+    generateHyperFramesTool,
   ]);
 }
 
@@ -81,4 +84,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool };

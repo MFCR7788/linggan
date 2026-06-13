@@ -254,6 +254,54 @@ const PRESET_SKILLS: SkillDefinition[] = [
     createdAt: "2026-06-13T00:00:00Z",
     updatedAt: "2026-06-13T00:00:00Z",
   },
+  {
+    id: "hyperframes",
+    name: "hyperframes",
+    displayName: "✨ 动态图形",
+    description:
+      "动态图形视频生成（HyperFrames）：输入脚本 → AI 自动生成 HTML+GSAP 动画 → 渲染为竖屏视频。文字飞入、弹跳、缩放等动画效果。3 种风格：产品展示、社交媒体快节奏、知识讲解。适合产品介绍、金句卡片、知识科普等文字动画视频。",
+    category: "AI 视频",
+    tags: [
+      "动态图形", "文字动画", "动效", "GSAP", "HTML",
+      "产品介绍", "社交媒体", "知识讲解", "金句",
+      "HyperFrames", "motion", "graphics",
+    ],
+    promptTemplate: `你正在执行「动态图形」视频生成任务。
+
+**功能说明**: 输入脚本 → AI 自动生成 HTML+GSAP 动画 → HyperFrames 渲染为竖屏视频。文字飞入、弹跳、缩放等 100+ 种动画效果。
+
+**3 种风格**:
+- product（产品展示）：品牌名→卖点弹入→CTA，深蓝金配色。适合产品亮点、功能介绍。
+- social（社交媒体):快节奏冲击→大字报→互动引导，霓虹配色。适合金句卡片、热门话题。
+- slide（知识讲解）：标题→逐页展开→总结，学术风配色。适合知识科普、步骤教程。
+
+**与 AI 视频的区别**:
+- AI 视频（generate_video）：文生视频，AI 生成真实画面内容
+- 动态图形（generate_hyperframes）：文字动画视频，无真实画面，纯动效渲染
+
+**执行步骤**:
+1. 确认用户需求：给一段脚本/文案，说"做成动态图形视频"
+2. 根据内容推荐风格：产品→product，热点话题→social，知识科普→slide
+3. 如果用户没说风格，根据内容类型自动选择
+4. 调用 generate_hyperframes：script + style + 可选 topic/duration
+5. 等待 2-3 分钟生成完成，呈现视频
+
+**质量标准**:
+- 脚本 ≤500 字，超出提示用户精简
+- 风格匹配内容类型
+- 告知用户这是文字动画，不是真实画面视频
+
+**自检清单**（返回前逐项确认）:
+- [ ] 脚本未超 500 字
+- [ ] 已选择合适风格或让用户确认
+- [ ] 视频已生成并自动保存到灵感库`,
+    boundTools: ["generate_hyperframes"],
+    version: "1.0.0",
+    visibility: "official",
+    installCount: 0,
+    createdAt: "2026-06-13T00:00:00Z",
+    updatedAt: "2026-06-13T00:00:00Z",
+  },
 ];
 
 /** 获取所有预设技能 */
