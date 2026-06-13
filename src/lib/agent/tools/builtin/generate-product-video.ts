@@ -145,9 +145,20 @@ function ffmpegArgs(args: string[]): void {
   } catch (e: unknown) {
     const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
     const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
-    // 去掉 ffmpeg banner，只保留关键错误信息
-    const cleaned = detail.replace(/^ffmpeg version.*?built with.*?\n/gm, '').trim();
+    // 去掉 ffmpeg banner 行（banner 行特征：以 "ffmpeg version" / "Copyright" / "built with" / "configuration:" 开头）
+    const cleaned = detail
+      .replace(/^(?:ffmpeg version|Copyright |built with|configuration:|lib\w+|  lib).*\n?/gm, '')
+      .trim();
     throw new Error(`ffmpeg 失败: ${cleaned.substring(0, 500)}`);
+  }
+}
+
+function ffmpegHasLibass(): boolean {
+  try {
+    const out = execFileSync(FFMPEG, ['-filters'], { stdio: 'pipe', timeout: 10000 }).toString();
+    return out.includes('subtitles');
+  } catch {
+    return false;
   }
 }
 
@@ -193,7 +204,7 @@ async function composeFinalVideo(args: {
   bgmStyle: string;
   ratio: string;
   userId: string;
-}): Promise<string> {
+}): Promise<{ videoUrl: string; subtitleBurned: boolean }> {
   const { shotVideoUrls, shots, ttsBuffer, bgmStyle, ratio, userId } = args;
 
   const resolution = ratio === '16:9' ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 };
@@ -288,18 +299,23 @@ async function composeFinalVideo(args: {
       ]);
     }
 
-    // 6. 烧录字幕
-    const srtPath = join(dir, 'subtitle.srt');
-    writeFileSync(srtPath, generateSRT(shots));
-    const finalPath = join(dir, 'final.mp4');
-    const subtitleStyle = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
-    const subtitlePos = 'Alignment=2,MarginV=80';
-    ffmpegArgs([
-      '-hide_banner', '-y', '-i', withAudioPath,
-      '-vf', `subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'`,
-      '-c:a', 'copy',
-      finalPath,
-    ]);
+    // 6. 烧录字幕（需要 libass；静态 ffmpeg 不支持则跳过）
+    let finalPath = withAudioPath;
+    let subtitleBurned = false;
+    if (ffmpegHasLibass()) {
+      const srtPath = join(dir, 'subtitle.srt');
+      writeFileSync(srtPath, generateSRT(shots));
+      finalPath = join(dir, 'final.mp4');
+      const subtitleStyle = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
+      const subtitlePos = 'Alignment=2,MarginV=80';
+      ffmpegArgs([
+        '-hide_banner', '-y', '-i', withAudioPath,
+        '-vf', `subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'`,
+        '-c:a', 'copy',
+        finalPath,
+      ]);
+      subtitleBurned = true;
+    }
 
     // 7. 上传到 Supabase Storage
     const supabase = createAdminClient();
@@ -313,7 +329,7 @@ async function composeFinalVideo(args: {
     if (uploadErr) throw new Error(`上传失败: ${uploadErr.message}`);
 
     const { data: urlData } = supabase.storage.from('lingji-media').getPublicUrl(storageKey);
-    return urlData.publicUrl;
+    return { videoUrl: urlData.publicUrl, subtitleBurned };
   } finally {
     try { rmSync(dir, { recursive: true, force: true }); } catch {}
   }
@@ -517,8 +533,9 @@ export const generateProductVideoTool: ToolDefinition = {
 
     // Step 5: 合成最终视频
     let videoUrl: string;
+    let subtitleBurned = false;
     try {
-      videoUrl = await composeFinalVideo({
+      const result = await composeFinalVideo({
         shotVideoUrls,
         shots: storyboard.shots,
         ttsBuffer,
@@ -526,6 +543,8 @@ export const generateProductVideoTool: ToolDefinition = {
         ratio,
         userId: ctx.userId || 'anon',
       });
+      videoUrl = result.videoUrl;
+      subtitleBurned = result.subtitleBurned;
       stepLog.push('视频合成完成');
     } catch (e) {
       return {
@@ -552,7 +571,7 @@ export const generateProductVideoTool: ToolDefinition = {
       output: [
         `已生成产品种草视频 ✨`,
         ``,
-        `【方案】Seedance 2.0 运镜拍摄 · ${styleLabel[style] || style} · ${platform === 'xiaohongshu' ? '小红书' : '抖音'}`,
+        `【方案】Seedance 2.0 运镜拍摄 · ${styleLabel[style] || style} · ${platform === 'xiaohongshu' ? '小红书' : '抖音'}${subtitleBurned ? '' : ' · 字幕未嵌入（ffmpeg 无 libass）'}`,
         `【分镜】${storyboard.shots.length} 镜 · 共 ${totalDuration} 秒`,
         storyboard.shots.map(s => `  镜头${s.index}: ${s.subtitle} (${s.duration}s)`).join('\n'),
         ``,
@@ -573,6 +592,7 @@ export const generateProductVideoTool: ToolDefinition = {
         platform,
         ratio,
         bgmStyle,
+        subtitleBurned,
         stepLog,
         errors: errors.length > 0 ? errors : undefined,
         autoSaved: true,
