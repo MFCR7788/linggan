@@ -82,6 +82,7 @@ jobs:
                 apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
               fi
               # 包管理器都失败 → 从 GitHub 下载静态二进制（限时 30s，防止卡死）
+              # 注意：RPM Fusion 安装的在 /usr/bin/ffmpeg，静态二进制放 /usr/local/bin 仅在包管理器失败时使用
               if ! command -v ffmpeg &> /dev/null; then
                 echo "=== static ffmpeg from GitHub ==="
                 curl -sL --connect-timeout 10 --max-time 30 \
@@ -93,6 +94,14 @@ jobs:
                   rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-master-latest-linux64-gpl
                 fi
                 chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
+              fi
+            fi
+            # ffmpeg 安装后：优先用包管理器的版本（支持 libass 字幕），清理旧的静态二进制
+            if command -v ffmpeg &> /dev/null; then
+              PKG_FF=$(which ffmpeg 2>/dev/null || echo "")
+              # 如果包管理器的 ffmpeg 存在且不是静态版本，删掉旧的静态二进制避免 PATH 冲突
+              if [ -n "$PKG_FF" ] && [ "$PKG_FF" != "/usr/local/bin/ffmpeg" ]; then
+                rm -f /usr/local/bin/ffmpeg 2>/dev/null || true
               fi
             fi
             # 写入 FFMPEG_PATH

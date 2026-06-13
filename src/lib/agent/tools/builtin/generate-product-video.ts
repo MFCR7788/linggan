@@ -127,7 +127,9 @@ function ffmpeg(cmd: string): void {
   } catch (e: unknown) {
     const err = e as { stderr?: Buffer; stdout?: Buffer; message?: string };
     const detail = (err.stderr?.toString() || '') + (err.stdout?.toString() || '') || (e instanceof Error ? e.message : String(e));
-    throw new Error(`ffmpeg 失败: ${detail.substring(0, 300)}`);
+    // 去掉 ffmpeg banner，只保留关键错误信息
+    const cleaned = detail.replace(/^ffmpeg version.*?built with.*?\n/gm, '').trim();
+    throw new Error(`ffmpeg 失败: ${cleaned.substring(0, 500)}`);
   }
 }
 
@@ -191,7 +193,7 @@ async function composeFinalVideo(args: {
         const blankPath = join(dir, `blank_${i}.mp4`);
         const dur = shots[i]?.duration || 4;
         ffmpeg(
-          `${FFMPEG} -y -f lavfi -i color=c=black:s=${width}x${height}:d=${dur} ` +
+          `${FFMPEG} -hide_banner -y -f lavfi -i color=c=black:s=${width}x${height}:d=${dur} ` +
           `-c:v libx264 -preset fast -pix_fmt yuv420p -r 30 -an "${blankPath}"`
         );
         segPaths.push(blankPath);
@@ -205,7 +207,7 @@ async function composeFinalVideo(args: {
       // 统一编码：缩放到目标分辨率 + 静音（去掉 Seedance 自带音频，用 TTS 替代）
       const dur = shots[i]?.duration || 4;
       ffmpeg(
-        `${FFMPEG} -y -i "${rawPath}" ` +
+        `${FFMPEG} -hide_banner -y -i "${rawPath}" ` +
         `-c:v libx264 -preset fast -t ${dur} -pix_fmt yuv420p -r 30 ` +
         `-vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black" ` +
         `-an "${segPath}"`
@@ -220,7 +222,7 @@ async function composeFinalVideo(args: {
     } else {
       const filelist = join(dir, 'filelist.txt');
       writeFileSync(filelist, segPaths.map(p => `file '${p}'`).join('\n'));
-      ffmpeg(`${FFMPEG} -y -f concat -safe 0 -i "${filelist}" -c copy "${mergedPath}"`);
+      ffmpeg(`${FFMPEG} -hide_banner -y -f concat -safe 0 -i "${filelist}" -c copy "${mergedPath}"`);
     }
 
     // 3. 写入 TTS 音频文件
@@ -247,7 +249,7 @@ async function composeFinalVideo(args: {
       const bgmVol = volMap[bgmStyle] || '0.16';
 
       ffmpeg(
-        `${FFMPEG} -y -i "${mergedPath}" -i "${ttsPath}" -i "${bgmPath}" ` +
+        `${FFMPEG} -hide_banner -y -i "${mergedPath}" -i "${ttsPath}" -i "${bgmPath}" ` +
         `-filter_complex "[1:a]volume=1.5[vo];[2:a]volume=${bgmVol},afade=t=in:d=1.5,afade=t=out:st=9999:d=2[bgm];[vo][bgm]amix=inputs=2:duration=first,volume=1.4[aout]" ` +
         `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
       );
@@ -255,7 +257,7 @@ async function composeFinalVideo(args: {
       // 无 BGM，仅 TTS 口播
       withAudioPath = join(dir, 'with_audio.mp4');
       ffmpeg(
-        `${FFMPEG} -y -i "${mergedPath}" -i "${ttsPath}" ` +
+        `${FFMPEG} -hide_banner -y -i "${mergedPath}" -i "${ttsPath}" ` +
         `-filter_complex "[1:a]volume=1.5[aout]" ` +
         `-map 0:v -map "[aout]" -c:v copy -shortest "${withAudioPath}"`
       );
@@ -268,7 +270,7 @@ async function composeFinalVideo(args: {
     const subtitleStyle = 'FontSize=28,PrimaryColour=&HFFFFFF,Outline=2,Bold=1';
     const subtitlePos = 'Alignment=2,MarginV=80';
     ffmpeg(
-      `${FFMPEG} -y -i "${withAudioPath}" ` +
+      `${FFMPEG} -hide_banner -y -i "${withAudioPath}" ` +
       `-vf "subtitles=${srtPath}:force_style='${subtitleStyle},${subtitlePos}'" ` +
       `-c:a copy "${finalPath}"`
     );
