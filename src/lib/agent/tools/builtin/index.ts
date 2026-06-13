@@ -31,6 +31,7 @@ import { extractContentTool } from './extract-content';
 import { generateAgnesVideoTool } from './generate-agnes-video';
 import { videoFaceSwapTool } from './video-face-swap';
 import { generateHyperFramesTool } from './generate-hyperframes';
+import { suggestContentIdeasTool } from './suggest-content-ideas';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -76,6 +77,8 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     videoFaceSwapTool,
     // 动态图形：脚本 → HTML+GSAP 动画 → 竖屏视频
     generateHyperFramesTool,
+    // 今日创作提案：热点+账号类型+偏好 → 选题建议
+    suggestContentIdeasTool,
   ]);
 }
 
@@ -84,4 +87,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool, suggestContentIdeasTool };
