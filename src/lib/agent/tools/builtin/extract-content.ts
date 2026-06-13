@@ -101,20 +101,79 @@ async function extractViaJina(url: string): Promise<JinaResult> {
 
 // ── 方法 2: 视频下载 → ffmpeg 音频 → ASR ──
 
+// yt-dlp 使用 Python 3.11（ECS 默认 3.6 太旧，3.11 才有最新 yt-dlp）
+const YTDLP_CMD = 'python3.11 -m yt_dlp';
+
 async function downloadViaYTDLP(url: string, workDir: string): Promise<string | null> {
   try {
-    // yt-dlp 下载最佳质量视频（限制 300MB）
     const outputPath = join(workDir, '%(id)s.%(ext)s');
     await execAsync(
-      `yt-dlp --no-playlist --max-filesize 300M -f "best[ext=mp4]/best" -o "${outputPath}" "${url}" 2>&1`,
+      `${YTDLP_CMD} --no-playlist --max-filesize 300M -f "best[ext=mp4]/best" -o "${outputPath}" "${url}" 2>&1`,
       { timeout: 120000, maxBuffer: 1024 * 1024 }
     );
 
-    // 找下载的文件
     const { readdir } = await import('fs/promises');
     const files = await readdir(workDir);
     const videoFile = files.find((f) => f.endsWith('.mp4') || f.endsWith('.mov') || f.endsWith('.webm') || f.endsWith('.mkv'));
     return videoFile ? join(workDir, videoFile) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── 方法 2b: B站公开 API 提取（无需下载视频）──
+
+interface BilibiliInfo {
+  title: string;
+  desc: string;
+  duration: number;
+  subtitleText?: string;
+}
+
+async function extractBilibili(url: string): Promise<BilibiliInfo | null> {
+  try {
+    // 提取 BV 号
+    const bvMatch = url.match(/BV[a-zA-Z0-9]+/) || url.match(/bilibili\.com\/video\/([a-zA-Z0-9]+)/);
+    const bvid = bvMatch?.[1] || bvMatch?.[0];
+    if (!bvid) return null;
+
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const headers = { 'User-Agent': ua, 'Referer': 'https://www.bilibili.com/' };
+
+    // 1. 获取视频信息
+    const infoRes = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
+      headers, signal: AbortSignal.timeout(10000),
+    });
+    if (!infoRes.ok) return null;
+    const infoData = await infoRes.json();
+    if (infoData.code !== 0) return null;
+
+    const { title, desc, duration, cid } = infoData.data;
+
+    // 2. 尝试获取字幕
+    let subtitleText = '';
+    try {
+      const subRes = await fetch(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`, {
+        headers, signal: AbortSignal.timeout(10000),
+      });
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        const subtitles = subData.data?.subtitle?.subtitles || [];
+        if (subtitles.length > 0) {
+          // 优先选中文/英文
+          const sub = subtitles.find((s: any) => s.lan === 'ai-zh' || s.lan === 'zh-Hans') || subtitles[0];
+          let subUrl = sub.subtitle_url || '';
+          if (subUrl.startsWith('//')) subUrl = 'https:' + subUrl;
+          const subContent = await fetch(subUrl, { headers, signal: AbortSignal.timeout(10000) });
+          if (subContent.ok) {
+            const subJson = await subContent.json();
+            subtitleText = (subJson.body || []).map((item: any) => item.content || '').join('');
+          }
+        }
+      }
+    } catch { /* subtitle optional */ }
+
+    return { title, desc, duration, subtitleText: subtitleText || undefined };
   } catch {
     return null;
   }
@@ -234,6 +293,39 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
     return { success: false, method: 'jina_text', platform: platformName, error: result.error };
   }
 
+  // B站 → 公开 API 获取标题+描述+字幕（无需下载视频）
+  if (platform?.hostPatterns.some((h) => h.includes('bilibili'))) {
+    const biResult = await extractBilibili(url);
+    if (biResult) {
+      const hasText = biResult.title || biResult.desc || biResult.subtitleText;
+      if (hasText) {
+        const transcript = biResult.subtitleText
+          || biResult.desc
+          || biResult.title;
+        const content = [
+          biResult.title ? `【标题】${biResult.title}` : '',
+          biResult.desc ? `\n【简介】${biResult.desc}` : '',
+          biResult.subtitleText ? `\n【AI字幕】\n${biResult.subtitleText}` : biResult.desc ? '' : '',
+          `\n【时长】${Math.floor(biResult.duration / 60)}分${biResult.duration % 60}秒`,
+        ].filter(Boolean).join('');
+        return {
+          success: true,
+          title: biResult.title,
+          content,
+          transcript,
+          method: biResult.subtitleText ? 'video_asr' : 'jina_text',
+          platform: platformName,
+        };
+      }
+    }
+    // 降级：jina
+    const jinaResult = await extractViaJina(url);
+    if (jinaResult.success && jinaResult.content) {
+      return { success: true, title: jinaResult.title, content: jinaResult.content, transcript: jinaResult.content.substring(0, 3000), method: 'jina_text', platform: platformName };
+    }
+    return { success: false, method: 'jina_text', platform: platformName, error: jinaResult.error };
+  }
+
   // 视频/混合平台 → 下载视频 + ASR
   let tmpDir: string | null = null;
   try {
@@ -241,14 +333,12 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
     let videoPath: string | null = null;
     let desc = '';
 
-    // 根据平台选择下载器
     const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
     if (host.includes('douyin.com') || host.includes('iesdouyin.com')) {
       const douyinResult = await downloadDouyin(url, tmpDir);
       desc = douyinResult.desc || '';
       videoPath = douyinResult.videoPath || null;
       if (douyinResult.error && !videoPath) {
-        // 降级：仅文本
         const fastText = desc || await extractTextFast(url);
         if (fastText) {
           return { success: true, title: desc, content: fastText, transcript: fastText, method: 'jina_fast', platform: platformName };
@@ -256,9 +346,7 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
         return { success: false, method: 'video_asr', platform: platformName, error: douyinResult.error };
       }
     } else {
-      // 通用 yt-dlp
       videoPath = await downloadViaYTDLP(url, tmpDir);
-      // 同时尝试 jina 获取标题
       const fastText = await extractTextFast(url);
       if (fastText) {
         const firstLine = fastText.split('\n')[0]?.trim() || '';
@@ -267,11 +355,9 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
     }
 
     if (!videoPath) {
-      // 降级：jina fast
       if (desc) {
         return { success: true, title: desc, content: desc, transcript: desc, method: 'jina_fast', platform: platformName };
       }
-      // 再试 jina full
       const jinaResult = await extractViaJina(url);
       if (jinaResult.success && jinaResult.content) {
         return {
@@ -292,7 +378,6 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
     const asrResult = await recognizeAudio(audioPath);
 
     if (!asrResult.success || !asrResult.text.trim()) {
-      // ASR 失败 → 降级为描述
       return {
         success: !!desc,
         title: desc,
@@ -312,7 +397,6 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
       platform: platformName,
     };
   } catch (e) {
-    // 最终降级：jina fast
     try {
       const fastText = await extractTextFast(url);
       if (fastText) {
