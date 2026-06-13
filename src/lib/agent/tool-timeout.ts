@@ -7,6 +7,7 @@ import { safeErrorText } from '@/lib/ai/errors';
 
 const DEFAULT_TOOL_TIMEOUT_MS = 120_000; // 2 分钟
 const LONG_RUNNING_TIMEOUT_MS = 300_000; // 5 分钟（视频生成等）
+const PRODUCT_VIDEO_TIMEOUT_MS = 600_000; // 10 分钟（Seedance 3镜+TTS+合成）
 
 export interface TimeoutOptions {
   /** 超时毫秒数，默认 120000 */
@@ -22,15 +23,23 @@ export interface TimeoutOptions {
 function getRecoverySuggestion(toolName: string, errorText: string): string {
   const err = errorText.toLowerCase();
 
+  // 产品视频（一张图出片）失败 — 不要建议 compose/hyperframes
+  if (toolName === 'generate_product_video') {
+    if (err.includes('timeout') || err.includes('超时')) {
+      return '一张图出片超时，告知用户视频生成耗时较长，正在重试或建议稍后再试。不要改用其他工具替代。';
+    }
+    return '一张图出片失败，告知用户并建议重试。不要用 compose_video 或 hyperframes 替代。';
+  }
+
   // 视频生成失败 → 建议降级路径
   if (toolName.startsWith('generate_') && toolName.includes('video')) {
     if (err.includes('timeout') || err.includes('超时')) {
-      return '视频生成耗时较长，可尝试：1) 缩短时长 2) 改用 compose_video 合成静态图+BGM 3) 告知用户稍后重试';
+      return '视频生成耗时较长，可尝试：1) 缩短时长 2) 告知用户稍后重试';
     }
     if (err.includes('quota') || err.includes('limit') || err.includes('rate')) {
-      return '当前视频引擎繁忙，可尝试降级：改用 compose_video（多图合成）或 generate_hyperframes（文字动画）替代';
+      return '当前视频引擎繁忙，告知用户稍后重试';
     }
-    return '视频生成失败，可降级为：1) 生成图片 + 配音 + 合成 2) 用文字动画替代 3) 告知用户并提供重试';
+    return '视频生成失败，告知用户并提供重试';
   }
 
   // 图片生成失败
@@ -122,23 +131,28 @@ export async function executeWithTimeoutAndRecovery(
   context: ToolContext,
   options: TimeoutOptions = {}
 ): Promise<ToolResult> {
-  const timeoutMs = options.isLongRunning
-    ? LONG_RUNNING_TIMEOUT_MS
-    : (options.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS);
+  const timeoutMs = toolName === 'generate_product_video'
+    ? PRODUCT_VIDEO_TIMEOUT_MS
+    : (options.isLongRunning
+      ? LONG_RUNNING_TIMEOUT_MS
+      : (options.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS));
 
   if (context.signal?.aborted) {
     return { success: false, output: '', error: '操作已取消' };
   }
 
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
       handler(params, context),
-      new Promise<ToolResult>((_, reject) =>
-        setTimeout(() => reject(new ToolTimeoutError(timeoutMs)), timeoutMs)
-      ),
+      new Promise<ToolResult>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new ToolTimeoutError(timeoutMs)), timeoutMs);
+      }),
     ]);
+    clearTimeout(timeoutId);
     return result;
   } catch (e) {
+    clearTimeout(timeoutId);
     if (e instanceof ToolTimeoutError) {
       const recovery = getRecoverySuggestion(toolName, 'timeout');
       return {
