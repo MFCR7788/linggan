@@ -5,6 +5,7 @@ import type { PipelineContext, PipelineResult } from './types';
 import type { DetectedIntent } from './intent';
 import type { KnowledgeManager } from './knowledge/manager';
 import type { MemoryManager } from './memory/manager';
+import type { SkillsHub } from './skills/hub';
 import { generateEmbedding } from './embedding';
 import { detectIntent } from './intent';
 import { buildPrompt, PROMPT_MODULES, LINGJI_IDENTITY, GEN_JSON_TEMPLATE } from './prompts';
@@ -13,6 +14,7 @@ import { sanitizeContext } from './memory/provider';
 export interface PipelineDeps {
   memoryManager: MemoryManager;
   knowledgeManager: KnowledgeManager;
+  skillsHub?: SkillsHub;
 }
 
 export interface PipelineInput {
@@ -28,10 +30,12 @@ export interface PipelineInput {
 export class ContextPipeline {
   private memoryManager: MemoryManager;
   private knowledgeManager: KnowledgeManager;
+  private skillsHub?: SkillsHub;
 
   constructor(deps: PipelineDeps) {
     this.memoryManager = deps.memoryManager;
     this.knowledgeManager = deps.knowledgeManager;
+    this.skillsHub = deps.skillsHub;
   }
 
   /** 执行完整上下文检索管道 */
@@ -65,6 +69,19 @@ export class ContextPipeline {
     // 4. 意图检测
     const intent = detectIntent(query, hasImages, hasVideos, historyMessages || []);
 
+    // 4a. 技能匹配（基于意图 + 用户输入）
+    let matchedSkills: import('./types').SkillMatch[] = [];
+    if (this.skillsHub) {
+      try {
+        matchedSkills = this.skillsHub.matchSkillsByIntent(intent.type, 3);
+        if (matchedSkills.length === 0) {
+          matchedSkills = this.skillsHub.matchSkills(query, 3);
+        }
+      } catch (e) {
+        console.warn('[Pipeline] 技能匹配失败:', e);
+      }
+    }
+
     // 5. 构建上下文
     const context: PipelineContext = {
       memoryBlock,
@@ -74,7 +91,7 @@ export class ContextPipeline {
         ? knowledge.results.filter(r => r.source === '联网搜索').map(r => r.content).join('\n\n')
         : undefined,
       historyMessages: historyMessages || [],
-      matchedSkills: [],
+      matchedSkills,
       skillInvocations: [],
     };
 
@@ -145,6 +162,14 @@ export class ContextPipeline {
 
     // 模块化 System Prompt
     parts.push(mod.systemPrompt);
+
+    // 技能上下文
+    if (ctx.matchedSkills.length > 0 && this.skillsHub) {
+      try {
+        const skillsBlock = this.skillsHub.buildSkillsPromptBlock();
+        if (skillsBlock) parts.push(skillsBlock);
+      } catch { /* 技能块失败不影响主流程 */ }
+    }
 
     if (requiresJSON) {
       parts.push(

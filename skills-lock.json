@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "debugger": {
+      "source": "shubhamsaboo/awesome-llm-apps",
+      "sourceType": "github",
+      "skillPath": "awesome_agent_skills/debugger/SKILL.md",
+      "computedHash": "609b0b6d79fe21bcb5eb8a01b38f5571b8ae05be826936a312bc04d9c5400193"
+    },
+    "lark-openapi-explorer": {
+      "source": "larksuite/cli",
+      "sourceType": "github",
+      "skillPath": "skills/lark-openapi-explorer/SKILL.md",
+      "computedHash": "a49ad0ad41b4bdeec9f5ccae6d5f6fba7b128fae0b0f428fde7df94cda6e6555"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "874f3786b05007a8b4a60452a4cd89b9917c645d34b6b1e40ea05037d12f0e67"
+    }
+  }
+}

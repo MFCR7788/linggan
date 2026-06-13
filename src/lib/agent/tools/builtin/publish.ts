@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../../types';
+import { getApiBaseUrl } from '../api-base-url';
 
 export const publishContentTool: ToolDefinition = {
   name: 'publish_content',
@@ -41,7 +42,7 @@ export const publishContentTool: ToolDefinition = {
 
     try {
       const tagArr = tags ? tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      const baseUrl = getApiBaseUrl();
 
       // 检查已授权的自动发布平台
       const accRes = await fetch(`${baseUrl}/api/platforms/accounts`);

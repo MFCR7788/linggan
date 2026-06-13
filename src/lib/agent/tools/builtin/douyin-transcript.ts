@@ -8,29 +8,9 @@ import { promisify } from 'util';
 import { writeFile, mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { getDouyinPythonPath, resetPythonPathCache } from '../douyin-python';
 
 const execAsync = promisify(exec);
-
-// ── douyin-cli Python 路径 ──
-
-let _pythonPath: string | null = null;
-
-async function getDouyinPython(): Promise<string> {
-  if (_pythonPath) return _pythonPath;
-  try {
-    const { stdout } = await execAsync('which douyin');
-    const douyinBin = stdout.trim();
-    const { stdout: pyOut } = await execAsync(
-      `find "$(dirname "${douyinBin}")/.." -path "*/bin/python*" -type f 2>/dev/null | head -1 || echo ""`
-    );
-    if (pyOut.trim()) {
-      _pythonPath = pyOut.trim();
-      return _pythonPath;
-    }
-  } catch { /* fall through */ }
-  _pythonPath = 'python3';
-  return _pythonPath;
-}
 
 // ── 调用 douyin-cli 下载视频 + 获取元数据 ──
 
@@ -41,7 +21,7 @@ interface DouyinAwemeData {
 }
 
 async function fetchViaDouyinCLI(videoUrl: string, workDir: string): Promise<DouyinAwemeData> {
-  const python = await getDouyinPython();
+  const python = await getDouyinPythonPath();
   const pyScript = `
 import json, sys, os
 from douyin_cli.douyin import Douyin
@@ -95,7 +75,7 @@ json.dump(result, sys.stdout, ensure_ascii=False)
 // ── 快速路径：仅获取描述（不下载视频） ──
 
 async function fetchDescOnly(videoUrl: string): Promise<string> {
-  const python = await getDouyinPython();
+  const python = await getDouyinPythonPath();
   const tmpDir = await mkdtemp(join(tmpdir(), 'dy-fast-'));
   const pyScript = `
 import json, sys

@@ -58,6 +58,10 @@
     "src/app/api/platforms/scheduled-publish/route.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "src/app/api/jobs/claim/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
     }
   },
   "crons": [
@@ -67,7 +71,7 @@
     },
     {
       "path": "/api/jobs/claim",
-      "schedule": "0 16 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/platforms/metrics-fetch",

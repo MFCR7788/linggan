@@ -229,9 +229,5 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作合伙人。你的职
 - [ ] 输出结果有结构（标题/正文/来源），不是一大段文字糊一起
 - [ ] 所有保存到灵感库的内容已打标签（source/tool/topic）`;
 
-export const DEFAULT_CONFIG: AgentConfig = {
-  ...DEFAULT_AGENT_CONFIG,
-  model: 'deepseek-v4-pro',
-  temperature: 0.7,
-  maxTokens: 8192,
-};
+/** @deprecated 使用 DEFAULT_AGENT_CONFIG (from './types') — 已统一为同一配置 */
+export const DEFAULT_CONFIG: AgentConfig = DEFAULT_AGENT_CONFIG;

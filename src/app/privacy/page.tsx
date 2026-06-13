@@ -1,7 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { Shield, FileText, Database, Bell, Users, ExternalLink } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
+import { TopNav } from '@/components/TopNav';
+import { BottomNav, type PageKey } from '@/components/BottomNav';
 
 const sections = [
   {
@@ -37,13 +40,23 @@ const sections = [
 ];
 
 export default function PrivacyPage() {
+  const router = useRouter();
+
+  const handleNavigate = (page: PageKey, params?: string) => {
+    switch (page) {
+      case 'home': router.push('/home'); break;
+      case 'inspiration': router.push('/inspiration'); break;
+      case 'ai': router.push('/ai'); break;
+      case 'hotspot': router.push('/hotspot'); break;
+      case 'profile': router.push('/profile'); break;
+      default: router.push('/home');
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="px-4 pt-6 pb-4">
-        <div className="flex items-center gap-3 mb-2">
-          <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10" />
-          <h1 style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 700 }}>隐私政策</h1>
-        </div>
+      <TopNav title="隐私政策" showBack onBack={() => router.push('/profile')} />
+      <div className="px-4 pt-2 pb-4">
         <p style={{ color: '#9CA3AF', fontSize: 13 }}>
           灵集重视您的隐私。本隐私政策说明我们如何收集、使用和保护您的个人信息。
         </p>
@@ -93,6 +106,7 @@ export default function PrivacyPage() {
           © 2026 灵集 LingJi. All rights reserved.
         </p>
       </div>
+      <BottomNav activePage="profile" onNavigate={handleNavigate} />
     </div>
   );
 }

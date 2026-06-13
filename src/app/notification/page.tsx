@@ -23,26 +23,7 @@ const typeIcons: Record<string, { icon: JSX.Element; color: string }> = {
   system: { icon: <Bell size={20} />, color: '#8B5CF6' },
 };
 
-const fallbackNotifications = [
-  {
-    id: '1', type: 'hotspot',
-    title: '紧急热点预警：AI监管新政策发布',
-    content: '相关部门发布AI内容监管新规，对内容创作者影响重大。',
-    is_read: false, created_at: new Date().toISOString(),
-  },
-  {
-    id: '2', type: 'hotspot',
-    title: '新热点：AI创作关键词有新动态',
-    content: '检测到3个与您关注领域高度相关的热点。',
-    is_read: false, created_at: new Date(Date.now() - 1800000).toISOString(),
-  },
-  {
-    id: '3', type: 'system',
-    title: '系统通知：周报已生成',
-    content: '您的创作周报已生成，请查看。',
-    is_read: true, created_at: new Date(Date.now() - 86400000).toISOString(),
-  },
-];
+const fallbackNotifications: NotificationItem[] = [];
 
 interface NotificationItem {
   id: string;

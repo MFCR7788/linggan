@@ -8,7 +8,7 @@ import type { ToolRegistry } from './tools/registry';
 import type { AgentConfig, AgentEvent, ToolResult, ToolCallRequest, AgentLoopOptions, ExecutionPlan } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
-import { executeWithTimeout } from './tool-timeout';
+import { executeWithTimeoutAndRecovery } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
 import { GoalPlanner, updatePlanProgress, getCurrentStep } from './goal-planner';
 import { GoalProgressTracker } from './goal-progress';
@@ -74,6 +74,9 @@ export async function* agentStreamLoop(
     if (hooks) {
       await hooks.emit('pre_llm_call', { userId: context.userId, sessionId: context.sessionId, messages });
     }
+
+    // token 预算硬限制：防止上下文溢出
+    messages = ctxEngine.enforceBudget(messages);
 
     const openaiTools = registry.toOpenAITools();
     let hasToolCalls = false;
@@ -249,10 +252,11 @@ async function executeToolCall(
     return { success: false, output: '', error: `未找到工具: ${toolName}` };
   }
 
-  return executeWithTimeout(
+  return executeWithTimeoutAndRecovery(
+    toolName,
     tool.handler,
     args,
-    { userId: context.userId, sessionId: context.sessionId, signal: context.signal },
+    { userId: context.userId, sessionId: context.sessionId, signal: context.signal, presets: context.presets },
     { timeoutMs, isLongRunning: tool.isLongRunning }
   );
 }

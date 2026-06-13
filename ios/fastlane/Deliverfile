@@ -1,0 +1,44 @@
+app_identifier("com.mfcr7788.lingji")
+api_key(
+  key_id: "52H698RFZF",
+  issuer_id: "1a2cb46c-d819-4e43-919c-4bb31e44f174",
+  key_filepath: "/Users/aplle/Documents/Zjsifan/Tools/lingji/ios/fastlane/AuthKey_52H698RFZF.p8"
+)
+
+# 版权
+copyright("© 2026 灵集")
+
+# 类别
+primary_category("Productivity")
+secondary_category("Graphics & Design")
+
+# 年龄分级
+# 4+
+
+# 价格
+price_tier(0)  # 免费
+
+# 可用地区
+# 全部 175 个国家和地区 (默认)
+
+# 审核信息
+app_review_information(
+  first_name: "Yu",
+  last_name: "Weijun",
+  phone_number: "+86 15967675767",
+  email_address: "229888777@qq.com",
+  demo_user_name: "18800000000",
+  demo_password: "123456",
+  notes: "演示账号：手机号 18800000000，验证码 123456（测试环境固定值）。功能路径：1. 登录后进入首页 2. AI 创作 → AI 文案 → 选择素材 → 生成小红书文案 3. 热点 → 热点详情 → 一键转灵感。注意：首次打开请求通知权限可拒绝，不影响核心功能。短信验证码测试环境固定 123456。AI 生成境外节点偶有 2-3 秒延迟。"
+)
+
+submission_information({
+  add_id_info_serves_ads: false,
+  add_id_info_limits_tracking: false,
+  add_id_info_tracks_action: false,
+  add_id_info_tracks_install: false,
+  add_id_info_uses_idfa: false,
+  content_rights_contains_third_party_content: false,
+  export_compliance_encryption_updated: false,
+  export_compliance_uses_encryption: false
+})

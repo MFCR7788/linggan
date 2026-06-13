@@ -1,24 +1,13 @@
 // 多平台互联网搜索工具
-// 底层：Exa REST API（curl）、Jina Reader（curl）、GitHub CLI（gh）
+// 底层：Exa REST API（fetch）、Jina Reader（fetch）、GitHub CLI（gh）
 
 import type { ToolDefinition } from '../../types';
-import { execSync } from 'child_process';
+import { execSync, execFile } from 'child_process';
+import { promisify } from 'util';
 import { getExaApiKey } from '@/lib/runtime-config';
 
 const SEARCH_TIMEOUT = 15000;
-
-async function sh(cmd: string, timeoutMs = SEARCH_TIMEOUT): Promise<{ stdout: string; stderr: string }> {
-  try {
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
-    const result = await execAsync(cmd, { timeout: timeoutMs, maxBuffer: 1024 * 1024 });
-    return { stdout: result.stdout, stderr: result.stderr };
-  } catch (e: unknown) {
-    const err = e as { stdout?: string; stderr?: string; killed?: boolean };
-    return { stdout: err.stdout || '', stderr: err.stderr || String(e) };
-  }
-}
+const execFileAsync = promisify(execFile);
 
 function hasCli(name: string): boolean {
   try {
@@ -34,22 +23,28 @@ async function exaSearch(query: string, limit = 5): Promise<string> {
   const apiKey = getExaApiKey();
   if (!apiKey) return 'Exa 搜索不可用：未配置 EXA_API_KEY 环境变量。';
 
-  const body = JSON.stringify({
-    query,
-    type: 'auto',
-    numResults: limit,
-    contents: { highlights: true },
-  });
-
-  const { stdout, stderr } = await sh(
-    `curl -s --max-time 30 -X POST "https://api.exa.ai/search" -H "Content-Type: application/json" -H "x-api-key: ${apiKey}" -d '${body.replace(/'/g, "'\\''")}'`
-  );
-
-  if (stderr && !stdout) return `搜索异常: ${stderr.substring(0, 300)}`;
-  if (!stdout.trim()) return '无结果';
-
   try {
-    const data = JSON.parse(stdout);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    const response = await fetch('https://api.exa.ai/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        query,
+        type: 'auto',
+        numResults: limit,
+        contents: { highlights: true },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return `Exa API 错误: HTTP ${response.status}`;
+    const data = await response.json();
     if (data.error) return `Exa API 错误: ${data.error}`;
     const results = data.results || [];
     if (results.length === 0) return `"${query}" 无结果`;
@@ -62,33 +57,57 @@ async function exaSearch(query: string, limit = 5): Promise<string> {
       })
       .join('\n\n');
     return formatted.length > 3000 ? formatted.substring(0, 3000) + '\n...(已截断)' : formatted;
-  } catch {
-    return stdout.substring(0, 3000);
+  } catch (e) {
+    return `搜索异常: ${e instanceof Error ? e.message : String(e)}`;
   }
 }
 
 /** Jina Reader 读取任意网页（含 JS 渲染的 SPA 页面，如微信公众号/小红书） */
 async function readWebPage(url: string): Promise<string> {
-  const { stdout, stderr } = await sh(
-    `curl -s --max-time 20 "https://r.jina.ai/${url.replace(/^https?:\/\//, '')}"`
-  );
-  if (stderr && !stdout) return `读取失败: ${stderr.substring(0, 200)}`;
-  if (!stdout.trim()) return '页面无内容或无法访问';
-  return stdout.length > 4000 ? stdout.substring(0, 4000) + '\n...(已截断)' : stdout;
+  try {
+    const normalizedUrl = url.replace(/^https?:\/\//, '');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+
+    const response = await fetch(`https://r.jina.ai/${normalizedUrl}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return `读取失败: HTTP ${response.status}`;
+    const text = await response.text();
+    if (!text.trim()) return '页面无内容或无法访问';
+    return text.length > 4000 ? text.substring(0, 4000) + '\n...(已截断)' : text;
+  } catch (e) {
+    return `读取失败: ${e instanceof Error ? e.message : String(e)}`;
+  }
 }
 
-/** GitHub 搜索 */
+/** GitHub 搜索 — 使用 execFile 避免 shell 命令注入 */
 async function githubSearch(query: string, type: 'repos' | 'code' | 'issues' = 'repos', limit = 5): Promise<string> {
   if (!hasCli('gh')) return 'GitHub 搜索不可用：gh CLI 未安装或未配置。运行 `gh auth login` 进行认证。';
-  const map: Record<string, string> = {
-    repos: `gh search repos "${query}" --sort stars --limit ${limit}`,
-    code: `gh search code "${query}" --limit ${limit}`,
-    issues: `gh search issues "${query}" --limit ${limit}`,
-  };
-  const { stdout, stderr } = await sh(map[type]);
-  if (stderr && !stdout) return `GitHub 搜索异常: ${stderr.substring(0, 300)}`;
-  if (!stdout.trim()) return '无结果';
-  return stdout.length > 3000 ? stdout.substring(0, 3000) + '\n...(已截断)' : stdout;
+
+  // execFile 不经过 shell，参数化传递避免注入
+  const args: string[] = (() => {
+    switch (type) {
+      case 'repos':   return ['search', 'repos', query, '--sort', 'stars', '--limit', String(limit)];
+      case 'code':    return ['search', 'code', query, '--limit', String(limit)];
+      case 'issues':  return ['search', 'issues', query, '--limit', String(limit)];
+    }
+  })();
+
+  try {
+    const { stdout, stderr } = await execFileAsync('gh', args, {
+      timeout: SEARCH_TIMEOUT,
+      maxBuffer: 1024 * 1024,
+    });
+    if (stderr && !stdout) return `GitHub 搜索异常: ${stderr.substring(0, 300)}`;
+    if (!stdout.trim()) return '无结果';
+    return stdout.length > 3000 ? stdout.substring(0, 3000) + '\n...(已截断)' : stdout;
+  } catch (e: unknown) {
+    const err = e as { stdout?: string; stderr?: string };
+    return `GitHub 搜索失败: ${err.stderr || String(e)}`.substring(0, 500);
+  }
 }
 
 export const searchInternetTool: ToolDefinition = {

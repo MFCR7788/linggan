@@ -6,7 +6,7 @@ import { WEATHER_USER_AGENT } from './types';
 export async function fetchWeather(city: string): Promise<WeatherData | null> {
   try {
     const encodedCity = encodeURIComponent(city.trim());
-    const url = `http://wttr.in/${encodedCity}?format=j1`;
+    const url = `https://wttr.in/${encodedCity}?format=j1`;
 
     const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
       || process.env.https_proxy || process.env.http_proxy

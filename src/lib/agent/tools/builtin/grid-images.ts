@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '../../types';
 import { callDeepSeek } from '@/lib/ai-services';
+import { generateImage } from '@/lib/ai/image';
 
 /** 修复 LLM 返回 JSON 的常见语法问题（尾部逗号、未转义换行等） */
 function repairJson(raw: string): string {
@@ -24,12 +25,18 @@ function repairJson(raw: string): string {
 
 export const generateGridImagesTool: ToolDefinition = {
   name: 'generate_grid_images',
-  description: '生成朋友圈九宫格配图。适用于产品展示、活动宣传、品牌推广等场景，自动生成9张风格统一的配图。',
+  description: `生成朋友圈九宫格配图方案 + 首图预览。
+流程：AI 设计 9 张统一风格的图片方案 → 自动生成第 1 张作为风格预览 → 返回完整方案。
+用户确认首图风格后，可前往「AI 创作 → 9宫格」页面批量生成剩余 8 张。
+适用场景：产品展示、活动宣传、品牌推广、生活方式、知识分享、美食。`,
   parameters: {
     type: 'object',
     properties: {
       topic: { type: 'string', description: '九宫格主题（如产品名称、活动名称）' },
-      scene: { type: 'string', description: '场景类型: product(产品展示), event(活动宣传), brand(品牌推广), lifestyle(生活方式), education(知识分享), food(美食)。默认 product' },
+      scene: {
+        type: 'string',
+        description: '场景类型: product(产品展示), event(活动宣传), brand(品牌推广), lifestyle(生活方式), education(知识分享), food(美食)。默认 product',
+      },
       keywords: { type: 'string', description: '补充关键词，用逗号分隔（可选）' },
     },
     required: ['topic'],
@@ -72,7 +79,6 @@ ${keywords ? `补充关键词：${keywords}` : ''}
         try {
           cells = JSON.parse(jsonMatch[0]);
         } catch {
-          // LLM 返回的 JSON 常有尾部逗号等问题，尝试修复后再解析
           try {
             const repaired = repairJson(jsonMatch[0]);
             cells = JSON.parse(repaired);
@@ -80,7 +86,7 @@ ${keywords ? `补充关键词：${keywords}` : ''}
             return {
               success: false,
               output: '',
-              error: `九宫格 JSON 解析失败: ${e2 instanceof Error ? e2.message : String(e2)}`,
+              error: `九宫格 JSON 解析失败: ${e2 instanceof Error ? e2.message : String(e2)}。可前往「AI 创作 → 9宫格」页面手动生成。`,
             };
           }
         }
@@ -89,14 +95,31 @@ ${keywords ? `补充关键词：${keywords}` : ''}
           return { success: false, output: '九宫格方案生成失败，请重试。' };
         }
 
+        // Step 2: 生成第 1 张作为风格预览
+        let previewUrl: string | null = null;
+        const firstCell = cells[0] as { prompt?: string; title?: string };
+        if (firstCell?.prompt) {
+          try {
+            const imgResult = await generateImage(firstCell.prompt, { ratio: '1:1', n: 1 });
+            const single = Array.isArray(imgResult) ? imgResult[0] : imgResult;
+            previewUrl = single?.url || null;
+          } catch {
+            // 预览生成失败不影响方案输出
+          }
+        }
+
         const plan = cells.map((c: any, i: number) =>
-          `${i + 1}. ${c.title} — ${c.prompt?.substring(0, 60)}...`
+          `${i + 1}. ${c.title || `图${i + 1}`} — ${(c.prompt || '').substring(0, 60)}...`
         ).join('\n');
+
+        const previewNote = previewUrl
+          ? `\n\n🖼️ 首图预览已生成：\n![预览](${previewUrl})\n\n风格已确认？前往「AI 创作 → 9宫格」页面一键生成剩余 8 张。`
+          : `\n\n⚠️ 首图预览生成失败，可前往「AI 创作 → 9宫格」页面手动逐张生成。`;
 
         return {
           success: true,
-          output: `已生成九宫格方案「${topic}」(${sceneLabels[scene] || scene})：\n\n${plan}\n\n⚠️ 逐张生成图片需要较长时间，请在 AI 创作→9宫格页面批量生成。`,
-          data: { cells, topic, scene },
+          output: `已生成九宫格方案「${topic}」(${sceneLabels[scene] || scene})：\n\n${plan}${previewNote}`,
+          data: { cells, topic, scene, previewUrl },
         };
       }
 
@@ -105,7 +128,7 @@ ${keywords ? `补充关键词：${keywords}` : ''}
       return {
         success: false,
         output: '',
-        error: `九宫格生成失败: ${e instanceof Error ? e.message : String(e)}`,
+        error: `九宫格生成失败: ${e instanceof Error ? e.message : String(e)}。可前往「AI 创作 → 9宫格」页面手动生成。`,
       };
     }
   },

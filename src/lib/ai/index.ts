@@ -1,5 +1,11 @@
 // AI Services - Barrel Re-exports
 
+// Error handling & retry
+export { withRetry } from './retry';
+export type { RetryOptions } from './retry';
+export { AIServiceError, safeErrorText, normalizeError } from './errors';
+export type { AIErrorCode } from './errors';
+
 // Chat
 export { callDeepSeek } from './chat';
 export { callQwen } from './chat';

@@ -2,37 +2,14 @@
 // 底层：LIghtJUNction/douyin CLI（开源，通过 Cookie 认证）
 
 import type { ToolDefinition } from '../../types';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { getDouyinPythonPath } from '../douyin-python';
 
 const execAsync = promisify(exec);
-
-let _pythonPath: string | null = null;
-
-async function getPythonPath(): Promise<string> {
-  if (_pythonPath) return _pythonPath;
-  try {
-    const { stdout } = await execAsync('which douyin');
-    const douyinBin = stdout.trim();
-    // douyin-cli 的 venv python 在 bin/douyin 旁边
-    const { stdout: pyOut } = await execAsync(`ls "$(dirname "${douyinBin}")/python"* 2>/dev/null || echo ""`);
-    if (pyOut.trim()) {
-      _pythonPath = pyOut.trim().split('\n')[0];
-    } else {
-      // Fallback: find python in the uv tool venv
-      const { stdout: uvOut } = await execAsync(
-        `find ~/.local/share/uv/tools/douyin-cli/bin -name 'python*' -type f 2>/dev/null | head -1 || echo ""`
-      );
-      _pythonPath = uvOut.trim() || 'python3';
-    }
-  } catch {
-    _pythonPath = 'python3';
-  }
-  return _pythonPath;
-}
 
 interface SearchResult {
   id: string;
@@ -47,7 +24,7 @@ async function douyinSearch(
   keyword: string,
   options: { limit?: number; sortType?: number; publishTime?: number; filterDuration?: string }
 ): Promise<SearchResult[]> {
-  const python = await getPythonPath();
+  const python = await getDouyinPythonPath();
   const scriptDir = join(tmpdir(), 'lingji-douyin');
   await mkdir(scriptDir, { recursive: true });
   const scriptPath = join(scriptDir, 'search.py');

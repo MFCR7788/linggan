@@ -1,0 +1,1605 @@
+软件名称: 灵集AI智能创作助手平台 V1.0          第 31 页
+
+/* ── src/types/index.ts ── */
+     1  // 数据库类型定义
+     2  export type ContentType = 'text' | 'voice' | 'image' | 'video' | 'link' | 'audio';
+     3  
+     4  export type AnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed';
+     5  
+     6  export type UserPlan = 'free' | 'pro' | 'creator';
+     7  
+     8  export type HotspotStatus = 'new' | 'following' | 'used' | 'ignored';
+     9  
+    10  export type CredibilityLevel = 'red' | 'yellow' | 'green';
+    11  
+    12  export type ImportanceLevel = 'low' | 'medium' | 'high' | 'urgent';
+    13  
+    14  // 用户类型
+    15  export interface User {
+    16    id: string;
+    17    email?: string;
+    18    phone?: string;
+    19    username?: string;
+    20    avatar_url?: string;
+    21    plan: UserPlan;
+    22    // 账号类型(媒体运营场景):startup/knowledge/ecommerce/b2b/personal/training/restaurant/medical
+    23    // 后端 User 类型暂未持久化, dev 模式走 localStorage, 生产环境后端 /user/profile 接受扩展字段
+    24    account_type?: string;
+    25    created_at: string;
+    26    updated_at: string;
+    27  }
+    28  
+    29  // 分类类型
+    30  export interface Category {
+    31    id: string;
+    32    user_id: string;
+    33    name: string;
+    34    icon?: string;
+    35    color?: string;
+    36    is_default: boolean;
+    37    created_at: string;
+    38    updated_at: string;
+    39  }
+    40  
+    41  // 标签类型
+    42  export interface Tag {
+    43    id: string;
+    44    user_id: string;
+    45    name: string;
+    46    color?: string;
+    47    created_at: string;
+    48  }
+    49  
+    50  // 灵感/内容类型
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 32 页
+
+    51  export interface ContentItem {
+    52    id: string;
+    53    user_id: string;
+    54    type: ContentType;
+    55    category_id?: string;
+    56    title?: string;
+    57    original_text?: string;
+    58    ai_summary?: string;
+    59    ai_key_points?: string[];
+    60    ai_creation_suggestions?: string[];
+    61    source_url?: string;
+    62    source_platform?: string;
+    63    media_urls?: string[];
+    64    voice_url?: string;
+    65    thumbnail_url?: string;
+    66    is_shared: boolean;
+    67    status: 'active' | 'archived' | 'deleted';
+    68    analysis_status: AnalysisStatus;
+    69    original_file_url?: string;
+    70    original_filename?: string;
+    71    original_file_size?: number;
+    72    original_mime_type?: string;
+    73    prompt?: string;
+    74    created_at: string;
+    75    updated_at: string;
+    76  }
+    77  
+    78  // 内容标签关联
+    79  export interface ContentTag {
+    80    id: string;
+    81    content_id: string;
+    82    tag_id: string;
+    83  }
+    84  
+    85  // 监控关键词
+    86  export interface MonitorKeyword {
+    87    id: string;
+    88    user_id: string;
+    89    keyword: string;
+    90    platforms?: string[];
+    91    frequency: string;
+    92    importance_threshold?: number;
+    93    is_active: boolean;
+    94    last_check_at?: string;
+    95    next_check_at?: string;
+    96    created_at: string;
+    97    updated_at: string;
+    98  }
+    99  
+   100  // 热点内容
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 33 页
+
+   101  export interface HotItem {
+   102    id: string;
+   103    user_id: string;
+   104    monitor_keyword_id?: string;
+   105    platform: string;
+   106    original_url: string;
+   107    title: string;
+   108    author?: string;
+   109    original_content?: string;
+   110    ai_summary?: string;
+   111    key_points?: string[];
+   112    relevance_reason?: string;
+   113    creation_suggestions?: string[];
+   114    view_count?: number;
+   115    like_count?: number;
+   116    comment_count?: number;
+   117    share_count?: number;
+   118    credibility_score?: number;
+   119    credibility_level?: CredibilityLevel;
+   120    relevance_score?: number;
+   121    importance_score?: number;
+   122    importance_level?: ImportanceLevel;
+   123    tags?: string[];
+   124    category?: string;
+   125    status: HotspotStatus;
+   126    is_read: boolean;
+   127    published_at?: string;
+   128    captured_at: string;
+   129    created_at: string;
+   130    updated_at: string;
+   131  }
+   132  
+   133  // 通知类型
+   134  export interface Notification {
+   135    id: string;
+   136    user_id: string;
+   137    hot_item_id?: string;
+   138    type: 'hotspot' | 'system';
+   139    title: string;
+   140    content: string;
+   141    is_read: boolean;
+   142    created_at: string;
+   143  }
+   144  
+   145  // 用量记录
+   146  export interface UsageRecord {
+   147    id: string;
+   148    user_id: string;
+   149    month: string;
+   150    ai_summary_count?: number;
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 34 页
+
+   151    link_parse_count?: number;
+   152    image_count?: number;
+   153    video_count?: number;
+   154    video_minutes?: number;
+   155    audio_minutes?: number;
+   156    ai_writing_count?: number;
+   157    storage_used_mb?: number;
+   158    created_at: string;
+   159    updated_at: string;
+   160  }
+   161  
+   162  // AI任务
+   163  export interface AiTask {
+   164    id: string;
+   165    user_id: string;
+   166    content_id?: string;
+   167    task_type: string;
+   168    status: AiTaskStatus;
+   169    input_tokens?: number;
+   170    output_tokens?: number;
+   171    input?: unknown;
+   172    output?: unknown;
+   173    error_message?: string;
+   174    created_at: string;
+   175    completed_at?: string;
+   176    // V2.0.1 新增字段
+   177    batch_id?: string;
+   178    parent_task_id?: string;
+   179    progress?: number;             // 0-100
+   180    scheduled_for?: string;
+   181    started_at?: string;
+   182    retry_count?: number;
+   183    max_retries?: number;
+   184    worker_id?: string;
+   185    priority?: number;             // 1-10
+   186    error_code?: string;
+   187    estimated_seconds?: number;
+   188  }
+   189  
+   190  // 任务类型枚举
+   191  export type AiTaskType =
+   192    | 'ai_summary'
+   193    | 'copywriting'
+   194    | 'image'
+   195    | 'image_batch'   // V2.0.1 批量生图
+   196    | 'video'
+   197    | 'digital_human'
+   198    | 'digital_human_batch'  // V2.0.2 批量数字人
+   199    | 'video_merge';
+   200  
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 35 页
+
+   201  // 任务状态（扩展 cancelled）
+   202  export type AiTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+   203  
+   204  // 批次进度（前端聚合用）
+   205  export interface BatchProgress {
+   206    batchId: string;
+   207    total: number;
+   208    pending: number;
+   209    processing: number;
+   210    completed: number;
+   211    failed: number;
+   212    cancelled: number;
+   213    percent: number;              // 0-100
+   214    estimatedRemainingSeconds?: number;
+   215    tasks: AiTask[];
+   216  }
+   217  
+   218  // 日程类型
+   219  export interface Schedule {
+   220    id: string;
+   221    user_id: string;
+   222    title: string;
+   223    description?: string;
+   224    scheduled_at: string;
+   225    location?: string;
+   226    color?: string;
+   227    status: 'pending' | 'completed' | 'cancelled';
+   228    remind_before?: number;
+   229    suggestions?: string[];
+   230    source_content_id?: string;
+   231    created_at: string;
+   232    updated_at: string;
+   233  }
+   234  
+   235  // API响应类型
+   236  export interface ApiResponse<T = any> {
+   237    success: boolean;
+   238    data?: T;
+   239    error?: string;
+   240    message?: string;
+   241    code?: string;  // 业务错误码,如 INSUFFICIENT_CREDITS
+   242  }
+   243  
+   244  // 分页响应
+   245  export interface PaginatedResponse<T = any> {
+   246    success: boolean;
+   247    data: T[];
+   248    pagination: {
+   249      page: number;
+   250      limit: number;
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 36 页
+
+   251      total: number;
+   252      total_pages: number;
+   253    };
+   254  }
+   255  
+   256  // ─── Workflow Sessions ────────────────────────────────────
+   257  
+   258  export type WorkflowSessionStatus = 'active' | 'paused' | 'completed' | 'abandoned';
+   259  
+   260  export interface StepResult {
+   261    index: number;
+   262    completedAt: string;
+   263    outputContentId?: string;
+   264  }
+   265  
+   266  export interface WorkflowSession {
+   267    id: string;
+   268    user_id: string;
+   269    combo_id: string;
+   270    account_type?: string;
+   271    title?: string;
+   272    current_step_index: number;
+   273    total_steps: number;
+   274    status: WorkflowSessionStatus;
+   275    step_results: StepResult[];
+   276    accumulated_handoff: Record<string, string>;
+   277    combo_snapshot: Record<string, unknown>;
+   278    created_at: string;
+   279    updated_at: string;
+   280    completed_at?: string;
+   281    paused_at?: string;
+   282  }
+
+/* ── src/types/supabase.ts ── */
+     1  export type Json =
+     2    | string
+     3    | number
+     4    | boolean
+     5    | null
+     6    | { [key: string]: Json | undefined }
+     7    | Json[];
+     8  
+     9  export interface Database {
+    10    public: {
+    11      Tables: {
+    12        users: {
+    13          Row: {
+    14            id: string;
+    15            phone: string | null;
+    16            username: string | null;
+    17            avatar_url: string | null;
+    18            plan: string;
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 37 页
+
+    19            created_at: string;
+    20            updated_at: string;
+    21          };
+    22          Insert: {
+    23            id: string;
+    24            phone?: string | null;
+    25            username?: string | null;
+    26            avatar_url?: string | null;
+    27            plan?: string;
+    28          };
+    29          Update: {
+    30            id?: string;
+    31            phone?: string | null;
+    32            username?: string | null;
+    33            avatar_url?: string | null;
+    34            plan?: string;
+    35          };
+    36        };
+    37        categories: {
+    38          Row: {
+    39            id: string;
+    40            user_id: string;
+    41            name: string;
+    42            icon: string | null;
+    43            color: string | null;
+    44            is_default: boolean;
+    45            sort_order: number | null;
+    46            created_at: string;
+    47            updated_at: string;
+    48          };
+    49          Insert: {
+    50            user_id: string;
+    51            name: string;
+    52            icon?: string | null;
+    53            color?: string | null;
+    54            is_default?: boolean;
+    55            sort_order?: number | null;
+    56          };
+    57          Update: {
+    58            id?: string;
+    59            user_id?: string;
+    60            name?: string;
+    61            icon?: string | null;
+    62            color?: string | null;
+    63            is_default?: boolean;
+    64            sort_order?: number | null;
+    65          };
+    66        };
+    67        tags: {
+    68          Row: {
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 38 页
+
+    69            id: string;
+    70            user_id: string;
+    71            name: string;
+    72            color: string | null;
+    73            created_at: string;
+    74          };
+    75          Insert: {
+    76            user_id: string;
+    77            name: string;
+    78            color?: string | null;
+    79          };
+    80          Update: {
+    81            id?: string;
+    82            user_id?: string;
+    83            name?: string;
+    84            color?: string | null;
+    85          };
+    86        };
+    87        schedules: {
+    88          Row: {
+    89            id: string;
+    90            user_id: string;
+    91            title: string;
+    92            description: string | null;
+    93            scheduled_at: string;
+    94            location: string | null;
+    95            color: string | null;
+    96            status: string;
+    97            remind_before: number | null;
+    98            source_content_id: string | null;
+    99            created_at: string;
+   100            updated_at: string;
+   101          };
+   102          Insert: {
+   103            user_id: string;
+   104            title: string;
+   105            description?: string | null;
+   106            scheduled_at: string;
+   107            location?: string | null;
+   108            color?: string | null;
+   109            status?: string;
+   110            remind_before?: number | null;
+   111            source_content_id?: string | null;
+   112          };
+   113          Update: {
+   114            id?: string;
+   115            user_id?: string;
+   116            title?: string;
+   117            description?: string | null;
+   118            scheduled_at?: string;
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 39 页
+
+   119            location?: string | null;
+   120            color?: string | null;
+   121            status?: string;
+   122            remind_before?: number | null;
+   123            source_content_id?: string | null;
+   124          };
+   125        };
+   126        content_items: {
+   127          Row: {
+   128            id: string;
+   129            user_id: string;
+   130            type: string;
+   131            category_id: string | null;
+   132            title: string | null;
+   133            original_text: string | null;
+   134            ai_summary: string | null;
+   135            ai_key_points: string[] | null;
+   136            ai_reuse_score: number | null;
+   137            ai_creation_suggestions: string[] | null;
+   138            source_url: string | null;
+   139            source_platform: string | null;
+   140            media_urls: string[] | null;
+   141            voice_url: string | null;
+   142            thumbnail_url: string | null;
+   143            is_shared: boolean;
+   144            status: string;
+   145            analysis_status: string;
+   146            created_at: string;
+   147            updated_at: string;
+   148          };
+   149          Insert: {
+   150            user_id: string;
+   151            type: string;
+   152            category_id?: string | null;
+   153            title?: string | null;
+   154            original_text?: string | null;
+   155            ai_summary?: string | null;
+   156            ai_key_points?: string[] | null;
+   157            ai_reuse_score?: number | null;
+   158            ai_creation_suggestions?: string[] | null;
+   159            source_url?: string | null;
+   160            source_platform?: string | null;
+   161            media_urls?: string[] | null;
+   162            voice_url?: string | null;
+   163            thumbnail_url?: string | null;
+   164            is_shared?: boolean;
+   165            status?: string;
+   166            analysis_status?: string;
+   167          };
+   168          Update: {
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 40 页
+
+   169            id?: string;
+   170            user_id?: string;
+   171            type?: string;
+   172            category_id?: string | null;
+   173            title?: string | null;
+   174            original_text?: string | null;
+   175            ai_summary?: string | null;
+   176            ai_key_points?: string[] | null;
+   177            ai_reuse_score?: number | null;
+   178            ai_creation_suggestions?: string[] | null;
+   179            source_url?: string | null;
+   180            source_platform?: string | null;
+   181            media_urls?: string[] | null;
+   182            voice_url?: string | null;
+   183            thumbnail_url?: string | null;
+   184            is_shared?: boolean;
+   185            status?: string;
+   186            analysis_status?: string;
+   187          };
+   188        };
+   189      };
+   190    };
+   191  }
+
+/* ── src/lib/style-constants.ts ── */
+     1  // 共享样式常量和映射
+     2  
+     3  // 内容类型对应的 emoji 和标签
+     4  export const TYPE_EMOJIS: Record<string, string> = {
+     5    text: "✨",
+     6    link: "📝",
+     7    image: "🖼️",
+     8    video: "🎬",
+     9    voice: "✍️",
+    10    audio: "🎵",
+    11    schedule: "📅",
+    12  };
+    13  
+    14  export const TYPE_LABELS: Record<string, string> = {
+    15    text: "灵感",
+    16    link: "选题",
+    17    image: "图片",
+    18    video: "视频",
+    19    voice: "文案",
+    20    audio: "音频",
+    21    schedule: "日程",
+    22  };
+    23  
+    24  export const STATUS_LABELS: Record<string, string> = {
+    25    pending: "待处理",
+    26    saved: "已收藏",
+    27    used: "已使用",
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 41 页
+
+    28    archived: "已归档",
+    29    active: "正常",
+    30  };
+    31  
+    32  // 热度颜色
+    33  export const HEAT_LEVELS = {
+    34    high: { bg: "rgba(239,68,68,0.2)", text: "#EF4444", label: "高" },
+    35    medium: { bg: "rgba(251,191,36,0.2)", text: "#FBBF24", label: "中" },
+    36    low: { bg: "rgba(156,163,175,0.15)", text: "#9CA3AF", label: "低" },
+    37  };
+    38  
+    39  // 平台颜色映射
+    40  export const PLATFORM_COLORS: Record<string, string> = {
+    41    weibo: "#E0534A",
+    42    zhihu: "#3B82F6",
+    43    bilibili: "#FB7299",
+    44    xiaohongshu: "#F43F5E",
+    45    sogou: "#FF8C00",
+    46    baidu: "#1E90FF",
+    47    douyin: "#000000",
+    48    toutiao: "#FF4757",
+    49    bing: "#00A4EF",
+    50    hackernews: "#FF6600",
+    51    youtube: "#FF0000",
+    52    twitter: "#1DA1F2",
+    53    weixin: "#07C160",
+    54  };
+    55  
+    56  export function getPlatformColor(platform: string): string {
+    57    return PLATFORM_COLORS[platform.toLowerCase()] || "#6366F1";
+    58  }
+    59  
+    60  // 导航路由映射
+    61  // 注意: 带 id 的详情页(inspiration-detail / hotspot-detail)不带 query,
+    62  // 调用方应直接用 router.push(`/hotspot/detail?id=${item.id}`) 而非 handleNavigate
+    63  export const PAGE_ROUTES: Record<string, string> = {
+    64    home: '/home',
+    65    inspiration: '/inspiration',
+    66    'inspiration-detail': '/inspiration/detail',
+    67    ai: '/ai',
+    68    'ai-copywriting': '/ai/copywriting',
+    69    'ai-image': '/ai/image',
+    70    'ai-video': '/ai/video',
+    71    hotspot: '/hotspot',
+    72    'hotspot-detail': '/hotspot/detail',
+    73    'hotspot-library': '/hotspot/library',
+    74    profile: '/profile',
+    75    notification: '/notification',
+    76    capture: '/capture',
+    77    schedule: '/schedule',
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 42 页
+
+    78    login: '/login',
+    79    'ai-tts': '/ai/tts',
+    80    'ai-digital-human': '/ai/digital-human',
+    81    'profile-help': '/profile/help',
+    82  };
+    83  
+    84  // 常用背景色
+    85  export const BG_GLASS = "rgba(255,255,255,0.06)";
+    86  export const BG_GLASS_HOVER = "rgba(255,255,255,0.1)";
+    87  export const BORDER_GLASS = "1px solid rgba(255,255,255,0.1)";
+    88  export const BORDER_PRIMARY = "1px solid rgba(59,130,246,0.3)";
+    89  
+    90  // 常用按钮/标签背景
+    91  export function getFilterButtonStyle(active: boolean, activeColor = "rgba(59,130,246,0.2)") {
+    92    return {
+    93      background: active ? activeColor : "rgba(255,255,255,0.07)",
+    94      border: active
+    95        ? `1px solid rgba(59,130,246,0.4)`
+    96        : BORDER_GLASS,
+    97      color: active ? "#93C5FD" : "#9CA3AF",
+    98    };
+    99  }
+   100  
+   101  // 格式化时间
+   102  // ─── AI 视频语言选项 ────────────────────────────────────────
+   103  
+   104  export interface LanguageOption {
+   105    value: string;
+   106    label: string;
+   107    nativeLabel: string;
+   108    icon: string;
+   109    promptInstruction: string;  // 注入生成 prompt 的语言指令
+   110  }
+   111  
+   112  export const LANGUAGE_OPTIONS: LanguageOption[] = [
+   113    { value: 'zh', label: '中文', nativeLabel: '中文', icon: '🇨🇳', promptInstruction: '字幕使用简体中文，语言自然口语化，适合中文短视频平台' },
+   114    { value: 'en', label: 'English', nativeLabel: 'English', icon: '🇺🇸', promptInstruction: '字幕使用英文，语言自然口语化，适合英文短视频平台' },
+   115    { value: 'ja', label: '日本語', nativeLabel: '日本語', icon: '🇯🇵', promptInstruction: '字幕使用日语，语言自然口语化，适合日文短视频平台' },
+   116    { value: 'ko', label: '한국어', nativeLabel: '한국어', icon: '🇰🇷', promptInstruction: '字幕使用韩语，语言自然口语化，适合韩文短视频平台' },
+   117  ];
+   118  
+   119  // ─── AI 视频风格预设 ────────────────────────────────────────
+   120  
+   121  export interface StylePreset {
+   122    label: string;
+   123    icon: string;
+   124    bgm: 'tech' | 'chill' | 'hype';
+   125    subtitle: string;       // subtitleStyle 默认值
+   126    subtitlePos: string;    // subtitlePosition 默认值
+   127    recDuration: number;    // 推荐时长
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 43 页
+
+   128    visualStyle: string;    // 注入 DeepSeek prompt 的视觉风格关键词
+   129  }
+   130  
+   131  export const STYLE_PRESETS: Record<string, StylePreset> = {
+   132    douyin_hot: {
+   133      label: '抖音爆款',
+   134      icon: '🔥',
+   135      bgm: 'hype',
+   136      subtitle: '白色粗体',
+   137      subtitlePos: '底部',
+   138      recDuration: 15,
+   139      visualStyle: 'fast-paced, high energy, trendy transitions, bold colors',
+   140    },
+   141    healing_vlog: {
+   142      label: '治愈vlog',
+   143      icon: '🌿',
+   144      bgm: 'chill',
+   145      subtitle: '白色粗体',
+   146      subtitlePos: '底部',
+   147      recDuration: 30,
+   148      visualStyle: 'warm tones, soft lighting, slow and calming, natural atmosphere',
+   149    },
+   150    product_show: {
+   151      label: '产品展示',
+   152      icon: '✨',
+   153      bgm: 'tech',
+   154      subtitle: '黑底白字',
+   155      subtitlePos: '底部',
+   156      recDuration: 60,
+   157      visualStyle: 'clean, professional, smooth camera movement, product-focused',
+   158    },
+   159    knowledge: {
+   160      label: '知识科普',
+   161      icon: '📚',
+   162      bgm: 'chill',
+   163      subtitle: '黑底白字',
+   164      subtitlePos: '中部',
+   165      recDuration: 60,
+   166      visualStyle: 'documentary style, clear, informative, structured, clean text overlays',
+   167    },
+   168    cyberpunk: {
+   169      label: '赛博朋克',
+   170      icon: '🌆',
+   171      bgm: 'tech',
+   172      subtitle: '渐变彩色',
+   173      subtitlePos: '底部',
+   174      recDuration: 15,
+   175      visualStyle: 'cyberpunk, neon lights, futuristic, dark atmosphere, high contrast',
+   176    },
+   177    random: {
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 44 页
+
+   178      label: '随机风格',
+   179      icon: '🎲',
+   180      bgm: 'tech',
+   181      subtitle: '白色粗体',
+   182      subtitlePos: '底部',
+   183      recDuration: 10,
+   184      visualStyle: 'creative, original, cinematic, visually striking',
+   185    },
+   186  };
+   187  
+   188  // ─── 时间格式化 ──────────────────────────────────────────────
+   189  
+   190  export function formatRelativeTime(iso: string): string {
+   191    if (!iso) return "";
+   192    const diff = Date.now() - new Date(iso).getTime();
+   193    const mins = Math.floor(diff / 60000);
+   194    if (mins < 1) return "刚刚";
+   195    if (mins < 60) return `${mins}分钟前`;
+   196    const hours = Math.floor(mins / 60);
+   197    if (hours < 24) return `${hours}小时前`;
+   198    const days = Math.floor(hours / 24);
+   199    return `${days}天前`;
+   200  }
+
+/* ── src/lib/text-utils.ts ── */
+     1  // 文本工具 — 纯客户端/服务端通用的字符串处理
+     2  // 注意：此文件必须保持零依赖，确保 client component 可以安全 import
+     3  
+     4  /** 按句子边界将长文本拆分为多段，每段不超过 maxCharsPerSegment */
+     5  export function splitLongText(text: string, maxCharsPerSegment: number = 500): string[] {
+     6    const segments: string[] = [];
+     7    let remaining = text.trim();
+     8  
+     9    while (remaining.length > 0) {
+    10      if (remaining.length <= maxCharsPerSegment) {
+    11        segments.push(remaining);
+    12        break;
+    13      }
+    14      const chunk = remaining.substring(0, maxCharsPerSegment);
+    15      const lastBreak = Math.max(
+    16        chunk.lastIndexOf('。'),
+    17        chunk.lastIndexOf('！'),
+    18        chunk.lastIndexOf('？'),
+    19        chunk.lastIndexOf('.'),
+    20        chunk.lastIndexOf('!'),
+    21        chunk.lastIndexOf('?'),
+    22        chunk.lastIndexOf('\n'),
+    23      );
+    24      const cutPoint = lastBreak > maxCharsPerSegment * 0.5 ? lastBreak + 1 : maxCharsPerSegment;
+    25      segments.push(remaining.substring(0, cutPoint).trim());
+    26      remaining = remaining.substring(cutPoint).trim();
+    27    }
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 45 页
+
+    28  
+    29    return segments.filter(s => s.length > 0);
+    30  }
+    31  
+    32  /**
+    33   * 去除 Markdown 格式化符号，返回纯文本。
+    34   * 处理：粗体/斜体/标题/列表/引用/代码/删除线。
+    35   */
+    36  export function stripMarkdown(text: string): string {
+    37    if (!text) return text;
+    38  
+    39    let result = text;
+    40  
+    41    // 逐行处理行级格式
+    42    result = result
+    43      .split('\n')
+    44      .map(line => {
+    45        let l = line.trim();
+    46  
+    47        // 标题: ### / ## / # 开头
+    48        l = l.replace(/^#{1,6}\s+/, '');
+    49  
+    50        // 无序列表: - / * / + 开头
+    51        l = l.replace(/^[-*+]\s+/, '');
+    52  
+    53        // 有序列表: 1. / 1) / 1、 开头
+    54        l = l.replace(/^\d+[.)、]\s*/, '');
+    55  
+    56        // 引用: > 开头（多层 > >）
+    57        l = l.replace(/^(>+\s*)+/, '');
+    58  
+    59        return l;
+    60      })
+    61      .join('\n');
+    62  
+    63    // 内联格式
+    64    // 粗体: **text** 或 __text__
+    65    result = result.replace(/\*\*(.+?)\*\*/g, '$1');
+    66    result = result.replace(/__(.+?)__/g, '$1');
+    67  
+    68    // 斜体: *text* 或 _text_（但不匹配 ** 残余）
+    69    result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+    70    result = result.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '$1');
+    71  
+    72    // 删除线: ~~text~~
+    73    result = result.replace(/~~(.+?)~~/g, '$1');
+    74  
+    75    // 行内代码: `text`
+    76    result = result.replace(/`(.+?)`/g, '$1');
+    77  
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 46 页
+
+    78    // 链接: [text](url) → text
+    79    result = result.replace(/\[(.+?)\]\(.+?\)/g, '$1');
+    80  
+    81    // 图片: ![alt](url) → alt
+    82    result = result.replace(/!\[(.+?)\]\(.+?\)/g, '$1');
+    83  
+    84    // 清理多余空白
+    85    result = result.replace(/\n{3,}/g, '\n\n').trim();
+    86  
+    87    return result;
+    88  }
+
+/* ── src/lib/handoff-url.ts ── */
+     1  /**
+     2   * 跨页面内容流转 — URL 构建工具
+     3   * 纯函数，兼容客户端和服务端
+     4   */
+     5  
+     6  export type HandoffField =
+     7    | 'prompt'
+     8    | 'topic'
+     9    | 'firstFrame'
+    10    | 'imageUrl'
+    11    | 'audioUrl'
+    12    | 'text'
+    13    | 'script'
+    14    | 'inspirationId'
+    15    | 'style'
+    16    | 'industry'
+    17    | 'preset'
+    18    | 'palette'
+    19    | 'ratio';
+    20  
+    21  export const HANDOFF_FIELD_KEYS: HandoffField[] = [
+    22    'prompt', 'topic', 'firstFrame', 'imageUrl', 'audioUrl', 'text', 'script',
+    23    'inspirationId', 'style', 'industry', 'preset', 'palette', 'ratio',
+    24  ];
+    25  
+    26  export function buildHandoffUrl(
+    27    target: string,
+    28    params: Partial<Record<HandoffField, string | number | undefined>>
+    29  ): string {
+    30    const query = new URLSearchParams();
+    31    for (const key of HANDOFF_FIELD_KEYS) {
+    32      const v = params[key];
+    33      if (v === undefined || v === null || v === '') continue;
+    34      query.set(key, String(v));
+    35    }
+    36    const qs = query.toString();
+    37    return qs ? `${target}?${qs}` : target;
+    38  }
+
+/* ── src/lib/api-client.ts ── */
+     1  import { ApiResponse } from "@/types";
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 47 页
+
+     2  import { syncDevAuthCookie, getDevUserIdHeader } from "./dev-auth";
+     3  
+     4  class ApiClient {
+     5    private baseUrl: string;
+     6    private defaultHeaders: Record<string, string>;
+     7  
+     8    constructor() {
+     9      this.baseUrl = "/api";
+    10      this.defaultHeaders = {
+    11        "Content-Type": "application/json",
+    12      };
+    13    }
+    14  
+    15    private async request<T>(
+    16      endpoint: string,
+    17      options: RequestInit = {}
+    18    ): Promise<ApiResponse<T>> {
+    19      try {
+    20        // 每次请求前确保认证 cookie 已设置
+    21        syncDevAuthCookie();
+    22  
+    23        const url = `${this.baseUrl}${endpoint}`;
+    24  
+    25        const response = await fetch(url, {
+    26          ...options,
+    27          credentials: 'include',
+    28          headers: {
+    29            ...this.defaultHeaders,
+    30            ...getDevUserIdHeader(),
+    31            ...options.headers,
+    32          },
+    33        });
+    34  
+    35        const contentType = response.headers.get('content-type') || '';
+    36        if (!contentType.includes('application/json')) {
+    37          const text = await response.text().catch(() => '');
+    38          throw new Error(`服务器返回非JSON响应 (${response.status}): ${text.substring(0, 100)}`);
+    39        }
+    40  
+    41        const data = await response.json();
+    42  
+    43        if (!response.ok) {
+    44          // 业务错误码:余额不足 → 全局派发事件,触发充值引导弹窗
+    45          if (typeof window !== 'undefined' && data?.code === 'INSUFFICIENT_CREDITS') {
+    46            window.dispatchEvent(new CustomEvent('credits:insufficient', {
+    47              detail: {
+    48                required: data?.data?.required ?? 0,
+    49                available: data?.data?.available ?? 0,
+    50                message: data?.error || '余额不足,请充值',
+    51              },
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 48 页
+
+    52            }));
+    53          }
+    54          return {
+    55            success: false,
+    56            error: data.error || `请求失败: ${response.status}`,
+    57            code: data.code,
+    58            data: data.data,
+    59          };
+    60        }
+    61  
+    62        // 成功后:如果响应里携带 balanceAfter / balance,派发 credits:updated 让横幅实时更新
+    63        if (typeof window !== 'undefined' && data?.success) {
+    64          const b = data?.data?.balanceAfter ?? data?.data?.balance;
+    65          if (typeof b === 'number') {
+    66            window.dispatchEvent(new CustomEvent('credits:updated', { detail: { balance: b } }));
+    67          }
+    68        }
+    69  
+    70        return data;
+    71      } catch (error) {
+    72        return {
+    73          success: false,
+    74          error: error instanceof Error ? error.message : "网络请求失败",
+    75        };
+    76      }
+    77    }
+    78  
+    79    public async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+    80      return this.request<T>(endpoint, {
+    81        method: "GET",
+    82      });
+    83    }
+    84  
+    85    public async post<T>(
+    86      endpoint: string,
+    87      data?: unknown
+    88    ): Promise<ApiResponse<T>> {
+    89      return this.request<T>(endpoint, {
+    90        method: "POST",
+    91        body: data ? JSON.stringify(data) : undefined,
+    92      });
+    93    }
+    94  
+    95    public async put<T>(
+    96      endpoint: string,
+    97      data?: unknown
+    98    ): Promise<ApiResponse<T>> {
+    99      return this.request<T>(endpoint, {
+   100        method: "PUT",
+   101        body: data ? JSON.stringify(data) : undefined,
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 49 页
+
+   102      });
+   103    }
+   104  
+   105    public async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+   106      return this.request<T>(endpoint, {
+   107        method: "DELETE",
+   108      });
+   109    }
+   110  
+   111    public async patch<T>(
+   112      endpoint: string,
+   113      data?: unknown
+   114    ): Promise<ApiResponse<T>> {
+   115      return this.request<T>(endpoint, {
+   116        method: "PATCH",
+   117        body: data ? JSON.stringify(data) : undefined,
+   118      });
+   119    }
+   120  }
+   121  
+   122  export const apiClient = new ApiClient();
+
+/* ── src/lib/runtime-config.ts ── */
+     1  // 运行时配置读取
+     2  // Next.js 在 build 时会将 process.env 内联，导致后续 .env.local 变更不生效。
+     3  // 此模块在运行时从文件系统读取敏感配置，绕过内联限制。
+     4  
+     5  import { readFileSync } from 'fs';
+     6  import { resolve } from 'path';
+     7  
+     8  let _envCache: Record<string, string> | null = null;
+     9  
+    10  function loadEnvFile(): Record<string, string> {
+    11    if (_envCache) return _envCache;
+    12    try {
+    13      const envPath = resolve(process.cwd(), '.env.local');
+    14      const content = readFileSync(envPath, 'utf-8');
+    15      _envCache = {};
+    16      for (const line of content.split('\n')) {
+    17        const trimmed = line.trim();
+    18        if (!trimmed || trimmed.startsWith('#')) continue;
+    19        const eqIdx = trimmed.indexOf('=');
+    20        if (eqIdx === -1) continue;
+    21        const key = trimmed.slice(0, eqIdx).trim();
+    22        const val = trimmed.slice(eqIdx + 1).trim();
+    23        _envCache[key] = val;
+    24      }
+    25    } catch {
+    26      _envCache = {};
+    27    }
+    28    return _envCache;
+    29  }
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 50 页
+
+    30  
+    31  /** 读取 env var，优先 process.env（build 时已设置），其次 .env.local 运行时文件 */
+    32  function getEnv(key: string): string | undefined {
+    33    if (process.env[key]) return process.env[key];
+    34    const fileEnv = loadEnvFile();
+    35    return fileEnv[key] || undefined;
+    36  }
+    37  
+    38  let _cachedCronSecret: string | undefined;
+    39  
+    40  export function getCronSecret(): string | undefined {
+    41    if (_cachedCronSecret !== undefined) return _cachedCronSecret;
+    42    _cachedCronSecret = getEnv('CRON_SECRET') || '';
+    43    return _cachedCronSecret || undefined;
+    44  }
+    45  
+    46  export function getDashScopeApiKey(): string | undefined {
+    47    return getEnv('DASHSCOPE_API_KEY') || getEnv('QWEN_API_KEY');
+    48  }
+    49  
+    50  export function getVolcTtsAppId(): string | undefined {
+    51    return getEnv('VOLC_TTS_APP_ID');
+    52  }
+    53  
+    54  export function getVolcTtsAccessToken(): string | undefined {
+    55    return getEnv('VOLC_TTS_ACCESS_TOKEN');
+    56  }
+    57  
+    58  export function getHappyHorseApiKey(): string | undefined {
+    59    return getEnv('HAPPYHORSE_API_KEY');
+    60  }
+    61  
+    62  export function getHeyGenApiKey(): string | undefined {
+    63    return getEnv('HEYGEN_API_KEY');
+    64  }
+    65  
+    66  export function getDoubaoEndpointId(): string | undefined {
+    67    return getEnv('DOUBAO_ENDPOINT_ID');
+    68  }
+    69  
+    70  export { getEnv };
+
+/* ── src/lib/account-presets.ts ── */
+     1  // 灵集账号类型 + 智能推荐组合
+     2  // 媒体运营官进灵集后,根据账号类型自动推荐 3-4 套视频组合 + 4 步流水线 SOP
+     3  // 复用 src/lib/preset-templates.ts 的 COPYWRITING_TYPES / STYLE_PRESETS / COPYWRITING_INDUSTRIES
+     4  
+     5  import { COPYWRITING_TYPES, COPYWRITING_INDUSTRIES, COPYWRITING_STYLES } from './preset-templates';
+     6  
+     7  // ─── 类型定义 ──────────────────────────────────────────────
+     8  
+     9  export type AccountTypeId =
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 51 页
+
+    10    | 'startup'      // 初创公司
+    11    | 'knowledge'    // 知识IP
+    12    | 'ecommerce'    // 电商品牌
+    13    | 'b2b'          // B2B企业
+    14    | 'personal'     // 个人创作者
+    15    | 'training'     // 教培
+    16    | 'restaurant'   // 餐饮
+    17    | 'medical'      // 医美
+    18    | 'real_estate'  // 房产
+    19    | 'travel'       // 旅游
+    20    | 'parenting'    // 母婴亲子
+    21    | 'fitness'      // 健身运动
+    22    | 'pet'          // 宠物
+    23    | 'home_decor';  // 家居装修
+    24  
+    25  // 灵集核心入口路径
+    26  export type LingjiEntry =
+    27    | '/inspiration'        // 灵感库
+    28    | '/ai/copywriting'     // AI 文案
+    29    | '/ai/image'           // AI 图片
+    30    | '/ai/image-editor'    // AI 图片编辑
+    31    | '/ai/digital-human'   // AI 数字人
+    32    | '/ai/video'           // AI 视频合成
+    33    | '/ai/ads'             // 朋友圈 9 宫格
+    34    | '/publish'            // 多平台分发
+    35    | '/ai/tts'             // AI 配音
+    36    | '/hotspot';           // 热点监控
+    37  
+    38  // 单个推荐组合(4 步流水线)
+    39  export interface RecommendationCombo {
+    40    id: string;
+    41    title: string;
+    42    emoji: string;
+    43    desc: string;            // 一句话说明(显示在卡片上)
+    44    steps: { label: string; entry: LingjiEntry; paramKey?: string; role?: string }[];
+    45    // 预填参数(用于"开始这套"按钮的 handoff URL)
+    46    prefills?: Partial<Record<
+    47      'topic' | 'industry' | 'style' | 'preset' | 'language' | 'palette' | 'ratio' | 'script',
+    48      string
+    49    >>;
+    50  }
+    51  
+    52  // ─── 节点默认角色（按入口类型） ────────────────────────────
+    53  export const DEFAULT_STEP_ROLES: Record<LingjiEntry, string> = {
+    54    '/ai/copywriting': '你是一个专业的内容创作者，擅长根据素材和话题生成高质量文案，能够适配不同平台和风格的创作需求。',
+    55    '/ai/image': '你是一个专业的AI视觉设计师，擅长将文字描述转化为高质量的视觉画面，注重构图、光影和色彩搭配。',
+    56    '/ai/video': '你是一个专业的短视频导演，擅长将文案脚本转化为视觉分镜方案，注重节奏感和画面冲击力。',
+    57    '/ai/digital-human': '你是一个专业的数字人口播主播，擅长用自然生动的表达传递信息，让观众有面对面交流的亲切感。',
+    58    '/ai/tts': '你是一个专业的配音师，擅长根据文案内容选择最合适的语音语调，让声音表达富有感染力。',
+    59    '/ai/ads': '你是一个社交媒体视觉内容设计师，擅长制作吸引眼球、高互动率的多图内容和9宫格排版。',
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 52 页
+
+    60    '/ai/image-editor': '你是一个专业的图片后期专家，擅长图片优化、调色和视觉增强。',
+    61    '/inspiration': '',
+    62    '/hotspot': '',
+    63    '/publish': '',
+    64  };
+    65  
+    66  /** 获取节点的角色描述（先取步骤自定义，再取入口默认，没有则返回空字符串） */
+    67  export function getStepRole(entry: string, stepRole?: string): string {
+    68    if (stepRole) return stepRole;
+    69    return (DEFAULT_STEP_ROLES as Record<string, string>)[entry] || '';
+    70  }
+    71  
+    72  export interface AccountTypePreset {
+    73    id: AccountTypeId;
+    74    label: string;
+    75    emoji: string;
+    76    desc: string;            // 一句话简介
+    77    audience: string;        // 适用人群
+    78    recommendedStyles: string[];      // 从 STYLE_PRESETS 挑
+    79    recommendedIndustries: string[];  // 从 COPYWRITING_INDUSTRIES 挑
+    80    recommendedPlatforms: string[];   // 从 COPYWRITING_TYPES 挑
+    81    combos: RecommendationCombo[];    // 3-4 个推荐组合
+    82  }
+    83  
+    84  // ─── 8 个账号类型预设 ──────────────────────────────────────
+    85  
+    86  export const ACCOUNT_TYPE_PRESETS: AccountTypePreset[] = [
+    87    // ─── 1. 初创 ────────────────────────────────────────────
+    88    {
+    89      id: 'startup',
+    90      label: '初创公司',
+    91      emoji: '🚀',
+    92      desc: '资源少要快速出片,产品种草 + 创始人 IP 双轮驱动',
+    93      audience: 'A 轮前 / 早期创业团队 / 个人创业 + 1-2 助手',
+    94      recommendedStyles: ['planting', 'story', 'passionate'],
+    95      recommendedIndustries: ['general', 'digital'],
+    96      recommendedPlatforms: ['xiaohongshu', 'douyin', 'script'],
+    97      combos: [
+    98        {
+    99          id: 'startup-product',
+   100          title: '产品种草一条龙',
+   101          emoji: '🎁',
+   102          desc: '产品图 + 卖点 → 9 宫格 + 短视频,直接发小红书/抖音',
+   103          steps: [
+   104            { label: '选产品图', entry: '/inspiration' },
+   105            { label: 'AI 文案', entry: '/ai/copywriting', paramKey: 'topic' },
+   106            { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+   107            { label: '多平台分发', entry: '/publish' },
+   108          ],
+   109          prefills: { topic: '新品种草', style: 'planting', industry: 'general' },
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 53 页
+
+   110        },
+   111        {
+   112          id: 'startup-founder',
+   113          title: '创始人 IP 速成',
+   114          emoji: '👤',
+   115          desc: '头像 → AI 数字人口播 → 多平台分发,1 分钟日更',
+   116          steps: [
+   117            { label: '一键生数字人', entry: '/ai/digital-human' },
+   118            { label: '多平台分发', entry: '/publish' },
+   119          ],
+   120          prefills: { topic: '创业故事', language: 'zh' },
+   121        },
+   122        {
+   123          id: 'startup-story',
+   124          title: '品牌故事短片',
+   125          emoji: '🎬',
+   126          desc: '主题 → 故事脚本 → AI 视频分镜 → AI 视频合成 + 字幕',
+   127          steps: [
+   128            { label: 'AI 写故事', entry: '/ai/copywriting' },
+   129            { label: 'AI 视频合成', entry: '/ai/video' },
+   130          ],
+   131          prefills: { topic: '我的创业故事', style: 'story', industry: 'general' },
+   132        },
+   133      ],
+   134    },
+   135  
+   136    // ─── 2. 知识 IP ─────────────────────────────────────────
+   137    {
+   138      id: 'knowledge',
+   139      label: '知识 IP',
+   140      emoji: '📚',
+   141      desc: '深耕专业领域,口播知识 + 长文转视频双输出',
+   142      audience: '律师/医生/财税/职场顾问/咨询师等专业 IP',
+   143      recommendedStyles: ['science', 'analysis', 'tutorial'],
+   144      recommendedIndustries: ['education', 'legal', 'finance', 'career', 'medical'],
+   145      recommendedPlatforms: ['xiaohongshu', 'wechat_article', 'zhihu', 'script'],
+   146      combos: [
+   147        {
+   148          id: 'knowledge-oral',
+   149          title: '口播知识日更',
+   150          emoji: '🎙️',
+   151          desc: '主题 → 科普文案 → AI 数字人口播 → 多平台分发',
+   152          steps: [
+   153            { label: 'AI 写科普', entry: '/ai/copywriting' },
+   154            { label: 'AI 数字人', entry: '/ai/digital-human' },
+   155            { label: '多平台分发', entry: '/publish' },
+   156          ],
+   157          prefills: { topic: '专业知识科普', style: 'science', industry: 'education' },
+   158        },
+   159        {
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 54 页
+
+   160          id: 'knowledge-article2video',
+   161          title: '长文转视频',
+   162          emoji: '📰',
+   163          desc: '公众号长文 → 摘要 → 分镜 → AI 视频 → 字幕',
+   164          steps: [
+   165            { label: '贴文章 URL', entry: '/inspiration' },
+   166            { label: 'AI 文案提炼', entry: '/ai/copywriting' },
+   167            { label: 'AI 视频合成', entry: '/ai/video' },
+   168          ],
+   169          prefills: { style: 'analysis', industry: 'education' },
+   170        },
+   171        {
+   172          id: 'knowledge-insight',
+   173          title: '行业洞察短评',
+   174          emoji: '🔍',
+   175          desc: '热点话题 → 深度评论 → AI 数字人 → 视频号/抖音',
+   176          steps: [
+   177            { label: '选热点', entry: '/hotspot' },
+   178            { label: '写深度评论', entry: '/ai/copywriting' },
+   179            { label: 'AI 数字人', entry: '/ai/digital-human' },
+   180            { label: '多平台分发', entry: '/publish' },
+   181          ],
+   182          prefills: { style: 'analysis', industry: 'general' },
+   183        },
+   184      ],
+   185    },
+   186  
+   187    // ─── 3. 电商品牌 ────────────────────────────────────────
+   188    {
+   189      id: 'ecommerce',
+   190      label: '电商品牌',
+   191      emoji: '🛒',
+   192      desc: '卖货导向,产品 360° + 9 宫格 + 直播切片三件套',
+   193      audience: '美妆/穿搭/美食/3C 等 DTC 品牌、淘宝店、跨境电商',
+   194      recommendedStyles: ['planting', 'selling', 'story'],
+   195      recommendedIndustries: ['beauty', 'fashion', 'food', 'digital'],
+   196      recommendedPlatforms: ['xiaohongshu', 'douyin', 'kuaishou'],
+   197      combos: [
+   198        {
+   199          id: 'ecom-9grid',
+   200          title: '小红书 9 宫格种草',
+   201          emoji: '🎯',
+   202          desc: '产品 + 3-5 卖点 → 9 张 1:1 封面 + 标题 ZIP',
+   203          steps: [
+   204            { label: '上传产品图', entry: '/inspiration' },
+   205            { label: 'AI 文案 9 卖点', entry: '/ai/copywriting' },
+   206            { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+   207          ],
+   208          prefills: { style: 'planting', industry: 'beauty' },
+   209        },
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 55 页
+
+   210        {
+   211          id: 'ecom-360',
+   212          title: '产品 360° 展示',
+   213          emoji: '🔄',
+   214          desc: '产品图 → AI 多角度生图 → AI 图生视频 → 合并',
+   215          steps: [
+   216            { label: 'AI 多角度生图', entry: '/ai/image' },
+   217            { label: 'AI 视频合成', entry: '/ai/video' },
+   218          ],
+   219          prefills: { preset: 'product_main', style: 'planting' },
+   220        },
+   221        {
+   222          id: 'ecom-xhs',
+   223          title: '小红书爆款笔记',
+   224          emoji: '📱',
+   225          desc: '主题 → 种草文案 → AI 封面图 → 多平台分发',
+   226          steps: [
+   227            { label: 'AI 写种草', entry: '/ai/copywriting' },
+   228            { label: 'AI 封面图', entry: '/ai/image' },
+   229            { label: '多平台分发', entry: '/publish' },
+   230          ],
+   231          prefills: { style: 'planting', industry: 'beauty' },
+   232        },
+   233      ],
+   234    },
+   235  
+   236    // ─── 4. B2B 企业 ────────────────────────────────────────
+   237    {
+   238      id: 'b2b',
+   239      label: 'B2B 企业',
+   240      emoji: '🏢',
+   241      desc: '企业客户决策,行业洞察 + 客户案例 + 产品演示',
+   242      audience: 'SaaS / 工业品 / 企业服务 / 咨询公司',
+   243      recommendedStyles: ['analysis', 'science', 'tutorial'],
+   244      recommendedIndustries: ['general', 'digital', 'legal', 'finance'],
+   245      recommendedPlatforms: ['wechat_article', 'zhihu', 'bilibili', 'script'],
+   246      combos: [
+   247        {
+   248          id: 'b2b-insight',
+   249          title: '行业洞察短评',
+   250          emoji: '📊',
+   251          desc: '行业话题 → 深度评论 → AI 数字人 → 视频号',
+   252          steps: [
+   253            { label: '写深度评论', entry: '/ai/copywriting' },
+   254            { label: 'AI 数字人', entry: '/ai/digital-human' },
+   255            { label: '多平台分发', entry: '/publish' },
+   256          ],
+   257          prefills: { style: 'analysis', industry: 'general' },
+   258        },
+   259        {
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 56 页
+
+   260          id: 'b2b-case',
+   261          title: '客户案例片',
+   262          emoji: '📋',
+   263          desc: '客户案例 → 文案 → AI 配图 → 视频合成',
+   264          steps: [
+   265            { label: 'AI 提炼', entry: '/ai/copywriting' },
+   266            { label: 'AI 配图', entry: '/ai/image' },
+   267            { label: 'AI 视频合成', entry: '/ai/video' },
+   268          ],
+   269          prefills: { style: 'tutorial', industry: 'digital' },
+   270        },
+   271        {
+   272          id: 'b2b-demo',
+   273          title: '产品演示教程',
+   274          emoji: '🎓',
+   275          desc: '产品功能 → 教程文案 → 分镜 → AI 视频',
+   276          steps: [
+   277            { label: 'AI 教程文案', entry: '/ai/copywriting', role: '你需要为产品功能介绍视频撰写口播脚本。要求：1. 开头3秒用痛点或悬念吸引注意力 2. 按模块逐个介绍功能，每个功能附带画面建议[画面：xxx] 3. 语言口语化、有节奏感，像真人讲解 4. 总时长控制在60-90秒的口播量（约200-300字）' },
+   278            { label: 'AI 视频合成', entry: '/ai/video', role: '你是一个产品演示视频导演。根据脚本中的[画面：xxx]提示生成对应的演示画面，运镜平稳，字幕清晰，整体风格专业现代。' },
+   279          ],
+   280          prefills: { topic: '产品功能介绍与使用教程', style: 'script', industry: 'digital' },
+   281        },
+   282      ],
+   283    },
+   284  
+   285    // ─── 5. 个人创作者 ──────────────────────────────────────
+   286    {
+   287      id: 'personal',
+   288      label: '个人创作者',
+   289      emoji: '🌟',
+   290      desc: '个人风格化,情感故事 + 个人 IP + Vlog',
+   291      audience: '自由职业 / 博主 / 自媒体 / 内容创作者',
+   292      recommendedStyles: ['resonant', 'story', 'joke'],
+   293      recommendedIndustries: ['general'],
+   294      recommendedPlatforms: ['xiaohongshu', 'douyin', 'weibo', 'bilibili'],
+   295      combos: [
+   296        {
+   297          id: 'personal-resonant',
+   298          title: '情感共鸣短文',
+   299          emoji: '💭',
+   300          desc: '心情主题 → 共鸣文案 → AI 配图 → 多平台',
+   301          steps: [
+   302            { label: 'AI 共鸣文案', entry: '/ai/copywriting' },
+   303            { label: 'AI 配图', entry: '/ai/image' },
+   304            { label: '多平台分发', entry: '/publish' },
+   305          ],
+   306          prefills: { style: 'resonant', industry: 'general' },
+   307        },
+   308        {
+   309          id: 'personal-ip',
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 57 页
+
+   310          title: '个人 IP 数字分身',
+   311          emoji: '👤',
+   312          desc: '头像 → AI 数字人口播 → 1 套形象日更',
+   313          steps: [
+   314            { label: '一键生数字人', entry: '/ai/digital-human' },
+   315            { label: '多平台分发', entry: '/publish' },
+   316          ],
+   317          prefills: { topic: '我的日常', style: 'resonant' },
+   318        },
+   319        {
+   320          id: 'personal-vlog',
+   321          title: '故事 Vlog',
+   322          emoji: '📖',
+   323          desc: '主题 → 故事脚本 → 分镜 → AI 视频合成',
+   324          steps: [
+   325            { label: 'AI 写故事', entry: '/ai/copywriting' },
+   326            { label: 'AI 视频合成', entry: '/ai/video' },
+   327          ],
+   328          prefills: { style: 'story', industry: 'general' },
+   329        },
+   330      ],
+   331    },
+   332  
+   333    // ─── 6. 教培 ────────────────────────────────────────────
+   334    {
+   335      id: 'training',
+   336      label: '教培',
+   337      emoji: '🎓',
+   338      desc: '知识培训机构,课程片段 + 知识科普 + 学员见证',
+   339      audience: 'K12 / 职业培训 / 兴趣教育 / 语言培训',
+   340      recommendedStyles: ['science', 'tutorial', 'passionate'],
+   341      recommendedIndustries: ['education', 'training', 'study_abroad'],
+   342      recommendedPlatforms: ['wechat_article', 'xiaohongshu', 'bilibili', 'script'],
+   343      combos: [
+   344        {
+   345          id: 'training-course',
+   346          title: '课程片段日更',
+   347          emoji: '📚',
+   348          desc: '课程要点 → 教程文案 → AI 数字人口播 → 矩阵分发',
+   349          steps: [
+   350            { label: 'AI 写教程', entry: '/ai/copywriting' },
+   351            { label: 'AI 数字人', entry: '/ai/digital-human' },
+   352            { label: '多平台分发', entry: '/publish' },
+   353          ],
+   354          prefills: { style: 'tutorial', industry: 'education' },
+   355        },
+   356        {
+   357          id: 'training-science',
+   358          title: '知识科普爆款',
+   359          emoji: '🔬',
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 58 页
+
+   360          desc: '科普主题 → 干货文案 → AI 视频分镜 → B站/抖音',
+   361          steps: [
+   362            { label: 'AI 写科普', entry: '/ai/copywriting' },
+   363            { label: 'AI 视频合成', entry: '/ai/video' },
+   364          ],
+   365          prefills: { style: 'science', industry: 'education' },
+   366        },
+   367        {
+   368          id: 'training-testimonial',
+   369          title: '学员见证短片',
+   370          emoji: '🏆',
+   371          desc: '学员故事 → 文案 → 分镜 → AI 视频合成',
+   372          steps: [
+   373            { label: 'AI 提炼', entry: '/ai/copywriting' },
+   374            { label: 'AI 视频合成', entry: '/ai/video' },
+   375          ],
+   376          prefills: { style: 'story', industry: 'education' },
+   377        },
+   378      ],
+   379    },
+   380  
+   381    // ─── 7. 餐饮 ────────────────────────────────────────────
+   382    {
+   383      id: 'restaurant',
+   384      label: '餐饮',
+   385      emoji: '🍜',
+   386      desc: '餐饮探店,菜品展示 + 9 宫格 + 品牌故事',
+   387      audience: '餐厅 / 探店博主 / 食品品牌 / 茶饮咖啡',
+   388      recommendedStyles: ['planting', 'story', 'joke'],
+   389      recommendedIndustries: ['food', 'restaurant'],
+   390      recommendedPlatforms: ['xiaohongshu', 'douyin', 'kuaishou'],
+   391      combos: [
+   392        {
+   393          id: 'restaurant-9grid',
+   394          title: '探店 9 宫格',
+   395          emoji: '📸',
+   396          desc: '菜品 + 3-5 卖点 → 9 张 1:1 封面 + 标题',
+   397          steps: [
+   398            { label: '上传菜品图', entry: '/inspiration' },
+   399            { label: 'AI 文案 9 卖点', entry: '/ai/copywriting' },
+   400            { label: '朋友圈 9 宫格', entry: '/ai/ads' },
+   401          ],
+   402          prefills: { style: 'planting', industry: 'food' },
+   403        },
+   404        {
+   405          id: 'restaurant-dish',
+   406          title: '菜品 360° 展示',
+   407          emoji: '🍱',
+   408          desc: '菜品图 → AI 多角度 → AI 图生视频 → 合并',
+   409          steps: [
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 59 页
+
+   410            { label: 'AI 多角度生图', entry: '/ai/image' },
+   411            { label: 'AI 视频合成', entry: '/ai/video' },
+   412          ],
+   413          prefills: { preset: 'product_main', style: 'planting', industry: 'food' },
+   414        },
+   415        {
+   416          id: 'restaurant-story',
+   417          title: '品牌故事短片',
+   418          emoji: '👨‍🍳',
+   419          desc: '餐厅故事 → 故事脚本 → 分镜 → AI 视频',
+   420          steps: [
+   421            { label: 'AI 写故事', entry: '/ai/copywriting' },
+   422            { label: 'AI 视频合成', entry: '/ai/video' },
+   423          ],
+   424          prefills: { style: 'story', industry: 'food' },
+   425        },
+   426      ],
+   427    },
+   428  
+   429    // ─── 8. 医美 ────────────────────────────────────────────
+   430    {
+   431      id: 'medical',
+   432      label: '医美',
+   433      emoji: '💉',
+   434      desc: '医美机构,知识科普 + 案例对比 + 咨询师 IP',
+   435      audience: '医美机构 / 美容皮肤科 / 抗衰中心 / 牙科',
+   436      recommendedStyles: ['science', 'analysis', 'resonant'],
+   437      recommendedIndustries: ['beauty_medical', 'medical'],
+   438      recommendedPlatforms: ['xiaohongshu', 'douyin', 'wechat_article'],
+   439      combos: [
+   440        {
+   441          id: 'medical-science',
+   442          title: '医美知识科普',
+   443          emoji: '🔬',
+   444          desc: '医美主题 → 科普文案 → AI 数字人口播 → 分发',
+   445          steps: [
+   446            { label: 'AI 写科普', entry: '/ai/copywriting' },
+   447            { label: 'AI 数字人', entry: '/ai/digital-human' },
+   448            { label: '多平台分发', entry: '/publish' },
+   449          ],
+   450          prefills: { style: 'science', industry: 'beauty_medical' },
+   451        },
+   452        {
+   453          id: 'medical-case',
+   454          title: '案例对比片',
+   455          emoji: '📊',
+   456          desc: '案例对比 → 文案 → AI 配图 → AI 视频',
+   457          steps: [
+   458            { label: 'AI 提炼对比', entry: '/ai/copywriting' },
+   459            { label: 'AI 配图', entry: '/ai/image' },
+
+软件名称: 灵集AI智能创作助手平台 V1.0          第 60 页
+
+   460            { label: 'AI 视频合成', entry: '/ai/video' },
+   461          ],
+   462          prefills: { style: 'analysis', industry: 'beauty_medical' },
+   463        },
+   464        {
+   465          id: 'medical-consultant',
+   466          title: '咨询师 IP',
+   467          emoji: '👩‍⚕️',
+   468          desc: '咨询师头像 → AI 数字人 → 知识口播 → 矩阵分发',
+   469          steps: [
+   470            { label: '一键生数字人', entry: '/ai/digital-human' },
+   471            { label: '多平台分发', entry: '/publish' },
+   472          ],
+   473          prefills: { topic: '医美知识', style: 'science', industry: 'beauty_medical' },
+   474        },
+   475      ],
+   476    },
+   477  
+   478    // ─── 9. 房产 ────────────────────────────────────────────
+   479    {
+   480      id: 'real_estate',
+   481      label: '房产',
+   482      emoji: '🏠',
+   483      desc: '房源展示 + 小区讲解 + 看房视频，新房二手都适用',
+   484      audience: '房产中介 / 新房销售 / 租赁代理 / 个人房东',
+   485      recommendedStyles: ['tutorial', 'analysis', 'planting'],
+   486      recommendedIndustries: ['real_estate', 'general'],
+   487      recommendedPlatforms: ['xiaohongshu', 'douyin', 'wechat_article', 'script'],
+   488      combos: [
+   489        {
+   490          id: 'realestate-listing',
+   491          title: '房源短视频',
+   492          emoji: '🏡',
+   493          desc: '户型图 + 卖点 → AI 文案 → AI 视频 → 多平台分发',
+   494          steps: [
+   495            { label: '选素材图', entry: '/inspiration' },
+   496            { label: 'AI 写房源文案', entry: '/ai/copywriting', paramKey: 'topic' },
+   497            { label: 'AI 视频合成', entry: '/ai/video' },
+   498            { label: '多平台分发', entry: '/publish' },
+   499          ],
+   500          prefills: { topic: '精品房源推荐', style: 'planting', industry: 'real_estate' },
+   501        },
+   502        {
+   503          id: 'realestate-tour',
+   504          title: '小区讲解片',
+   505          emoji: '🏘️',
+   506          desc: '小区配套 → 深度文案 → AI 数字人口播 → 分发',
+   507          steps: [
+   508            { label: 'AI 写讲解稿', entry: '/ai/copywriting' },
+   509            { label: 'AI 数字人', entry: '/ai/digital-human' },
+

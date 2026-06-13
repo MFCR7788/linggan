@@ -7,8 +7,8 @@
 # 每天 08:00 — 热点检查
 0 8 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/check-hotspots
 
-# 每天 00:00 — AI 任务队列领取
-0 0 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/jobs/claim
+# 每 5 分钟 — AI 任务队列领取（支持 30s-8min 指数退避重试）
+*/5 * * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/jobs/claim
 
 # 每天 06:00 — 平台指标拉取
 0 6 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/platforms/metrics-fetch

@@ -113,9 +113,9 @@ export interface AgentConfig {
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   maxIterations: 10,
-  model: 'deepseek-v3',
-  temperature: 0.3,
-  maxTokens: 4096,
+  model: 'deepseek-v4-pro',
+  temperature: 0.7,
+  maxTokens: 8192,
   conversationalMode: false,
 };
 

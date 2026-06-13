@@ -141,7 +141,18 @@ export async function claimNext(opts: ClaimOptions): Promise<AiTask[]> {
     console.warn('[claimNext] 回收超时任务失败:', reclaimError.message);
   }
 
-  // 2) 抢占新任务
+  // 2) 获取各类型当前 processing 数（并发限制）
+  const { data: concurrencyData } = await supabase
+    .from('ai_tasks')
+    .select('task_type')
+    .eq('status', 'processing');
+
+  const processingCounts: Record<string, number> = {};
+  for (const row of (concurrencyData || [])) {
+    processingCounts[row.task_type] = (processingCounts[row.task_type] || 0) + 1;
+  }
+
+  // 3) 抢占新任务（过滤超并发限制的类型）
   let query = supabase
     .from('ai_tasks')
     .select('*')
@@ -155,11 +166,19 @@ export async function claimNext(opts: ClaimOptions): Promise<AiTask[]> {
     query = query.eq('task_type', opts.taskType);
   }
 
-  const { data: candidates, error } = await query;
-  if (error || !candidates || candidates.length === 0) {
+  const { data: rawCandidates, error } = await query;
+  if (error || !rawCandidates || rawCandidates.length === 0) {
     if (error) console.error('[claimNext] 查询失败:', error);
     return [];
   }
+
+  // 过滤超并发限制的任务
+  const candidates = rawCandidates.filter((c) => {
+    const limit = CONCURRENCY_LIMITS[c.task_type as AiTaskType];
+    if (!limit) return true; // 未定义限制则放行
+    const current = processingCounts[c.task_type] || 0;
+    return current < limit;
+  });
 
   // 3) 原子更新（用 in 一次更新所有候选）
   const ids = candidates.map((c) => c.id);

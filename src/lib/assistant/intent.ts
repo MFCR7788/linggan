@@ -30,7 +30,7 @@ export function detectIntent(
   content: string,
   hasImages: boolean,
   hasVideos: boolean,
-  _historyMessages: Array<{ role: string; content: string }> = []
+  historyMessages: Array<{ role: string; content: string }> = []
 ): DetectedIntent {
   const c = content;
 
@@ -108,6 +108,26 @@ export function detectIntent(
   // Priority 3: has video attachment → video analysis
   if (hasVideos) return make('video', '视频分析&复刻', '视频内容分析', hasImages, hasVideos);
 
-  // Priority 4: fallback → writing
+  // Priority 4: 利用对话历史上下文增强意图判断
+  if (historyMessages.length > 0) {
+    const recentHistory = historyMessages.slice(-4); // 最近 4 条
+    const historyText = recentHistory.map(m => m.content).join(' ');
+
+    // 历史中提到过视频相关 → 当前消息倾向视频
+    const historyVideo = /生成.*视频|视频.*生成|做.*视频|数字人|口播|换脸|合成|剪辑/.test(historyText);
+    if (historyVideo && matchWriting) return make('video', '视频内容创作', '基于对话上下文判断为视频创作意图', hasImages, hasVideos, true, hasImages ? 'img2vid' : 'text2vid');
+
+    // 历史中提到过图片 → 当前消息倾向图片
+    const historyImage = /生成.*图|画图|做.*图|图片|海报|封面/.test(historyText);
+    if (historyImage && matchWriting) return make('image', '图像创作', '基于对话上下文判断为图像创作意图', hasImages, hasVideos, true, hasImages ? 'img2img' : 'text2img');
+
+    // 历史中提到过写作/文案 → 保持写作意图
+    const historyWriting = /写|文案|文章|润色/.test(historyText);
+    if (historyWriting && !matchWriting && !matchImage && !matchVideo && !matchKnowledge) {
+      return make('writing', '文字创作&处理', '基于对话上下文判断为文字创作意图', hasImages, hasVideos);
+    }
+  }
+
+  // Priority 5: fallback → writing
   return make('writing', '文字创作&处理', '文案创作与文字处理', hasImages, hasVideos);
 }

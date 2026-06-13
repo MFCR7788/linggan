@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../../types';
+import { createAdminClient } from '@/lib/supabase-server';
 
 export const saveToInspirationTool: ToolDefinition = {
   name: 'save_to_inspiration',
@@ -13,30 +14,27 @@ export const saveToInspirationTool: ToolDefinition = {
     },
     required: ['title', 'content'],
   },
-  async handler(params, _ctx) {
+  async handler(params, ctx) {
     const title = params.title as string;
     const content = params.content as string;
     const contentType = (params.contentType as string) || 'ai';
     const tags = params.tags ? (params.tags as string).split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      const res = await fetch(`${baseUrl}/api/inspiration`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          original_text: content,
-          type: contentType,
-          tags,
-          source: 'agent',
-          status: 'pending',
-        }),
+      // 直接写 Supabase，避免 HTTP 回环（无需 NEXT_PUBLIC_SITE_URL）
+      const supabase = createAdminClient();
+      const { error } = await supabase.from('inspirations').insert({
+        user_id: ctx.userId,
+        title,
+        original_text: content,
+        type: contentType,
+        tags,
+        source: 'agent',
+        status: 'pending',
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        return { success: false, output: `保存失败: ${err}` };
+      if (error) {
+        return { success: false, output: `保存失败: ${error.message}` };
       }
 
       return {

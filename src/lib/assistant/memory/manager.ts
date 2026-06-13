@@ -68,7 +68,12 @@ export class MemoryManager {
       try {
         if (!(await p.isAvailable())) continue;
         if (p.onSessionEnd) {
-          // 每轮对话后同步（简化版，完整版用 onSessionEnd）
+          // 每轮对话后提取记忆：构造临时消息列表传入 provider 的提取器
+          const messages: ChatMessage[] = [
+            { role: 'user', content: userContent } as ChatMessage,
+            { role: 'assistant', content: assistantContent } as ChatMessage,
+          ];
+          await p.onSessionEnd(sessionId || '', messages);
         }
       } catch (e) {
         console.warn(`Memory provider '${p.name}' sync 失败:`, e);

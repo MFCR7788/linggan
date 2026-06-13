@@ -6,6 +6,7 @@ import type { ToolDefinition } from '../../types';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, mkdtemp, rm } from 'fs/promises';
+import { getDouyinPythonPath } from '../douyin-python';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -238,17 +239,7 @@ async function downloadDouyin(url: string, workDir: string): Promise<{ desc?: st
 
   // 降级 douyin-cli Python 脚本
   try {
-    const python = await (async () => {
-      try {
-        const { stdout } = await execAsync('which douyin');
-        const douyinBin = stdout.trim();
-        const { stdout: pyOut } = await execAsync(
-          `find "$(dirname "${douyinBin}")/.." -path "*/bin/python*" -type f 2>/dev/null | head -1 || echo ""`
-        );
-        if (pyOut.trim()) return pyOut.trim();
-      } catch {}
-      return 'python3';
-    })();
+    const python = await getDouyinPythonPath();
 
     const pyScript = `
 import json, sys, os

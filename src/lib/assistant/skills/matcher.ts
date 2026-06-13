@@ -74,6 +74,13 @@ export class SkillMatcher {
       if (tag.toLowerCase().includes(query)) score += 0.3;
     }
 
+    // 触发关键词匹配（SkillDefinition.triggerKeywords 用于精准匹配）
+    if (skill.triggerKeywords && skill.triggerKeywords.length > 0) {
+      for (const kw of skill.triggerKeywords) {
+        if (query.includes(kw.toLowerCase())) score += 0.6;
+      }
+    }
+
     // 类别匹配
     if (skill.category && query.includes(skill.category.toLowerCase())) score += 0.2;
 
@@ -94,6 +101,13 @@ export class SkillMatcher {
     // 标签匹配
     for (const tag of skill.tags) {
       if (intent.includes(tag.toLowerCase())) score += 0.4;
+    }
+
+    // 触发关键词匹配
+    if (skill.triggerKeywords && skill.triggerKeywords.length > 0) {
+      for (const kw of skill.triggerKeywords) {
+        if (intent.includes(kw.toLowerCase())) score += 0.5;
+      }
     }
 
     // 描述匹配

@@ -241,7 +241,7 @@ export async function generateVideo(prompt: string, duration: number = 5) {
   if (result.taskId) {
     return { videoUrl: null, prompt, duration, taskId: result.taskId, status: 'queued' };
   }
-  return { videoUrl: `https://picsum.photos/seed/${Date.now()}/800/600`, prompt, duration };
+  return { videoUrl: null, prompt, duration, status: 'error', message: result.message || '视频任务提交失败，请稍后重试' };
 }
 
 // ====== Agnes AI 视频生成 ======

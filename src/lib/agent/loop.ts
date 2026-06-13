@@ -5,12 +5,13 @@
 
 import type { ChatMessage } from '@/lib/ai/types';
 import type { ToolRegistry } from './tools/registry';
-import type { AgentConfig, AgentLoopOptions, ExecutionPlan } from './types';
+import type { AgentConfig, AgentLoopOptions, ExecutionPlan, ToolCallRequest } from './types';
 import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
-import { executeWithTimeout } from './tool-timeout';
+import { executeWithTimeoutAndRecovery } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
 import { GoalPlanner, updatePlanProgress, getCurrentStep } from './goal-planner';
+import { groupToolCallsForExecution } from './tools/parallelizer';
 
 interface AgentLoopResult {
   content: string;
@@ -74,6 +75,9 @@ export async function agentLoop(
       await hooks.emit('pre_llm_call', { userId: context.userId, sessionId: context.sessionId, messages });
     }
 
+    // token 预算硬限制：防止上下文溢出
+    messages = ctxEngine.enforceBudget(messages);
+
     const openaiTools = registry.toOpenAITools();
     const response = await modelRouter.chatWithTools(messages, openaiTools, {
       model: config.model,
@@ -112,10 +116,17 @@ export async function agentLoop(
         tool_calls: msg.tool_calls,
       } as unknown as ChatMessage);
 
-      for (const tc of msg.tool_calls) {
-        const toolName = tc.function.name;
-        let toolArgs: Record<string, unknown>;
+      // 解析所有工具调用参数，过滤重复
+      const parsedCalls: Array<{
+        tc: ToolCallRequest;
+        name: string;
+        args: Record<string, unknown>;
+        hash: string;
+        skippedReason?: string;
+      }> = [];
 
+      for (const tc of msg.tool_calls) {
+        let toolArgs: Record<string, unknown>;
         try {
           toolArgs = JSON.parse(tc.function.arguments);
         } catch {
@@ -127,20 +138,32 @@ export async function agentLoop(
           }
         }
 
-        // 防同参数死循环
-        const hash = `${toolName}:${JSON.stringify(toolArgs)}`;
+        const hash = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
         const count = (toolCallHistory.get(hash) || 0) + 1;
         toolCallHistory.set(hash, count);
+
         if (count >= 3) {
+          parsedCalls.push({ tc, name: tc.function.name, args: toolArgs, hash, skippedReason: '重复调用' });
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
             content: '该工具已重复调用多次，请尝试其他方法或基于已有信息给出回答。',
           } as unknown as ChatMessage);
-          continue;
+        } else {
+          parsedCalls.push({ tc, name: tc.function.name, args: toolArgs, hash });
         }
+      }
 
-        // pre_tool_call hook
+      // 使用并行化器分组：并行安全的工具可并发执行
+      const activeCalls = parsedCalls.filter(c => !c.skippedReason);
+      const grouped = groupToolCallsForExecution(activeCalls.map(c => c.tc));
+
+      // 执行工具（按分组：并行组内并发，串行组逐个执行）
+      async function executeOne(call: typeof parsedCalls[0]): Promise<void> {
+        const toolName = call.name;
+        const toolArgs = call.args;
+        const tc = call.tc;
+
         const toolStartTime = Date.now();
         if (hooks) {
           await hooks.emit('pre_tool_call', {
@@ -149,10 +172,10 @@ export async function agentLoop(
           });
         }
 
-        // 执行工具（带超时）
         const tool = registry.get(toolName);
         const result = tool
-          ? await executeWithTimeout(
+          ? await executeWithTimeoutAndRecovery(
+              toolName,
               tool.handler,
               toolArgs,
               { userId: context.userId, sessionId: context.sessionId, signal: context.signal, presets: context.presets },
@@ -162,12 +185,6 @@ export async function agentLoop(
 
         toolsUsed.add(toolName);
 
-        // 更新计划进度
-        if (plan) {
-          plan = updatePlanProgress(plan, [...toolsUsed]);
-        }
-
-        // post_tool_call hook
         if (hooks) {
           await hooks.emit('post_tool_call', {
             userId: context.userId, sessionId: context.sessionId,
@@ -185,6 +202,23 @@ export async function agentLoop(
           tool_call_id: tc.id,
           content: truncatedOutput,
         } as unknown as ChatMessage);
+      }
+
+      // 执行并行组（组内并发）
+      for (const group of grouped.parallel) {
+        const groupCalls = group.map(tc => activeCalls.find(c => c.tc.id === tc.id)!).filter(Boolean);
+        await Promise.all(groupCalls.map(c => executeOne(c)));
+      }
+
+      // 执行串行工具（逐个）
+      for (const tc of grouped.serial) {
+        const call = activeCalls.find(c => c.tc.id === tc.id);
+        if (call) await executeOne(call);
+      }
+
+      // 更新计划进度
+      if (plan) {
+        plan = updatePlanProgress(plan, [...toolsUsed]);
       }
 
       // 上下文压缩（使用 ContextEngine）

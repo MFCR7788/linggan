@@ -6,6 +6,7 @@ import { ProviderRegistry } from './registry';
 import type { ProviderProfile, ResolvedModel } from './types';
 import type { ChatMessage } from '@/lib/ai/types';
 import { resolveTaskModel, accumulateCost, type TaskType, type TaskModelResult } from './cost-matrix';
+import { withRetry } from '@/lib/ai/retry';
 
 interface RouterOptions {
   model?: string;
@@ -82,7 +83,7 @@ export class ModelRouter {
 
   // ====== 非流式调用 ======
 
-  /** 非工具模式 chat */
+  /** 非工具模式 chat（带指数退避重试） */
   async chat(
     messages: ChatMessage[],
     options: RouterOptions = {}
@@ -90,32 +91,40 @@ export class ModelRouter {
     const resolved = this.resolveModel(options.model, options.taskType);
     const body = this.buildBody(resolved, messages, options);
 
-    const response = await this.fetchWithTimeout(resolved.baseUrl, {
-      method: 'POST',
-      headers: resolved.headers,
-      body: JSON.stringify(body),
-    }, 120000);
+    return withRetry(
+      async () => {
+        const response = await this.fetchWithTimeout(resolved.baseUrl, {
+          method: 'POST',
+          headers: resolved.headers,
+          body: JSON.stringify(body),
+        }, 120000);
 
-    if (!response.ok) {
-      const err = await response.text().catch(() => '');
-      throw new Error(`Chat failed (${response.status}): ${err.substring(0, 200)}`);
-    }
+        if (!response.ok) {
+          const err = await response.text().catch(() => '');
+          throw Object.assign(
+            new Error(`Chat failed (${response.status}): ${err.substring(0, 200)}`),
+            { status: response.status }
+          );
+        }
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
 
-    // 成本追踪
-    if (data?.usage?.completion_tokens) {
-      accumulateCost(data.usage.completion_tokens, resolved.model);
-    }
+        // 成本追踪
+        if (data?.usage?.completion_tokens) {
+          accumulateCost(data.usage.completion_tokens, resolved.model);
+        }
 
-    if (typeof content !== 'string') {
-      throw new Error(`Unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-    }
-    return content;
+        if (typeof content !== 'string') {
+          throw new Error(`Unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+        }
+        return content;
+      },
+      { operationName: 'chat', maxRetries: 2 }
+    );
   }
 
-  /** 工具模式 chat (非流式) */
+  /** 工具模式 chat (非流式，带指数退避重试) */
   async chatWithTools(
     messages: ChatMessage[],
     tools: Array<{ type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }>,
@@ -135,24 +144,32 @@ export class ModelRouter {
       tool_choice: 'auto' as const,
     };
 
-    const response = await this.fetchWithTimeout(resolved.baseUrl, {
-      method: 'POST',
-      headers: resolved.headers,
-      body: JSON.stringify(body),
-    }, 120000);
+    return withRetry(
+      async () => {
+        const response = await this.fetchWithTimeout(resolved.baseUrl, {
+          method: 'POST',
+          headers: resolved.headers,
+          body: JSON.stringify(body),
+        }, 120000);
 
-    if (!response.ok) {
-      const err = await response.text().catch(() => '');
-      throw new Error(`Tools call failed (${response.status}): ${err.substring(0, 200)}`);
-    }
+        if (!response.ok) {
+          const err = await response.text().catch(() => '');
+          throw Object.assign(
+            new Error(`Tools call failed (${response.status}): ${err.substring(0, 200)}`),
+            { status: response.status }
+          );
+        }
 
-    const data = await response.json();
-    const msg = data?.choices?.[0]?.message;
-    if (!msg) {
-      throw new Error(`Unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
-    }
+        const data = await response.json();
+        const msg = data?.choices?.[0]?.message;
+        if (!msg) {
+          throw new Error(`Unexpected response: ${JSON.stringify(data).substring(0, 200)}`);
+        }
 
-    return { message: msg, usage: data?.usage };
+        return { message: msg, usage: data?.usage };
+      },
+      { operationName: 'chatWithTools', maxRetries: 2 }
+    );
   }
 
   // ====== 流式调用 ======

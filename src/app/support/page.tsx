@@ -1,21 +1,36 @@
-import type { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: '帮助与支持 - 灵集',
-  description: '灵集 App 帮助与支持中心',
-};
+import { useRouter } from 'next/navigation';
+import { TopNav } from '@/components/TopNav';
+import { BottomNav, type PageKey } from '@/components/BottomNav';
+
+// Metadata must be exported from a separate layout or generateMetadata
+// This page is client-rendered; for meta tags, wrap in a layout.ts
 
 export default function SupportPage() {
+  const router = useRouter();
+
+  const handleNavigate = (page: PageKey, params?: string) => {
+    switch (page) {
+      case 'home': router.push('/home'); break;
+      case 'inspiration': router.push('/inspiration'); break;
+      case 'ai': router.push('/ai'); break;
+      case 'hotspot': router.push('/hotspot'); break;
+      case 'profile': router.push('/profile'); break;
+      default: router.push('/home');
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #0A1629 0%, #1A365D 100%)',
       color: '#E5E7EB',
       fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      padding: '40px 20px 60px',
       lineHeight: 1.8,
     }}>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <TopNav title="帮助与支持" showBack onBack={() => router.push('/profile')} />
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 20px 60px' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <img src="/brand/logo-mark.png" alt="灵集" style={{ width: 48, height: 48, margin: '0 auto 12px' }} />
         </div>
@@ -99,6 +114,7 @@ export default function SupportPage() {
           <InfoRow label="应用网址" value="https://ai.zjsifan.com" />
         </Section>
       </div>
+      <BottomNav activePage="profile" onNavigate={handleNavigate} />
     </div>
   );
 }

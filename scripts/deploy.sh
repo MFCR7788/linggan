@@ -112,23 +112,32 @@ rsync -a --delete \
 # 8. 修正权限
 chown -R deploy:deploy "$DEPLOY_DIR"
 
-# 9. 更新 git ref (保持 HEAD 与远程同步)
+# 9. 更新 cron 定时任务
+log "⏰ 安装 crontab"
+if [ -f "$DEPLOY_DIR/scripts/ecs-crontab.txt" ]; then
+  bash -c "$RUN_AS crontab $DEPLOY_DIR/scripts/ecs-crontab.txt" 2>&1 | tee -a "$LOG_FILE"
+  log "   crontab 已更新 ($(wc -l < "$DEPLOY_DIR/scripts/ecs-crontab.txt") 条任务)"
+else
+  log "   ⚠️ ecs-crontab.txt 不存在, 跳过"
+fi
+
+# 10. 更新 git ref (保持 HEAD 与远程同步)
 bash -c "$RUN_AS git -C $DEPLOY_DIR update-ref refs/heads/main $NEW_COMMIT" 2>/dev/null || true
 bash -c "$RUN_AS git -C $DEPLOY_DIR symbolic-ref HEAD refs/heads/main" 2>/dev/null || true
 
-# 10. npm install
+# 11. npm install
 log "📦 npm install"
 # 清空 NODE_ENV, 强制安装 devDependencies (typescript, tailwindcss 等 Next.js build 必需)
 bash -c "NODE_ENV= $RUN_AS npm install --include=dev --no-audit --no-fund" 2>&1 | tail -5 | tee -a "$LOG_FILE"
 
-# 11. 构建
+# 12. 构建
 log "🔨 npm run build"
 if ! bash -c "$RUN_AS npm run build" 2>&1 | tail -15 | tee -a "$LOG_FILE"; then
   log "❌ 构建失败, 请查看上方日志"
   exit 1
 fi
 
-# 11.5 构建产物自检(防止 build 部分完成导致 systemd 重启后 502)
+# 12.5 构建产物自检(防止 build 部分完成导致 systemd 重启后 502)
 # Next.js 14 不一定生成 .next/BUILD_ID 文件,改用更可靠的 app-build-manifest.json
 log "🔍 检查构建产物"
 if [ ! -s "$DEPLOY_DIR/.next/app-build-manifest.json" ] || [ ! -d "$DEPLOY_DIR/.next/server" ] || [ ! -d "$DEPLOY_DIR/.next/static" ]; then
@@ -143,7 +152,7 @@ else
   log "⚠️  .next/BUILD_ID 不存在(Next.js 14 某些版本不生成),但核心产物存在,继续部署"
 fi
 
-# 12. 重启 (需要 root)
+# 13. 重启 (需要 root)
 if [ "$CURRENT_USER" = "root" ]; then
   log "🔄 重启服务"
   systemctl restart lingji

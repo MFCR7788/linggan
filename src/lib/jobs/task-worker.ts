@@ -6,13 +6,77 @@ import { claimNext, markCompleted, markFailed, type ClaimOptions } from './queue
 import { processImageTask } from './workers/image';
 import { processDigitalHumanTask, onDigitalHumanCompleted } from './workers/digital-human';
 import type { AiTask, AiTaskType } from '@/types';
+import { summarizeContent, generateCopywriting } from '@/lib/ai/content';
+import { submitVideoTask } from '@/lib/ai/video';
+import { logAiUsage } from '@/lib/ai/usage';
 
 // Worker 注册表：每个 taskType 对应一个处理函数
 type WorkerHandler = (task: AiTask, workerId: string) => Promise<any>;
 
+/** AI 摘要任务处理器 */
+async function processSummaryTask(task: AiTask, _workerId: string) {
+  const input = task.input as { content?: string; contentType?: string };
+  if (!input?.content) throw Object.assign(new Error('缺少 content'), { code: 'INVALID_INPUT' });
+  const result = await summarizeContent(input.content, input.contentType || 'text');
+  if (task.user_id) {
+    logAiUsage(task.user_id, 'ai_summary', 0).catch(() => {});
+  }
+  return result;
+}
+
+/** AI 文案任务处理器 */
+async function processCopywritingTask(task: AiTask, _workerId: string) {
+  const input = task.input as {
+    inspirations?: Array<{ title?: string; originalText?: string; aiSummary?: string }>;
+    type?: string;
+    style?: string;
+    noAiTaste?: boolean;
+    variantCount?: number;
+    industryInstruction?: string;
+    userInstruction?: string;
+  };
+  const result = await generateCopywriting(
+    input?.inspirations || [],
+    input?.type || 'text',
+    input?.style || '通用',
+    input?.noAiTaste ?? false,
+    input?.variantCount || 1,
+    input?.industryInstruction,
+    input?.userInstruction,
+  );
+  if (task.user_id) {
+    logAiUsage(task.user_id, 'copywriting', 0).catch(() => {});
+  }
+  return result;
+}
+
+/** 视频生成任务处理器 */
+async function processVideoTask(task: AiTask, _workerId: string) {
+  const input = task.input as { prompt?: string; duration?: number };
+  if (!input?.prompt) throw Object.assign(new Error('缺少 prompt'), { code: 'INVALID_INPUT' });
+  const result = await submitVideoTask(input.prompt, input.duration || 5);
+  if (task.user_id) {
+    logAiUsage(task.user_id, 'video', 0).catch(() => {});
+  }
+  return result;
+}
+
+/** 视频合并任务处理器（服务端 ffmpeg） */
+async function processVideoMergeTask(task: AiTask, _workerId: string) {
+  const input = task.input as { segmentUrls?: string[]; bgmUrl?: string; subtitles?: string };
+  if (!input?.segmentUrls?.length) throw Object.assign(new Error('缺少 segmentUrls'), { code: 'INVALID_INPUT' });
+  // 视频合并由 /api/ai/video/merge 端点处理，此处作为异步队列入口
+  // worker 返回 merge 参数，实际合并在 merge route 执行
+  return { segmentUrls: input.segmentUrls, bgmUrl: input.bgmUrl, subtitles: input.subtitles, merged: false, note: '合并任务需调用 /api/ai/video/merge 完成' };
+}
+
 const WORKER_REGISTRY: Partial<Record<AiTaskType, WorkerHandler>> = {
+  ai_summary: processSummaryTask,
+  copywriting: processCopywritingTask,
   image: processImageTask,
   image_batch: processImageTask,
+  video: processVideoTask,
+  video_merge: processVideoMergeTask,
   digital_human: processDigitalHumanTask,
   digital_human_batch: processDigitalHumanTask,
 };
