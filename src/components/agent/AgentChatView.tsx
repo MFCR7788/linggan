@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useInputHistory } from '@/hooks/use-input-history';
 import { AgentMessage } from './AgentMessage';
 import { ThinkingIndicator } from './ThinkingIndicator';
-import { useSkillRecommendations } from './SkillRecommendCards';
+import { useSkillRecommendations, SkillRecommendCards, type SkillRecommendation } from './SkillRecommendCards';
 import { CapabilityTags } from './CapabilityTags';
 import { ChoiceCards, type ChoiceSelection } from './ChoiceCards';
 import { InspirationPicker } from './InspirationPicker';
@@ -22,6 +22,22 @@ import type { AttachedFile } from '@/hooks/use-file-upload';
 import type { AgentSession } from '@/hooks/use-agent-sessions';
 import { ACCOUNT_TYPE_PRESETS, type RecommendationCombo, type AccountTypePreset } from '@/lib/account-presets';
 import { scheduleNotification } from '@/lib/notification-service';
+import { CREDIT_COSTS } from '@/lib/credit-costs';
+
+// 生成类关键词 → 预估扣点（供前端确认弹窗用）
+const GEN_COST_HINTS: { pattern: RegExp; cost: () => number; label: string }[] = [
+  { pattern: /生成.*(?:图片|照片|图|配图|封面|海报|插图)/, cost: () => CREDIT_COSTS.ai_image.perImage, label: 'AI 图片生成' },
+  { pattern: /(?:生成|做|创建).*(?:视频|短片|动画|影片)/, cost: () => CREDIT_COSTS.ai_video.premium, label: 'AI 视频生成' },
+  { pattern: /数字人/, cost: () => CREDIT_COSTS.ai_digital_human['720P'], label: 'AI 数字人生成' },
+  { pattern: /(?:配音|语音合成|文字转语音|TTS)/, cost: () => CREDIT_COSTS.ai_tts.minCost, label: 'AI 配音' },
+];
+
+function detectGenCost(input: string): { cost: number; label: string } | null {
+  for (const hint of GEN_COST_HINTS) {
+    if (hint.pattern.test(input)) return { cost: hint.cost(), label: hint.label };
+  }
+  return null;
+}
 
 // 工具名 → 流程步骤入口 映射（用于自动推进步骤）
 const TOOL_TO_ENTRY: Record<string, string> = {
@@ -183,6 +199,40 @@ export function AgentChatView() {
 
   // 技能推荐
   const skillRecs = useSkillRecommendations();
+
+  // V3-2.3: 动态技能匹配 — 输入变化时调后端 API 匹配技能
+  const [dynamicRecs, setDynamicRecs] = useState<SkillRecommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+
+  // V3-3: 扣点确认弹窗
+  const [creditConfirm, setCreditConfirm] = useState<{ cost: number; label: string } | null>(null);
+  const pendingSendRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const trimmed = input.trim();
+    if (trimmed.length < 3) {
+      setDynamicRecs([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setRecsLoading(true);
+        const apiClient = (await import('@/lib/api-client')).apiClient;
+        const res = await apiClient.post('/assistant/skills', { action: 'match', query: trimmed });
+        if (res.success && Array.isArray(res.data)) {
+          setDynamicRecs(res.data.slice(0, 6).map((m: any) => ({
+            name: m.skill?.name || m.name,
+            displayName: m.skill?.displayName || m.displayName,
+            score: m.score || 0,
+          })));
+        }
+      } catch {
+        setDynamicRecs([]);
+      } finally {
+        setRecsLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [input]);
 
   // 会话管理
   const sessionMgr = useAgentSessions();
@@ -437,10 +487,9 @@ export function AgentChatView() {
     }
   }, []);
 
-  const handleSend = useCallback(async () => {
+  // 实际执行发送
+  const doActualSend = useCallback(async () => {
     const trimmed = input.trim();
-    const hasFiles = attachedFiles.length > 0;
-    if ((!trimmed && !hasFiles) || isStreaming) return;
 
     // 上传附件
     const uploadedImages: string[] = [];
@@ -503,6 +552,25 @@ export function AgentChatView() {
 
     await doStream(displayContent, uploadedImages, uploadedVideos, uploadedDocs, attachmentInfo, sessionId);
   }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession, doStream]);
+
+  const handleSend = useCallback(async () => {
+    const trimmed = input.trim();
+    const hasFiles = attachedFiles.length > 0;
+    if ((!trimmed && !hasFiles) || isStreaming) return;
+
+    // V3-3: 检测生成意图，弹扣点确认
+    const genCost = detectGenCost(trimmed);
+    if (genCost && !hasFiles) {
+      pendingSendRef.current = () => {
+        setCreditConfirm(null);
+        doActualSend();
+      };
+      setCreditConfirm(genCost);
+      return;
+    }
+
+    doActualSend();
+  }, [input, isStreaming, attachedFiles, doActualSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // 斜杠菜单导航
@@ -1560,6 +1628,14 @@ export function AgentChatView() {
             今天你有什么灵感，发送给我！
           </p>
         )}
+        {/* 动态技能推荐 — 输入时匹配 */}
+        {dynamicRecs.length > 0 && (
+          <SkillRecommendCards
+            recommendations={dynamicRecs}
+            loading={recsLoading}
+            onSelect={(skill) => { setInput(`/${skill.name} `); inputRef.current?.focus(); }}
+          />
+        )}
         {/* 快捷能力标签 — 输入框上方 */}
         <div className="mb-2">
           <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
@@ -1893,6 +1969,37 @@ export function AgentChatView() {
       </div>
 
     {/* 灵感库素材选择弹窗 */}
+    {/* V3-3: 扣点确认弹窗 */}
+    {creditConfirm && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setCreditConfirm(null)}>
+        <div
+          className="w-full max-w-[480px] rounded-t-2xl p-6 pb-8"
+          style={{ background: 'rgba(15, 23, 42, 0.98)', backdropFilter: 'blur(20px)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-semibold text-white mb-2">确认操作</h3>
+          <p className="text-sm text-gray-300 mb-4">
+            你即将使用 <span className="text-blue-400 font-medium">{creditConfirm.label}</span>
+            ，预计消耗 <span className="text-amber-400 font-medium">{creditConfirm.cost} 灵力</span>
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setCreditConfirm(null)}
+              className="flex-1 py-3 rounded-xl text-sm font-medium border border-white/20 text-gray-300 hover:bg-white/5 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => pendingSendRef.current()}
+              className="flex-1 py-3 rounded-xl text-sm font-medium text-white transition-colors"
+              style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}
+            >
+              确认生成 ({creditConfirm.cost} 💎)
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <InspirationPicker
       open={inspPickerOpen}
       onClose={() => setInspPickerOpen(false)}

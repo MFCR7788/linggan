@@ -16,6 +16,7 @@ import { recommendBgmAuto, type BgmStyle } from '@/lib/bgm-recommender';
 import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
 import { saveWorkHistory } from '@/lib/supabase-server';
+import { indexContentItem } from '@/lib/assistant/embedding';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ async function uploadToStorage(
   }
 }
 
-// 保存作品记录（自动保存到 content_items）
+// 保存作品记录（自动保存到 content_items），返回 content_id 用于后续向量嵌入
 async function saveVideoWork(
   userId: string,
   videoUrl: string,
@@ -68,7 +69,7 @@ async function saveVideoWork(
     language?: string;
     topic?: string;
   }
-): Promise<void> {
+): Promise<string | null> {
   const supabase = createAdminClient();
   const title = metadata.storyboard
     .map((s) => s.subtitle || '')
@@ -124,12 +125,13 @@ async function saveVideoWork(
     insertData.thumbnail_url = thumbnailUrl;
   }
 
-  const { error } = await supabase.from('content_items').insert(insertData);
+  const { data: inserted, error } = await supabase.from('content_items').insert(insertData).select('id').single();
   if (error) {
     console.error('[Merge] 保存作品失败:', error.message, error.details);
     throw new Error(`保存作品失败: ${error.message}`);
   }
   console.log(`[Merge] 作品已保存: ${title}`);
+  return inserted?.id || null;
 }
 
 export const POST = withAuth(async ({ request, user }) => {
@@ -251,8 +253,9 @@ export const POST = withAuth(async ({ request, user }) => {
     });
 
     // 6. 保存作品记录（灵感库）
+    let savedContentId: string | null = null;
     try {
-      await saveVideoWork(user.id, publicUrl, thumbnailUrl, {
+      savedContentId = await saveVideoWork(user.id, publicUrl, thumbnailUrl, {
         storyboard: (storyboard || []) as FfmpegScene[],
         bgmStyle: bgmStyle || 'tech',
         subtitleStyle: subtitleStyle || '白色粗体',
@@ -265,6 +268,14 @@ export const POST = withAuth(async ({ request, user }) => {
     } catch (saveErr: any) {
       console.error('[Merge] 作品保存失败（视频已上传）:', saveErr.message);
       // 视频已上传成功，作品保存失败不阻塞响应
+    }
+
+    // 异步生成向量嵌入
+    if (savedContentId) {
+      const embedText = [topic || '', stylePreset || '', `视频${totalDuration}秒`].filter(Boolean).join(' ');
+      indexContentItem(savedContentId, user.id, embedText).catch(
+        (e) => console.warn('[Merge] 向量嵌入失败:', e)
+      );
     }
 
     // 清理临时文件

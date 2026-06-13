@@ -5,6 +5,7 @@
 import { createAdminClient } from '../../supabase-server';
 import { generateImage, logAiUsage } from '../../ai-services';
 import { updateProgress } from '../queue';
+import { indexContentItem } from '../../assistant/embedding';
 import type { AiTask } from '@/types';
 
 export interface ImageWorkerInput {
@@ -66,7 +67,7 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
   if (input.saveToInspiration !== false) {
     try {
       const supabase = createAdminClient();
-      await supabase.from('content_items').insert({
+      const { data: inserted } = await supabase.from('content_items').insert({
         user_id: task.user_id,
         type: 'image',
         title: input.prompt.substring(0, 50),
@@ -80,7 +81,14 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
         status: 'active',
         is_shared: false,
         category_id: null,
-      });
+      }).select('id').single();
+
+      // 异步生成向量嵌入
+      if (inserted?.id) {
+        indexContentItem(inserted.id, task.user_id, input.prompt).catch(
+          (e) => console.warn(`[image worker] 向量嵌入失败: ${e instanceof Error ? e.message : String(e)}`)
+        );
+      }
     } catch (e: unknown) {
       // 写灵感库失败不阻塞任务完成（图片本身已生成）
       console.warn(`[image worker] 写灵感库失败: ${e instanceof Error ? e.message : String(e)}`);

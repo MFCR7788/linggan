@@ -7,16 +7,16 @@ interface BottomNavProps {
   onNavigate: (page: PageKey) => void;
 }
 
+// V3.0: AI工具tab移除，Agent成为中心按钮
 const items = [
   { key: "home" as PageKey, label: "首页", Icon: Home },
   { key: "inspiration" as PageKey, label: "灵感库", Icon: BookOpen },
-  { key: "agent" as PageKey, label: "", Icon: Plus, isCapture: true },
-  { key: "ai" as PageKey, label: "AI工具", Icon: Sparkles },
+  { key: "agent" as PageKey, label: "AI助手", Icon: Sparkles, isCenter: true },
   { key: "profile" as PageKey, label: "我的", Icon: User },
 ];
 
-export function BottomNav({ 
-  activePage, 
+export function BottomNav({
+  activePage,
   onNavigate
 }: BottomNavProps) {
   const activeTab = items.find(i => i.key === activePage)?.key ?? "home";
@@ -39,7 +39,7 @@ export function BottomNav({
           borderTop: "1px solid rgba(255,255,255,0.15)",
         }}
       >
-        {items.map(({ key, label, Icon, isCapture }) => {
+        {items.map(({ key, label, Icon, isCenter }) => {
           const isActive = activeTab === key;
           return (
             <button
@@ -47,7 +47,7 @@ export function BottomNav({
               onClick={() => onNavigate(key)}
               className="flex flex-col items-center gap-1 px-2 py-1 rounded-xl transition-all"
             >
-              {isCapture ? (
+              {isCenter ? (
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center"
                   style={{
@@ -66,16 +66,15 @@ export function BottomNav({
                   }}
                 />
               )}
-              {!isCapture && (
-                <span 
-                  style={{ 
-                    fontSize: 10, 
-                    color: isActive ? "#3B82F6" : "#9CA3AF" 
-                  }}
-                >
-                  {label}
-                </span>
-              )}
+              <span
+                style={{
+                  fontSize: 10,
+                  color: isCenter ? "#A5B4FC" : (isActive ? "#3B82F6" : "#9CA3AF"),
+                  fontWeight: isCenter ? 600 : 400,
+                }}
+              >
+                {label}
+              </span>
             </button>
           );
         })}

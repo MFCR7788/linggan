@@ -4,6 +4,7 @@
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { indexContentItem } from '@/lib/assistant/embedding';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +65,7 @@ export const GET = withAuth(async ({ user }) => {
       ? content.replace(/<[^>]*>/g, '').substring(0, 50)
       : (videoUrl ? 'AI 生成视频' : imageUrl ? 'AI 生成图片' : 'AI 生成内容');
 
-    const { error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from('content_items')
       .insert({
         user_id: user.id,
@@ -77,7 +78,9 @@ export const GET = withAuth(async ({ user }) => {
         status: 'active',
         analysis_status: 'completed',
         created_at: msg.created_at,
-      });
+      })
+      .select('id')
+      .single();
 
     if (insertError) {
       console.error('迁移失败:', msg.id, insertError.message);
@@ -85,6 +88,14 @@ export const GET = withAuth(async ({ user }) => {
       migrated++;
       if (contentKey) existingTexts.add(contentKey);
       mediaUrls.forEach((u: string) => existingUrls.add(u));
+
+      // 异步生成向量嵌入
+      const embedText = [title, content || ''].filter(Boolean).join(' ');
+      if (inserted?.id && embedText.trim()) {
+        indexContentItem(inserted.id, user.id, embedText).catch(
+          (e) => console.warn('[migrate ai-works] 向量嵌入失败:', e)
+        );
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 // Agent 工具共用 — 生成内容自动保存到灵感库
 import { createAdminClient } from '@/lib/supabase-server';
+import { indexContentItem } from '@/lib/assistant/embedding';
 
 const TYPE_TO_CATEGORY: Record<string, string> = {
   image: '图片',
@@ -95,6 +96,13 @@ export async function saveMediaToInspiration(
       if (rows.length > 0) {
         await supabase.from('content_tags').insert(rows);
       }
+    }
+
+    // 异步生成向量嵌入（fire-and-forget，不阻塞工具响应）
+    if (item?.id) {
+      indexContentItem(item.id, userId, prompt).catch(
+        (e) => console.warn('[saveMediaToInspiration] 向量嵌入失败:', e)
+      );
     }
   } catch (e) {
     console.warn('[saveMediaToInspiration] 保存失败:', e);

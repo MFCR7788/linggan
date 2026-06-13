@@ -83,6 +83,10 @@ export interface SkillDefinition {
   boundTools?: string[];
   /** 必须可用的工具（不可用时技能不激活） */
   requiredTools?: string[];
+  /** 触发关键词（用于用户输入匹配，增强 SkillMatcher） */
+  triggerKeywords?: string[];
+  /** 工具链步骤定义 [{tool, params}]，技能激活时按序执行 */
+  steps?: { tool: string; params?: Record<string, unknown> }[];
   version: string;
   authorId?: string;
   visibility: 'private' | 'public' | 'official';

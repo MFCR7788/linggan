@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
+import { generateEmbedding } from '@/lib/assistant/embedding';
 
 // GET /api/chat/history — 获取会话列表或某会话的消息或我的作品
 //   ?session_id=xxx  → 获取该会话的消息
@@ -15,20 +16,20 @@ export const GET = withAuth(async ({ request, user }) => {
   const supabase = createAdminClient();
 
   if (worksMode === 'true') {
-    // 获取我的作品：仅来自 chat_messages（临时历史，7天自动过期）
+    // 获取我的作品：来自 chat_messages（30 天保留，与 cleanup cron 一致）
     const workType = searchParams.get('type');
     const sourcePlatform = searchParams.get('sourcePlatform');
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    // chat_messages 中最近 7 天的 AI 创作记录
+    // chat_messages 中最近 30 天的 AI 创作记录
     const { data: messages, error: msgError } = await supabase
       .from('chat_messages')
       .select('id, content, content_type, metadata, created_at, session_id')
       .eq('user_id', user.id)
       .eq('type', 'ai')
       .contains('metadata', { source: 'ai_creation' })
-      .gte('created_at', sevenDaysAgo)
+      .gte('created_at', thirtyDaysAgo)
       .order('created_at', { ascending: false })
       .limit(30);
 
@@ -174,6 +175,43 @@ export const POST = withAuth(async ({ request, user }) => {
       }))
     );
     if (error) return createApiError('保存失败', 500);
+
+    // 异步生成向量嵌入，使历史消息可被语义搜索（fire-and-forget）
+    const messagesWithContent = messages.filter(
+      (m: any) => m.content && typeof m.content === 'string' && m.content.trim().length >= 10
+    );
+    if (messagesWithContent.length > 0) {
+      // 只嵌入有足够内容的消息
+      Promise.allSettled(
+        messagesWithContent.slice(0, 10).map(async (m: any, idx: number) => {
+          try {
+            const embedding = await generateEmbedding(m.content.trim().slice(0, 2000));
+            if (embedding && embedding.length > 0) {
+              // 需要用 RLS 绕过的方式写入：由于 message 刚插入，需要反查 message_id
+              const { data: inserted } = await supabase
+                .from('chat_messages')
+                .select('id')
+                .eq('session_id', session_id)
+                .eq('user_id', user.id)
+                .eq('type', m.type)
+                .order('created_at', { ascending: false })
+                .limit(messagesWithContent.length);
+
+              if (inserted && inserted[idx]) {
+                await supabase.from('chat_message_embeddings').upsert({
+                  message_id: inserted[idx].id,
+                  user_id: user.id,
+                  session_id,
+                  embedding,
+                }, { onConflict: 'message_id' });
+              }
+            }
+          } catch (e) {
+            // 嵌入生成失败不阻塞消息保存
+          }
+        })
+      ).catch(() => {});
+    }
 
     // 更新会话时间
     await supabase

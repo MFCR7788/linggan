@@ -35,6 +35,14 @@
       "maxDuration": 60,
       "memory": 512
     },
+    "src/app/api/cron/push-suggestions/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "src/app/api/migrate/index-inspirations/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "src/app/api/cron/credits-reset/route.ts": {
       "maxDuration": 60,
       "memory": 512
@@ -80,6 +88,10 @@
     {
       "path": "/api/cron/subscription-grant",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/push-suggestions",
+      "schedule": "30 0 * * *"
     }
   ]
 }

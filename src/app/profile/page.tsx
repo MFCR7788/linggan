@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Settings, Bell, HelpCircle, LogOut, ChevronRight, Edit3,
   BookOpen, Sparkles, TrendingUp, Star, Wallet, ArrowRight, Globe, Shield,
+  BarChart3,
   Brain, Search,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
@@ -75,6 +76,7 @@ const menuItems = [
   { icon: <Bell size={18} />, label: '通知设置', page: 'notification' as PageKey, color: '#3B82F6', desc: '热点预警 · 系统消息' },
   { icon: <TrendingUp size={18} />, label: '热点监控', page: 'hotspot' as PageKey, color: '#EF4444', desc: '关键词驱动的实时追踪' },
   { icon: <BookOpen size={18} />, label: '灵感库', page: 'inspiration' as PageKey, color: '#F59E0B', desc: '查看 / 编辑全部素材' },
+  { icon: <BarChart3 size={18} />, label: '效果数据', href: '/insights', color: '#06B6D4', desc: '公众号/微博数据 · 创作效果' },
   { icon: <Globe size={18} />, label: '平台集成', page: 'profile-integrations' as PageKey, color: '#22C55E', desc: '公众号 / 微博 OAuth 授权' },
   { icon: <Settings size={18} />, label: '账号设置', page: 'profile-settings' as PageKey, color: '#8B5CF6', desc: '账号类型 · 安全 · 密码' },
   { icon: <HelpCircle size={18} />, label: '帮助与反馈', page: 'profile-help' as PageKey, color: '#9CA3AF', desc: '功能说明 · 常见问题' },

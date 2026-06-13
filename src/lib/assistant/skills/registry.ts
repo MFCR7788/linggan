@@ -18,6 +18,8 @@ interface SkillRow {
   linked_content: Record<string, string> | null;
   bound_tools: string[] | null;
   required_tools: string[] | null;
+  trigger_keywords: string[] | null;
+  steps: { tool: string; params?: Record<string, unknown> }[] | null;
   version: string;
   author_id: string | null;
   visibility: 'private' | 'public' | 'official';
@@ -271,6 +273,8 @@ function mapSkill(row: SkillRow): SkillDefinition {
     linkedContent: row.linked_content || undefined,
     boundTools: row.bound_tools || undefined,
     requiredTools: row.required_tools || undefined,
+    triggerKeywords: row.trigger_keywords || undefined,
+    steps: row.steps || undefined,
     version: row.version,
     authorId: row.author_id || undefined,
     visibility: row.visibility,

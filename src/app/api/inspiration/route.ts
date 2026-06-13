@@ -3,6 +3,7 @@ import { createApiResponse, createApiError, getPaginationParams, createPaginated
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { stripMarkdown } from '@/lib/text-utils';
+import { indexContentItem } from '@/lib/assistant/embedding';
 
 export const dynamic = 'force-dynamic';
 
@@ -251,5 +252,28 @@ export const POST = withAuth(async ({ request, user }) => {
     }
   }
 
+  // 异步生成向量嵌入（fire-and-forget，不阻塞响应）
+  indexInspirationEmbedding(data.id, user.id, data.title, data.original_text, data.ai_summary).catch(
+    (e) => console.warn('[Inspiration] 向量嵌入失败:', e)
+  );
+
   return createApiResponse(data, '灵感创建成功');
 });
+
+// 异步向量嵌入生成（不阻塞灵感创建响应）
+async function indexInspirationEmbedding(
+  itemId: string,
+  userId: string,
+  title: string | null,
+  originalText: string | null,
+  summary: string | null
+): Promise<void> {
+  try {
+    const embedText = [title, originalText, summary].filter(Boolean).join(' ');
+    if (embedText.trim()) {
+      await indexContentItem(itemId, userId, embedText.trim());
+    }
+  } catch (e) {
+    console.warn('[Inspiration] 嵌入索引失败:', e);
+  }
+}

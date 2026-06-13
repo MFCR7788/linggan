@@ -24,3 +24,6 @@
 
 # 每天 00:00 — 订阅点数发放
 0 0 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/subscription-grant
+
+# 每天 08:30 — 主动选题建议推送
+30 8 * * * /bin/bash /var/www/lingji/scripts/cron-runner.sh /api/cron/push-suggestions

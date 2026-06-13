@@ -13,6 +13,7 @@ import { ToolRegistry, registerAllBuiltinTools } from '@/lib/agent/tools';
 import { agentStreamLoop } from '@/lib/agent/stream';
 import { MCPManager } from '@/lib/mcp/manager';
 import { getDefaultMCPServers } from '@/lib/mcp/defaults';
+import { detectCrossPlatform, delegateMultiPlatform, formatDelegationResult } from '@/lib/agent/delegation';
 import { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '@/lib/agent/conversational';
 import type { AgentEvent } from '@/lib/agent/types';
 import type { ChatMessage } from '@/lib/ai/types';
@@ -148,6 +149,31 @@ export const POST = withAuth(async ({ request, user }) => {
       const comboSKills = getAllComboSkills();
       const presetSkills = getAllPresetSkills();
       agentSkillMatcher.loadSkills([...comboSKills, ...presetSkills]);
+    }
+
+    // C12: 检测跨平台委托 — 多平台请求直接并行生成，不走 Agent 循环
+    const crossPlatforms = detectCrossPlatform(content);
+    if (crossPlatforms.length >= 2) {
+      console.log(`[Agent] 检测到跨平台委托: ${crossPlatforms.join(', ')}`);
+      const delegationResult = await delegateMultiPlatform(content, crossPlatforms);
+      const formatted = formatDelegationResult(delegationResult);
+
+      // 保存消息
+      if (sessionId) {
+        const supabase = createAdminClient();
+        await supabase.from('chat_messages').insert([
+          { user_id: user.id, session_id: sessionId, type: 'user', content },
+          { user_id: user.id, session_id: sessionId, type: 'ai', content: formatted, metadata: { source: 'delegation', platforms: crossPlatforms } },
+        ]);
+      }
+
+      return NextResponse.json({
+        success: true,
+        response: formatted,
+        summary: `已生成 ${crossPlatforms.length} 个平台版本`,
+        _intent: 'cross-platform',
+        _context: { delegation: true, platforms: crossPlatforms, durationMs: delegationResult.totalDurationMs },
+      });
     }
 
     // === V2: 使用 ContextAssembler 统一组装上下文 ===

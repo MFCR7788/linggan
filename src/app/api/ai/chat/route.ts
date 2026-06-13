@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/api-handler';
 import { consume, InsufficientCreditsError } from '@/lib/credits';
 import { isLinkInput, normalizeUrl, analyzeLink, extractDocuments, type LinkContext } from '@/lib/assistant/chat-helpers';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
+import { checkCompliance, formatComplianceNote } from '@/lib/compliance/checker';
 import { detectIntent, buildPrompt, LINGJI_IDENTITY, GEN_JSON_TEMPLATE } from '@/lib/assistant';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
 import { BuiltinMemoryProvider } from '@/lib/assistant/memory/builtin-provider';
@@ -941,6 +942,17 @@ JSON 格式：
         { role: 'assistant' as const, content: assistantMsg },
       ];
       memMgr.onSessionEnd(session_id, msgs as any).catch(e => console.warn('[Memory] onSessionEnd 失败:', e));
+    }
+
+    // C11: 合规检查（异步不阻塞，命中追加提示到 response）
+    if (analysis?.response) {
+      checkCompliance(content, analysis.response).then((issues) => {
+        if (issues.length > 0) {
+          const note = formatComplianceNote(issues);
+          analysis.response = (analysis.response || '') + '\n\n' + note;
+          console.log(`[合规] 命中 ${issues.length} 条规则:`, issues.map((i) => i.rule_title).join(', '));
+        }
+      }).catch((e) => console.warn('[合规] 检查失败:', e));
     }
 
     return NextResponse.json({

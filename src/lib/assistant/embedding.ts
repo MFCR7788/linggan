@@ -110,24 +110,28 @@ async function batchEmbed(texts: string[]): Promise<number[][]> {
     .map(d => d.embedding);
 }
 
-/** 为 content_items 表批量生成并存储 embedding */
-export async function indexContentItem(itemId: string, text: string): Promise<number[]> {
+/** 为单个 content_item 生成 embedding 并存入 inspiration_embeddings 表 */
+export async function indexContentItem(itemId: string, userId: string, text: string): Promise<number[]> {
   const embedding = await generateEmbedding(text);
   const { createAdminClient } = await import('@/lib/supabase-server');
   const supabase = createAdminClient();
 
   const { error } = await supabase
-    .from('content_items')
-    .update({ embedding })
-    .eq('id', itemId);
+    .from('inspiration_embeddings')
+    .upsert({
+      content_id: itemId,
+      user_id: userId,
+      embedding,
+      indexed_at: new Date().toISOString(),
+    }, { onConflict: 'content_id' });
 
-  if (error) console.warn(`[Embedding] 存储 content_item[${itemId}] 失败:`, error.message);
+  if (error) console.warn(`[Embedding] 存储 inspiration_embeddings[${itemId}] 失败:`, error.message);
   return embedding;
 }
 
-/** 批量为 content_items 建立索引（初始化/迁移用） */
+/** 批量为 content_items 建立索引（初始化/迁移用，写入 inspiration_embeddings 表） */
 export async function indexContentItemsBatch(
-  items: { id: string; text: string }[]
+  items: { id: string; userId: string; text: string }[]
 ): Promise<{ indexed: number; failed: number }> {
   let indexed = 0;
   let failed = 0;
@@ -140,14 +144,16 @@ export async function indexContentItemsBatch(
 
       const { createAdminClient } = await import('@/lib/supabase-server');
       const supabase = createAdminClient();
-      const updates = batch.map((item, i) => ({
-        id: item.id,
+      const rows = batch.map((item, i) => ({
+        content_id: item.id,
+        user_id: item.userId,
         embedding: embeddings[i],
+        indexed_at: new Date().toISOString(),
       }));
 
-      const { error } = await supabase.from('content_items').upsert(updates);
+      const { error } = await supabase.from('inspiration_embeddings').upsert(rows, { onConflict: 'content_id' });
       if (error) {
-        console.warn('[Embedding] 批量更新失败:', error.message);
+        console.warn('[Embedding] 批量写入 inspiration_embeddings 失败:', error.message);
         failed += batch.length;
       } else {
         indexed += batch.length;
