@@ -23,32 +23,59 @@ jobs:
           timeout_minutes: 20
           script: |
             set -e  # git + env 阶段失败立即停止
-            cd /opt/lingji
-            # 强制同步远程最新代码
-            echo "=== git remote ==="
-            git remote -v
-            echo "=== git fetch + reset ==="
-            git fetch origin main
-            git reset --hard origin/main
-            echo "=== git log ==="
-            git log --oneline -5
-            # 同步 env var（Perl ~ 分隔符，避免 / # 等特殊字符破坏正则）
+
+            # 两个目录：
+            #   /var/www/lingji — git 同步区（有 remote）
+            #   /opt/lingji     — systemd 服务运行目录
+            GIT_DIR="/var/www/lingji"
+            APP_DIR="/opt/lingji"
+
+            # 辅助函数：写入 .env.local
             write_env_line() {
-              local key="$1" val="$2"
-              if grep -q "^${key}=" .env.local 2>/dev/null; then
-                perl -i -pe "s~^${key}=.*~${key}=${val}~" .env.local
+              local file="$1" key="$2" val="$3"
+              if grep -q "^${key}=" "$file" 2>/dev/null; then
+                perl -i -pe "s~^${key}=.*~${key}=${val}~" "$file"
               else
-                echo "${key}=${val}" >> .env.local
+                echo "${key}=${val}" >> "$file"
               fi
             }
-            write_env_line "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
-            write_env_line "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
-            write_env_line "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
-            write_env_line "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
+
+            # ===== 阶段 1: 在 /var/www/lingji 同步最新代码 =====
+            echo "=== git sync ==="
+            cd "$GIT_DIR"
+            git remote -v
+            git fetch origin main
+            git reset --hard origin/main
+            git log --oneline -5
+
+            # 写入 secrets 到 /var/www/lingji/.env.local (git 区)
+            write_env_line "$GIT_DIR/.env.local" "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
+            write_env_line "$GIT_DIR/.env.local" "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
+            write_env_line "$GIT_DIR/.env.local" "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
+            write_env_line "$GIT_DIR/.env.local" "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
+
+            # ===== 阶段 2: 同步源码到 /opt/lingji =====
+            echo "=== rsync source to $APP_DIR ==="
+            mkdir -p "$APP_DIR"
+            rsync -a --delete \
+              --exclude '.git' \
+              --exclude 'node_modules' \
+              --exclude '.next' \
+              --exclude '.next.old' \
+              "$GIT_DIR/" "$APP_DIR/"
+
+            # 复制 .env.local 到 /opt/lingji
+            cp "$GIT_DIR/.env.local" "$APP_DIR/.env.local"
+
+            # ===== 阶段 3: 系统环境准备 =====
             # 先停应用释放内存
             systemctl stop lingji || true
-            # 清理残留的 onnxruntime 包 (不在 npm lockfile 中, postinstall 下载会 302 导致 install 失败)
+
+            cd "$APP_DIR"
+
+            # 清理残留的 onnxruntime 包
             rm -rf node_modules/onnxruntime-node node_modules/onnxruntime-common 2>/dev/null || true
+
             # 确保 swap 存在并激活
             if [ ! -f /swapfile ]; then
               echo "=== creating 2G swap ==="
@@ -60,28 +87,26 @@ jobs:
               swapon /swapfile
             fi
             free -m
-            # 安装编译工具（npm native modules 需要）
+
+            # 安装编译工具
             if command -v apt-get &> /dev/null; then
               apt-get update -qq && apt-get install -y -qq build-essential python3
             elif command -v yum &> /dev/null; then
               yum install -y gcc-c++ make python3
             fi
-            # 安装 ffmpeg（视频合成需要） — 每次部署都尝试装包管理器版本（idempotent）
-            # 优先级：/usr/bin/ffmpeg（包管理器，有 libass 字幕支持） > 静态二进制（无 libass）
+
+            # 安装 ffmpeg
             echo "=== ffmpeg setup ==="
             if command -v yum &> /dev/null; then
-              # 阿里云 Linux 8 → EPEL + RPM Fusion（已安装时自动跳过/更新）
               yum install -y epel-release 2>/dev/null || true
               yum install -y ffmpeg 2>/dev/null || true
               if [ ! -x /usr/bin/ffmpeg ]; then
-                # EPEL 没 ffmpeg → RPM Fusion
                 yum install -y --nogpgcheck "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm" 2>/dev/null || true
                 yum install -y ffmpeg 2>/dev/null || true
               fi
             elif command -v apt-get &> /dev/null; then
               apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
             fi
-            # 决策：优先用 /usr/bin/ffmpeg（包管理器，支持 libass），删除冲突的静态二进制
             if [ -x /usr/bin/ffmpeg ]; then
               rm -f /usr/local/bin/ffmpeg 2>/dev/null || true
               hash -r 2>/dev/null || true
@@ -91,7 +116,6 @@ jobs:
               FF=$(command -v ffmpeg)
               echo "=== using existing ffmpeg: ${FF} ==="
             else
-              # 都没有 → 下载静态二进制（无 libass，字幕功能不可用）
               echo "=== downloading static ffmpeg from GitHub ==="
               curl -sL --connect-timeout 10 --max-time 30 \
                 "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
@@ -105,15 +129,15 @@ jobs:
               FF="/usr/local/bin/ffmpeg"
               echo "=== using static ffmpeg (no libass, subtitle rendering disabled) ==="
             fi
-            write_env_line "FFMPEG_PATH" "${FF}"
+            write_env_line "$APP_DIR/.env.local" "FFMPEG_PATH" "${FF}"
             "${FF}" -version 2>&1 | head -1 || true
-            set +e  # npm/build 允许失败，下面有回退逻辑
-            # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
+
+            # ===== 阶段 4: 构建 =====
+            set +e
             echo "=== npm install ==="
             npm install --prefer-offline --no-audit --no-fund --ignore-scripts
             INSTALL_EXIT=$?
             if [ $INSTALL_EXIT -eq 0 ]; then
-              # 保留旧构建作为回退（install 成功但 build 可能失败）
               rm -rf .next.old 2>/dev/null || true
               if [ -d .next ]; then
                 mv .next .next.old
@@ -122,10 +146,8 @@ jobs:
               npm run build
               BUILD_EXIT=$?
               if [ $BUILD_EXIT -eq 0 ]; then
-                # 构建成功，清理旧备份
                 rm -rf .next.old 2>/dev/null || true
               else
-                # 构建失败，恢复旧 .next
                 rm -rf .next 2>/dev/null || true
                 if [ -d .next.old ]; then
                   mv .next.old .next
@@ -134,11 +156,12 @@ jobs:
             else
               BUILD_EXIT=$INSTALL_EXIT
             fi
+
+            # ===== 阶段 5: 重启服务 =====
             if [ $BUILD_EXIT -eq 0 ]; then
               echo "=== build success, restarting lingji ==="
-              echo "=== static diagnostics ==="
+              echo "=== diagnostics ==="
               echo "Chunks count: $(ls .next/static/chunks/*.js 2>/dev/null | wc -l)"
-              echo "App chunks count: $(find .next/static/chunks/app -name '*.js' 2>/dev/null | wc -l)"
               echo "Webpack chunks:"
               ls -la .next/static/chunks/webpack-*.js 2>/dev/null || echo "  NONE FOUND"
               echo "App layout/page chunks:"
@@ -150,7 +173,8 @@ jobs:
               echo "=== build failed (exit $BUILD_EXIT), keeping previous build ==="
               systemctl start lingji
             fi
-            # 安装 crontab 定时任务
+
+            # 安装 crontab
             chmod +x scripts/cron-runner.sh
             crontab scripts/ecs-crontab.txt
             echo "=== crontab installed ==="
