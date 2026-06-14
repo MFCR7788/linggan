@@ -23,7 +23,7 @@ jobs:
           timeout_minutes: 20
           script: |
             set -e  # git + env 阶段失败立即停止
-            cd /var/www/lingji
+            cd /opt/lingji
             # 强制同步远程最新代码
             echo "=== git remote ==="
             git remote -v
