@@ -110,7 +110,7 @@ jobs:
             set +e  # npm/build 允许失败，下面有回退逻辑
             # 增量安装（仅变更的依赖），低配 ECS 全量重装会 OOM
             echo "=== npm install ==="
-            npm install --prefer-offline --no-audit --no-fund
+            npm install --prefer-offline --no-audit --no-fund --ignore-scripts
             INSTALL_EXIT=$?
             if [ $INSTALL_EXIT -eq 0 ]; then
               # 保留旧构建作为回退（install 成功但 build 可能失败）
