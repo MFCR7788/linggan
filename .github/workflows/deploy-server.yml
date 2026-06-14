@@ -192,6 +192,13 @@ jobs:
               echo "=== killing any process on port 3000 ==="
               fuser -k 3000/tcp 2>/dev/null || true
               sleep 3
+              # 手动测试 next start 能否正常启动（捕获错误信息）
+              echo "=== testing next start ==="
+              timeout 15 /usr/bin/node node_modules/next/dist/bin/next start 2>&1 || true
+              echo "=== next start test exit: $? ==="
+              # 确保端口再次释放
+              fuser -k 3000/tcp 2>/dev/null || true
+              sleep 1
               # 重启服务
               systemctl restart lingji
               sleep 5
