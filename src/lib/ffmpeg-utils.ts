@@ -35,12 +35,22 @@ const SUBTITLE_STYLE_MAP: Record<string, string> = {
   '黄色描边': 'FontSize=24,PrimaryColour=&H00FFFF,Outline=2',
   '黑底白字': 'FontSize=24,PrimaryColour=&HFFFFFF,BackColour=&H80000000,Outline=0',
   '渐变彩色': 'FontSize=24,PrimaryColour=&HAA55FF,Outline=1',
+  // V4.0 扩展样式
+  '抖音风格': 'FontSize=26,PrimaryColour=&HFFFFFF,Outline=3,Bold=1',
+  '极简细体': 'FontSize=18,PrimaryColour=&HFFFFFF,Outline=0,Spacing=3',
+  '霓虹效果': 'FontSize=22,PrimaryColour=&H0FF0FF,Outline=1,Shadow=3',
+  '手写风格': 'FontSize=22,PrimaryColour=&HFFFFFF,Outline=1',
+  '剧透弹幕': 'FontSize=20,PrimaryColour=&H0000FF,Outline=2,Bold=1',
+  '卡拉OK': 'FontSize=24,PrimaryColour=&H00FFFF,Outline=2,Bold=1',
 };
 
 const SUBTITLE_POSITION_MAP: Record<string, string> = {
   '底部': 'Alignment=2,MarginV=50',
   '中部': 'Alignment=5,MarginV=0',
   '顶部': 'Alignment=8,MarginV=50',
+  // V4.0 扩展位置
+  '左下': 'Alignment=1,MarginV=50,MarginL=20',
+  '右下': 'Alignment=3,MarginV=50,MarginR=20',
 };
 
 /** 安全获取字幕样式，仅允许预定义映射中的值 */
@@ -184,6 +194,46 @@ export async function burnSubtitles(
   await ffmpegExec(
     `${FFMPEG_PATH} -y -i "${videoPath}" ` +
     `-vf "subtitles=${srtPath}:force_style='${styleStr},${positionStr}'" ` +
+    `-c:a copy "${outputPath}"`
+  );
+  return outputPath;
+}
+
+/**
+ * 增强字幕烧录 — 支持 ASS 格式 + 高级样式 + 双语字幕
+ * V4.0 新增，与原 burnSubtitles() 并存
+ *
+ * 对于 ASS 格式字幕，直接使用 ass= 过滤器（保留 ASS 内的高级特效）
+ * 对于 SRT 格式，回退到 subtitles= 过滤器
+ */
+export async function burnSubtitlesEnhanced(options: {
+  videoPath: string;
+  subtitlePath: string;
+  format: 'srt' | 'ass';
+  styleStr?: string;
+  outputPath: string;
+  fontsDir?: string;
+}): Promise<string> {
+  const { videoPath, subtitlePath, format, styleStr, outputPath, fontsDir } = options;
+
+  let vfFilter: string;
+  if (format === 'ass') {
+    // ASS 格式：使用 ass= 过滤器，保留文件中内嵌的样式
+    let assFilter = `ass=${subtitlePath}`;
+    if (fontsDir) assFilter += `:fontsdir=${fontsDir}`;
+    if (styleStr) assFilter += `:force_style='${styleStr}'`;
+    vfFilter = assFilter;
+  } else {
+    // SRT 格式：使用 subtitles= 过滤器
+    let subFilter = `subtitles=${subtitlePath}`;
+    if (fontsDir) subFilter += `:fontsdir=${fontsDir}`;
+    if (styleStr) subFilter += `:force_style='${styleStr}'`;
+    vfFilter = subFilter;
+  }
+
+  await ffmpegExec(
+    `${FFMPEG_PATH} -y -i "${videoPath}" ` +
+    `-vf "${vfFilter}" ` +
     `-c:a copy "${outputPath}"`
   );
   return outputPath;

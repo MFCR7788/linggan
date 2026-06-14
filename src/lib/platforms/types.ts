@@ -1,14 +1,15 @@
 // 平台适配器接口定义
 // 所有平台都实现这套接口,业务代码只对接接口,变更时只改具体实现
 
-export type PlatformId = 'wechat_mp' | 'weibo' | 'douyin' | 'xiaohongshu' | 'wechat_video' | 'bilibili';
+export type PlatformId = 'wechat_mp' | 'weibo' | 'douyin' | 'xiaohongshu' | 'wechat_video' | 'bilibili' | 'kuaishou';
 
 export const PLATFORMS: Record<PlatformId, {
   name: string;
   emoji: string;
   color: string;
-  autoPublish: boolean;       // 是否支持 OAuth 自动发布
+  autoPublish: boolean;       // 是否支持自动发布
   autoMetrics: boolean;       // 是否支持官方 API 抓数据
+  seleniumFallback: boolean;  // 无 API 时是否支持 Selenium 降级
   helpText: string;
 }> = {
   wechat_mp: {
@@ -17,6 +18,7 @@ export const PLATFORMS: Record<PlatformId, {
     color: '#07C160',
     autoPublish: true,
     autoMetrics: true,
+    seleniumFallback: false,
     helpText: '需服务号 + 微信开放平台认证(企业资质)',
   },
   weibo: {
@@ -25,6 +27,7 @@ export const PLATFORMS: Record<PlatformId, {
     color: '#E6162D',
     autoPublish: true,
     autoMetrics: true,
+    seleniumFallback: false,
     helpText: '个人开发者可申请',
   },
   douyin: {
@@ -33,7 +36,8 @@ export const PLATFORMS: Record<PlatformId, {
     color: '#000000',
     autoPublish: false,
     autoMetrics: false,
-    helpText: '无个人开放 API,使用"复制引导页"手动发布',
+    seleniumFallback: true,
+    helpText: 'Selenium 自动发布（需本地 Chrome + 已登录）',
   },
   xiaohongshu: {
     name: '小红书',
@@ -41,7 +45,8 @@ export const PLATFORMS: Record<PlatformId, {
     color: '#FF2442',
     autoPublish: false,
     autoMetrics: false,
-    helpText: '无个人开放 API,使用"复制引导页"手动发布',
+    seleniumFallback: true,
+    helpText: 'Selenium 自动发布（需本地 Chrome + 已登录）',
   },
   wechat_video: {
     name: '视频号',
@@ -49,15 +54,26 @@ export const PLATFORMS: Record<PlatformId, {
     color: '#FA9D3B',
     autoPublish: false,
     autoMetrics: false,
-    helpText: '无个人开放 API,使用"复制引导页"手动发布',
+    seleniumFallback: true,
+    helpText: 'Selenium 自动发布（需本地 Chrome + 已登录）',
   },
   bilibili: {
     name: 'B 站',
     emoji: '📺',
     color: '#00A1D6',
+    autoPublish: true,
+    autoMetrics: false,
+    seleniumFallback: true,
+    helpText: 'B 站开放平台 API + Selenium 降级',
+  },
+  kuaishou: {
+    name: '快手',
+    emoji: '⚡',
+    color: '#FF4906',
     autoPublish: false,
     autoMetrics: false,
-    helpText: '使用"复制引导页"手动发布 + 手动录入数据',
+    seleniumFallback: true,
+    helpText: 'Selenium 自动发布（需本地 Chrome + 已登录）',
   },
 };
 
@@ -65,13 +81,20 @@ export interface PublishInput {
   title: string;
   content: string;
   coverUrl?: string;
+  /** V4.0: 视频文件 URL（本地路径或远程 URL） */
+  videoUrl?: string;
   tags?: string[];
+  /** 定时发布时间 (ISO 8601) */
+  scheduleTime?: string;
 }
 
 export interface PublishResult {
+  success: boolean;
   externalPostId: string;
   externalUrl: string;
-  publishedAt: Date;
+  publishedAt?: Date;
+  error?: string;
+  strategy?: 'api' | 'selenium';
 }
 
 export interface PlatformMetrics {

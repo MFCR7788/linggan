@@ -4,7 +4,7 @@
 
 import { claimNext, markCompleted, markFailed, type ClaimOptions } from './queue';
 import { processImageTask } from './workers/image';
-import { processDigitalHumanTask, onDigitalHumanCompleted } from './workers/digital-human';
+import { processDigitalHumanTask } from './workers/digital-human';
 import type { AiTask, AiTaskType } from '@/types';
 import { summarizeContent, generateCopywriting } from '@/lib/ai/content';
 import { submitVideoTask } from '@/lib/ai/video';
@@ -70,6 +70,12 @@ async function processVideoMergeTask(task: AiTask, _workerId: string) {
   return { segmentUrls: input.segmentUrls, bgmUrl: input.bgmUrl, subtitles: input.subtitles, merged: false, note: '合并任务需调用 /api/ai/video/merge 完成' };
 }
 
+async function processVideoMixTask(task: AiTask): Promise<Record<string, unknown>> {
+  // 视频混剪任务：返回混剪参数，实际执行在 API route 或后台 worker
+  const input = task.input as Record<string, unknown>;
+  return { project: input.project, status: 'queued', note: '混剪任务已入队' };
+}
+
 const WORKER_REGISTRY: Partial<Record<AiTaskType, WorkerHandler>> = {
   ai_summary: processSummaryTask,
   copywriting: processCopywritingTask,
@@ -77,6 +83,7 @@ const WORKER_REGISTRY: Partial<Record<AiTaskType, WorkerHandler>> = {
   image_batch: processImageTask,
   video: processVideoTask,
   video_merge: processVideoMergeTask,
+  video_mix: processVideoMixTask,
   digital_human: processDigitalHumanTask,
   digital_human_batch: processDigitalHumanTask,
 };

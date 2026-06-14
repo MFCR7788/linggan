@@ -17,6 +17,7 @@ export const CONCURRENCY_LIMITS: Record<AiTaskType, number> = {
   digital_human: 3,
   digital_human_batch: 3,
   video_merge: 5,
+  video_mix: 3,              // 视频混剪（CPU 密集型）
 };
 
 // 任务类型 → 预估秒数（前端 ETA 计算）
@@ -29,6 +30,7 @@ export const ESTIMATED_SECONDS: Record<AiTaskType, number> = {
   digital_human: 90,
   digital_human_batch: 90,
   video_merge: 30,
+  video_mix: 60,             // 视频混剪（CPU 密集型，预估 60s）
 };
 
 // 抢占超时：worker 抢占后多少秒没上报进度视为卡死

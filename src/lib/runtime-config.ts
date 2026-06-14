@@ -123,4 +123,24 @@ export function getAliyunSmsAccessKeySecret(): string | undefined {
   return getEnv('ALIYUN_SMS_ACCESS_KEY_SECRET') || getEnv('ALIYUN_ACCESS_KEY_SECRET');
 }
 
+// ─── 媒体素材搜索 ────────────────────────────────────────────
+
+export function getPexelsApiKey(): string | undefined {
+  return getEnv('PEXELS_API_KEY');
+}
+
+export function getPixabayApiKey(): string | undefined {
+  return getEnv('PIXABAY_API_KEY');
+}
+
+export function getUnsplashAccessKey(): string | undefined {
+  return getEnv('UNSPLASH_ACCESS_KEY');
+}
+
+// ─── DeepSeek（用于关键词翻译等轻量 LLM 调用） ────────────────
+
+export function getDeepSeekApiKey(): string | undefined {
+  return getEnv('DEEPSEEK_API_KEY');
+}
+
 export { getEnv };

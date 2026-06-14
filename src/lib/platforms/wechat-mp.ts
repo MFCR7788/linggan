@@ -119,6 +119,7 @@ export class WeChatMPAdapter implements PlatformAdapter {
 
     // 2) 群发(简化:返回 media_id 作为 external_post_id)
     return {
+      success: true,
       externalPostId: json.media_id,
       externalUrl: `https://mp.weixin.qq.com/s/${json.media_id}`,
       publishedAt: new Date(),

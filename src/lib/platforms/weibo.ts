@@ -101,6 +101,7 @@ export class WeiboAdapter implements PlatformAdapter {
     }>(`${url}?${params}`, { method: 'POST' });
 
     return {
+      success: true,
       externalPostId: json.id,
       externalUrl: `https://weibo.com/${json.user.id}/${json.id}`,
       publishedAt: new Date(json.created_at),

@@ -79,6 +79,7 @@ export const PAGE_ROUTES: Record<string, string> = {
   login: '/login',
   'ai-tts': '/ai/tts',
   'ai-digital-human': '/ai/digital-human',
+  'ai-video-mix': '/ai/video-mix',
   'profile-help': '/profile/help',
   'profile-memory': '/profile/memory',
   'profile-skills': '/profile/skills',

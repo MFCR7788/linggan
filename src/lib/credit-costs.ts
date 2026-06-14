@@ -107,6 +107,26 @@ export const CREDIT_COSTS = {
   digital_twin: {
     oneTime: 300,
   },
+
+  // ─── 媒体素材搜索 ──────────────────────────────────
+  // Pexels/Pixabay 免费，Unsplash 免费，仅收取 AI 关键词翻译 + 聚合成本
+  media_search: {
+    perQuery: 1,  // 每次搜索 1 credit（含 AI 翻译 + 多源聚合）
+  },
+
+  // ─── 视频混剪 ──────────────────────────────────────
+  // FFmpeg 后端处理，按成品时长计费（CPU 密集型 + Supabase 上传）
+  video_mix: {
+    perMinute: 5,  // 每分钟成品 5 credits
+    minCost: 3,     // 最低 3 credits（不足 1 分钟也收）
+  },
+
+  // ─── 平台发布 ──────────────────────────────────────
+  // API 发布有上游成本，Selenium 仅 CPU 成本
+  platform_publish: {
+    perPlatform: 3,  // 每平台 3 credits
+    selenium: 1,     // Selenium 降级仅 1 credit
+  },
 } as const;
 
 // ─── 辅助计算函数 ──────────────────────────────────────────
@@ -155,5 +175,17 @@ export function calcAvatarVideoCost(chars: number): number {
   return Math.max(
     CREDIT_COSTS.ai_avatar_video.minCost,
     estimatedSeconds * CREDIT_COSTS.ai_avatar_video.perSecond
+  );
+}
+
+/**
+ * 视频混剪扣点:按成品时长(min)算
+ * @param durationSeconds 成品时长(秒)
+ */
+export function calcVideoMixCost(durationSeconds: number): number {
+  const minutes = Math.ceil(durationSeconds / 60);
+  return Math.max(
+    CREDIT_COSTS.video_mix.minCost,
+    minutes * CREDIT_COSTS.video_mix.perMinute
   );
 }
