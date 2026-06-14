@@ -192,25 +192,9 @@ jobs:
               echo "=== fixing permissions ==="
               chown -R deploy:deploy /var/www/lingji
 
-              # 重写 systemd 服务文件，先设置 Restart=no 防止自动重启循环
+              # 重写 systemd 服务文件（Restart=no 防止自动重启循环）
               echo "=== rewriting systemd service (Restart=no) ==="
-              cat > /etc/systemd/system/lingji.service << 'SVC'
-              [Unit]
-              Description=Lingji Next.js App
-              After=network.target
-
-              [Service]
-              Type=simple
-              User=deploy
-              WorkingDirectory=/var/www/lingji
-              ExecStart=/usr/bin/node node_modules/next/dist/bin/next start
-              Restart=no
-              Environment=NODE_ENV=production
-              Environment=PORT=3000
-
-              [Install]
-              WantedBy=multi-user.target
-              SVC
+              printf '[Unit]\nDescription=Lingji Next.js App\nAfter=network.target\n\n[Service]\nType=simple\nUser=deploy\nWorkingDirectory=/var/www/lingji\nExecStart=/usr/bin/node node_modules/next/dist/bin/next start\nRestart=no\nEnvironment=NODE_ENV=production\nEnvironment=PORT=3000\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/lingji.service
               systemctl daemon-reload
               echo "  service file updated (Restart=no)"
 
