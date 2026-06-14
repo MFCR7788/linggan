@@ -35,7 +35,7 @@ interface PixabayHit {
 
 function getApiKey(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const { getPixabayApiKey } = require('@/lib/runtime-config');
     return getPixabayApiKey() || '';
   } catch {

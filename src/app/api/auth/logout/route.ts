@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getSupabaseUrl, getSupabaseAnonKey } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +9,8 @@ async function clearSession(request: NextRequest) {
   const cookieStore = cookies();
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    getSupabaseUrl(),
+    getSupabaseAnonKey(),
     {
       cookies: {
         get(name: string) {

@@ -95,7 +95,13 @@ export async function POST(request: NextRequest) {
     const child = spawn('bash', [DEPLOY_SCRIPT], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
-      env: { ...process.env },
+      env: {
+        PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        HOME: process.env.HOME || '/root',
+        LANG: process.env.LANG || 'en_US.UTF-8',
+        NODE_ENV: process.env.NODE_ENV || 'production',
+        DEPLOY_TRIGGER: 'github-webhook',
+      },
     });
     child.unref();
   } catch (err) {

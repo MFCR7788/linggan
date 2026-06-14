@@ -19,7 +19,8 @@ import type {
   MixSubtitleConfig,
   MixTaskStatus,
 } from '@/lib/video-mixer/types';
-import { TRANSITIONS, getTransitionsByCategory, BGM_STYLES } from '@/lib/video-mixer';
+import { TRANSITIONS, getTransitionsByCategory } from '@/lib/video-mixer/transitions';
+import { BGM_STYLES } from '@/lib/video-mixer/types';
 import { Plus, Trash2, GripVertical, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ─── 内置工具组件 ────────────────────────────────────────────

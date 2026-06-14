@@ -69,7 +69,7 @@ async function translateWithAI(chineseText: string): Promise<string[]> {
   // 直接用 fetch 调用 DeepSeek，不依赖复杂的 LLM 抽象
   const apiKey = (() => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line
       const { getDeepSeekApiKey } = require('@/lib/runtime-config');
       return getDeepSeekApiKey() || process.env.DEEPSEEK_API_KEY || '';
     } catch {

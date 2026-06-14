@@ -2,13 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import Dysmsapi, * as $Dysmsapi from '@alicloud/dysmsapi20170525';
 import { Config } from '@alicloud/openapi-client';
-import { getAliyunSmsAccessKeyId, getAliyunSmsAccessKeySecret } from '@/lib/runtime-config';
+import { getAliyunSmsAccessKeyId, getAliyunSmsAccessKeySecret, getAliyunSmsTemplateCode, getAliyunSmsSignName, getAliyunSmsRegionId } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
 const CODE_EXPIRY_MINUTES = 5;
-const SMS_TEMPLATE_CODE = process.env.ALIYUN_SMS_TEMPLATE_CODE || 'SMS_506745050';
-const SMS_SIGN_NAME = process.env.ALIYUN_SMS_SIGN_NAME || '魔法超人';
 
 export async function POST(request: Request) {
   try {
@@ -77,7 +75,7 @@ export async function POST(request: Request) {
     }
 
     // 5. 发送短信 (阿里云)
-    const regionId = process.env.ALIYUN_SMS_REGION_ID || 'cn-hangzhou';
+    const regionId = getAliyunSmsRegionId();
     const accessKeyId = getAliyunSmsAccessKeyId();
     const accessKeySecret = getAliyunSmsAccessKeySecret();
 
@@ -95,8 +93,8 @@ export async function POST(request: Request) {
         const client = new Dysmsapi(config);
         const sendSmsRequest = new $Dysmsapi.SendSmsRequest({
           phoneNumbers: phone,
-          signName: SMS_SIGN_NAME,
-          templateCode: SMS_TEMPLATE_CODE,
+          signName: getAliyunSmsSignName(),
+          templateCode: getAliyunSmsTemplateCode(),
           templateParam: JSON.stringify({ code }),
         });
         const result = await client.sendSms(sendSmsRequest);

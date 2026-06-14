@@ -51,7 +51,7 @@ function getApiKey(): string {
   // 生产环境通过 runtime-config
   if (!key) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line
       const { getPexelsApiKey } = require('@/lib/runtime-config');
       return getPexelsApiKey() || '';
     } catch {

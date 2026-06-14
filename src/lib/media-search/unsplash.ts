@@ -25,7 +25,7 @@ interface UnsplashPhoto {
 
 function getAccessKey(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const { getUnsplashAccessKey } = require('@/lib/runtime-config');
     return getUnsplashAccessKey() || '';
   } catch {

@@ -37,9 +37,9 @@ export async function seleniumPublish(
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const { Builder } = require('selenium-webdriver');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const chrome = require('selenium-webdriver/chrome');
 
     const opts = new chrome.Options();
@@ -81,9 +81,9 @@ export async function seleniumPublish(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line 
 function getPlatformPublisher(platform: string): ((driver: any, input: PublishInput) => Promise<string>) | null {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line
   const { By, until } = require('selenium-webdriver');
 
   const publishers: Record<string, (driver: any, input: PublishInput) => Promise<string>> = {

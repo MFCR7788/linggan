@@ -83,6 +83,22 @@ export function getAuthSalt(): string | undefined {
   return getEnv('AUTH_SALT');
 }
 
+export function getAliyunSmsTemplateCode(): string {
+  return getEnv('ALIYUN_SMS_TEMPLATE_CODE') || 'SMS_506745050';
+}
+
+export function getAliyunSmsSignName(): string {
+  return getEnv('ALIYUN_SMS_SIGN_NAME') || '魔法超人';
+}
+
+export function getSupabaseUrl(): string {
+  return getEnv('NEXT_PUBLIC_SUPABASE_URL') || getEnv('SUPABASE_URL') || '';
+}
+
+export function getSupabaseAnonKey(): string {
+  return getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || '';
+}
+
 export function getDevAuthSecret(): string | undefined {
   return getEnv('DEV_AUTH_SECRET');
 }
@@ -121,6 +137,14 @@ export function getAliyunSmsAccessKeyId(): string | undefined {
 
 export function getAliyunSmsAccessKeySecret(): string | undefined {
   return getEnv('ALIYUN_SMS_ACCESS_KEY_SECRET') || getEnv('ALIYUN_ACCESS_KEY_SECRET');
+}
+
+export function getAliyunSmsRegionId(): string {
+  return getEnv('ALIYUN_SMS_REGION_ID') || 'cn-hangzhou';
+}
+
+export function getDebugSecret(): string | undefined {
+  return getEnv('DEBUG_SECRET');
 }
 
 // ─── 媒体素材搜索 ────────────────────────────────────────────

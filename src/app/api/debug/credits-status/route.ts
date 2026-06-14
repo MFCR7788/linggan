@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { getBalance, getTransactions, getPackages, getTiers } from '@/lib/credits';
+import { getDebugSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
 
-  const debugSecret = process.env.DEBUG_SECRET;
+  const debugSecret = getDebugSecret();
   if (!debugSecret) {
     return NextResponse.json({ error: 'Debug 端点未配置' }, { status: 404 });
   }

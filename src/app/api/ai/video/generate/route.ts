@@ -177,7 +177,8 @@ export const GET = withAuth(async ({ request, user }) => {
           const provider = (providers[idx] || 'dashscope') as VideoProvider;
           const result = await getVideoTaskStatusUniversal(id, provider);
           return { taskId: id, ...result };
-        } catch {
+        } catch (e) {
+          console.error(`[video] 轮询任务 ${id} 失败:`, e);
           return { taskId: id, status: 'error', message: '查询失败' };
         }
       })

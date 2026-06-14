@@ -9,7 +9,9 @@ export type {
   MixSubmitResult,
   MixTaskStatus,
   TransitionType,
+  BGMStyle,
 } from './types';
+export { BGM_STYLES } from './types';
 
 export {
   TRANSITIONS,
@@ -23,9 +25,7 @@ export { mixVideos, mixBGM } from './engine';
 export type { MixEngineOptions } from './engine';
 
 export {
-  BGM_STYLES,
   getBGMPath,
   recommendBGM,
   getAvailableBGMFiles,
 } from './bgm-engine';
-export type { BGMStyle } from './bgm-engine';

@@ -99,7 +99,7 @@ async function aiOptimize(
 ): Promise<OptimizedSubtitle[] | null> {
   const apiKey = (() => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line
       const { getDeepSeekApiKey } = require('@/lib/runtime-config');
       return getDeepSeekApiKey() || process.env.DEEPSEEK_API_KEY || '';
     } catch {

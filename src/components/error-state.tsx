@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { PrimaryButton } from "./PrimaryButton";
 
@@ -7,7 +8,7 @@ interface ErrorStateProps {
   className?: string;
 }
 
-export function ErrorState({ 
+export const ErrorState = memo(function ErrorState({
   message = "加载失败，请重试", onRetry, className = "" }: ErrorStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-3 py-10 ${className}`}>
@@ -21,4 +22,4 @@ export function ErrorState({
       )}
     </div>
   );
-}
+});

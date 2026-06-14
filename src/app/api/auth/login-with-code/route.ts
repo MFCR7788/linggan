@@ -2,12 +2,33 @@
 // 策略：先登录 → 失败则创建 → GoTrue 异常时 SQL 直插 auth.users 兜底
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { createAdminClient } from '@/lib/supabase-server';
+import { getAuthSalt, getSupabaseUrl, getSupabaseAnonKey } from '@/lib/runtime-config';
 import { grant } from '@/lib/credits';
-import type { SupabaseClient } from '@supabase/supabase-js';
+
+function derivePassword(phone: string): string {
+  const salt = getAuthSalt();
+  if (!salt) {
+    throw new Error('FATAL: AUTH_SALT 未配置！生产环境必须设置 AUTH_SALT 环境变量。此值首次上线后不可变更。用 openssl rand -hex 64 生成。');
+  }
+  return createHash('sha256').update(`${phone}|${salt}`).digest('hex').slice(0, 48);
+}
+
+function toAuthEmail(phone: string): string {
+  return `${phone}@phone.lingji.app`;
+}
+
+function deriveJwtSecret(): string {
+  const salt = getAuthSalt();
+  if (!salt) {
+    throw new Error('FATAL: AUTH_SALT 未配置，无法派生 JWT 密钥。');
+  }
+  return createHash('sha256').update(`jwt:${salt}`).digest('hex');
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -25,26 +46,6 @@ function safeJson(body: Record<string, unknown>, status = 200): NextResponse {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
-}
-
-function derivePassword(phone: string): string {
-  const salt = process.env.AUTH_SALT;
-  if (!salt) {
-    throw new Error('FATAL: AUTH_SALT 未配置！生产环境必须设置 AUTH_SALT 环境变量。此值首次上线后不可变更。用 openssl rand -hex 64 生成。');
-  }
-  return createHash('sha256').update(`${phone}|${salt}`).digest('hex').slice(0, 48);
-}
-
-function toAuthEmail(phone: string): string {
-  return `${phone}@phone.lingji.app`;
-}
-
-function deriveJwtSecret(): string {
-  const salt = process.env.AUTH_SALT;
-  if (!salt) {
-    throw new Error('FATAL: AUTH_SALT 未配置，无法派生 JWT 密钥。');
-  }
-  return createHash('sha256').update(`jwt:${salt}`).digest('hex');
 }
 
 /** 通过 RPC 查找 auth.users 中的用户（绕过 GoTrue） */
@@ -197,8 +198,8 @@ export async function POST(request: NextRequest) {
     // ─── 5. SSR session cookie ───
     const cookieStore = cookies();
     const ssr = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
+      getSupabaseUrl(),
+      getSupabaseAnonKey(),
       {
         cookies: {
           get(name: string) { return cookieStore.get(name)?.value; },

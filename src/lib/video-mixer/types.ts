@@ -76,6 +76,28 @@ export interface MixProject {
   outputAspect: '16:9' | '9:16' | '1:1';
 }
 
+/** BGM 风格定义 */
+export interface BGMStyle {
+  id: string;
+  name: string;
+  description: string;
+  suitableFor: string[];
+  defaultVolume: number;
+  supportsDucking: boolean;
+}
+
+/** 所有 BGM 风格 */
+export const BGM_STYLES: BGMStyle[] = [
+  { id: 'tech', name: '科技感', description: '电子合成，适合科技/数码/产品展示', suitableFor: ['科技', '数码', '产品展示', '开箱'], defaultVolume: 0.25, supportsDucking: true },
+  { id: 'chill', name: '轻松休闲', description: '轻柔舒缓，适合Vlog/日常/旅行', suitableFor: ['Vlog', '日常', '旅行', '治愈'], defaultVolume: 0.3, supportsDucking: true },
+  { id: 'hype', name: '激情动感', description: '节奏强劲，适合运动/电竞/快节奏', suitableFor: ['运动', '电竞', '快节奏', '混剪'], defaultVolume: 0.2, supportsDucking: false },
+  { id: 'elegant', name: '优雅典雅', description: '古典/爵士，适合品牌/时尚/高端', suitableFor: ['品牌', '时尚', '高端', '婚礼'], defaultVolume: 0.22, supportsDucking: true },
+  { id: 'energetic', name: '活力阳光', description: '明快活泼，适合美食/种草/娱乐', suitableFor: ['美食', '种草', '娱乐', '探店'], defaultVolume: 0.25, supportsDucking: true },
+  { id: 'cinematic', name: '电影感', description: '史诗/管弦，适合大片/宣传片', suitableFor: ['宣传片', '品牌故事', '旅行大片'], defaultVolume: 0.28, supportsDucking: true },
+  { id: 'lofi', name: 'Lo-Fi 放松', description: 'Lo-Fi Hip Hop，适合学习/阅读/知识', suitableFor: ['学习', '阅读', '知识', '播客'], defaultVolume: 0.25, supportsDucking: true },
+  { id: 'corporate', name: '商务专业', description: '干净利落，适合企业/B2B/财经', suitableFor: ['企业', 'B2B', '财经', '新闻'], defaultVolume: 0.2, supportsDucking: true },
+];
+
 /** BGM 配置 */
 export interface MixBGMConfig {
   /** BGM 风格: tech/chill/hype/elegant/energetic，或本地文件路径 */

@@ -21,7 +21,7 @@ const VOICES: TtsVoice[] = [
 
 function getApiKey(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const { getDashScopeApiKey } = require('@/lib/runtime-config');
     return getDashScopeApiKey() || process.env.DASHSCOPE_API_KEY || '';
   } catch {

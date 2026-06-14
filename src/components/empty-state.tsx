@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Inbox } from "lucide-react";
 
 interface EmptyStateProps {
@@ -8,7 +9,7 @@ interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({ 
+export const EmptyState = memo(function EmptyState({
   icon, title, description, action, className = "" }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-4 py-10 px-6 ${className}`}>
@@ -24,4 +25,4 @@ export function EmptyState({
       {action}
     </div>
   );
-}
+});
