@@ -136,6 +136,15 @@ jobs:
             fi
             if [ $BUILD_EXIT -eq 0 ]; then
               echo "=== build success, restarting lingji ==="
+              echo "=== static diagnostics ==="
+              echo "Chunks count: $(ls .next/static/chunks/*.js 2>/dev/null | wc -l)"
+              echo "App chunks count: $(find .next/static/chunks/app -name '*.js' 2>/dev/null | wc -l)"
+              echo "Webpack chunks:"
+              ls -la .next/static/chunks/webpack-*.js 2>/dev/null || echo "  NONE FOUND"
+              echo "App layout/page chunks:"
+              ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
+              echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
+              df -h / | tail -1
               systemctl restart lingji
             else
               echo "=== build failed (exit $BUILD_EXIT), keeping previous build ==="
