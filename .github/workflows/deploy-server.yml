@@ -198,13 +198,52 @@ jobs:
               systemctl daemon-reload
               echo "  service file updated (Restart=no)"
 
-              # 停服务 + 清端口（Restart=no 不会有自动重启）
+              # ===== 进程调查：找出是谁在自动重启 Next.js =====
+              echo "=== process investigation ==="
+              echo "--- all next/node processes ---"
+              ps aux | grep -E '[n]ext|[n]ode' || echo "  none"
+              echo "--- port 3000 holder ---"
+              PID_3000=$(fuser 3000/tcp 2>/dev/null)
+              if [ -n "$PID_3000" ]; then
+                echo "  PID: $PID_3000"
+                echo "  PPID chain:"
+                ps -o pid,ppid,user,args -p "$PID_3000" 2>/dev/null || echo "  ps failed"
+                # 追查父进程链
+                CPID="$PID_3000"
+                for depth in 1 2 3 4 5; do
+                  PPID=$(ps -o ppid= -p "$CPID" 2>/dev/null | tr -d ' ')
+                  if [ -z "$PPID" ] || [ "$PPID" = "1" ] || [ "$PPID" = "0" ]; then
+                    echo "  chain ends at PID=$CPID (PPID=$PPID)"
+                    break
+                  fi
+                  echo "  level $depth: PID=$CPID → PPID=$PPID"
+                  ps -o pid,ppid,user,args -p "$PPID" 2>/dev/null || echo "  parent ps failed"
+                  CPID="$PPID"
+                done
+                echo "--- /proc/$PID_3000/status ---"
+                if [ -f "/proc/$PID_3000/status" ]; then
+                  grep -E '^(Name|Pid|PPid|State|Uid)' "/proc/$PID_3000/status"
+                  # cgroup 可以看出是否在 Docker 里
+                  grep -E 'cgroup' "/proc/$PID_3000/cgroup" 2>/dev/null | head -5 || true
+                fi
+              else
+                echo "  port 3000 is free"
+              fi
+              echo "--- check for other supervisors ---"
+              systemctl is-active docker 2>/dev/null && echo "  docker: ACTIVE" || true
+              systemctl is-active supervisord 2>/dev/null && echo "  supervisord: ACTIVE" || true
+              systemctl is-active monit 2>/dev/null && echo "  monit: ACTIVE" || true
+              ps aux | grep -E '[s]upervisord|[m]onit|[p]m2' || echo "  no supervisor/monit/pm2 found"
+              echo "--- all systemd services on port 3000 ---"
+              systemctl list-units --type=service --state=running | grep -E 'next|node|lingji' || echo "  none"
+
+              # 停服务 + 清端口
               echo "=== stopping service ==="
               systemctl stop lingji 2>&1 || true
               sleep 1
-              echo "=== killing port 3000 ==="
+              echo "=== killing port 3000 (SIGKILL) ==="
               for i in 1 2 3 4 5; do
-                fuser -k 3000/tcp 2>/dev/null && echo "  killed (round $i)" || { echo "  none (round $i)"; break; }
+                fuser -k -9 3000/tcp 2>/dev/null && echo "  killed (round $i)" || { echo "  none (round $i)"; break; }
                 sleep 1
               done
               echo "=== port check ==="
