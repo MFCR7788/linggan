@@ -191,24 +191,30 @@ jobs:
               # 先停 systemd 服务（防止 Restart=always 自动重启）
               systemctl stop lingji 2>/dev/null || true
               sleep 1
-              # 强制释放 3000 端口（无论进程属于哪个用户）
+              # 强制释放 3000 端口
               echo "=== killing any process on port 3000 ==="
               fuser -k 3000/tcp 2>/dev/null || true
               sleep 2
               # 验证端口已释放
               echo "=== port 3000 after kill ==="
               ss -tlnp | grep 3000 || echo "  port 3000 is free"
-              # 重启服务
-              echo "=== starting lingji service ==="
+              # 手动以 deploy 用户运行 next start 查看错误
+              echo "=== manual next start (as deploy user) ==="
+              timeout 10 su - deploy -c "cd /var/www/lingji && /usr/bin/node node_modules/next/dist/bin/next start" 2>&1 || true
+              echo "=== manual start exit: $? ==="
+              # 确保端口再次释放
+              fuser -k 3000/tcp 2>/dev/null || true
+              sleep 1
+              # 启动服务
+              echo "=== starting lingji via systemd ==="
               systemctl start lingji
               sleep 5
-              # 验证服务状态和端口
+              # 验证
               if systemctl is-active --quiet lingji; then
                 echo "=== lingji service is active ==="
               else
                 echo "=== WARNING: lingji service not active ==="
                 systemctl status lingji 2>&1 || true
-                journalctl -u lingji --no-pager -n 30 2>/dev/null || true
               fi
               echo "=== port 3000 ==="
               ss -tlnp | grep 3000 || echo "  nothing on port 3000"
