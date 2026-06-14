@@ -23,55 +23,75 @@ jobs:
           timeout_minutes: 20
           script: |
             set -e  # git + env 阶段失败立即停止
-
-            # 两个目录：
-            #   /var/www/lingji — git 同步区（有 remote）
-            #   /opt/lingji     — systemd 服务运行目录
-            GIT_DIR="/var/www/lingji"
-            APP_DIR="/opt/lingji"
+            cd /var/www/lingji
 
             # 辅助函数：写入 .env.local
             write_env_line() {
-              local file="$1" key="$2" val="$3"
-              if grep -q "^${key}=" "$file" 2>/dev/null; then
-                perl -i -pe "s~^${key}=.*~${key}=${val}~" "$file"
+              local key="$1" val="$2"
+              if grep -q "^${key}=" .env.local 2>/dev/null; then
+                perl -i -pe "s~^${key}=.*~${key}=${val}~" .env.local
               else
-                echo "${key}=${val}" >> "$file"
+                echo "${key}=${val}" >> .env.local
               fi
             }
 
-            # ===== 阶段 1: 在 /var/www/lingji 同步最新代码 =====
+            # ===== 阶段 1: 同步代码 + env =====
             echo "=== git sync ==="
-            cd "$GIT_DIR"
             git remote -v
             git fetch origin main
             git reset --hard origin/main
             git log --oneline -5
 
-            # 写入 secrets 到 /var/www/lingji/.env.local (git 区)
-            write_env_line "$GIT_DIR/.env.local" "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
-            write_env_line "$GIT_DIR/.env.local" "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
-            write_env_line "$GIT_DIR/.env.local" "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
-            write_env_line "$GIT_DIR/.env.local" "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
+            write_env_line "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
+            write_env_line "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
+            write_env_line "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
+            write_env_line "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
 
-            # ===== 阶段 2: 同步源码到 /opt/lingji =====
-            echo "=== rsync source to $APP_DIR ==="
-            mkdir -p "$APP_DIR"
-            rsync -a --delete \
-              --exclude '.git' \
-              --exclude 'node_modules' \
-              --exclude '.next' \
-              --exclude '.next.old' \
-              "$GIT_DIR/" "$APP_DIR/"
+            # ===== 阶段 2: 修正 systemd 服务目录（统一使用 /var/www/lingji）=====
+            echo "=== systemd service check ==="
+            SERVICE_FILE="/etc/systemd/system/lingji.service"
+            if [ -f "$SERVICE_FILE" ]; then
+              # 检查是否指向错误目录
+              if grep -q '/opt/lingji' "$SERVICE_FILE" 2>/dev/null; then
+                echo "Fixing systemd service: /opt/lingji → /var/www/lingji"
+                sed -i 's|/opt/lingji|/var/www/lingji|g' "$SERVICE_FILE"
+                systemctl daemon-reload
+                echo "systemd service updated + daemon-reload done"
+              else
+                echo "systemd service already points to /var/www/lingji"
+              fi
+            else
+              # 不存在则创建
+              echo "Creating systemd service file"
+              cat > "$SERVICE_FILE" << 'SERVICEEOF'
+            [Unit]
+            Description=Lingji Next.js App
+            After=network.target
 
-            # 复制 .env.local 到 /opt/lingji
-            cp "$GIT_DIR/.env.local" "$APP_DIR/.env.local"
+            [Service]
+            Type=simple
+            User=deploy
+            WorkingDirectory=/var/www/lingji
+            ExecStart=/usr/bin/npm start
+            Restart=always
+            RestartSec=3
+            Environment=NODE_ENV=production
+            Environment=PORT=3000
+
+            [Install]
+            WantedBy=multi-user.target
+            SERVICEEOF
+              systemctl daemon-reload
+              systemctl enable lingji
+              echo "systemd service created + enabled"
+            fi
+
+            # 显示当前 systemd 配置
+            grep -E 'WorkingDirectory|ExecStart' "$SERVICE_FILE"
 
             # ===== 阶段 3: 系统环境准备 =====
             # 先停应用释放内存
             systemctl stop lingji || true
-
-            cd "$APP_DIR"
 
             # 清理残留的 onnxruntime 包
             rm -rf node_modules/onnxruntime-node node_modules/onnxruntime-common 2>/dev/null || true
@@ -129,7 +149,7 @@ jobs:
               FF="/usr/local/bin/ffmpeg"
               echo "=== using static ffmpeg (no libass, subtitle rendering disabled) ==="
             fi
-            write_env_line "$APP_DIR/.env.local" "FFMPEG_PATH" "${FF}"
+            write_env_line "FFMPEG_PATH" "${FF}"
             "${FF}" -version 2>&1 | head -1 || true
 
             # ===== 阶段 4: 构建 =====
