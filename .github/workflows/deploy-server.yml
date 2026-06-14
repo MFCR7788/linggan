@@ -188,19 +188,19 @@ jobs:
               ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
               echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
               df -h / | tail -1
+              # 先停 systemd 服务（防止 Restart=always 自动重启）
+              systemctl stop lingji 2>/dev/null || true
+              sleep 1
               # 强制释放 3000 端口（无论进程属于哪个用户）
               echo "=== killing any process on port 3000 ==="
               fuser -k 3000/tcp 2>/dev/null || true
-              sleep 3
-              # 手动测试 next start 能否正常启动（捕获错误信息）
-              echo "=== testing next start ==="
-              timeout 15 /usr/bin/node node_modules/next/dist/bin/next start 2>&1 || true
-              echo "=== next start test exit: $? ==="
-              # 确保端口再次释放
-              fuser -k 3000/tcp 2>/dev/null || true
-              sleep 1
+              sleep 2
+              # 验证端口已释放
+              echo "=== port 3000 after kill ==="
+              ss -tlnp | grep 3000 || echo "  port 3000 is free"
               # 重启服务
-              systemctl restart lingji
+              echo "=== starting lingji service ==="
+              systemctl start lingji
               sleep 5
               # 验证服务状态和端口
               if systemctl is-active --quiet lingji; then
