@@ -207,18 +207,18 @@ jobs:
               if [ -n "$PID_3000" ]; then
                 echo "  PID: $PID_3000"
                 echo "  PPID chain:"
-                ps -o pid,ppid,user,args -p "$PID_3000" 2>/dev/null || echo "  ps failed"
+                ps -o pid,ppid,user:32,args -p "$PID_3000" 2>/dev/null || echo "  ps failed"
                 # 追查父进程链
                 CPID="$PID_3000"
                 for depth in 1 2 3 4 5; do
-                  PPID=$(ps -o ppid= -p "$CPID" 2>/dev/null | tr -d ' ')
-                  if [ -z "$PPID" ] || [ "$PPID" = "1" ] || [ "$PPID" = "0" ]; then
-                    echo "  chain ends at PID=$CPID (PPID=$PPID)"
+                  pparent=$(ps -o ppid= -p "$CPID" 2>/dev/null | tr -d ' ')
+                  if [ -z "$pparent" ] || [ "$pparent" = "1" ] || [ "$pparent" = "0" ]; then
+                    echo "  chain ends at PID=$CPID (parent=$pparent)"
                     break
                   fi
-                  echo "  level $depth: PID=$CPID → PPID=$PPID"
-                  ps -o pid,ppid,user,args -p "$PPID" 2>/dev/null || echo "  parent ps failed"
-                  CPID="$PPID"
+                  echo "  level $depth: PID=$CPID → parent=$pparent"
+                  ps -o pid,ppid,user:32,args -p "$pparent" 2>/dev/null || echo "  parent ps failed"
+                  CPID="$pparent"
                 done
                 echo "--- /proc/$PID_3000/status ---"
                 if [ -f "/proc/$PID_3000/status" ]; then
