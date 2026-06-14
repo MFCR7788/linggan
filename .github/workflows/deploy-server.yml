@@ -188,34 +188,26 @@ jobs:
               ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
               echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
               df -h / | tail -1
-              # 先停 systemd 服务（防止 Restart=always 自动重启）
+              # 修正文件权限（root 构建，deploy 用户运行 systemd 服务）
+              echo "=== fixing permissions ==="
+              chown -R deploy:deploy /var/www/lingji
+              # 先停 systemd 服务
               systemctl stop lingji 2>/dev/null || true
               sleep 1
               # 显示所有占用 3000 端口的进程
               echo "=== processes on port 3000 (before kill) ==="
               ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  none"
-              # 反复杀，确保全清（可能有多个进程监听）
+              # 反复杀，确保全清
               for i in 1 2 3; do
                 fuser -k 3000/tcp 2>/dev/null && echo "  killed (round $i)" || echo "  none to kill (round $i)"
                 sleep 1
               done
-              # 再次确认
               echo "=== processes on port 3000 (after kill) ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  none"
-              # 手动以 deploy 用户运行 next start 查看错误
-              echo "=== manual next start (as deploy user) ==="
-              timeout 10 su - deploy -c "cd /var/www/lingji && /usr/bin/node node_modules/next/dist/bin/next start" 2>&1 || true
-              echo "=== manual start exit: $? ==="
-              # 确保端口再次释放
-              fuser -k 3000/tcp 2>/dev/null || true
-              sleep 1
-              echo "=== port 3000 before systemd start ==="
               ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  none"
               # 启动服务
               echo "=== starting lingji via systemd ==="
               systemctl start lingji
               sleep 5
-              # 验证
               if systemctl is-active --quiet lingji; then
                 echo "=== lingji service is active ==="
               else
@@ -224,7 +216,6 @@ jobs:
               fi
               echo "=== port 3000 final ==="
               ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  nothing on port 3000"
-              # 确保 nginx 也刷新
               nginx -s reload 2>/dev/null || true
               echo "=== nginx reloaded ==="
             else
