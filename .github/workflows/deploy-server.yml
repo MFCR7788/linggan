@@ -191,33 +191,54 @@ jobs:
               # 修正文件权限
               echo "=== fixing permissions ==="
               chown -R deploy:deploy /var/www/lingji
-              # 暴力清端口：先 mv 服务文件再 mask（因 mask 在文件已存在时会失败）
-              echo "=== force stopping service ==="
+
+              # 重写 systemd 服务文件，先设置 Restart=no 防止自动重启循环
+              echo "=== rewriting systemd service (Restart=no) ==="
+              cat > /etc/systemd/system/lingji.service << 'SVC'
+              [Unit]
+              Description=Lingji Next.js App
+              After=network.target
+
+              [Service]
+              Type=simple
+              User=deploy
+              WorkingDirectory=/var/www/lingji
+              ExecStart=/usr/bin/node node_modules/next/dist/bin/next start
+              Restart=no
+              Environment=NODE_ENV=production
+              Environment=PORT=3000
+
+              [Install]
+              WantedBy=multi-user.target
+              SVC
+              systemctl daemon-reload
+              echo "  service file updated (Restart=no)"
+
+              # 停服务 + 清端口（Restart=no 不会有自动重启）
+              echo "=== stopping service ==="
               systemctl stop lingji 2>&1 || true
-              mv /etc/systemd/system/lingji.service /etc/systemd/system/lingji.service.bak 2>/dev/null || true
-              systemctl daemon-reload
-              # 反复杀端口
-              echo "=== killing all on port 3000 ==="
+              sleep 1
+              echo "=== killing port 3000 ==="
               for i in 1 2 3 4 5; do
-                if ss -tlnp 'sport = :3000' 2>/dev/null | grep -q LISTEN; then
-                  fuser -k 3000/tcp 2>&1 && echo "  killed (round $i)" || true
-                  sleep 1
-                else
-                  echo "  port free (round $i)"
-                  break
-                fi
+                fuser -k 3000/tcp 2>/dev/null && echo "  killed (round $i)" || { echo "  none (round $i)"; break; }
+                sleep 1
               done
-              echo "=== port 3000 status ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  port 3000 is free"
-              # 直接启动 Next.js（绕过 systemd auto-restart 循环）
-              echo "=== starting next.js directly ==="
-              su - deploy -c "cd /var/www/lingji && nohup /usr/bin/node node_modules/next/dist/bin/next start &>/var/log/lingji.log &"
+              echo "=== port check ==="
+              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  STILL OCCUPIED!" || echo "  port 3000 is free"
+
+              # 启动 systemd 服务（Restart=no，一次启动）
+              echo "=== starting lingji ==="
+              systemctl start lingji
               sleep 5
-              echo "=== port 3000 final ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  nothing on port 3000"
-              # 恢复 systemd 服务文件（下次部署用）
-              mv /etc/systemd/system/lingji.service.bak /etc/systemd/system/lingji.service 2>/dev/null || true
+              systemctl is-active --quiet lingji && echo "=== lingji service ACTIVE ===" || echo "=== lingji service NOT active ==="
+              echo "=== port 3000 ==="
+              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN || echo "  nothing on port 3000"
+
+              # 恢复 Restart=always（用于后续自动恢复）
+              echo "=== restoring Restart=always ==="
+              sed -i 's/Restart=no/Restart=always/' /etc/systemd/system/lingji.service
               systemctl daemon-reload
+              echo "  Restart=always restored"
               nginx -s reload 2>/dev/null || true
               echo "=== nginx reloaded ==="
             else
