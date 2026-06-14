@@ -188,7 +188,22 @@ jobs:
               ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
               echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
               df -h / | tail -1
+              # 杀死所有 next start 进程（防止残留旧进程占用端口）
+              pkill -f "next start" 2>/dev/null || true
+              sleep 2
+              # 重启服务
               systemctl restart lingji
+              sleep 3
+              # 验证服务状态
+              if systemctl is-active --quiet lingji; then
+                echo "=== lingji service is active ==="
+              else
+                echo "=== WARNING: lingji service not active, checking logs ==="
+                journalctl -u lingji --no-pager -n 20 2>/dev/null || true
+              fi
+              # 确保 nginx 也刷新
+              nginx -s reload 2>/dev/null || true
+              echo "=== nginx reloaded ==="
             else
               echo "=== build failed (exit $BUILD_EXIT), keeping previous build ==="
               systemctl start lingji
