@@ -188,43 +188,36 @@ jobs:
               ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
               echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
               df -h / | tail -1
-              # 修正文件权限（root 构建，deploy 用户运行 systemd 服务）
+              # 修正文件权限
               echo "=== fixing permissions ==="
               chown -R deploy:deploy /var/www/lingji
-              # 停用 systemd 服务并 mask 防止自动重启
-              echo "=== stopping + masking lingji service ==="
+              # 暴力清端口：先 mv 服务文件再 mask（因 mask 在文件已存在时会失败）
+              echo "=== force stopping service ==="
               systemctl stop lingji 2>&1 || true
-              systemctl mask lingji 2>&1 || true
-              sleep 1
-              # 反复杀端口，确保全清
+              mv /etc/systemd/system/lingji.service /etc/systemd/system/lingji.service.bak 2>/dev/null || true
+              systemctl daemon-reload
+              # 反复杀端口
               echo "=== killing all on port 3000 ==="
               for i in 1 2 3 4 5; do
                 if ss -tlnp 'sport = :3000' 2>/dev/null | grep -q LISTEN; then
-                  fuser -vk 3000/tcp 2>&1 && echo "  killed (round $i)" || echo "  fuser failed (round $i)"
+                  fuser -k 3000/tcp 2>&1 && echo "  killed (round $i)" || true
                   sleep 1
                 else
                   echo "  port free (round $i)"
                   break
                 fi
               done
-              # 确认端口已空闲
               echo "=== port 3000 status ==="
               ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  port 3000 is free"
-              # 恢复并启动 systemd 服务
-              echo "=== unmasking + starting lingji ==="
-              systemctl unmask lingji 2>&1 || true
-              systemctl start lingji
+              # 直接启动 Next.js（绕过 systemd auto-restart 循环）
+              echo "=== starting next.js directly ==="
+              su - deploy -c "cd /var/www/lingji && nohup /usr/bin/node node_modules/next/dist/bin/next start &>/var/log/lingji.log &"
               sleep 5
-              if systemctl is-active --quiet lingji; then
-                echo "=== lingji service is active ==="
-              else
-                echo "=== WARNING: lingji service not active ==="
-                systemctl status lingji 2>&1 || true
-                echo "=== journal ==="
-                journalctl -u lingji --no-pager -n 5 2>&1 || true
-              fi
               echo "=== port 3000 final ==="
               ss -tlnp 'sport = :3000' 2>/dev/null || ss -tlnp | grep 3000 || echo "  nothing on port 3000"
+              # 恢复 systemd 服务文件（下次部署用）
+              mv /etc/systemd/system/lingji.service.bak /etc/systemd/system/lingji.service 2>/dev/null || true
+              systemctl daemon-reload
               nginx -s reload 2>/dev/null || true
               echo "=== nginx reloaded ==="
             else
