@@ -96,7 +96,7 @@ function _anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-/** 安全截断 API 错误响应（防止日志泄露 API Key） */
+/** @deprecated 使用 errors.ts 中的 safeErrorText（支持更多模式、不截断） */
 export function safeErrorText(text: string, maxLen: number = 200): string {
   // 移除可能的 Authorization header 回显
   return text

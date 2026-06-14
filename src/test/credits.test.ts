@@ -13,7 +13,7 @@ import { InsufficientCreditsError, getBalance } from '@/lib/credits';
 
 function chain() {
   const calls: Record<string, unknown> = {};
-  const builder: Record<string, (...args: unknown[]) => unknown> = {
+  const builder: Record<string, any> = {
     select: vi.fn(() => builder),
     insert: vi.fn(() => builder),
     update: vi.fn(() => builder),

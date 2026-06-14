@@ -2,7 +2,7 @@
 
 // Agent 聊天主容器 — 会话管理 + 流式消息 + 语音 + 附件 + 媒体预览
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useInputHistory } from '@/hooks/use-input-history';
 import { AgentMessage } from './AgentMessage';
@@ -14,6 +14,8 @@ import { InspirationPicker } from './InspirationPicker';
 import { EditPlanCard } from './EditPlanCard';
 import type { EditPlan } from '@/lib/agent/types';
 import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
+import { parseParamCards, formatParamValues } from '@/lib/agent/param-parser';
+import { ParamCard } from '@/components/agent/ParamCard';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
 import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
 import { useFileUpload } from '@/hooks/use-file-upload';
@@ -98,6 +100,8 @@ export function AgentChatView() {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
   const [choiceSelections, setChoiceSelections] = useState<Map<number, ChoiceSelection>>(new Map());
+  const [paramValues, setParamValues] = useState<Map<number, Record<string, unknown>>>(new Map());
+  const [paramSubmitting, setParamSubmitting] = useState(false);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -138,6 +142,21 @@ export function AgentChatView() {
       c.command.toLowerCase().includes(f) || c.label.toLowerCase().includes(f)
     );
   })();
+
+  // V3.0: 动态 placeholder — 从预设提示词随机选取
+  const placeholderText = useMemo(() => {
+    const pool = [
+      '试试说：帮我写一篇小红书种草文案...',
+      '试试说：帮我把产品图做成带货视频...',
+      '试试说：最近有什么AI相关热点？',
+      '试试说：帮我分析这篇文章的要点...',
+      '试试说：生成一张赛博朋克风格的海报...',
+      '试试说：帮我的产品写一段口播脚本...',
+      '试试说：给这张图去背景...',
+      '试试说：把这段文字转成语音...',
+    ];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, []);
 
   const selectSlashCommand = (cmd: typeof OFFICIAL_COMMANDS[0]) => {
     const ta = inputRef.current;
@@ -978,6 +997,45 @@ export function AgentChatView() {
     setChoiceSubmitting(false);
   }, [isStreaming, choiceSubmitting, choiceSelections, messages, currentSessionId, doStream]);
 
+  // ParamCard 参数提交
+  const handleParamSubmit = useCallback(async () => {
+    if (isStreaming || paramSubmitting) return;
+
+    // 从最后一条 assistant 消息解析 param_cards 来获取 schema
+    const lastMsg = [...messages].reverse().find(m => m.type === 'assistant');
+    if (!lastMsg) return;
+    const { cards } = parseParamCards(lastMsg.content);
+    if (cards.length === 0) return;
+
+    const parts: string[] = [];
+    for (let i = 0; i < cards.length; i++) {
+      const values = paramValues.get(i);
+      if (!values) continue;
+      const formatted = formatParamValues(cards[i], values);
+      if (formatted) parts.push(formatted);
+    }
+    if (parts.length === 0) return;
+
+    setParamSubmitting(true);
+    const lastUserMsg = [...messages].reverse().find(m => m.type === 'user');
+    const context = lastUserMsg?.content || '';
+    const paramText = `用户选择的参数：\n${parts.join('\n')}\n\n${context ? `原始需求：${context}` : ''}\n\n请按照以上参数继续生成。`;
+
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: paramText,
+      toolCalls: [],
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+    setParamValues(new Map());
+
+    await doStream(paramText, [], [], [], [], currentSessionId);
+    setParamSubmitting(false);
+  }, [isStreaming, paramSubmitting, paramValues, messages, currentSessionId, doStream]);
+
   // 从本地选择素材并自动注入对话
   const handlePickLocalMedia = useCallback(async (mediaType: 'image' | 'video') => {
     const input = document.createElement('input');
@@ -1598,6 +1656,61 @@ export function AgentChatView() {
           );
         })()}
 
+        {/* ParamCard — 结构化参数选择（滑块/开关/下拉），与 <choices> 并存 */}
+        {(() => {
+          const lastMsg = messages[messages.length - 1];
+          if (!lastMsg || lastMsg.type !== 'assistant' || isStreaming) return null;
+          const { cards } = parseParamCards(lastMsg.content);
+          if (cards.length === 0) return null;
+
+          const hasParamValues = Array.from(paramValues.values()).some(
+            v => Object.keys(v).length > 0
+          );
+
+          return (
+            <div className="px-4 space-y-3 mt-3">
+              {cards.map((schema, i) => (
+                <ParamCard
+                  key={i}
+                  schema={schema}
+                  onChange={(values) => {
+                    setParamValues(prev => {
+                      const next = new Map(prev);
+                      next.set(i, values);
+                      return next;
+                    });
+                  }}
+                />
+              ))}
+
+              <button
+                onClick={handleParamSubmit}
+                disabled={!hasParamValues || paramSubmitting}
+                className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                style={{
+                  background: hasParamValues
+                    ? 'linear-gradient(135deg, #3B82F6, #8B5CF6)'
+                    : 'rgba(255,255,255,0.08)',
+                  color: hasParamValues ? '#FFFFFF' : 'rgba(255,255,255,0.3)',
+                  opacity: paramSubmitting ? 0.6 : 1,
+                  cursor: hasParamValues ? 'pointer' : 'default',
+                }}
+              >
+                {paramSubmitting ? (
+                  <>处理中...</>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    确认参数，开始生成
+                  </>
+                )}
+              </button>
+            </div>
+          );
+        })()}
+
         {/* 思考指示器 */}
         {isStreaming && (statusText === 'executing' || statusText === 'thinking' || statusText) && (
           <ThinkingIndicator
@@ -1910,7 +2023,7 @@ export function AgentChatView() {
                     isPastingRef.current = true;
                   }}
                   onKeyDown={handleKeyDown}
-                  placeholder={attachedFiles.length > 0 ? '添加描述...' : '说说你想创作什么...'}
+                  placeholder={attachedFiles.length > 0 ? '添加描述...' : placeholderText}
                   rows={1}
                   className="w-full bg-transparent text-white text-sm placeholder-white/30 outline-none resize-none max-h-[120px] py-0.5"
                   disabled={isStreaming}

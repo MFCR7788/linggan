@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { withAuth, withHandler } from '@/lib/api-handler';
 
 // Mock dependencies
-const mockUser = { id: 'user-123', email: 'test@example.com' };
+const mockUser = { id: 'user-123', email: 'test@example.com', user_metadata: {} as Record<string, unknown> };
 
 vi.mock('@/lib/supabase-server', () => ({
   getCurrentUser: vi.fn(),

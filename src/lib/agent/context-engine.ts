@@ -5,11 +5,8 @@
 import type { ChatMessage } from '@/lib/ai/types';
 import { compressHistory } from '@/lib/assistant/context-compressor';
 
-export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
+// Re-export from types.ts (avoid duplicate definition)
+export type { TokenUsage } from './types';
 
 export interface ContextEngineConfig {
   /** token 阈值（占比），超过则触发压缩。默认 0.75 */
@@ -105,15 +102,19 @@ export class ContextEngine {
 
     const systemTokens = this.estimateTokens(systemMsgs);
     let available = budget - systemTokens;
-    if (available <= 0) {
-      // system prompt 本身就超预算 — 异常情况，仍然保留 system + 最后一条 user 消息
+    // 保护：至少保留最后 2 条消息（预算不能为 0 或负）
+    const MIN_KEEP = 2;
+    if (available <= 0 || budget < 100) {
       this.truncationCount++;
-      console.warn(`[ContextEngine] system prompt 自身 ${systemTokens} tokens 已超过预算 ${budget}，强制截断`);
-      const lastUser = nonSystem.filter(m => m.role === 'user').slice(-1);
-      return [...systemMsgs, ...lastUser];
+      const effectiveBudget = Math.max(budget, 200); // 最低 200 token 预算
+      available = effectiveBudget - systemTokens;
+      if (available <= 0) {
+        const lastUser = nonSystem.filter(m => m.role === 'user').slice(-1);
+        return [...systemMsgs, ...lastUser];
+      }
     }
 
-    // 从后往前保留，直到超出预算
+    // 从后往前保留，直到超出预算（至少保留 MIN_KEEP 条）
     const kept: ChatMessage[] = [];
     let usedTokens = 0;
 
@@ -135,7 +136,7 @@ export class ContextEngine {
   /** 执行上下文压缩 */
   async compress(messages: ChatMessage[]): Promise<ChatMessage[]> {
     const nonSystem = messages.filter(
-      (m) => m.role !== 'system'
+      (m) => m.role === 'user' || m.role === 'assistant'
     ) as Array<{ role: 'user' | 'assistant'; content: string }>;
 
     const { compressedSummary, recentMessages } = await compressHistory(nonSystem);

@@ -40,6 +40,7 @@ function NotificationContent() {
   const [activeFilter, setActiveFilter] = useState('全部');
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [readState, setReadState] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -48,6 +49,7 @@ function NotificationContent() {
 
   const loadNotifications = async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const params = new URLSearchParams({ limit: '50' });
       const res = await fetch(`/api/notification?${params}`);
@@ -56,35 +58,49 @@ function NotificationContent() {
       if (data.success && data.data) {
         setNotifications(data.data);
       } else {
-        setNotifications(fallbackNotifications);
+        setNotifications([]);
+        setLoadError(true);
       }
     } catch {
-      setNotifications(fallbackNotifications);
+      setNotifications([]);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   const markAllRead = useCallback(async () => {
+    // 记住当前状态用于回滚
+    const prevState = { ...readState };
+    const newState = Object.fromEntries(notifications.map((n) => [n.id, true]));
+    setReadState(newState);
+
     try {
-      await fetch('/api/notification', {
+      const res = await fetch('/api/notification', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markAll: true }),
       });
-    } catch {}
-    setReadState(Object.fromEntries(notifications.map((n) => [n.id, true])));
-  }, [notifications]);
+      if (!res.ok) setReadState(prevState); // 回滚
+    } catch {
+      setReadState(prevState); // 回滚
+    }
+  }, [notifications, readState]);
 
   const markOneRead = useCallback(async (id: string) => {
+    // 乐观更新
+    setReadState((s) => ({ ...s, [id]: true }));
+
     try {
-      await fetch('/api/notification', {
+      const res = await fetch('/api/notification', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-    } catch {}
-    setReadState((s) => ({ ...s, [id]: true }));
+      if (!res.ok) setReadState((s) => ({ ...s, [id]: false })); // 回滚
+    } catch {
+      setReadState((s) => ({ ...s, [id]: false })); // 回滚
+    }
   }, []);
 
   const filtered = useMemo(() => {
@@ -164,8 +180,23 @@ function NotificationContent() {
         {/* Loading */}
         {isLoading && <div className="py-12"><LoadingSpinner /></div>}
 
+        {/* Error state with retry */}
+        {!isLoading && loadError && (
+          <div className="flex flex-col items-center py-20 gap-4">
+            <span style={{ fontSize: 40 }}>😵</span>
+            <p style={{ color: '#9CA3AF', fontSize: 14 }}>加载失败，请检查网络后重试</p>
+            <button
+              onClick={loadNotifications}
+              className="px-6 py-2 rounded-lg text-sm"
+              style={{ color: '#3B82F6', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }}
+            >
+              重新加载
+            </button>
+          </div>
+        )}
+
         {/* Notification List */}
-        {!isLoading && (
+        {!isLoading && !loadError && (
           <div className="space-y-3">
             {filtered.map((notif) => {
               const typeIcon = typeIcons[notif.type] || typeIcons.system;

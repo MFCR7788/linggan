@@ -72,15 +72,13 @@ export function detectIntent(
   // Creative
   const matchCreative = /头脑风暴|brainstorm|创意.*(?:点子|方案|想法|构思)|品牌.*(?:定位|IP|形象|故事|slogan|口号|标语|升级|焕新|重塑)|营销.*(?:方案|策略|计划|文案|活动)|slogan|Slogan|口号.*(?:创作|设计|想)|IP.*(?:设计|打造|策划|角色)|产品.*(?:文案|卖点|定位|包装)|内容.*(?:策划|规划|日历|方向)|灵感.*(?:发散|激发)|构思.*(?:方案|创意)|策划.*(?:方案|活动|创意|营销|品牌|内容)|广告.*(?:文案|创意|语)|推广.*(?:文案|方案)|活动.*(?:策划|创意|点子|方案)|视觉.*(?:风格|方向|参考)|Mood.?[Bb]oard|情绪板/.test(c);
 
-  // Priority 1: keyword matching (specific → broad)
+  // Priority 1: keyword matching (specific first → broad later)
+  // 视频/图片 优先级高于 写作/创意/生活（避免"写个视频脚本"被误判为 writing）
   if (matchKnowledge) return make('knowledge', '知识解答&学习辅助', '知识点讲解与答疑解惑', hasImages, hasVideos);
   if (matchCoding) return make('coding', '编程开发&技术助手', '代码编写、调试与技术问答', hasImages, hasVideos);
   if (matchOffice) return make('office', '办公&数据', '办公文档与数据分析', hasImages, hasVideos);
   if (matchLegal) return make('legal', '法律文书&合规草拟', '合同协议起草与法律条款解读', hasImages, hasVideos);
   if (matchWeather) return make('weather', '天气查询', '实时天气查询与出行建议', hasImages, hasVideos);
-  if (matchWriting) return make('writing', '文字创作&处理', '文案创作与文字处理', hasImages, hasVideos);
-  if (matchCreative) return make('creative', '创意设计&营销策划', '品牌创意与营销方案设计', hasImages, hasVideos);
-  if (matchLife) return make('life', '生活&规划', '出行攻略与方案策划', hasImages, hasVideos);
   if (matchSchedule) return make('schedule', '日程管理', '时间安排与日程提醒', hasImages, hasVideos);
 
   if (matchVideo) {
@@ -102,13 +100,18 @@ export function detectIntent(
     return make('image', '图像处理&生成', gType ? '图片生成与创作' : '图像分析与描述', hasImages, hasVideos, !!gType, gType);
   }
 
-  // Priority 2: has image attachment → image analysis
+  // Priority 2: 宽泛匹配（video/image 已检查完，再检查 writing/creative/life）
+  if (matchWriting) return make('writing', '文字创作&处理', '文案创作与文字处理', hasImages, hasVideos);
+  if (matchCreative) return make('creative', '创意设计&营销策划', '品牌创意与营销方案设计', hasImages, hasVideos);
+  if (matchLife) return make('life', '生活&规划', '出行攻略与方案策划', hasImages, hasVideos);
+
+  // Priority 3: has image attachment → image analysis
   if (hasImages) return make('image', '图像处理&生成', '图像分析与描述', hasImages, hasVideos);
 
-  // Priority 3: has video attachment → video analysis
+  // Priority 4: has video attachment → video analysis
   if (hasVideos) return make('video', '视频分析&复刻', '视频内容分析', hasImages, hasVideos);
 
-  // Priority 4: 利用对话历史上下文增强意图判断
+  // Priority 5: 利用对话历史上下文增强意图判断
   if (historyMessages.length > 0) {
     const recentHistory = historyMessages.slice(-4); // 最近 4 条
     const historyText = recentHistory.map(m => m.content).join(' ');

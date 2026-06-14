@@ -95,7 +95,7 @@ function ProfileContent() {
     switch (page) {
       case 'home': router.push('/home'); break;
       case 'inspiration': router.push('/inspiration'); break;
-      case 'ai': router.push('/ai'); break;
+      case 'ai': router.push('/agent'); break;
       case 'hotspot': router.push('/hotspot'); break;
       case 'profile': router.push('/profile'); break;
       case 'login': router.push('/login'); break;

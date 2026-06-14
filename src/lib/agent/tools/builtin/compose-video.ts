@@ -308,7 +308,7 @@ export const composeVideoTool: ToolDefinition = {
       }
 
       // 7. 清理临时文件
-      try { execSync(`rm -rf "${dir}"`); } catch {}
+      try { rmSync(dir, { recursive: true, force: true }); } catch {}
 
       const totalDuration = scenes.reduce((sum, s) => sum + (s.duration || 3), 0);
       const sizeMB = (videoBuffer.length / 1024 / 1024).toFixed(1);
@@ -343,7 +343,7 @@ export const composeVideoTool: ToolDefinition = {
         },
       };
     } catch (e) {
-      try { execSync(`rm -rf "${dir}"`); } catch {}
+      try { rmSync(dir, { recursive: true, force: true }); } catch {}
       return {
         success: false,
         output: '',

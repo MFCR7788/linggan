@@ -117,7 +117,7 @@ async function runWorker(request: Request) {
           status: 'published',
           external_url: result.externalUrl,
           external_post_id: result.externalPostId,
-          published_at: result.publishedAt.toISOString(),
+          published_at: (result.publishedAt || new Date()).toISOString(),
         })
         .eq('id', pub.id);
 

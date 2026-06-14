@@ -1,7 +1,8 @@
 // AI Services - Video Generation (百炼 DashScope Wan 系列)
 
 import { optimizePrompt } from './image';
-import { DASHSCOPE_VIDEO_BASE, getHappyHorseApiKey, fetchWithTimeout, safeErrorText } from './constants';
+import { DASHSCOPE_VIDEO_BASE, getHappyHorseApiKey, fetchWithTimeout } from './constants';
+import { safeErrorText } from './errors';
 import { getAgnesApiKey } from '@/lib/runtime-config';
 import { QUALITY_TIERS } from './types';
 import type { VideoTaskResult, I2VTaskResult } from './types';

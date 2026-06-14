@@ -93,8 +93,8 @@ export class SkillMatcher {
   private computeCategoryScore(intent: string, skill: SkillDefinition): number {
     let score = 0;
 
-    // 类别直接匹配
-    if (skill.category && intent.includes(skill.category.toLowerCase())) {
+    // 类别直接匹配（skill.category 通常更具体，如 'video_production'，需包含 intent 如 'video'）
+    if (skill.category && skill.category.toLowerCase().includes(intent.toLowerCase())) {
       score += 0.7;
     }
 

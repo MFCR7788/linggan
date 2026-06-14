@@ -10,8 +10,9 @@ import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
 import { executeWithTimeoutAndRecovery } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
-import { GoalPlanner, updatePlanProgress, getCurrentStep } from './goal-planner';
+import { GoalPlanner, getCurrentStep } from './goal-planner';
 import { GoalProgressTracker } from './goal-progress';
+import { groupToolCallsForExecution } from './tools/parallelizer';
 
 export async function* agentStreamLoop(
   messages: ChatMessage[],
@@ -93,7 +94,14 @@ export async function* agentStreamLoop(
       } else if (chunk.type === 'tool_calls') {
         hasToolCalls = true;
 
-        for (const tc of chunk.calls) {
+        // 并行化：分组工具调用
+        const grouped = groupToolCallsForExecution(chunk.calls);
+        const allCalls = [...grouped.parallel.flat(), ...grouped.serial];
+
+        // 构建快速查找：tc.id → 是否在平行组
+        const parallelIds = new Set(grouped.parallel.flat().map(tc => tc.id));
+
+        for (const tc of allCalls) {
           const toolArgs = parseArgs(tc);
           yield { type: 'tool_call', tool: tc.function.name, params: toolArgs };
 
@@ -153,6 +161,13 @@ export async function* agentStreamLoop(
           } as unknown as ChatMessage);
         }
       }
+
+      // H4 fix: 流式 API 不返回 usage，用估算替代
+      ctxEngine.updateFromResponse({
+        prompt_tokens: ctxEngine.estimateTokens(messages),
+        completion_tokens: Math.ceil(finalContent.length / 2),
+        total_tokens: 0, // 由 updateFromResponse 累加
+      });
     }
 
     if (!hasToolCalls) {

@@ -100,9 +100,23 @@ async function extractViaJina(url: string): Promise<JinaResult> {
   return extractViaDirectFetch(url);
 }
 
+// SSRF 防护：阻止访问内部/私有地址
+const SSRF_BLOCKED = new Set([
+  'localhost', '127.0.0.1', '0.0.0.0', '::1',
+  '169.254.169.254', 'metadata.google.internal',
+]);
+
 /** 直接抓取网页 + 提取正文（国内 ECS 可用，无需代理） */
 async function extractViaDirectFetch(url: string): Promise<JinaResult> {
   try {
+    // SSRF 防护：校验 URL 并阻止内部地址
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { return { success: false, error: '无效的 URL' }; }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return { success: false, error: '仅支持 http/https' };
+    if (SSRF_BLOCKED.has(parsed.hostname)) return { success: false, error: '不允许访问内部地址' };
+    // 阻止私有 IP 段
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(parsed.hostname)) return { success: false, error: '不允许访问私有网络' };
+
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
     const res = await fetch(url, {
       headers: { 'User-Agent': ua, 'Accept': 'text/html' },

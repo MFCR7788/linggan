@@ -108,7 +108,6 @@ export interface AgentConfig {
   model: string;
   temperature: number;
   maxTokens: number;
-  conversationalMode: boolean;
 }
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -116,7 +115,6 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   model: 'deepseek-v4-pro',
   temperature: 0.7,
   maxTokens: 8192,
-  conversationalMode: false,
 };
 
 // ====== Tool Call 类型（OpenAI 兼容） ======

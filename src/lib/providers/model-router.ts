@@ -7,6 +7,7 @@ import type { ProviderProfile, ResolvedModel } from './types';
 import type { ChatMessage } from '@/lib/ai/types';
 import { resolveTaskModel, accumulateCost, type TaskType, type TaskModelResult } from './cost-matrix';
 import { withRetry } from '@/lib/ai/retry';
+import { normalizeError, safeErrorText } from '@/lib/ai/errors';
 
 interface RouterOptions {
   model?: string;
@@ -190,7 +191,7 @@ export class ModelRouter {
 
     if (!response.ok) {
       const err = await response.text().catch(() => '');
-      throw new Error(`Stream failed (${response.status}): ${err.substring(0, 200)}`);
+      throw new Error(`Stream failed (${response.status}): ${safeErrorText(err).substring(0, 200)}`);
     }
 
     const reader = response.body?.getReader();
@@ -251,7 +252,7 @@ export class ModelRouter {
 
     if (!response.ok) {
       const err = await response.text().catch(() => '');
-      throw new Error(`Stream with tools failed (${response.status}): ${err.substring(0, 200)}`);
+      throw new Error(`Stream with tools failed (${response.status}): ${safeErrorText(err).substring(0, 200)}`);
     }
 
     const reader = response.body?.getReader();

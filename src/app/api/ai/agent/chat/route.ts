@@ -17,6 +17,7 @@ import { detectCrossPlatform, delegateMultiPlatform, formatDelegationResult } fr
 import { AGENT_SYSTEM_PROMPT, DEFAULT_CONFIG } from '@/lib/agent/conversational';
 import type { AgentEvent } from '@/lib/agent/types';
 import type { ChatMessage } from '@/lib/ai/types';
+import { HookManager, qualityReviewHook } from '@/lib/hooks';
 import { detectIntent } from '@/lib/assistant/intent';
 import { generateEmbedding } from '@/lib/assistant/embedding';
 import { MemoryManager } from '@/lib/assistant/memory/manager';
@@ -131,6 +132,10 @@ export const POST = withAuth(async ({ request, user }) => {
       await mcpManager.initialize(defaultMCPServers);
     }
 
+    // 初始化 Hook 系统 — 审核Agent 在工具执行后自动检查生成内容质量
+    const hooks = new HookManager();
+    hooks.register(qualityReviewHook);
+
     // 初始化记忆/知识/技能
     const memoryManager = new MemoryManager();
     memoryManager.addProvider(new BuiltinMemoryProvider());
@@ -210,13 +215,15 @@ export const POST = withAuth(async ({ request, user }) => {
       }
     }
 
-    // 意图检测 — 如果用户明确要求生图/视频，注入提示引导模型优先调用工具
-    const detectedIntent = detectIntent(content, images.length > 0, false);
-    if (detectedIntent.wantsGeneration) {
-      const toolHint = detectedIntent.type === 'image'
-        ? '\n\n[系统指令] 用户想要生成图片。请直接调用 generate_image 工具生成图片，使用用户消息中的描述作为 prompt 参数。不要反问，直接调用工具。'
-        : '\n\n[系统指令] 用户想要生成视频。请直接调用 generate_video 工具，使用用户消息中的描述作为 prompt 参数。不要反问，直接调用工具。';
-      assembled.messages[0].content += toolHint;
+    // V3.0: 意图检测由 System Prompt 工具路由表 + Skill 匹配统一处理
+    // detectIntent 的逻辑已融入 conversational.ts 的 §1 工具路由 + SkillMatcher
+    const detectedSkill = assembled.skillsUsed.length > 0 ? assembled.skillsUsed[0] : null;
+    if (detectedSkill) {
+      const isGeneration = /copywriting|image|video|digital_human|tts|grid|product_video/.test(detectedSkill);
+      if (isGeneration) {
+        const toolHint = `\n\n[系统指令] 用户意图匹配到技能「${detectedSkill}」。请按照 §1 工具路由表选择合适的工具，优先调用生成工具。不要反问，直接调用工具。`;
+        assembled.messages[0].content += toolHint;
+      }
     }
 
     const agentConfig = {
@@ -307,7 +314,7 @@ export const POST = withAuth(async ({ request, user }) => {
             }
           }
 
-          for await (const event of agentStreamLoop(assembled.messages, registry, agentContext, agentConfig)) {
+          for await (const event of agentStreamLoop(assembled.messages, registry, agentContext, agentConfig, { hooks })) {
             sendEvent(event);
             if (event.type === 'tool_call') {
               completedToolCalls.push({ tool: event.tool, params: event.params, result: { success: true, output: '' } });

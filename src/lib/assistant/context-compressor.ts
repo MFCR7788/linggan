@@ -30,8 +30,15 @@ export async function compressHistory(
   const recent = messages.slice(-KEEP_RECENT);
 
   try {
+    // 按句子截断（500 字后找句号），避免丢关键信息
+    const truncate = (text: string, maxLen = 500): string => {
+      if (text.length <= maxLen) return text;
+      const cut = text.slice(0, maxLen);
+      const lastPeriod = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('\n'));
+      return lastPeriod > maxLen * 0.5 ? cut.slice(0, lastPeriod + 1) : cut;
+    };
     const conversation = toCompress
-      .map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.content.slice(0, 200)}`)
+      .map(m => `${m.role === 'user' ? '用户' : 'AI'}：${truncate(m.content)}`)
       .join('\n');
 
     const summary = await callDeepSeek(`${COMPRESSION_PROMPT}\n\n对话历史：\n${conversation}`, {

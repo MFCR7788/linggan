@@ -72,12 +72,21 @@ function extractPath(argsJson: string): string | undefined {
   }
 }
 
-/** 检查路径列表是否有重叠 */
+/** 检查路径列表是否有重叠（含层级包含，如 a/b 和 a/b/c） */
 function pathsOverlap(paths: Array<string | undefined>): boolean {
   const validPaths = paths.filter((p): p is string => p !== undefined);
   if (validPaths.length <= 1) return false;
-  // 有任何路径匹配 → 不可并行
-  return new Set(validPaths).size !== validPaths.length;
+  // 精确重复 → 重叠
+  if (new Set(validPaths).size !== validPaths.length) return true;
+  // 层级包含: a/b/c 的父目录是 a/b → 重叠
+  for (let i = 0; i < validPaths.length; i++) {
+    for (let j = i + 1; j < validPaths.length; j++) {
+      const a = validPaths[i].replace(/\/$/, '');
+      const b = validPaths[j].replace(/\/$/, '');
+      if (a.startsWith(b + '/') || b.startsWith(a + '/')) return true;
+    }
+  }
+  return false;
 }
 
 /**

@@ -102,7 +102,7 @@ ${keywords ? `补充关键词：${keywords}` : ''}
           try {
             const imgResult = await generateImage(firstCell.prompt, { ratio: '1:1', n: 1 });
             const single = Array.isArray(imgResult) ? imgResult[0] : imgResult;
-            previewUrl = single?.url || null;
+            previewUrl = single?.imageUrl || null;
           } catch {
             // 预览生成失败不影响方案输出
           }

@@ -2,7 +2,7 @@
 // 底层：Exa REST API（fetch）、Jina Reader（fetch）、GitHub CLI（gh）
 
 import type { ToolDefinition } from '../../types';
-import { execSync, execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { getExaApiKey } from '@/lib/runtime-config';
 
@@ -10,8 +10,10 @@ const SEARCH_TIMEOUT = 15000;
 const execFileAsync = promisify(execFile);
 
 function hasCli(name: string): boolean {
+  // 安全：只接受字母数字+连字符的 CLI 名称，防止命令注入
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name)) return false;
   try {
-    execSync(`which ${name}`, { stdio: 'ignore' });
+    execFileSync('which', [name], { stdio: 'ignore' });
     return true;
   } catch {
     return false;

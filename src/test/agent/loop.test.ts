@@ -112,7 +112,7 @@ describe('agentLoop', () => {
       makeMessages([{ role: 'user', content: 'test' }]),
       makeRegistry([tool]),
       { userId: 'user-1' },
-      { maxIterations: 5, model: 'deepseek-v3', temperature: 0.7, maxTokens: 4096, conversationalMode: false },
+      { maxIterations: 5, model: 'deepseek-v3', temperature: 0.7, maxTokens: 4096 },
     );
 
     // handler 只应被调用 2 次（第 3 次被跳过）
@@ -147,7 +147,7 @@ describe('agentLoop', () => {
       makeMessages([{ role: 'user', content: 'test' }]),
       makeRegistry([tool]),
       { userId: 'user-1' },
-      { maxIterations: 3, model: 'deepseek-v3', temperature: 0.7, maxTokens: 4096, conversationalMode: false },
+      { maxIterations: 3, model: 'deepseek-v3', temperature: 0.7, maxTokens: 4096 },
     );
 
     expect(result.iterations).toBe(3);
