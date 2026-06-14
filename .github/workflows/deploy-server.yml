@@ -203,7 +203,7 @@ jobs:
               echo "--- all next/node processes ---"
               ps aux | grep -E '[n]ext|[n]ode' || echo "  none"
               echo "--- port 3000 holder ---"
-              PID_3000=$(fuser 3000/tcp 2>/dev/null)
+              PID_3000=$(fuser 3000/tcp 2>/dev/null | tr -d ' ')
               if [ -n "$PID_3000" ]; then
                 echo "  PID: $PID_3000"
                 echo "  PPID chain:"
@@ -238,7 +238,11 @@ jobs:
               systemctl list-units --type=service --state=running | grep -E 'next|node|lingji' || echo "  none"
 
               # 停服务 + 清端口
-              echo "=== stopping service ==="
+              echo "=== stopping PM2 ==="
+              # PM2 作为 deploy 用户运行，需 su 过去操作
+              su - deploy -c "pm2 stop lingji 2>/dev/null || true" 2>/dev/null || true
+              su - deploy -c "pm2 delete lingji 2>/dev/null || true" 2>/dev/null || true
+              echo "=== stopping systemd ==="
               systemctl stop lingji 2>&1 || true
               sleep 1
               echo "=== killing port 3000 (SIGKILL) ==="
@@ -247,7 +251,13 @@ jobs:
                 sleep 1
               done
               echo "=== port check ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  STILL OCCUPIED!" || echo "  port 3000 is free"
+              if ss -tlnp 'sport = :3000' 2>/dev/null | grep -q LISTEN; then
+                echo "  STILL OCCUPIED! Last resort: pm2 kill"
+                su - deploy -c "pm2 kill 2>/dev/null || true" 2>/dev/null || true
+                sleep 1
+                fuser -k -9 3000/tcp 2>/dev/null || true
+              fi
+              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  Unstoppable!" || echo "  port 3000 is free"
 
               # 启动 systemd 服务（Restart=no，一次启动）
               echo "=== starting lingji ==="
