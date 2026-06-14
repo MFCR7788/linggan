@@ -242,22 +242,20 @@ jobs:
               # PM2 作为 deploy 用户运行，需 su 过去操作
               su - deploy -c "pm2 stop lingji 2>/dev/null || true" 2>/dev/null || true
               su - deploy -c "pm2 delete lingji 2>/dev/null || true" 2>/dev/null || true
+              # 最终手段：直接杀掉 PM2 守护进程
+              su - deploy -c "pm2 kill 2>/dev/null || true" 2>/dev/null || true
+              # 禁用 PM2 开机自启（改用 systemd）
+              su - deploy -c "pm2 unstartup 2>/dev/null || true" 2>/dev/null || true
               echo "=== stopping systemd ==="
               systemctl stop lingji 2>&1 || true
-              sleep 1
+              sleep 2
               echo "=== killing port 3000 (SIGKILL) ==="
               for i in 1 2 3 4 5; do
                 fuser -k -9 3000/tcp 2>/dev/null && echo "  killed (round $i)" || { echo "  none (round $i)"; break; }
                 sleep 1
               done
               echo "=== port check ==="
-              if ss -tlnp 'sport = :3000' 2>/dev/null | grep -q LISTEN; then
-                echo "  STILL OCCUPIED! Last resort: pm2 kill"
-                su - deploy -c "pm2 kill 2>/dev/null || true" 2>/dev/null || true
-                sleep 1
-                fuser -k -9 3000/tcp 2>/dev/null || true
-              fi
-              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  Unstoppable!" || echo "  port 3000 is free"
+              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  STILL OCCUPIED!" || echo "  port 3000 is free"
 
               # 启动 systemd 服务（Restart=no，一次启动）
               echo "=== starting lingji ==="
