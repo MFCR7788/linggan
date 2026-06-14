@@ -47,8 +47,8 @@ jobs:
             write_env_line "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
             # 先停应用释放内存
             systemctl stop lingji || true
-            # 只删构建缓存，保留 node_modules 避免全量重装 OOM
-            rm -rf .next
+            # 清理残留的 onnxruntime 包 (不在 npm lockfile 中, postinstall 下载会 302 导致 install 失败)
+            rm -rf node_modules/onnxruntime-node node_modules/onnxruntime-common 2>/dev/null || true
             # 确保 swap 存在并激活
             if [ ! -f /swapfile ]; then
               echo "=== creating 2G swap ==="
@@ -113,9 +113,24 @@ jobs:
             npm install --prefer-offline --no-audit --no-fund
             INSTALL_EXIT=$?
             if [ $INSTALL_EXIT -eq 0 ]; then
+              # 保留旧构建作为回退（install 成功但 build 可能失败）
+              rm -rf .next.old 2>/dev/null || true
+              if [ -d .next ]; then
+                mv .next .next.old
+              fi
               echo "=== npm run build ==="
               npm run build
               BUILD_EXIT=$?
+              if [ $BUILD_EXIT -eq 0 ]; then
+                # 构建成功，清理旧备份
+                rm -rf .next.old 2>/dev/null || true
+              else
+                # 构建失败，恢复旧 .next
+                rm -rf .next 2>/dev/null || true
+                if [ -d .next.old ]; then
+                  mv .next.old .next
+                fi
+              fi
             else
               BUILD_EXIT=$INSTALL_EXIT
             fi
@@ -123,7 +138,7 @@ jobs:
               echo "=== build success, restarting lingji ==="
               systemctl restart lingji
             else
-              echo "=== build failed (exit $BUILD_EXIT), restarting lingji with previous build ==="
+              echo "=== build failed (exit $BUILD_EXIT), keeping previous build ==="
               systemctl start lingji
             fi
             # 安装 crontab 定时任务
