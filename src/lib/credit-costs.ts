@@ -121,6 +121,17 @@ export const CREDIT_COSTS = {
     minCost: 3,     // 最低 3 credits（不足 1 分钟也收）
   },
 
+  // ─── 智能剪辑/切片 ────────────────────────────────
+  // 规则引擎免费（仅 FFmpeg 静音检测），LLM 分析成本约 ¥0.005~0.05/次
+  smart_clip: {
+    ruleBased: 1,  // silence_only 或全 keep 场景（仅 FFmpeg）
+    llmBased: 2,   // auto/by_description 等（含 DeepSeek LLM + FunASR）
+  },
+  smart_slice: {
+    ruleBased: 2,  // uniform/custom 等（仅 FFmpeg 切分）
+    llmBased: 3,   // product/topic/highlight（含 LLM 分析）
+  },
+
   // ─── 平台发布 ──────────────────────────────────────
   // API 发布有上游成本，Selenium 仅 CPU 成本
   platform_publish: {
