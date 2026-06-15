@@ -1,4 +1,4 @@
-import { Home, BookOpen, Sparkles, User, Plus } from "lucide-react";
+import { Home, BookOpen, Sparkles, Wand2, User, Plus } from "lucide-react";
 
 export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "ai-ads" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "agent" | "schedule" | "profile-help" | "profile-settings" | "profile-integrations" | "profile-memory" | "profile-skills" | "schedule-detail";
 
@@ -7,11 +7,11 @@ interface BottomNavProps {
   onNavigate: (page: PageKey) => void;
 }
 
-// V3.0: AI工具tab移除，Agent成为中心按钮
 const items = [
   { key: "home" as PageKey, label: "首页", Icon: Home },
   { key: "inspiration" as PageKey, label: "灵感库", Icon: BookOpen },
   { key: "agent" as PageKey, label: "AI助手", Icon: Sparkles, isCenter: true },
+  { key: "ai" as PageKey, label: "AI创作", Icon: Wand2 },
   { key: "profile" as PageKey, label: "我的", Icon: User },
 ];
 
