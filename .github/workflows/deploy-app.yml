@@ -96,7 +96,7 @@ jobs:
       - name: Decode Android keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_FILE }}" | base64 -d > android/app/lingji-release.keystore
-          cat > android/app/keystore.properties << PROPS
+          cat > android/keystore.properties << PROPS
           storeFile=lingji-release.keystore
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
