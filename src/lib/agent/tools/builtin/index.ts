@@ -1,4 +1,5 @@
 import { ToolRegistry } from '../registry';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 import { webSearchTool } from './web-search';
 import { generateImageTool } from './generate-image';
 import { generateVideoTool } from './generate-video';
@@ -38,65 +39,93 @@ import { smartSliceTool } from './smart-slice';
 import { titleOptimizerTool } from './title-optimizer';
 import { coverGeneratorTool } from './cover-generator';
 import { autoMashupTool } from './auto-mashup';
+import type { ToolDefinition } from '../../types';
+
+// ── 所有工具（按版本分组） ──
+
+/** V1.0 基础创作工具 */
+const V1_0_TOOLS: ToolDefinition[] = [
+  webSearchTool,
+  generateImageTool,
+  generateVideoTool,
+  getWeatherTool,
+  analyzeImageTool,
+  readDocumentTool,
+  searchMemoryTool,
+  searchKnowledgeTool,
+  searchInspirationsTool,
+  getHotspotTool,
+  summarizeTool,
+  synthesizeSpeechTool,
+  generateCopywritingTool,
+  extractScheduleTool,
+  analyzeLinkTool,
+  saveToInspirationTool,
+  searchInternetTool,
+  douyinTranscriptTool,
+  douyinSearchTool,
+  composeVideoTool,
+  extractContentTool,
+  suggestContentIdeasTool,
+  generateVideoTemplateTool,
+];
+
+/** V1.1 增强创作 + 分发工具 */
+const V1_1_TOOLS: ToolDefinition[] = [
+  generateDigitalHumanTool,
+  editImageTool,
+  generateGridImagesTool,
+  publishContentTool,
+  generateAvatarVideoTool,
+  generateAnimateVideoTool,
+  titleOptimizerTool,
+];
+
+/** V2.0 智能视频编辑工具 */
+const V2_0_TOOLS: ToolDefinition[] = [
+  generateEditPlanTool,
+  smartClipTool,
+  smartSliceTool,
+  coverGeneratorTool,
+  autoMashupTool,
+];
+
+/** V2.1 高级 AI 工具 */
+const V2_1_TOOLS: ToolDefinition[] = [
+  generateAgnesVideoTool,
+  videoFaceSwapTool,
+  generateHyperFramesTool,
+  generateProductVideoTool,
+];
+
+const ALL_TOOLS: ToolDefinition[] = [
+  ...V1_0_TOOLS,
+  ...V1_1_TOOLS,
+  ...V2_0_TOOLS,
+  ...V2_1_TOOLS,
+];
+
+// ── 注册函数 ──
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
-  registry.registerAll([
-    // 原有 12 个工具
-    webSearchTool,
-    generateImageTool,
-    generateVideoTool,
-    getWeatherTool,
-    analyzeImageTool,
-    readDocumentTool,
-    searchMemoryTool,
-    searchKnowledgeTool,
-    searchInspirationsTool,
-    getHotspotTool,
-    summarizeTool,
-    synthesizeSpeechTool,
-    // 新增 9 个工具
-    generateCopywritingTool,
-    extractScheduleTool,
-    analyzeLinkTool,
-    saveToInspirationTool,
-    generateDigitalHumanTool,
-    editImageTool,
-    generateGridImagesTool,
-    publishContentTool,
-    generateAvatarVideoTool,
-    generateAnimateVideoTool,
-    generateEditPlanTool,
-    generateVideoTemplateTool,
-    // Agent Reach 多平台搜索
-    searchInternetTool,
-    // 抖音文案提取
-    douyinTranscriptTool,
-    // 抖音搜索
-    douyinSearchTool,
-    // 视频合成（图片+BGM+字幕）
-    composeVideoTool,
-    // 多平台内容提取（抖音/小红书/B站/头条/腾讯新闻 等）
-    extractContentTool,
-    // 换人复刻：照片+文案 → Agnes 口播视频（原生口型同步+配音）
-    generateAgnesVideoTool,
-    // 视频换人：原视频场景不变，仅替换出镜人物（wan2.2-animate-mix）
-    videoFaceSwapTool,
-    // 动态图形：脚本 → HTML+GSAP 动画 → 竖屏视频
-    generateHyperFramesTool,
-    // 今日创作提案：热点+账号类型+偏好 → 选题建议
-    suggestContentIdeasTool,
-    // 一张图出片：产品图 → 识图→文案→场景图→合成→入库
-    generateProductVideoTool,
-    // 智能编辑：智能剪辑（去废话/静音/重复）+ 智能切片（长视频→精华片段）
-    smartClipTool,
-    smartSliceTool,
-    // 标题优化器：多平台标题生成
-    titleOptimizerTool,
-    // AI 封面生成器：智能选帧 + 标题 + 模板合成
-    coverGeneratorTool,
-    // AI 混剪：多素材智能编排 + 合成
-    autoMashupTool,
-  ]);
+  // 注册全部工具定义给 LLM 感知（description 不变）
+  // 但非 V1.0 工具的 handler 替换为"即将上线"提示
+  const enabledTools = ALL_TOOLS.map((tool) => {
+    if (isFeatureEnabled('v1.0') && V1_0_TOOLS.includes(tool)) return tool;
+    if (isFeatureEnabled('v1.1') && V1_1_TOOLS.includes(tool)) return tool;
+    if (isFeatureEnabled('v2.0') && V2_0_TOOLS.includes(tool)) return tool;
+    if (isFeatureEnabled('v2.1') && V2_1_TOOLS.includes(tool)) return tool;
+    // 未上线工具：注册但 handler 返回提示
+    return {
+      ...tool,
+      handler: async () => ({
+        success: true,
+        output: `"${tool.name}" 功能即将在后续版本上线，敬请期待！当前 V1.0 已支持 AI 文案、AI 图片、AI 视频、AI 配音、热点选题、灵感库等功能，如需使用请告诉我您的具体需求。`,
+      }),
+    };
+  });
+
+  registry.registerAll(enabledTools);
 }
 
 export { webSearchTool, generateImageTool, generateVideoTool, getWeatherTool, analyzeImageTool };
