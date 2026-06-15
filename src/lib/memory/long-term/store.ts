@@ -8,6 +8,12 @@ import { migrate, getCurrentVersion } from './schema';
 import type { LongTermMemoryEntry, MemorySearchParams } from './types';
 
 type DB = InstanceType<typeof Database>;
+// 避免 ReturnType<DB['prepare']> 因泛型条件类型未解析导致的类型错误
+interface PreparedStmt {
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+}
 
 // Vercel serverless: process.cwd() 只读，用 /tmp 作为 SQLite 数据目录
 const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
@@ -48,12 +54,12 @@ function openDb(dbPath?: string): DB | null {
 
 export class LongTermMemoryStore {
   private db: DB | null;
-  private insertStmt: ReturnType<DB['prepare']> | null = null;
-  private searchStmt: ReturnType<DB['prepare']> | null = null;
-  private getByUserStmt: ReturnType<DB['prepare']> | null = null;
-  private touchStmt: ReturnType<DB['prepare']> | null = null;
-  private deleteStmt: ReturnType<DB['prepare']> | null = null;
-  private updateImportanceStmt: ReturnType<DB['prepare']> | null = null;
+  private insertStmt: PreparedStmt | null = null;
+  private searchStmt: PreparedStmt | null = null;
+  private getByUserStmt: PreparedStmt | null = null;
+  private touchStmt: PreparedStmt | null = null;
+  private deleteStmt: PreparedStmt | null = null;
+  private updateImportanceStmt: PreparedStmt | null = null;
 
   constructor(dbPath?: string) {
     this.db = openDb(dbPath);
@@ -162,8 +168,10 @@ export class LongTermMemoryStore {
       const rows = this.db.prepare(sql).all(...bindings) as LongTermMemoryEntry[];
 
       // touch accessed memories
-      for (const r of rows) {
-        this.touchStmt.run(r.id);
+      if (this.touchStmt) {
+        for (const r of rows) {
+          this.touchStmt.run(r.id);
+        }
       }
 
       return rows;

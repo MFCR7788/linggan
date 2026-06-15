@@ -44,6 +44,8 @@ describe('LongTermMemoryStore', () => {
 
   it('删除记忆', () => {
     const entry = store.insert('user1', 'fact', '测试删除', 5);
+    expect(entry).not.toBeNull();
+    if (!entry) return;
     const deleted = store.delete(entry.id, 'user1');
     expect(deleted).toBe(true);
 
@@ -53,6 +55,8 @@ describe('LongTermMemoryStore', () => {
 
   it('更新重要性', () => {
     const entry = store.insert('user1', 'fact', '可更新', 3);
+    expect(entry).not.toBeNull();
+    if (!entry) return;
     store.updateImportance(entry.id, 'user1', 7);
 
     const results = store.getByUser('user1');
