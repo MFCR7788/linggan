@@ -17,7 +17,7 @@ platform :android do
     upload_to_play_store(
       package_name: "com.lingji.app",
       track: "internal",
-      json_key_data: File.read(ENV["GOOGLE_PLAY_JSON_KEY_FILE"]),
+      json_key_data: ENV["GOOGLE_PLAY_JSON_KEY_DATA"],
       release_status: "completed"
     )
   end

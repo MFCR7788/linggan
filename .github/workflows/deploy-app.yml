@@ -103,9 +103,6 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           PROPS
 
-      - name: Write Google Play JSON key
-        run: echo "${{ secrets.GOOGLE_PLAY_JSON_KEY_FILE }}" > android/google-play-key.json
-
       - name: Build and upload to Play Store
         working-directory: android
         run: bundle exec fastlane beta
@@ -114,4 +111,4 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          GOOGLE_PLAY_JSON_KEY_FILE: ${{ github.workspace }}/android/google-play-key.json
+          GOOGLE_PLAY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_JSON_KEY_FILE }}
