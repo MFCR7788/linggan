@@ -3,8 +3,7 @@
 
 import { join } from 'path';
 import { execFileSync } from 'child_process';
-import { writeFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
-import { getTempDir, cleanupTempDir } from '@/lib/ffmpeg-utils';
+import { writeFileSync, existsSync, copyFileSync } from 'fs';
 import { callDeepSeek } from '@/lib/ai-services';
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';

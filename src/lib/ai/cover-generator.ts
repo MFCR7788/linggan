@@ -3,8 +3,6 @@
 
 import { join } from 'path';
 import { execFileSync } from 'child_process';
-import { writeFileSync, readFileSync, mkdirSync } from 'fs';
-import { getTempDir, cleanupTempDir } from '@/lib/ffmpeg-utils';
 import { callDeepSeek } from '@/lib/ai-services';
 import sharp from 'sharp';
 
