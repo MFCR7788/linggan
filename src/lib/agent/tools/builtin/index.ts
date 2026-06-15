@@ -35,6 +35,9 @@ import { suggestContentIdeasTool } from './suggest-content-ideas';
 import { generateProductVideoTool } from './generate-product-video';
 import { smartClipTool } from './smart-clip';
 import { smartSliceTool } from './smart-slice';
+import { titleOptimizerTool } from './title-optimizer';
+import { coverGeneratorTool } from './cover-generator';
+import { autoMashupTool } from './auto-mashup';
 
 export function registerAllBuiltinTools(registry: ToolRegistry): void {
   registry.registerAll([
@@ -87,6 +90,12 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
     // 智能编辑：智能剪辑（去废话/静音/重复）+ 智能切片（长视频→精华片段）
     smartClipTool,
     smartSliceTool,
+    // 标题优化器：多平台标题生成
+    titleOptimizerTool,
+    // AI 封面生成器：智能选帧 + 标题 + 模板合成
+    coverGeneratorTool,
+    // AI 混剪：多素材智能编排 + 合成
+    autoMashupTool,
   ]);
 }
 
@@ -95,4 +104,4 @@ export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirat
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
 export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
-export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool, suggestContentIdeasTool, generateProductVideoTool, smartClipTool, smartSliceTool };
+export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool, suggestContentIdeasTool, generateProductVideoTool, smartClipTool, smartSliceTool, titleOptimizerTool, coverGeneratorTool, autoMashupTool };

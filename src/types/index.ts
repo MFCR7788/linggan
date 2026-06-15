@@ -198,7 +198,10 @@ export type AiTaskType =
   | 'digital_human_batch'  // V2.0.2 批量数字人
   | 'video_merge'
   | 'video_mix'      // V4.0 视频混剪
-  | 'smart_clip';   // V4.0 智能剪辑+切片
+  | 'smart_clip'       // V4.0 智能剪辑+切片
+  | 'title_optimizer'   // V4.0 标题优化器
+  | 'cover_generator'   // V4.0 封面生成器
+  | 'mashup';           // V4.0 AI 混剪
 
 // 任务状态（扩展 cancelled）
 export type AiTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';

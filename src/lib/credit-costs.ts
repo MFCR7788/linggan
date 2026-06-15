@@ -132,6 +132,25 @@ export const CREDIT_COSTS = {
     llmBased: 3,   // product/topic/highlight（含 LLM 分析）
   },
 
+  // ─── 标题优化器 ────────────────────────────────
+  // 纯 LLM 调用（DeepSeek），成本约 ¥0.005~0.01/次
+  title_optimizer: {
+    perCall: 2,  // 每次生成多平台标题 2 credits
+  },
+
+  // ─── 封面生成器 ────────────────────────────────
+  // 下载视频 + FFmpeg 抽帧 + sharp 评分/合成 + LLM 标题，CPU+网络密集型
+  cover_generator: {
+    perGeneration: 3,  // 每次生成封面 3 credits
+  },
+
+  // ─── AI 混剪 ──────────────────────────────────
+  // 多素材下载 + LLM 编排 + FFmpeg xfade+BGM 合成，CPU+网络密集型
+  mashup: {
+    perClip: 2,      // 每段素材 2 credits
+    minCost: 5,       // 最低 5 credits（< 3 段素材也收）
+  },
+
   // ─── 平台发布 ──────────────────────────────────────
   // API 发布有上游成本，Selenium 仅 CPU 成本
   platform_publish: {

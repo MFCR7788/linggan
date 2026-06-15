@@ -19,6 +19,9 @@ export const CONCURRENCY_LIMITS: Record<AiTaskType, number> = {
   video_merge: 5,
   video_mix: 3,              // 视频混剪（CPU 密集型）
   smart_clip: 2,             // 智能剪辑/切片（FFmpeg 密集型）
+  title_optimizer: 10,       // 标题优化（纯 LLM，无重量依赖）
+  cover_generator: 2,        // 封面生成（sharp 图片处理）
+  mashup: 2,                 // AI 混剪（FFmpeg 密集型）
 };
 
 // 任务类型 → 预估秒数（前端 ETA 计算）
@@ -33,6 +36,9 @@ export const ESTIMATED_SECONDS: Record<AiTaskType, number> = {
   video_merge: 30,
   video_mix: 60,             // 视频混剪（CPU 密集型，预估 60s）
   smart_clip: 120,           // 智能剪辑/切片（含下载+ASR+FFmpeg+上传）
+  title_optimizer: 15,       // 标题优化（LLM ≈ 8s + 网络）
+  cover_generator: 60,        // 封面生成（下载+抽帧+LLM+合成≈40s）
+  mashup: 180,               // AI 混剪（多素材下载+FFmpeg合成≈120s+）
 };
 
 // 抢占超时：worker 抢占后多少秒没上报进度视为卡死
