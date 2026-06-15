@@ -38,6 +38,7 @@ export class LongTermMemoryProvider implements MemoryProvider {
 
   private async syncFromSupabaseIfNeeded(): Promise<void> {
     const store = getLongTermMemoryStore();
+    if (!store.isAvailable()) return;
     const existing = store.getByUser(this.userId, 3, 1);
     if (existing.length > 0) return;
 
@@ -74,24 +75,26 @@ export class LongTermMemoryProvider implements MemoryProvider {
   async prefetch(query: string, embedding: number[]): Promise<MemorySearchResult[]> {
     if (!this.available) return [];
 
-    // 1. SQLite FTS5 本地搜索（快）
+    // 1. SQLite FTS5 本地搜索（快，仅在可用时）
     try {
       const store = getLongTermMemoryStore();
-      const localResults = store.search({
+      if (store.isAvailable()) {
+        const localResults = store.search({
         userId: this.userId,
         query,
         limit: 10,
         minImportance: 3,
       });
 
-      if (localResults.length > 0) {
-        return localResults.map((m) => ({
-          id: `ltm_${m.id}`,
-          category: mapTypeToCategory(m.type),
-          value: m.content,
-          importance: m.importance,
-          similarity: 0.85,
-        }));
+        if (localResults.length > 0) {
+          return localResults.map((m) => ({
+            id: `ltm_${m.id}`,
+            category: mapTypeToCategory(m.type),
+            value: m.content,
+            importance: m.importance,
+            similarity: 0.85,
+          }));
+        }
       }
     } catch (e) {
       console.warn('[LongTermMemory] SQLite 搜索失败:', e);
@@ -131,6 +134,7 @@ export class LongTermMemoryProvider implements MemoryProvider {
     if (!this.available) throw new Error('LongTermMemoryProvider 未初始化');
 
     const store = getLongTermMemoryStore();
+    if (!store.isAvailable()) throw new Error('SQLite 存储不可用');
     const memType = mapCategoryToType(entry.category);
 
     const result = store.insert(
@@ -140,6 +144,8 @@ export class LongTermMemoryProvider implements MemoryProvider {
       entry.importance,
       entry.sourceSessionId
     );
+
+    if (!result) throw new Error('SQLite 写入失败');
 
     return {
       id: `ltm_${result.id}`,
@@ -164,6 +170,7 @@ export class LongTermMemoryProvider implements MemoryProvider {
     if (numericId === null) return;
 
     const store = getLongTermMemoryStore();
+    if (!store.isAvailable()) return;
 
     if (patch.importance !== undefined) {
       store.updateImportance(numericId, this.userId, patch.importance);
@@ -177,6 +184,7 @@ export class LongTermMemoryProvider implements MemoryProvider {
     if (numericId === null) return;
 
     const store = getLongTermMemoryStore();
+    if (!store.isAvailable()) return;
     store.delete(numericId, this.userId);
   }
 
@@ -271,9 +279,13 @@ export class LongTermMemoryProvider implements MemoryProvider {
       const store = getLongTermMemoryStore();
       const supabase = createAdminClient();
 
+      const sqliteAvailable = store.isAvailable();
+
       for (const r of results) {
         // 1. SQLite 本地缓存（快）
-        store.insert(this.userId, r.type, r.content, r.importance, sessionId);
+        if (sqliteAvailable) {
+          store.insert(this.userId, r.type, r.content, r.importance, sessionId);
+        }
 
         // 2. Supabase 主存储（持久化）
         const category = mapTypeToCategory(r.type);
