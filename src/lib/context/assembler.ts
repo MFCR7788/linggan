@@ -101,7 +101,7 @@ export class ContextAssembler {
 
     let userContent = input.userMessage;
     if (input.images && input.images.length > 0) {
-      userContent += `\n\n[用户上传了 ${input.images.length} 张图片，AI 可以通过 analyze_image 工具分析这些图片: ${input.images.join(', ')}]`;
+      userContent += `\n\n[用户上传了 ${input.images.length} 张图片。你必须使用 analyze_image 工具逐一分析每张图片的内容，获取详细描述后再基于分析结果回答用户问题。不要跳过分析直接回复。图片 URL: ${input.images.join(', ')}]`;
     }
     if (input.documents && input.documents.length > 0) {
       userContent += `\n\n[用户上传了 ${input.documents.length} 个文档: ${input.documents.join(', ')}]`;

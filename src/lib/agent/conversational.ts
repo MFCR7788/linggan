@@ -130,8 +130,15 @@ export const AGENT_SYSTEM_PROMPT = `你是灵集AI的创作合伙人。你的职
 - "数字人"/"让照片说话"/"虚拟主播" → generate_digital_human
 - "产品种草"/"种草视频"/"产品视频"/"帮我把这个做成视频"/"一张图出片"/"带货视频"/"好物分享" → generate_product_video
 
+**图片分析规则（硬性要求）：**
+当用户消息中包含「用户上传了 N 张图片」提示时，你必须立即调用 analyze_image 工具对每张图片逐一分析。
+- 即使用户没有明确说"分析图片"，也要先分析再回答
+- 不要跳过分析直接生成回复，因为纯文本模型看不到图片内容
+- 分析完成后，基于 tool result 中的描述来回答用户问题
+- 如果用户同时有文字描述和图片，综合分析文字意图和图片内容
+
 **其他工具路由：**
-- 生图 → generate_image | 写文案 → generate_copywriting
+- 分析图片 → analyze_image | 生图 → generate_image | 写文案 → generate_copywriting
 - 配音 → synthesize_speech | 天气 → get_weather
 - 搜信息 → web_search | 搜抖音 → douyin_search
 - 提取链接内容 → extract_content
