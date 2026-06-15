@@ -46,6 +46,9 @@ jobs:
           bundler-cache: true
           working-directory: ios
 
+      - name: Set up Match git auth
+        run: echo "MATCH_GIT_BASIC_AUTHORIZATION=$(echo -n "x-access-token:${{ secrets.MATCH_PASSWORD }}" | base64)" >> $GITHUB_ENV
+
       - name: Build and upload to TestFlight
         working-directory: ios
         run: bundle exec fastlane beta
@@ -73,7 +76,9 @@ jobs:
         run: npm run build
 
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx cap sync android
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
