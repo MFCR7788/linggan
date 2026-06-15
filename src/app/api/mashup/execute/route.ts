@@ -68,7 +68,7 @@ export const POST = withAuth(async ({ request, user }) => {
           transition: a.transition || 'hard',
         })),
         totalDuration: arrangements.reduce((s, a) => s + a.duration, 0),
-        bgmStyle: bgm || 'auto' as BgmStyle,
+        bgmStyle: bgm || 'chill',
         hasSubtitles: false,
         summary: '',
       },

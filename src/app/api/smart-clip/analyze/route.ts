@@ -44,6 +44,9 @@ export const POST = withAuth(async ({ request }) => {
 
     dir = getTempDir('smart-clip-analyze');
 
+    // 预生成 taskId，避免在 onProgress 回调中访问未初始化的 result
+    const taskId = crypto.randomUUID();
+
     const result = await runAnalyzePipeline(
       videoUrl,
       dir,
@@ -60,20 +63,20 @@ export const POST = withAuth(async ({ request }) => {
         removeRepetition: body.removeRepetition,
       },
       (step, percent) => {
-        emitProgress(result.taskId, { type: 'progress', step, percent });
+        emitProgress(taskId, { type: 'progress', step, percent });
       }
     );
 
     // 注册 task + 缓存分析状态（30 分钟 TTL）
-    registerTask(result.taskId);
-    cacheAnalysis(result.taskId, {
+    registerTask(taskId);
+    cacheAnalysis(taskId, {
       videoPath: result.videoPath,
       audioPath: result.audioPath,
       direction: result.direction,
     });
 
     // 将分析结果绑定到 taskId（通过 progressBus 传递）
-    emitProgress(result.taskId, {
+    emitProgress(taskId, {
       type: 'step_complete',
       step: 'analyze_done',
       duration: 0,
@@ -103,7 +106,7 @@ export const POST = withAuth(async ({ request }) => {
 
     return createApiResponse(
       {
-        taskId: result.taskId,
+        taskId,
         direction: result.direction,
         videoDuration: result.videoDuration,
         segments: result.segments,
