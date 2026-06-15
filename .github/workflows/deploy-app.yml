@@ -46,8 +46,8 @@ jobs:
           bundler-cache: true
           working-directory: ios
 
-      - name: Set up Match git auth
-        run: echo "MATCH_GIT_BASIC_AUTHORIZATION=$(echo -n "x-access-token:${{ secrets.MATCH_PASSWORD }}" | base64)" >> $GITHUB_ENV
+      - name: Configure git auth for Match
+        run: git config --global url."https://x-access-token:${{ secrets.MATCH_PASSWORD }}@github.com/".insteadOf "https://github.com/"
 
       - name: Build and upload to TestFlight
         working-directory: ios
@@ -87,10 +87,10 @@ jobs:
           bundler-cache: true
           working-directory: android
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Decode Android keystore
