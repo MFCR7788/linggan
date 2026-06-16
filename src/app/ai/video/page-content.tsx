@@ -8,6 +8,7 @@ import {
   Settings, Wand2, Sparkles, ImageIcon, Music,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
+import { MediaPicker } from '@/components/MediaPicker';
 import { TopNav } from '@/components/TopNav';
 import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -573,7 +574,23 @@ function AIVideoContent() {
       {/* 素材选择 */}
       <GlassCard>
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ color: '#3B82F6' }}>素材</span> · 灵感库选材
+          <span style={{ color: '#3B82F6' }}>素材</span> · 选材
+        </p>
+
+        {/* 上传 / 灵感库 / URL 视频参考 */}
+        <div className="mb-3">
+          <MediaPicker
+            accept="video"
+            onSelect={(url) => { setFirstFrameUrl(url); }}
+            compact
+            tabs={['upload', 'inspiration', 'url']}
+            label=""
+          />
+        </div>
+
+        {/* 文字灵感多选 */}
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>
+          📚 灵感库（多选文字素材）
         </p>
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {inspirationsLoading ? (
