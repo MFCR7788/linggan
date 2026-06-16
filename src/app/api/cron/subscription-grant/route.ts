@@ -1,10 +1,10 @@
-// 月度订阅赠送 cron(Vercel Cron 调用)
+// 月度订阅赠送 cron（阿里云 ECS crontab 调用）
 // 每天 0 点跑一次(UTC),处理到期的订阅:
 // - 自动续费用户:延 30 天 + 赠送月度 credits
 // - 已取消用户(到期不续):降级到 free + 清余额 + 写 reset 流水
 // - 加油包余额不受影响(只动订阅赠送的部分)
 //
-// 安全: 必须携带 Vercel Cron Secret 头
+// 安全: 必须携带 CRON_SECRET 头
 
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';

@@ -1,5 +1,4 @@
 // 类型声明 — selenium-webdriver（可选依赖，仅 ECS 部署时需要）
-// 在 Vercel 环境中此包不可用，Selenium 自动降级
 
 declare module 'selenium-webdriver' {
   export class Builder {

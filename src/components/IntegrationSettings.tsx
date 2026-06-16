@@ -169,7 +169,7 @@ export function IntegrationSettings() {
         >
           <AlertTriangle size={14} color="#FDE047" className="flex-shrink-0 mt-0.5" />
           <p style={{ color: '#FDE68A', fontSize: 11, lineHeight: 1.5 }}>
-            站内只是「配置中心」，生效需把值同步到 Vercel → Settings → Environment Variables → 重新部署。
+            站内只是「配置中心」，生效需把值同步到服务器环境变量（.env.local）→ 重启 pm2。
           </p>
         </div>
       </GlassCard>
@@ -340,7 +340,7 @@ function EditValueModal({
     setSaving(true);
     const resp = await apiClient.put<{ ok: boolean }>('/admin/platform-settings', { keyName, value });
     if (resp.success) {
-      showToast('已保存(别忘了同步到 Vercel)', 'success');
+      showToast('已保存(别忘了同步到服务器 env)', 'success');
       onSaved();
     } else {
       showToast(resp.error || '保存失败', 'error');
@@ -379,7 +379,7 @@ function EditValueModal({
         </div>
         <div className="p-4 space-y-3">
           <p style={{ color: '#D1D5DB', fontSize: 12 }}>
-            粘贴从 Vercel / 平台开放平台复制的值。站内有加密备份，但代码读的是 Vercel env，所以同步到 Vercel 才会真正生效。
+            粘贴从平台开放平台复制的值。站内有加密备份，但代码读的是服务器 env，所以同步到 .env.local 才会真正生效。
           </p>
           <div className="relative">
             <GlassInput
@@ -465,7 +465,7 @@ function AutoGenResultModal({
           >
             <AlertTriangle size={14} color="#FCA5A5" className="flex-shrink-0 mt-0.5" />
             <p style={{ color: '#FCA5A5', fontSize: 11, lineHeight: 1.5 }}>
-              此值仅显示一次。立即复制到 Vercel → Environment Variables → 重新部署。
+              此值仅显示一次。立即复制到服务器 .env.local → 重启 pm2。
             </p>
           </div>
           <div

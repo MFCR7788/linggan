@@ -12,9 +12,9 @@ import { SearchResult, HotListItem } from '../search/types';
 const TWITTER_QUOTA = 0;   // 没有 Twitter API Key，设为 0
 const OTHER_QUOTA = 8;     // 每个关键词最多处理 8 条候选项
 
-// 单次调用限制（Vercel maxDuration=300s，curl timeout=280s）
+// 单次调用限制（pm2 进程无超时限制，保留分批处理控制内存）
 const MAX_KEYWORD_GROUPS = 5;   // 每次最多处理 5 个关键词组
-const DEADLINE_SECONDS = 250;   // 在 Vercel 超时前 50s 停止处理
+const DEADLINE_SECONDS = 250;   // 提前 50s 停止处理，给后续任务留余量
 
 // 热榜缓存，一次检查周期只拉取一次
 interface HotListCache {

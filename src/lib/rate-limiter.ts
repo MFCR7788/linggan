@@ -1,5 +1,5 @@
-// 内存频率限制器（适用于 Vercel serverless 单实例保护）
-// 生产环境建议替换为 Upstash Redis 实现以支持跨实例共享
+// 内存频率限制器（单实例保护）
+// 如需跨实例共享，可替换为 Redis 实现
 const windows = new Map<string, { count: number; resetAt: number }>();
 
 // 每 5 分钟清理一次过期窗口

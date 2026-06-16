@@ -1,6 +1,6 @@
 // 定时任务：为活跃用户生成主动选题建议
 // GET /api/cron/push-suggestions?secret=xxx
-// 建议每天 08:30 执行（vercel.json cron）
+// 建议每天 08:30 执行（ECS crontab）
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';

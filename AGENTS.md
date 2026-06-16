@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 项目概述
 
-灵集 LingJi — AI 灵感收集 + 热点监控 + 内容创作工具，面向中文创作者。Vercel 部署 H5，Capacitor 8 套壳为 iOS/Android 原生应用。
+灵集 LingJi — AI 灵感收集 + 热点监控 + 内容创作工具，面向中文创作者。阿里云 ECS 部署 H5，Capacitor 8 套壳为 iOS/Android 原生应用。
 
 ## 常用命令
 
@@ -28,11 +28,11 @@ vitest 配置了 `globals: true`，测试文件中 `describe`/`it`/`expect`/`vi`
 - **前端**: Next.js 14 (App Router) + React 18 + TypeScript + TailwindCSS 3.4
 - **后端**: Next.js API Routes + Supabase (Postgres, Auth, Storage)
 - **AI 服务**: 阿里云 DashScope (DeepSeek, Qwen, Wan, CosyVoice) + 火山引擎豆包 + OpenRouter + HeyGen + ElevenLabs + jina.ai Reader
-- **移动端**: Capacitor 8，WebView 加载 Vercel URL (`https://ai.zjsifan.com`)
-- **部署**: Vercel (前端 + API) + 阿里云 ECS (自部署 FunASR/Kokoro) + pm2
+- **移动端**: Capacitor 8，WebView 加载生产 URL (`https://ai.zjsifan.com`)
+- **部署**: 阿里云 ECS (前端 + API + FunASR/Kokoro) + pm2
 - **测试**: Vitest + jsdom + @testing-library/react，Playwright 用于 E2E
 - **CI/CD**: GitHub Actions (移动端发布到 TestFlight/Play Store, 服务端部署到阿里云)
-- **包管理器**: 本地开发用 pnpm（有 `pnpm-lock.yaml`），Vercel 和 GitHub Actions 用 npm（有 `package-lock.json`），两个 lockfile 需保持同步
+- **包管理器**: 本地开发用 pnpm（有 `pnpm-lock.yaml`），GitHub Actions 用 npm（有 `package-lock.json`），两个 lockfile 需保持同步
 - **模块系统**: ESM (`"type": "module"`)，CommonJS 配置文件使用 `.cjs` 扩展名 (`postcss.config.cjs`)
 
 ## 项目结构
@@ -143,7 +143,7 @@ export const GET = withAuth(async ({ request, user, params }) => {
 
 - `.env.local` 中的敏感配置通过 `src/lib/runtime-config.ts` 运行时从文件系统读取，不依赖 Next.js build 时内联
 - 读取 API key 用 `getDashScopeApiKey()` 等专有函数，不用 `process.env` 直接访问
-- `CRON_SECRET` 用于保护 Vercel cron 调用的端点 (`/api/jobs/claim`, `/api/platforms/metrics-fetch`)
+- `CRON_SECRET` 用于保护 cron 调用的端点 (`/api/jobs/claim`, `/api/platforms/metrics-fetch`)
 
 > **注意**: Middleware 中 Supabase 客户端使用 `process.env.SUPABASE_ANON_KEY`（无 `NEXT_PUBLIC_` 前缀），但 `.env.example` 中定义为 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。`.env.local` 中两个变量名均需设置。
 
@@ -182,7 +182,7 @@ export const GET = withAuth(async ({ request, user, params }) => {
 `src/lib/jobs/queue.ts` 基于 `ai_tasks` 表的异步任务队列：
 - `enqueueBatch` 批量提交 → worker `claimNext` 抢占 → 更新进度 → 标记完成/失败
 - 失败自动重试 (指数退避: 30s → 2min → 8min)
-- `/api/jobs/claim` 由 Vercel cron (`0 0 * * *`) 定时触发
+- `/api/jobs/claim` 由 ECS crontab 定时触发
 - 并发限制按任务类型 (如 `digital_human: 3`, `video: 5`)
 - 任务有 `priority` (1-10)、`estimated_seconds`、进度百分比
 
@@ -232,18 +232,20 @@ RAG 增强的 AI 创作助手 pipeline：
 - `TYPE_EMOJIS` / `TYPE_LABELS` — 内容类型图标和标签
 - `BG_GLASS` / `BORDER_GLASS` 等 — 毛玻璃 UI 样式常量
 
-### Vercel 部署要点
+### 阿里云 ECS 部署要点
 
-- `vercel.json` 中 AI 视频/合并路由 `maxDuration: 60s`，热点检查 cron `maxDuration: 300s`
-- `next.config.mjs`: `serverActions.bodySizeLimit: '30mb'`, `serverComponentsExternalPackages: ['pdf-parse']`
+- 服务器通过 GitHub Actions (`deploy-server.yml`) 自动部署：push main → SSH 到阿里云 → git pull → `npm ci && npm run build` → `pm2 restart lingji`
+- `next.config.mjs`: `serverActions.bodySizeLimit: '30mb'`, `serverComponentsExternalPackages: ['pdf-parse', 'better-sqlite3']`
 - build 命令为 `next build`，install 为 `npm install` (非 pnpm)
+- pm2 管理 Next.js 进程，确保崩溃自动重启
+- SQLite 数据库存储在 `process.cwd()/.data/`，ECS 磁盘可写
 
-**Vercel Cron 时间表** (全部为北京时间):
+**ECS Crontab 时间表** (全部为北京时间):
 
 | 时间 | 路径 | 用途 |
 |------|------|------|
 | 每天 08:00 | `/api/cron/check-hotspots` | 热点检查 |
-| 每天 00:00 | `/api/jobs/claim` | AI 任务队列领取 |
+| 每分钟 | `/api/jobs/claim` | AI 任务队列领取 |
 | 每天 06:00 | `/api/platforms/metrics-fetch` | 平台指标拉取 |
 | 每天 12:00 | `/api/platforms/scheduled-publish` | 定时发布 |
 | 每月 1 日 16:00 | `/api/cron/credits-reset` | 点数重置 |

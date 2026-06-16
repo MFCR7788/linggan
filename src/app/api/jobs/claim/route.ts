@@ -1,6 +1,6 @@
 // Worker 抢占端点 (V2.0.1)
 // POST /api/jobs/claim
-// 由 Vercel cron 每分钟调用（或外部触发器）
+// 由 cron 每分钟调用（或外部触发器）
 // 鉴权：CRON_SECRET 环境变量
 
 import { NextResponse } from 'next/server';
@@ -9,7 +9,7 @@ import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
-const WORKER_ID_PREFIX = 'vercel-cron';
+const WORKER_ID_PREFIX = 'ecs-cron';
 
 export async function POST(request: Request): Promise<NextResponse> {
   // 1) CRON_SECRET 鉴权（必须配置，不可降级到其他密钥）

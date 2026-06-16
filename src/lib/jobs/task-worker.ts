@@ -104,7 +104,7 @@ export interface RunWorkerResult {
 
 /**
  * 跑一轮 worker：claim 一批任务，逐个执行
- * - 默认每轮 claim 5 个（与 Vercel cron 1 分钟频率匹配）
+ * - 默认每轮 claim 5 个（与 cron 1 分钟频率匹配）
  * - 任务级并发控制：每个 taskType 独立计数
  */
 export async function runWorker(opts: { workerId: string; limit?: number }): Promise<RunWorkerResult> {

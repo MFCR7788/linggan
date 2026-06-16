@@ -1,8 +1,8 @@
-// 月底清零 cron(Vercel Cron 调用)
+// 月底清零 cron（阿里云 ECS crontab 调用）
 // POST/GET /api/cron/credits-reset
-// 配置见 vercel.json → crons 段(每月 1 号 00:00 UTC+8)
+// 每月 1 号 00:00 UTC+8
 //
-// 安全:必须携带 Vercel Cron Secret 头,否则任何人手动触发都能重置,会出大事
+// 安全：必须携带 CRON_SECRET 头，否则任何人手动触发都能重置
 //
 // 业务规则:只清零"订阅档位赠送的余额",加油包余额不动
 // 当前实现:简化版一刀切(只对 tier_expires_at <= now 的用户清零,加油包用户没到期时间)

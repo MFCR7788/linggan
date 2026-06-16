@@ -20,22 +20,12 @@ export interface SeleniumPublishResult extends PublishResult {
 
 /**
  * Selenium 发布入口
- * 只在 ECS 有 Chrome 的环境中可用，Vercel 自动跳过
+ * 仅在 ECS 有 Chrome 的环境中可用
  */
 export async function seleniumPublish(
   input: PublishInput,
   options: SeleniumPublishOptions
 ): Promise<SeleniumPublishResult> {
-  if (process.env.VERCEL || process.env.VERCEL_ENV) {
-    return {
-      success: false,
-      externalPostId: '',
-      externalUrl: '',
-      strategy: 'selenium',
-      error: 'Selenium 发布在 Vercel 中不可用',
-    };
-  }
-
   try {
     // eslint-disable-next-line
     const { Builder } = require('selenium-webdriver');

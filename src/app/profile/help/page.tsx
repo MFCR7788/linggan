@@ -179,7 +179,7 @@ const features: FeatureEntry[] = [
     color: '#22C55E',
     highlights: [
       '3 种输入方式:CSV 导入 / 表格内联编辑 / 灵感库多选',
-      '后端真任务队列:Vercel cron 每分钟 claim,worker 并发 10 个',
+      '后端真任务队列：ECS cron 每分钟 claim，worker 并发 10 个',
       '进度可视化:每张图独立进度条,失败可重试',
       '模板复用:8 个生图预设联动比例/风格/色调,带 {{name}} 占位符',
       '配额透明:提交前显示已用/将用,免费 20 批/月,Pro 200 批/月',
@@ -561,7 +561,7 @@ const faqs: FAQEntry[] = [
   },
   {
     q: '批量生图为什么用 N×12 秒?任务会不会丢?',
-    a: '预估时间:每张图豆包 API 约 10-15 秒,12 秒是经验值(并发 10 张 + Vercel cron 1 分钟粒度)。\n\n任务队列: 不是「客户端轮询」,而是后端真任务队列(ai_tasks 表 + Vercel cron + worker 池)。即使关掉页面,任务在数据库里,重开自动续上。\n\n中途关页面: 进度不丢,重新进入「批量生图」页,会自动用 batchId 拉最新进度。\n\n失败重试: 失败任务可单独「重试」,最多 3 次自动重试(指数退避 30s/2min/8min)。',
+    a: '预估时间:每张图豆包 API 约 10-15 秒,12 秒是经验值(并发 10 张 + ECS cron 1 分钟粒度)。\n\n任务队列: 不是「客户端轮询」,而是后端真任务队列(ai_tasks 表 + cron + worker 池)。即使关掉页面,任务在数据库里,重开自动续上。\n\n中途关页面: 进度不丢,重新进入「批量生图」页,会自动用 batchId 拉最新进度。\n\n失败重试: 失败任务可单独「重试」,最多 3 次自动重试(指数退避 30s/2min/8min)。',
   },
   {
     q: 'TTS 语音合成失败怎么办？',
@@ -680,12 +680,12 @@ const faqs: FAQEntry[] = [
     a: '通过本页面的"意见反馈"标签提交问题，我们会在 24 小时内回复。也可以通过反馈表单提交功能建议。',
   },
   {
-    q: '平台集成里的 6 个 env 为什么要分别填到 Vercel？',
-    a: '灵集代码读的是 Vercel 的 process.env，站内「平台集成」是「配置中心」（状态、申请指引、AES 加密备份），不是 env 的真源。\n\n配置流程：(1) 在站内填入或自动生成 → 站内加密存库 → 顶部出现「已配置」徽章；(2) 同步把同一个值贴到 Vercel → Settings → Environment Variables；(3) 重新部署后 Vercel env 生效 → 定时任务、多平台 OAuth 发布才真正能用。\n\n6 个 env：PLATFORM_ENCRYPTION_KEY（AES-256-GCM 加密 token 的密钥）、CRON_SECRET（Vercel cron 调 worker 的鉴权密钥）、WECHAT_MP_APP_ID/SECRET、WEIBO_APP_KEY/SECRET。',
+    q: '平台集成里的 6 个 env 为什么要分别填到服务器？',
+    a: '灵集代码读的是服务器的 process.env，站内「平台集成」是「配置中心」（状态、申请指引、AES 加密备份），不是 env 的真源。\n\n配置流程：(1) 在站内填入或自动生成 → 站内加密存库 → 顶部出现「已配置」徽章；(2) 同步把同一个值贴到服务器 .env.local → 重启 pm2 后生效 → 定时任务、多平台 OAuth 发布才真正能用。\n\n6 个 env：PLATFORM_ENCRYPTION_KEY（AES-256-GCM 加密 token 的密钥）、CRON_SECRET（cron 调 worker 的鉴权密钥）、WECHAT_MP_APP_ID/SECRET、WEIBO_APP_KEY/SECRET。',
   },
   {
     q: '微信公众号需要什么资质？个人能开吗？',
-    a: '需要「已认证的服务号」+ 微信开放平台第三方平台账号，均需企业资质。\n\n流程：(1) 注册「微信公众平台」账号 → 完成企业主体认证（需营业执照，¥300/年审核费）；(2) 账号类型选「服务号」（订阅号无发文 API 权限）；(3) 在「微信开放平台」(open.weixin.qq.com) 注册开发者账号 → 认证 → 创建「第三方平台」→ 拿到 AppID + AppSecret；(4) 把这两个值填到灵集「平台集成」+ Vercel env。\n\n个人开发者无法走通这套流程（缺企业资质）。微博开放平台个人可以申请，但需要审核（约 1-3 个工作日）。',
+    a: '需要「已认证的服务号」+ 微信开放平台第三方平台账号，均需企业资质。\n\n流程：(1) 注册「微信公众平台」账号 → 完成企业主体认证（需营业执照，¥300/年审核费）；(2) 账号类型选「服务号」（订阅号无发文 API 权限）；(3) 在「微信开放平台」(open.weixin.qq.com) 注册开发者账号 → 认证 → 创建「第三方平台」→ 拿到 AppID + AppSecret；(4) 把这两个值填到灵集「平台集成」+ 服务器 env。\n\n个人开发者无法走通这套流程（缺企业资质）。微博开放平台个人可以申请，但需要审核（约 1-3 个工作日）。',
   },
   {
     q: '改密码后会退出所有设备吗？',
@@ -860,9 +860,9 @@ const guides: GuideSection[] = [
       { step: 1, content: '个人中心 → 右上角齿轮 → 跳到「账号设置」' },
       { step: 2, content: '「资料」section：上传头像、修改昵称（1-30 字符）' },
       { step: 3, content: '「安全」section：点「修改密码」→ 输入当前密码 + 8 位以上新密码 → 确认（其他设备会立即退出）' },
-      { step: 4, content: '「集成」section：点「自动生成 PLATFORM_ENCRYPTION_KEY」→ 复制 64 字符 hex → 粘贴到 Vercel env；CRON_SECRET 同理' },
+      { step: 4, content: '「集成」section：点「自动生成 PLATFORM_ENCRYPTION_KEY」→ 复制 64 字符 hex → 粘贴到服务器 .env.local；CRON_SECRET 同理' },
       { step: 5, content: '「集成」section：填入 WECHAT_MP_APP_ID / APP_SECRET、WEIBO_APP_KEY / APP_SECRET（需在微信公众平台、微博开放平台先申请）' },
-      { step: 6, content: '所有 env 都贴到 Vercel → 重新部署 → 集成状态变「已配置」+ 多平台 OAuth 发布 + 定时任务即可用' },
+      { step: 6, content: '所有 env 都贴到服务器 .env.local → 重启 pm2 → 集成状态变「已配置」+ 多平台 OAuth 发布 + 定时任务即可用' },
     ],
   },
   {

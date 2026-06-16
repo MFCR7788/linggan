@@ -1,12 +1,12 @@
 // 平台集成配置中心 API (V2.0.2 后续)
 // 6 个 env 的查看/更新/清空/自动生成
-// 注: 这是"配置中心",不是 env 的真源 — Vercel 的 process.env 仍是真源
+// 注: 这是"配置中心",不是 env 的真源 — 服务器的 process.env 仍是真源
 //
 // GET    /api/admin/platform-settings                → 拉 6 行元信息(不返 value)
 // PUT    /api/admin/platform-settings                → 更新 1 个 { keyName, value }
 // DELETE /api/admin/platform-settings?keyName=xxx    → 清空 1 个
 // POST   /api/admin/platform-settings?action=auto-generate&keyName=PLATFORM_ENCRYPTION_KEY
-//        → 自动生成 64 字符 hex,返明文一次(让用户复制到 Vercel)
+//        → 自动生成 64 字符 hex,返明文一次(让用户复制到服务器 env)
 
 import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
@@ -85,8 +85,8 @@ export const PUT = withAuth(async ({ request, user }) => {
   try {
     encrypted = encryptToken(value);
   } catch (e: any) {
-    // Bootstrap 死锁:PLATFORM_ENCRYPTION_KEY 还没同步到 Vercel,encryptToken 抛错。
-    // 明文兜底存,前端强提示用户尽快同步到 Vercel
+    // Bootstrap 死锁：PLATFORM_ENCRYPTION_KEY 还没同步到服务器 env，encryptToken 抛错。
+    // 明文兜底存，前端强提示用户尽快同步到服务器 env
     encrypted = value;
     unsafe_mode = true;
   }
@@ -107,8 +107,8 @@ export const PUT = withAuth(async ({ request, user }) => {
   return createApiResponse(
     { ok: true, keyName, unsafe: unsafe_mode },
     unsafe_mode
-      ? '已保存(明文兜底,因 Vercel 还没 PLATFORM_ENCRYPTION_KEY)请把同值同步到 Vercel → 重新部署 → 回来再次更新此 key 即可启用加密'
-      : '已保存(同步到 Vercel 后才生效)'
+      ? '已保存(明文兜底,因服务器还没 PLATFORM_ENCRYPTION_KEY)请把同值同步到服务器 env → 重启 pm2 → 回来再次更新此 key 即可启用加密'
+      : '已保存(同步到服务器 env 后才生效)'
   );
 });
 
@@ -140,7 +140,7 @@ export const DELETE = withAuth(async ({ request }) => {
 
 /**
  * 自动生成(只对 crypto/cron 类生效;oauth 4 个需要用户填)
- * 返明文一次,前端弹窗显示 + 提示"复制到 Vercel"
+ * 返明文一次，前端弹窗显示 + 提示"复制到服务器 env"
  */
 export const POST = withAuth(async ({ request, user }) => {
   const url = new URL(request.url);
@@ -160,9 +160,9 @@ export const POST = withAuth(async ({ request, user }) => {
   const value = randomBytes(32).toString('hex');
 
   // 加密 + 写库
-  // Bootstrap 死锁处理:PLATFORM_ENCRYPTION_KEY 还没同步到 Vercel 时,encryptToken 会抛错。
-  // 这种情况下用明文直接存(unsafe),前端强提示「立即复制到 Vercel → 重新部署 →
-  // 回来再次更新此 key 即可启用加密」,让所有 bootstrap 期的写入都不被卡住。
+  // Bootstrap 死锁处理：PLATFORM_ENCRYPTION_KEY 还没同步到服务器 env 时，encryptToken 会抛错。
+  // 这种情况下用明文直接存(unsafe)，前端强提示「立即复制到服务器 env → 重启 pm2 →
+  // 回来再次更新此 key 即可启用加密」
   const supabase = createAdminClient();
   let value_encrypted: string;
   let unsafe_mode = false;
@@ -188,7 +188,7 @@ export const POST = withAuth(async ({ request, user }) => {
   return createApiResponse(
     { keyName, value, unsafe: unsafe_mode },
     unsafe_mode
-      ? '已生成(明文兜底,因 Vercel 还没 PLATFORM_ENCRYPTION_KEY)请立即复制到 Vercel → 重新部署 → 回来再次更新此 key 即可启用加密'
-      : '已生成(只显示一次,请立即复制到 Vercel)'
+      ? '已生成(明文兜底,因服务器还没 PLATFORM_ENCRYPTION_KEY)请立即复制到服务器 env → 重启 pm2 → 回来再次更新此 key 即可启用加密'
+      : '已生成(只显示一次,请立即复制到服务器 env)'
   );
 });

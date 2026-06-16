@@ -15,10 +15,7 @@ interface PreparedStmt {
   all(...params: unknown[]): unknown[];
 }
 
-// Vercel serverless: process.cwd() 只读，用 /tmp 作为 SQLite 数据目录
-const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
-const DATA_DIR = isVercel ? path.join('/tmp', 'lingji-data') : path.join(process.cwd(), '.data');
-const DEFAULT_DB_PATH = path.join(DATA_DIR, 'memories.db');
+const DEFAULT_DB_PATH = path.join(process.cwd(), '.data', 'memories.db');
 
 let globalDb: DB | null = null;
 

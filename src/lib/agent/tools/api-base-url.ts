@@ -13,19 +13,13 @@ export function getApiBaseUrl(): string {
     return _cachedBaseUrl;
   }
 
-  // 2. Vercel 自动注入
-  if (process.env.VERCEL_URL) {
-    _cachedBaseUrl = `https://${process.env.VERCEL_URL}`;
-    return _cachedBaseUrl;
-  }
-
-  // 3. 生产域名硬编码 fallback
+  // 2. 生产域名硬编码 fallback
   if (process.env.NODE_ENV === 'production') {
     _cachedBaseUrl = 'https://ai.zjsifan.com';
     return _cachedBaseUrl;
   }
 
-  // 4. 开发环境
+  // 3. 开发环境
   _cachedBaseUrl = 'http://localhost:3000';
   return _cachedBaseUrl;
 }
