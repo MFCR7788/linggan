@@ -120,7 +120,6 @@ function AIVideoContent() {
   const [extraFramesText, setExtraFramesText] = useState(''); // 逗号/换行分隔,parse 时取 http 开头
   const [firstFrameInput, setFirstFrameInput] = useState('');
   const [firstFrameTab, setFirstFrameTab] = useState<'inspiration' | 'url' | 'upload'>('inspiration');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Step 2: 分镜预览 & 微调 ─────────────────────────
 

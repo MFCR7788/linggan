@@ -106,8 +106,8 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
 
   const id = `media-picker-${accept}`;
 
-  return (
-    <GlassCard>
+  const content = (
+    <>
       {!compact && label && (
         <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
           {label}
@@ -215,6 +215,9 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
           </button>
         </div>
       )}
-    </GlassCard>
+    </>
   );
+
+  if (compact) return <div>{content}</div>;
+  return <GlassCard>{content}</GlassCard>;
 }

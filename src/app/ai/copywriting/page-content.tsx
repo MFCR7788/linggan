@@ -222,46 +222,6 @@ function AICopywritingContent() {
     return () => { if (urlDebounceRef.current) clearTimeout(urlDebounceRef.current); };
   }, [userInput, loadInspirations, typeFilter, hideAiWorks, showToast]);
 
-  // ─── 图片处理 ──────────────────────────────────
-  const handleImageFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) { setImageError('只支持图片文件'); return; }
-    setUploadingImage(true);
-    setImageError(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const upRes = await fetch('/api/upload/inspiration', { method: 'POST', body: formData });
-      const upData = await upRes.json();
-      if (!upRes.ok || !upData.success) throw new Error(upData.error || '上传失败');
-      const imageUrl = upData.data.url;
-
-      const analyzeRes = await fetch('/api/ai/copywriting/analyze-image', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl }),
-      });
-      const analyzeData = await analyzeRes.json();
-      if (!analyzeData.success) throw new Error(analyzeData.error || '图片分析失败');
-
-      const itemId = upData.data.id;
-      await fetch(`/api/inspiration/${itemId}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ai_summary: analyzeData.data.description,
-          title: analyzeData.data.text?.substring(0, 50) || analyzeData.data.description?.substring(0, 50) || '图片素材',
-        }),
-      }).catch(() => {});
-
-      setSelectedInspirations(prev => { const next = new Set(prev); next.add(itemId); return next; });
-      setRefinedMessage(analyzeData.data.description);
-      showToast(`已分析图片: ${analyzeData.data.tags?.slice(0, 2).join(' / ') || '已加入灵感库'}`, 'success');
-      loadInspirations(typeFilter, hideAiWorks);
-    } catch (e: any) {
-      setImageError(e?.message || '图片处理失败');
-    } finally {
-      setUploadingImage(false);
-    }
-  }, [loadInspirations, typeFilter, hideAiWorks, showToast]);
-
   // MediaPicker 选择图片后的分析处理
   const handleMediaPicked = useCallback(async (url: string) => {
     setUploadingImage(true);
@@ -669,17 +629,7 @@ function AICopywritingContent() {
               ref={userInputRef}
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              onPaste={(e) => {
-                const items = e.clipboardData?.items;
-                if (!items) return;
-                for (let i = 0; i < items.length; i++) {
-                  if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
-                    const file = items[i].getAsFile();
-                    if (file) { e.preventDefault(); handleImageFile(file); return; }
-                  }
-                }
-              }}
-              placeholder="写一篇面向 25-30 岁职场女性的抗老精华推荐…（可粘贴链接或图片）"
+              placeholder="写一篇面向 25-30 岁职场女性的抗老精华推荐…（可粘贴链接，图片通过下方上传）"
               className="w-full p-2.5 rounded-lg text-sm resize-none custom-scrollbar"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#E5E7EB', minHeight: 100, maxHeight: 200, outline: 'none' }}
             />
