@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePageTitle } from '@/hooks/use-page-title';
 import {
   Settings, Bell, HelpCircle, LogOut, ChevronRight, Edit3,
   BookOpen, Sparkles, TrendingUp, Star, Wallet, ArrowRight, Globe, Shield,
@@ -86,6 +87,7 @@ const menuItems = [
 ];
 
 function ProfileContent() {
+  usePageTitle('我的');
   const router = useRouter();
   const { data: user, isLoading: userLoading, error: userError } = useUser();
   const { data: stats, isLoading: statsLoading } = useProfileStats();

@@ -102,6 +102,30 @@ function InspirationDetailContent() {
       .catch(() => {});
   }, [inspiration?.title]);
 
+  // 动态设置页面标题和 meta 标签（用于分享预览等）
+  useEffect(() => {
+    if (!inspiration) return;
+    const title = inspiration.title || '灵感详情';
+    document.title = `${title} - 灵集`;
+    const setMeta = (property: string, content: string) => {
+      let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute('property', property);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+    const desc = (inspiration.original_text || inspiration.ai_summary || '').substring(0, 200);
+    const image = inspiration.thumbnail_url || inspiration.media_urls?.[0] || '';
+    const url = `${window.location.origin}/inspiration/detail?id=${inspiration.id}`;
+    setMeta('og:title', title);
+    setMeta('og:description', desc);
+    setMeta('og:image', image);
+    setMeta('og:url', url);
+    setMeta('og:type', 'article');
+  }, [inspiration]);
+
   const showStatus = (msg: string) => {
     setStatusMsg(msg);
     setTimeout(() => setStatusMsg(null), 3000);
@@ -169,15 +193,26 @@ function InspirationDetailContent() {
   const shareInspiration = async () => {
     const url = `${window.location.origin}/inspiration/detail?id=${id}`;
     const title = inspiration?.title || '灵感详情';
-    const text = inspiration?.original_text || inspiration?.title || '';
+    const text = inspiration?.original_text || inspiration?.ai_summary || inspiration?.title || '';
+    // 取第一张图片作为分享缩略图
+    const shareImage = inspiration?.thumbnail_url || inspiration?.media_urls?.[0] || '';
 
-    // 优先使用系统原生分享
+    // 优先使用系统原生分享（支持 files 的浏览器传图片）
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url });
+        const shareData: ShareData = { title, text: text.substring(0, 256), url };
+        // 如果有分享图片且浏览器支持 files，尝试获取图片并附加
+        if (shareImage && (navigator as any).canShare?.({ files: [] })) {
+          try {
+            const res = await fetch(shareImage);
+            const blob = await res.blob();
+            const file = new File([blob], 'inspiration.jpg', { type: blob.type || 'image/jpeg' });
+            (shareData as any).files = [file];
+          } catch { /* 获取图片失败，不带图片分享 */ }
+        }
+        await navigator.share(shareData);
         showStatus('✅ 已分享');
       } catch (e: any) {
-        // 用户取消分享不算错误
         if (e?.name !== 'AbortError') {
           showStatus('❌ 分享失败');
         }
@@ -188,9 +223,20 @@ function InspirationDetailContent() {
     // 回退：复制链接到剪贴板
     try {
       await navigator.clipboard.writeText(url);
-      showStatus('✅ 链接已复制到剪贴板');
+      showStatus('✅ 链接已复制，可粘贴分享');
     } catch {
-      showStatus('❌ 复制失败');
+      // 兜底：显示链接让用户手动复制
+      try {
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showStatus('✅ 链接已复制到剪贴板');
+      } catch {
+        showStatus('❌ 复制失败，请手动分享');
+      }
     }
   };
 

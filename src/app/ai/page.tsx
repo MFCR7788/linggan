@@ -8,6 +8,7 @@ import { BottomNav, PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import { Toast } from "@/components/Toast";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { AccountTypeOnboarding } from "@/components/AccountTypeOnboarding";
 import { CreditsWarningBanner } from "@/components/CreditsWarningBanner";
 import { useInspirations } from "@/hooks/use-inspiration";
@@ -49,6 +50,7 @@ const dataTools: AITool[] = [
 ];
 
 function AICreationContent() {
+  usePageTitle('AI创作');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const router = useRouter();

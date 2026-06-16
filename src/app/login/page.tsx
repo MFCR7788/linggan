@@ -8,10 +8,12 @@ import { LoadingSpinner } from "@/components";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClickTextCaptcha } from "@/components/ClickTextCaptcha";
 import { useRouter } from "next/navigation";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useUser } from "@/hooks/use-user";
 
 
 function LoginContent() {
+  usePageTitle('登录');
   const [tab, setTab] = useState<"login" | "register">("login");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");

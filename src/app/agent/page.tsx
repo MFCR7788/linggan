@@ -4,8 +4,10 @@
 
 import { ProtectedRoute } from '@/components';
 import { AgentChatView } from '@/components/agent/AgentChatView';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 export default function AgentPage() {
+  usePageTitle('AI助手');
   return (
     <ProtectedRoute>
       <div className="flex flex-col h-screen bg-[#0A1629]">

@@ -54,6 +54,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // 未登录，不渲染
-  return null;
+  // 未登录 → 显示加载并等待跳转
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 opacity-40" />
+      <LoadingSpinner text="验证身份..." />
+    </div>
+  );
 }

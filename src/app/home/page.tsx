@@ -8,6 +8,7 @@ import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
 import { useRouter } from "next/navigation";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useInspirations } from "@/hooks/use-inspiration";
 import { useSchedules } from "@/hooks/use-schedule";
 import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
@@ -51,6 +52,7 @@ function HomeContent() {
   };
   const [hotTopics, setHotTopics] = useState<HotTopic[]>([]);
   const [hotLoading, setHotLoading] = useState(true);
+  usePageTitle('首页');
 
   useEffect(() => {
     fetch('/api/hotspot?limit=5')

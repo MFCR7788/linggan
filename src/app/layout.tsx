@@ -43,7 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflow: "auto", fontFamily }}>
+      <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflow: "auto", fontFamily, overscrollBehaviorX: "none", touchAction: "pan-y" }}>
         {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{
@@ -74,6 +74,18 @@ export default function RootLayout({
             </ToastProvider>
           </ReactQueryProvider>
         </main>
+        {/* PWA Service Worker 注册 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+            `,
+          }}
+        />
       </body>
     </html>
   );

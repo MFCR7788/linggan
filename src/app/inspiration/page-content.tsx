@@ -5,6 +5,7 @@ import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav, PageKey } from "@/components/BottomNav";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
 import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration, useUpdateInspiration } from "@/hooks/use-inspiration";
@@ -156,6 +157,7 @@ function SimpleCalendar({ events, onDateClick }: { events: Map<string, any[]>; o
 // ====== 主组件 ======
 
 function InspirationLibraryContent() {
+  usePageTitle('灵感库');
   const [activeFilter, setActiveFilter] = useState("全部");
   const [showSavedTip, setShowSavedTip] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);

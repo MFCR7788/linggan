@@ -2,11 +2,23 @@
   "name": "灵集 - AI 灵感创作助手",
   "short_name": "灵集",
   "description": "AI 驱动的灵感收集与内容创作工具",
-  "start_url": "/",
+  "id": "com.zjsifan.lingji",
+  "start_url": "/home",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
   "background_color": "#0A1629",
   "theme_color": "#0A1629",
+  "lang": "zh-CN",
+  "categories": ["productivity", "social"],
   "icons": [
+    {
+      "src": "/brand/logo-mark.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "/brand/app-icon.svg",
       "sizes": "1024x1024",
@@ -17,6 +29,21 @@
       "src": "/brand/favicon.svg",
       "sizes": "64x64",
       "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI 助手",
+      "short_name": "助手",
+      "description": "与 AI 对话创作",
+      "url": "/agent",
+      "icons": [{ "src": "/brand/favicon.svg", "sizes": "64x64" }]
+    },
+    {
+      "name": "灵感库",
+      "short_name": "灵感",
+      "url": "/inspiration",
+      "icons": [{ "src": "/brand/favicon.svg", "sizes": "64x64" }]
     }
   ]
 }

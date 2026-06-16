@@ -661,16 +661,17 @@ export function AgentChatView() {
       pressHandledRef.current = true;
       // 录音开始 → 震动反馈
       if (navigator.vibrate) navigator.vibrate(30);
+      startRecording();
     }, 300);
-    startRecording();
   };
 
   const handlePressEnd = async () => {
     setPressingMic(false);
     setCancelGesture(false);
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
-    if (pressHandledRef.current) return;
-    pressHandledRef.current = true;
+
+    // 按住不足 300ms，不启动录音，直接忽略
+    if (!pressHandledRef.current) return;
 
     if (cancelGesture) {
       cancelRecording();

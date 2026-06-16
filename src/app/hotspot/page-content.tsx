@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { syncDevAuthCookie, getDevUserIdHeader } from '@/lib/dev-auth';
+import { usePageTitle } from '@/hooks/use-page-title';
 import {
   Plus, Search, TrendingUp, ChevronRight, X, Loader2, Activity,
   Flame, ExternalLink,
@@ -836,6 +837,7 @@ function HotspotRadarInner() {
   const [hotspots, setHotspots] = useState<HotspotItem[]>([]);
   const [keywords, setKeywords] = useState<KeywordData[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  usePageTitle('热点话题');
   const [refreshing, setRefreshing] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
