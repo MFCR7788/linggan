@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import FormattedText from "@/components/FormattedText";
 import { Step1MaterialRefineModal } from "@/components/Step1MaterialRefineModal";
+import { MediaPicker } from "@/components/MediaPicker";
 import {
   COPYWRITING_TYPES,
   COPYWRITING_STYLES,
@@ -123,7 +124,6 @@ function AICopywritingContent() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const urlDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // ─── Step 2-4 state ────────────────────────────
@@ -261,6 +261,28 @@ function AICopywritingContent() {
       setUploadingImage(false);
     }
   }, [loadInspirations, typeFilter, hideAiWorks, showToast]);
+
+  // MediaPicker 选择图片后的分析处理
+  const handleMediaPicked = useCallback(async (url: string) => {
+    setUploadingImage(true);
+    setImageError(null);
+    try {
+      const analyzeRes = await fetch('/api/ai/copywriting/analyze-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+      const analyzeData = await analyzeRes.json();
+      if (!analyzeData.success) throw new Error(analyzeData.error || '图片分析失败');
+      if (analyzeData.data.description) {
+        setRefinedMessage(analyzeData.data.description);
+        showToast(`已分析图片: ${analyzeData.data.tags?.slice(0, 2).join(' / ') || '已识别'}`, 'success');
+      }
+    } catch (e: any) {
+      setImageError(e?.message || '图片处理失败');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [showToast]);
 
   // ─── Handoff 接收 ──────────────────────────────
   useEffect(() => {
@@ -675,23 +697,16 @@ function AICopywritingContent() {
               </div>
             )}
 
-            {/* 拖拽/上传图片 */}
-            <label
-              className="mt-1.5 flex items-center justify-center gap-1 px-2 py-1 rounded-lg cursor-pointer"
-              style={{
-                background: isDraggingImage ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.02)',
-                border: isDraggingImage ? '1px dashed rgba(59,130,246,0.5)' : '1px dashed rgba(255,255,255,0.12)',
-                color: isDraggingImage ? '#93C5FD' : '#6B7280', fontSize: 10,
-              }}
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-              onDragLeave={() => setIsDraggingImage(false)}
-              onDrop={(e) => { e.preventDefault(); setIsDraggingImage(false); const file = e.dataTransfer.files?.[0]; if (file?.type.startsWith('image/')) handleImageFile(file); }}
-            >
-              <ImageIcon size={11} /> 点击或拖入图片（自动识别文字与场景）
-              <input type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleImageFile(file); e.target.value = ''; }}
+            {/* 图片素材选择器 */}
+            <div className="mt-1.5">
+              <MediaPicker
+                accept="image"
+                onSelect={handleMediaPicked}
+                compact
+                tabs={['upload', 'inspiration', 'url']}
+                label=""
               />
-            </label>
+            </div>
           </div>
 
           {/* 智能助手 */}
