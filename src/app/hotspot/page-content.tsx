@@ -109,28 +109,28 @@ function HotspotCard({
     >
       {/* 第一行：重要性 + 来源 + 热度 */}
       <div className="flex items-center gap-1 mb-1 flex-wrap">
-        <span className="px-1 rounded text-[9px] font-medium" style={{ background: importanceConf.bg, color: importanceConf.color }}>
+        <span className="px-1 rounded text-[11px] font-medium" style={{ background: importanceConf.bg, color: importanceConf.color }}>
           {importanceConf.label}
         </span>
-        <span className="px-1 rounded text-[9px]" style={{ background: getPlatformColor(item.platform) + '22', color: getPlatformColor(item.platform) }}>
+        <span className="px-1 rounded text-[11px]" style={{ background: getPlatformColor(item.platform) + '22', color: getPlatformColor(item.platform) }}>
           {item.platform}
         </span>
         {showKeyword && item.keyword && (
-          <span className="px-1 rounded text-[9px]" style={{ background: 'rgba(139,92,246,0.15)', color: '#C4B5FD' }}>{item.keyword}</span>
+          <span className="px-1 rounded text-[11px]" style={{ background: 'rgba(139,92,246,0.15)', color: '#C4B5FD' }}>{item.keyword}</span>
         )}
-        <span className="ml-auto flex items-center gap-1" style={{ color: heat.color, fontSize: 10, fontWeight: 600 }}>
+        <span className="ml-auto flex items-center gap-1" style={{ color: heat.color, fontSize: 12, fontWeight: 600 }}>
           {heat.label} {Math.round(item.heatScore || item.relevance_score || 0)}
         </span>
       </div>
 
       {/* 标题 */}
-      <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
+      <p style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
         {item.title}
       </p>
 
       {/* AI 摘要（1行） */}
       {item.ai_summary && (
-        <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
+        <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
           {item.ai_summary}
         </p>
       )}
@@ -138,10 +138,10 @@ function HotspotCard({
       {/* 底部：时间 + 相关度 + 操作 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span style={{ color: '#6B7280', fontSize: 10 }}>
+          <span style={{ color: '#6B7280', fontSize: 11 }}>
             {item.published_at ? formatRelativeTime(item.published_at) + ' · ' : ''}{formatRelativeTime(item.captured_at)}
           </span>
-          <span className="px-1 rounded text-[10px]" style={{
+          <span className="px-1 rounded text-[11px]" style={{
             background: (item.relevance_score || 0) > 70 ? 'rgba(34,197,94,0.12)' : 'rgba(251,191,36,0.1)',
             color: (item.relevance_score || 0) > 70 ? '#86EFAC' : '#FBBF24',
           }}>
@@ -150,7 +150,7 @@ function HotspotCard({
         </div>
         <div className="flex gap-1">
           <button onClick={(e) => { e.stopPropagation(); onToInspiration(item); }}
-            className="px-2 py-0.5 rounded text-[10px]"
+            className="px-2 py-0.5 rounded text-[11px]"
             style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
             转灵感
           </button>
@@ -334,7 +334,7 @@ function RadarTab({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between" style={{ paddingRight: 8 }}>
                     <HotspotCard item={item} onToInspiration={onToInspiration} showKeyword />
-                    <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 10 }}>
+                    <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 11 }}>
                       {isExpanded ? '收起 ▲' : '展开 ▼'}
                     </span>
                   </div>
@@ -345,39 +345,39 @@ function RadarTab({
                       {/* 完整原文 */}
                       {item.original_content && (
                         <div className="mt-2 mb-2">
-                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>原文内容</p>
-                          <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                          <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>原文内容</p>
+                          <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
                         </div>
                       )}
 
                       {/* AI 分析 */}
                       <div className="mt-2 mb-2">
-                        <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                        <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>AI 分析</p>
                         {item.ai_summary && (
-                          <p style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
+                          <p style={{ color: '#D1D5DB', fontSize: 13, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
                         )}
                         <div className="flex flex-wrap gap-1 mb-1">
                           {(item.relevance_score || 0) > 0 && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
+                            <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
                           )}
                           {item.importance_level && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
                           )}
                           {item.credibility_level && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: item.credibility_level === 'green' ? 'rgba(34,197,94,0.1)' : item.credibility_level === 'red' ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)', color: item.credibility_level === 'green' ? '#86EFAC' : item.credibility_level === 'red' ? '#FCA5A5' : '#FBBF24' }}>可信度 {item.credibility_score || '-'}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: item.credibility_level === 'green' ? 'rgba(34,197,94,0.1)' : item.credibility_level === 'red' ? 'rgba(239,68,68,0.1)' : 'rgba(234,179,8,0.1)', color: item.credibility_level === 'green' ? '#86EFAC' : item.credibility_level === 'red' ? '#FCA5A5' : '#FBBF24' }}>可信度 {item.credibility_score || '-'}</span>
                           )}
                           {(item.key_points?.length ?? 0) > 0 && item.key_points!.map((kp: string, ki: number) => (
-                            <span key={ki} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
+                            <span key={ki} className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
                           ))}
                         </div>
                         {item.relevance_reason && (
-                          <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.4 }}>{item.relevance_reason}</p>
+                          <p style={{ color: '#6B7280', fontSize: 11, lineHeight: 1.4 }}>{item.relevance_reason}</p>
                         )}
                         {(item.creation_suggestions?.length ?? 0) > 0 && (
                           <div className="mt-2">
-                            <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 2 }}>创作建议</p>
+                            <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 2 }}>创作建议</p>
                             {item.creation_suggestions!.map((s: string, si: number) => (
-                              <p key={si} style={{ color: '#C4B5FD', fontSize: 10, lineHeight: 1.4 }}>{si + 1}. {s}</p>
+                              <p key={si} style={{ color: '#C4B5FD', fontSize: 11, lineHeight: 1.4 }}>{si + 1}. {s}</p>
                             ))}
                           </div>
                         )}
@@ -388,13 +388,13 @@ function RadarTab({
                         {item.original_url && (
                           <a href={item.original_url} target="_blank" rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[12px]"
                             style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
-                            <ExternalLink size={11} /> 打开原文
+                            <ExternalLink size={12} /> 打开原文
                           </a>
                         )}
                         <button onClick={(e) => { e.stopPropagation(); onToInspiration(item); }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[12px]"
                           style={{ background: 'rgba(139,92,246,0.12)', color: '#C4B5FD' }}>
                           转灵感
                         </button>
@@ -616,7 +616,7 @@ function KeywordsTab({
                   <div key={item.id} onClick={() => onExpand(item)} className="cursor-pointer">
                     <div className="flex items-center justify-between" style={{ paddingRight: 8 }}>
                       <HotspotCard item={item} onToInspiration={onToInspiration} showKeyword />
-                      <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 10 }}>
+                      <span className="flex-shrink-0 ml-2" style={{ color: '#6B7280', fontSize: 11 }}>
                         {isExpanded ? '收起 ▲' : '展开 ▼'}
                       </span>
                     </div>
@@ -625,38 +625,38 @@ function KeywordsTab({
                       <div className="px-3 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                         {item.original_content && (
                           <div className="mt-2 mb-2">
-                            <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>原文内容</p>
-                            <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                            <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>原文内容</p>
+                            <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
                           </div>
                         )}
                         <div className="mt-2 mb-2">
-                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                          <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>AI 分析</p>
                           {item.ai_summary && (
-                            <p style={{ color: '#D1D5DB', fontSize: 11, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
+                            <p style={{ color: '#D1D5DB', fontSize: 13, lineHeight: 1.5, marginBottom: 4 }}>{item.ai_summary}</p>
                           )}
                           <div className="flex flex-wrap gap-1 mb-1">
                             {(item.relevance_score || 0) > 0 && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
+                              <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {item.relevance_score}%</span>
                             )}
                             {item.importance_level && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: IMPORTANCE_CONFIG[item.importance_level]?.bg, color: IMPORTANCE_CONFIG[item.importance_level]?.color }}>{IMPORTANCE_CONFIG[item.importance_level]?.label}</span>
                             )}
                           </div>
                           {item.relevance_reason && (
-                            <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.4 }}>{item.relevance_reason}</p>
+                            <p style={{ color: '#6B7280', fontSize: 11, lineHeight: 1.4 }}>{item.relevance_reason}</p>
                           )}
                         </div>
                         <div className="flex gap-1.5">
                           {item.original_url && (
                             <a href={item.original_url} target="_blank" rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded text-[12px]"
                               style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
-                              <ExternalLink size={11} /> 打开原文
+                              <ExternalLink size={12} /> 打开原文
                             </a>
                           )}
                           <button onClick={(e) => { e.stopPropagation(); onToInspiration(item); }}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[12px]"
                             style={{ background: 'rgba(139,92,246,0.12)', color: '#C4B5FD' }}>
                             转灵感
                           </button>
@@ -735,16 +735,16 @@ function SearchTab({
                   style={{ background: isExpanded ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isExpanded ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}` }}>
                   {/* 头部：来源 + 标签 */}
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="px-1 rounded text-[10px]" style={{ background: getPlatformColor(r.source) + '22', color: getPlatformColor(r.source) }}>{r.source}</span>
+                    <span className="px-1 rounded text-[11px]" style={{ background: getPlatformColor(r.source) + '22', color: getPlatformColor(r.source) }}>{r.source}</span>
                     {r.analysis?.relevance && (
-                      <span className="px-1 rounded text-[10px]" style={{ background: r.analysis.relevance > 70 ? 'rgba(34,197,94,0.12)' : 'rgba(251,191,36,0.1)', color: r.analysis.relevance > 70 ? '#86EFAC' : '#FBBF24' }}>
+                      <span className="px-1 rounded text-[11px]" style={{ background: r.analysis.relevance > 70 ? 'rgba(34,197,94,0.12)' : 'rgba(251,191,36,0.1)', color: r.analysis.relevance > 70 ? '#86EFAC' : '#FBBF24' }}>
                         相关{r.analysis.relevance}%</span>
                     )}
                     {r.analysis?.importance && (
-                      <span className="px-1 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg || 'rgba(156,163,175,0.1)', color: IMPORTANCE_CONFIG[r.analysis.importance]?.color || '#9CA3AF' }}>
+                      <span className="px-1 rounded text-[11px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg || 'rgba(156,163,175,0.1)', color: IMPORTANCE_CONFIG[r.analysis.importance]?.color || '#9CA3AF' }}>
                         {IMPORTANCE_CONFIG[r.analysis.importance]?.label || r.analysis.importance}</span>
                     )}
-                    <span className="ml-auto text-[10px]" style={{ color: '#6B7280' }}>
+                    <span className="ml-auto text-[11px]" style={{ color: '#6B7280' }}>
                       {isExpanded ? '收起 ▲' : '展开 ▼'}
                     </span>
                   </div>
@@ -753,13 +753,13 @@ function SearchTab({
                   <a href={r.url || '#'} target="_blank" rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="block mb-1 hover:underline"
-                    style={{ color: '#93C5FD', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }}>
-                    {r.title} <ExternalLink size={10} className="inline" />
+                    style={{ color: '#93C5FD', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>
+                    {r.title} <ExternalLink size={11} className="inline" />
                   </a>
 
                   {/* 摘要 / 内容 */}
                   {(r.analysis?.summary || r.content) && (
-                    <p style={{ color: isExpanded ? '#D1D5DB' : '#9CA3AF', fontSize: 11, lineHeight: 1.5 }}
+                    <p style={{ color: isExpanded ? '#D1D5DB' : '#9CA3AF', fontSize: 13, lineHeight: 1.5 }}
                       className={isExpanded ? '' : 'line-clamp-2'}>
                       {r.analysis?.summary || r.content}
                     </p>
@@ -771,24 +771,24 @@ function SearchTab({
                       {/* 完整原文 */}
                       {r.content && r.analysis?.summary && r.content !== r.analysis.summary && (
                         <div className="mb-2">
-                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 2 }}>原文内容</p>
-                          <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                          <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 2 }}>原文内容</p>
+                          <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{r.content}</p>
                         </div>
                       )}
 
                       {/* AI 分析详情 */}
                       {r.analysis && (
                         <div className="mb-2">
-                          <p style={{ color: '#6B7280', fontSize: 10, marginBottom: 4 }}>AI 分析</p>
+                          <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>AI 分析</p>
                           <div className="flex flex-wrap gap-1 mb-1">
                             {r.analysis.relevance && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {r.analysis.relevance}%</span>
+                              <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC' }}>相关度 {r.analysis.relevance}%</span>
                             )}
                             {r.analysis.importance && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg, color: IMPORTANCE_CONFIG[r.analysis.importance]?.color }}>{IMPORTANCE_CONFIG[r.analysis.importance]?.label}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: IMPORTANCE_CONFIG[r.analysis.importance]?.bg, color: IMPORTANCE_CONFIG[r.analysis.importance]?.color }}>{IMPORTANCE_CONFIG[r.analysis.importance]?.label}</span>
                             )}
                             {r.analysis.keyPoints?.length > 0 && r.analysis.keyPoints.map((kp: string, ki: number) => (
-                              <span key={ki} className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
+                              <span key={ki} className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: 'rgba(139,92,246,0.1)', color: '#C4B5FD' }}>{kp}</span>
                             ))}
                           </div>
                         </div>
@@ -798,9 +798,9 @@ function SearchTab({
                       <div className="flex gap-1.5">
                         <a href={r.url || '#'} target="_blank" rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px]"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[12px]"
                           style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>
-                          <ExternalLink size={11} /> 打开原文
+                          <ExternalLink size={12} /> 打开原文
                         </a>
                       </div>
                     </div>
