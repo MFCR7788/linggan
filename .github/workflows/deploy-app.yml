@@ -49,6 +49,9 @@ jobs:
       - name: Configure git auth for Match
         run: git config --global url."https://x-access-token:${{ secrets.MATCH_PASSWORD }}@github.com/".insteadOf "https://github.com/"
 
+      - name: Write App Store Connect API Key
+        run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
+
       - name: Build and upload to TestFlight
         working-directory: ios
         run: bundle exec fastlane beta
