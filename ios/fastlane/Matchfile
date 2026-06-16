@@ -4,8 +4,3 @@ type("appstore")
 app_identifier("com.mfcr7788.lingji")
 username(ENV["APPLE_ID"])
 team_id(ENV["APPLE_TEAM_ID"])
-api_key(
-  key_id: "52H698RFZF",
-  issuer_id: ENV["APPLE_ISSUER_ID"],
-  key_filepath: "fastlane/AuthKey_52H698RFZF.p8"
-)
