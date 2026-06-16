@@ -10,6 +10,7 @@ import { BottomNav, PageKey } from '@/components/BottomNav';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
+import { MediaPicker } from '@/components/MediaPicker';
 import { useInspirations } from '@/hooks/use-inspiration';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { useWorkflowSession } from '@/hooks/use-workflow-session';
@@ -569,7 +570,21 @@ function AIImageContent() {
             />
           </div>
 
-          {/* 1c. 智能提示按钮（真的智能） */}
+          {/* 1c. 参考图片（上传 / 灵感库 / URL） */}
+          <div className="mb-3">
+            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>
+              🖼️ 参考图片（可选，上传 / 灵感库 / 粘贴URL）
+            </p>
+            <MediaPicker
+              accept="image"
+              onSelect={(url) => { setUserInput(prev => prev + (prev ? '\n' : '') + `[参考图: ${url}]`); }}
+              compact
+              tabs={['upload', 'inspiration', 'url']}
+              label=""
+            />
+          </div>
+
+          {/* 1d. 智能提示按钮 */}
           <button
             onClick={handleSmartPrompt}
             disabled={isRefining}
