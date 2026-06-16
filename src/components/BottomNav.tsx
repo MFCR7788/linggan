@@ -116,11 +116,11 @@ export function BottomNav({
   return (
     <>
       <div
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full"
+        className="fixed bottom-0 left-1/2 w-full"
         style={{
           zIndex: 50,
           paddingBottom: "env(safe-area-inset-bottom)",
-          transform: "translateZ(0)",
+          transform: "translateX(-50%) translateZ(0)",
           willChange: "transform",
         }}
       >
