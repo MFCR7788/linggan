@@ -5,6 +5,7 @@
 import { createAdminClient } from '@/lib/supabase-server';
 import { logAiUsage, submitDigitalHumanTask, getDigitalHumanTaskStatus } from '@/lib/ai-services';
 import { updateProgress } from '../queue';
+import { downloadAndUploadToStorage } from '@/lib/storage/media-downloader';
 import type { AiTask } from '@/types';
 
 interface DigitalHumanParams {
@@ -67,6 +68,10 @@ export async function onDigitalHumanCompleted(task: AiTask, output: Record<strin
   const supabase = createAdminClient();
   const params = task.input as DigitalHumanParams;
 
+  // 将临时 AI 生成 URL 转为永久 Supabase Storage URL
+  const permanentUrl = await downloadAndUploadToStorage(output.videoUrl as string, { folder: 'digital-human' });
+  const finalUrl = permanentUrl || (output.videoUrl as string);
+
   // 写 content_items
   await supabase
     .from('content_items')
@@ -75,8 +80,8 @@ export async function onDigitalHumanCompleted(task: AiTask, output: Record<strin
       type: 'video',
       title: params.script?.substring(0, 50) || '数字人视频',
       description: params.script,
-      media_urls: [output.videoUrl],
-      thumbnail_url: output.videoUrl,
+      media_urls: [finalUrl],
+      thumbnail_url: finalUrl,
       source_platform: 'ai',
       tags: ['数字人'],
       metadata: { digital_human_task_id: output.taskId },

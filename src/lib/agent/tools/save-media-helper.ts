@@ -1,6 +1,7 @@
 // Agent 工具共用 — 生成内容自动保存到灵感库
 import { createAdminClient } from '@/lib/supabase-server';
 import { indexContentItem } from '@/lib/assistant/embedding';
+import { downloadAndUploadToStorage } from '@/lib/storage/media-downloader';
 
 const TYPE_TO_CATEGORY: Record<string, string> = {
   image: '图片',
@@ -48,6 +49,14 @@ export async function saveMediaToInspiration(
     ];
     const tags = defaultTags;
 
+    // 将临时 AI 生成 URL 转为永久 Supabase Storage URL
+    const permanentUrls = mediaUrls.length > 0
+      ? await Promise.all(mediaUrls.map(async (url) => {
+          const permanent = await downloadAndUploadToStorage(url, { folder: type });
+          return permanent || url;
+        }))
+      : [];
+
     const { data: item, error } = await supabase
       .from('content_items')
       .insert({
@@ -57,7 +66,7 @@ export async function saveMediaToInspiration(
         original_text: prompt,
         prompt,
         category_id: categoryId,
-        media_urls: mediaUrls.length > 0 ? mediaUrls : null,
+        media_urls: permanentUrls.length > 0 ? permanentUrls : null,
         source_platform: options?.sourcePlatform || 'ai',
         status: 'active',
         analysis_status: 'completed',

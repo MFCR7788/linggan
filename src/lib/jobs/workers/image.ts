@@ -6,6 +6,7 @@ import { createAdminClient } from '../../supabase-server';
 import { generateImage, logAiUsage } from '../../ai-services';
 import { updateProgress } from '../queue';
 import { indexContentItem } from '../../assistant/embedding';
+import { downloadAndUploadToStorage } from '../../storage/media-downloader';
 import type { AiTask } from '@/types';
 
 export interface ImageWorkerInput {
@@ -63,6 +64,14 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
     throw Object.assign(new Error('生成结果为空'), { code: 'EMPTY_RESULT' });
   }
 
+  // 将临时 AI 生成 URL 转为永久 Supabase Storage URL
+  const permanentUrls = await Promise.all(
+    imageUrls.map(async (url) => {
+      const permanent = await downloadAndUploadToStorage(url, { folder: 'image' });
+      return permanent || url;
+    })
+  );
+
   // 4) 写 content_items（如果 saveToInspiration 不为 false）
   if (input.saveToInspiration !== false) {
     try {
@@ -72,10 +81,10 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
         type: 'image',
         title: input.prompt.substring(0, 50),
         original_text: input.prompt,
-        source_url: imageUrls[0],
+        source_url: permanentUrls[0],
         source_platform: 'ai',
-        media_urls: imageUrls,
-        thumbnail_url: imageUrls[0],
+        media_urls: permanentUrls,
+        thumbnail_url: permanentUrls[0],
         lifecycle_status: 'draft',
         analysis_status: 'pending',
         status: 'active',
