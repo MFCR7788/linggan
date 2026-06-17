@@ -67,8 +67,7 @@ export default function RootLayout({
           className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] md:max-w-[720px] lg:max-w-[1024px]"
           style={{
             minHeight: "100vh",
-            paddingTop: "env(safe-area-inset-top)",
-            paddingBottom: "calc(80px + env(safe-area-inset-bottom))",
+            paddingBottom: "env(safe-area-inset-bottom)",
             paddingLeft: "env(safe-area-inset-left)",
             paddingRight: "env(safe-area-inset-right)",
           }}
