@@ -57,9 +57,8 @@ jobs:
 
       - name: Set up keychain for code signing
         run: |
-          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db
-          security set-keychain-settings -lut 21600 ~/Library/Keychains/login.keychain-db
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/login.keychain-db
+          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+          security set-keychain-settings -lut 21600 ~/Library/Keychains/login.keychain-db 2>/dev/null || true
 
       - name: Check Xcode and resolve SPM
         working-directory: ios
