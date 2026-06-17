@@ -62,9 +62,16 @@ jobs:
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
 
       - name: Set up keychain for code signing
+        id: keychain
         run: |
-          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
-          security set-keychain-settings -lut 21600 ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+          KEYCHAIN_PATH=~/Library/Keychains/lingji-build.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          echo "name=$KEYCHAIN_PATH" >> "$GITHUB_OUTPUT"
+          echo "password=$KEYCHAIN_PASSWORD" >> "$GITHUB_OUTPUT"
 
       - name: Build and upload to TestFlight
         working-directory: ios
@@ -77,6 +84,8 @@ jobs:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_NAME: ${{ steps.keychain.outputs.name }}
+          MATCH_KEYCHAIN_PASSWORD: ${{ steps.keychain.outputs.password }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
 
   build-android:
