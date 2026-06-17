@@ -45,10 +45,8 @@ jobs:
       - name: Cache SPM packages
         uses: actions/cache@v4
         with:
-          path: |
-            ios/DerivedData
-            ~/Library/Developer/Xcode/DerivedData/*/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('ios/App/CapApp-SPM/Package.swift') }}-${{ hashFiles('node_modules/.pnpm/@capacitor+*/node_modules/@capacitor/*/Package.swift') }}
+          path: ~/Library/Developer/Xcode/DerivedData/*/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/App/CapApp-SPM/Package.swift') }}
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -68,15 +66,11 @@ jobs:
           security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
           security set-keychain-settings -lut 21600 ~/Library/Keychains/login.keychain-db 2>/dev/null || true
 
-      - name: Check Xcode and resolve SPM
+      - name: Build and upload to TestFlight
         working-directory: ios
         run: |
           xcodebuild -version
-          xcodebuild -project App/App.xcodeproj -scheme App -resolvePackageDependencies -derivedDataPath ./DerivedData
-
-      - name: Build and upload to TestFlight
-        working-directory: ios
-        run: bundle exec fastlane beta
+          bundle exec fastlane beta
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
