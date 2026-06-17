@@ -54,6 +54,13 @@ jobs:
       - name: Write App Store Connect API Key
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
 
+      - name: Set up keychain for code signing
+        run: |
+          security create-keychain -p "" build.keychain-db
+          security default-keychain -s build.keychain-db
+          security unlock-keychain -p "" build.keychain-db
+          security set-keychain-settings -lut 21600 build.keychain-db
+
       - name: Build and upload to TestFlight
         working-directory: ios
         run: bundle exec fastlane beta
@@ -61,6 +68,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          MATCH_KEYCHAIN_NAME: "build.keychain-db"
+          MATCH_KEYCHAIN_PASSWORD: ""
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
