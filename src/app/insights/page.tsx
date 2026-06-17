@@ -84,7 +84,7 @@ function InsightsContent() {
   const hasData = overview && overview.totalPublished > 0;
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
+    <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="效果数据" showBack onBack={() => router.push('/ai')} />
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">

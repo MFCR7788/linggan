@@ -393,7 +393,7 @@ function AIImageContent() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
+    <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="AI 图片生成" showBack onBack={handleBack} />
 
       {isInWorkflow && session && (

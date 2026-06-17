@@ -133,7 +133,7 @@ function BatchImageContent() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
+    <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="批量生图" showBack onBack={() => router.push('/ai/image')} />
 
       <div className="flex-1 px-4 pt-4 space-y-4 min-w-0">

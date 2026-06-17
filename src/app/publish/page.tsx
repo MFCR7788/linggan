@@ -234,7 +234,7 @@ function PublishContent() {
     accounts.filter((a) => a.platform === p && a.status === 'active');
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
+    <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="多平台分发" showBack onBack={() => router.push('/ai')} />
 
       {/* 工作流步骤(标识当前在第 6 步) */}
