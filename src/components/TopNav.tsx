@@ -20,6 +20,7 @@ export function TopNav({ title, left, right, onBack, showBack = false, showShare
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(255,255,255,0.1)",
+        paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
       }}
     >
       <div className="flex items-center gap-2 min-w-[40px]">
