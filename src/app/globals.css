@@ -8,17 +8,16 @@
 
 html {
   background: #0A1629;
-  overflow: hidden;
   height: 100%;
 }
 
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  height: 100%;
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100%;
+  overscroll-behavior-y: none;
 }
 
 /* 确保所有媒体元素不超出屏幕宽度 */
