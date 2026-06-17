@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StarBackground } from "@/components/StarBackground";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
@@ -7,6 +7,13 @@ import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal"
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'default-cache';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 const fontFamily =
   'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -43,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflow: "auto", fontFamily, overscrollBehaviorX: "none", touchAction: "pan-y" }}>
+      <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflowX: "hidden", overflowY: "auto", fontFamily, overscrollBehaviorX: "none", WebkitOverflowScrolling: "touch" }}>
         {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{

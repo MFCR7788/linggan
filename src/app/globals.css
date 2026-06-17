@@ -9,6 +9,13 @@
 body {
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+}
+
+/* 确保所有媒体元素不超出屏幕宽度 */
+img, video, canvas, svg, iframe {
+  max-width: 100%;
+  height: auto;
 }
 
 /* 玻璃拟态效果 */
