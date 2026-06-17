@@ -117,10 +117,7 @@ export function BottomNav({
     <>
       <div
         className="fixed bottom-0 left-0 right-0"
-        style={{
-          zIndex: 50,
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
+        style={{ zIndex: 50 }}
       >
         <div
           className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
