@@ -11,7 +11,7 @@ platform :ios do
 
     match(
       type: "appstore",
-      readonly: false,
+      readonly: true,
       app_identifier: "com.mfcr7788.lingji",
       api_key: api_key
     )
