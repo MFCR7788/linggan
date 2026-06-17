@@ -24,7 +24,7 @@ platform :ios do
       export_method: "app-store",
       output_directory: "./build",
       include_symbols: true,
-      xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
+      xcargs: "CURRENT_PROJECT_VERSION=#{build_number} IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
     upload_to_testflight(
