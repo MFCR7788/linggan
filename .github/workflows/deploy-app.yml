@@ -23,7 +23,7 @@ jobs:
   build-ios:
     if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +41,14 @@ jobs:
         run: |
           npx cap sync ios
           sed -i '' 's/\.iOS(\.v1[789])/.iOS(.v16)/g' ios/App/CapApp-SPM/Package.swift
+
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/DerivedData
+            ~/Library/Developer/Xcode/DerivedData/*/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/App/CapApp-SPM/Package.swift') }}-${{ hashFiles('node_modules/.pnpm/@capacitor+*/node_modules/@capacitor/*/Package.swift') }}
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
