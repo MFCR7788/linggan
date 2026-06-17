@@ -6,10 +6,19 @@
   box-sizing: border-box;
 }
 
+html {
+  background: #0A1629;
+  overflow: hidden;
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
 
 /* 确保所有媒体元素不超出屏幕宽度 */

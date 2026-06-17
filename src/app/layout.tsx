@@ -50,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body style={{ margin: 0, padding: 0, minHeight: "100vh", position: "relative", overflowX: "hidden", overflowY: "auto", fontFamily, overscrollBehaviorX: "none", WebkitOverflowScrolling: "touch" }}>
+      <body style={{ margin: 0, padding: 0, height: "100%", position: "relative", overflow: "hidden", fontFamily }}>
         {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{
@@ -66,7 +66,11 @@ export default function RootLayout({
         <main
           className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] md:max-w-[720px] lg:max-w-[1024px]"
           style={{
-            minHeight: "100vh",
+            height: "100%",
+            overflowY: "auto",
+            overflowX: "hidden",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "none",
             // iOS safe area: 顶部给 status bar 留位置, 底部让 BottomNav 加 padding
             paddingTop: "env(safe-area-inset-top)",
             paddingBottom: "env(safe-area-inset-bottom)",
