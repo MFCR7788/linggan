@@ -116,7 +116,7 @@ export function BottomNav({
   return (
     <>
       <div
-        className="fixed bottom-0 left-0 right-0"
+        className="sticky bottom-0 left-0 right-0"
         style={{
           zIndex: 50,
           paddingBottom: "env(safe-area-inset-bottom)",
