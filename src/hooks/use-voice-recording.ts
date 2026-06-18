@@ -1,4 +1,5 @@
-// 语音录制 Hook — 浏览器 SpeechRecognition + 实时标点
+// 语音录制 Hook — MediaRecorder → 百炼 Paraformer ASR
+// iOS WKWebView 中 SpeechRecognition 不稳定，改用 MediaRecorder + 服务端转写
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -9,13 +10,10 @@ export function useVoiceRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const shouldRestartRef = useRef(false);
-  const punctuateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastPunctuatedLenRef = useRef(0);
-  const punctuatedTextRef = useRef('');
 
   useEffect(() => {
     if (isRecording) {
@@ -26,130 +24,134 @@ export function useVoiceRecording() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isRecording]);
 
-  useEffect(() => {
-    return () => { if (punctuateTimerRef.current) clearTimeout(punctuateTimerRef.current); };
+  /** 释放麦克风资源 */
+  const releaseStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    chunksRef.current = [];
   }, []);
 
-  const schedulePunctuate = () => {
-    if (punctuateTimerRef.current) clearTimeout(punctuateTimerRef.current);
-    punctuateTimerRef.current = setTimeout(async () => {
-      const fullText = finalTranscriptRef.current;
-      const newPart = fullText.slice(lastPunctuatedLenRef.current);
-      if (!newPart.trim()) return;
-      try {
-        const res = await fetch('/api/ai/punctuate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: newPart }),
-        });
-        const data = await res.json();
-        if (data.success && data.data?.text) {
-          punctuatedTextRef.current = punctuatedTextRef.current + data.data.text;
-          lastPunctuatedLenRef.current = fullText.length;
-        }
-      } catch { /* ignore */ }
-    }, 1500);
-  };
+  const startRecording = useCallback(async () => {
+    if (mediaRecorderRef.current) return;
 
-  const startRecording = useCallback(() => {
-    if (recognitionRef.current) return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { showToast('您的浏览器不支持语音识别，请使用 Chrome 浏览器', 'warning'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-    setIsRecording(true);
-    setRecordingTime(0);
-    setLiveTranscript('');
-    finalTranscriptRef.current = '';
-    punctuatedTextRef.current = '';
-    lastPunctuatedLenRef.current = 0;
-    shouldRestartRef.current = true;
+      // 选择支持的 MIME 类型
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : 'audio/webm';
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
 
-    recognition.onresult = (event: any) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscriptRef.current += result[0].transcript;
-        } else {
-          interim += result[0].transcript;
-        }
-      }
-      const newUnpunctuated = finalTranscriptRef.current.slice(lastPunctuatedLenRef.current);
-      setLiveTranscript(punctuatedTextRef.current + newUnpunctuated + interim);
-      if (newUnpunctuated.trim()) schedulePunctuate();
-    };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
 
-    recognition.onerror = (event: any) => {
-      console.error('语音识别错误:', event.error);
-      if (event.error === 'not-allowed') {
-        showToast('请允许使用麦克风权限', 'warning');
-        shouldRestartRef.current = false;
+      recorder.onerror = () => {
+        showToast('录音失败，请检查麦克风权限', 'warning');
+        releaseStream();
         setIsRecording(false);
         setRecordingTime(0);
+      };
+
+      recorder.start(500); // 每 500ms 收集一次数据块
+      setIsRecording(true);
+      setRecordingTime(0);
+      setLiveTranscript('');
+    } catch (e) {
+      const err = e as Error;
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        showToast('请允许使用麦克风权限', 'warning');
+      } else {
+        showToast('无法启动录音，请检查设备', 'warning');
       }
-    };
-
-    recognition.onend = () => {
-      if (shouldRestartRef.current) {
-        try { recognition.start(); } catch {
-          shouldRestartRef.current = false;
-          setIsRecording(false);
-          setRecordingTime(0);
-        }
-      }
-    };
-
-    recognition.start();
-    recognitionRef.current = recognition;
-  }, [showToast]);
-
-  const stopRecording = useCallback(async () => {
-    shouldRestartRef.current = false;
-    if (punctuateTimerRef.current) { clearTimeout(punctuateTimerRef.current); punctuateTimerRef.current = null; }
-    if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
-
-    // 立即更新 UI，不等标点 API
-    setIsRecording(false);
-    setRecordingTime(0);
-    setLiveTranscript('');
-
-    const remaining = finalTranscriptRef.current.slice(lastPunctuatedLenRef.current);
-    let finalText = punctuatedTextRef.current + remaining;
-    if (remaining.trim()) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch('/api/ai/punctuate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: remaining }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        const data = await res.json();
-        if (data.success && data.data?.text) {
-          finalText = punctuatedTextRef.current + data.data.text;
-        }
-      } catch { /* ignore, use unpunctuated text */ }
+      releaseStream();
     }
-    const transcript = finalText.trim() || finalTranscriptRef.current.trim();
-    return transcript;
-  }, []);
+  }, [showToast, releaseStream]);
+
+  const stopRecording = useCallback(async (): Promise<string> => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      releaseStream();
+      setIsRecording(false);
+      setRecordingTime(0);
+      return '';
+    }
+
+    return new Promise((resolve) => {
+      recorder.onstop = async () => {
+        releaseStream();
+        setIsRecording(false);
+        setRecordingTime(0);
+
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        if (blob.size < 100) {
+          // 音频太短，可能是误触
+          resolve('');
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          formData.append('audio', blob, `recording.${recorder.mimeType.includes('webm') ? 'webm' : 'm4a'}`);
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          const res = await fetch('/api/ai/transcribe', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+
+          const data = await res.json();
+          if (data.success && data.data?.text) {
+            resolve(data.data.text);
+          } else {
+            console.warn('[voice] 转写失败:', data.error);
+            showToast('语音识别失败，请重试', 'warning');
+            resolve('');
+          }
+        } catch (e) {
+          if (e instanceof DOMException && e.name === 'AbortError') {
+            showToast('语音识别超时，请重试', 'warning');
+          } else {
+            console.error('[voice] 转写请求异常:', e);
+          }
+          resolve('');
+        }
+      };
+
+      recorder.stop();
+    });
+  }, [showToast, releaseStream]);
 
   const cancelRecording = useCallback(() => {
-    shouldRestartRef.current = false;
-    if (punctuateTimerRef.current) { clearTimeout(punctuateTimerRef.current); punctuateTimerRef.current = null; }
-    if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
-    setIsRecording(false);
-    setRecordingTime(0);
-    setLiveTranscript('');
-  }, []);
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => {
+        releaseStream();
+        setIsRecording(false);
+        setRecordingTime(0);
+        setLiveTranscript('');
+      };
+      recorder.stop();
+    } else {
+      releaseStream();
+      setIsRecording(false);
+      setRecordingTime(0);
+      setLiveTranscript('');
+    }
+  }, [releaseStream]);
 
   return { isRecording, recordingTime, liveTranscript, startRecording, stopRecording, cancelRecording };
 }

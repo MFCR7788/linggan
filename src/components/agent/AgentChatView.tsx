@@ -99,24 +99,11 @@ export function AgentChatView() {
   const [speechSupported, setSpeechSupported] = useState(true);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
 
-  // 检测语音识别是否可用
+  // 检测麦克风录音是否可用（MediaRecorder + getUserMedia）
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setSpeechSupported(false);
       setInputMode('text');
-    } else {
-      // WKWebView 中 SpeechRecognition 可能存在但不工作
-      try {
-        const test = new SpeechRecognition();
-        if (!test || typeof test.start !== 'function') {
-          setSpeechSupported(false);
-          setInputMode('text');
-        }
-      } catch {
-        setSpeechSupported(false);
-        setInputMode('text');
-      }
     }
   }, []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -201,7 +188,6 @@ export function AgentChatView() {
   const sseClientRef = useRef<AgentSSEClient | null>(null);
   const assistantMsgRef = useRef<string>('');
   const activeFlowRef = useRef(activeFlow);
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressHandledRef = useRef(false);
   const sessionLoadedRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -718,7 +704,7 @@ export function AgentChatView() {
     setIsStreaming(false);
   };
 
-  // 按住说话手势 — pointer + touch 双兼容
+  // 按住说话手势 — pointer + touch 双兼容，MediaRecorder 录音
   const cancelGestureRef = useRef(false);
   const touchActiveRef = useRef(false);
 
@@ -735,9 +721,9 @@ export function AgentChatView() {
     cancelGestureRef.current = false;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
     pressStartYRef.current = clientY || 0;
-    // 立即开始录音，不等延迟
     pressHandledRef.current = true;
     if (navigator.vibrate) navigator.vibrate(30);
+    // 立即开始录音（startRecording 内部异步获取麦克风权限）
     startRecording();
   };
 
@@ -745,6 +731,8 @@ export function AgentChatView() {
     if (e && e.nativeEvent.type === 'pointerup' && touchActiveRef.current) return;
     setPressingMic(false);
     setCancelGesture(false);
+
+    if (!pressHandledRef.current) return;
 
     if (cancelGestureRef.current) {
       cancelRecording();
