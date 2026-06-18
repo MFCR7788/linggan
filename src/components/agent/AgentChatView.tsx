@@ -96,6 +96,7 @@ export function AgentChatView() {
   const [currentTool, setCurrentTool] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [showTools, setShowTools] = useState(false);
+  const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
@@ -572,6 +573,58 @@ export function AgentChatView() {
     await doStream(displayContent, uploadedImages, uploadedVideos, uploadedDocs, attachmentInfo, sessionId);
   }, [input, isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession, doStream]);
 
+  const handleSendWithText = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming) return;
+
+    // 上传附件
+    const uploadedImages: string[] = [];
+    const uploadedVideos: string[] = [];
+    const uploadedDocs: string[] = [];
+    const attachmentInfo: { url: string; name: string; type: 'image' | 'video' | 'document' | 'audio' }[] = [];
+
+    for (const af of attachedFiles) {
+      let url = af.uploadedUrl || null;
+      if (!url) {
+        const pending = uploadPromisesRef.current.get(af.id);
+        url = pending ? await pending : await uploadFile(af.file);
+      }
+      if (url) {
+        const type: 'image' | 'video' | 'document' | 'audio' = af.type;
+        attachmentInfo.push({ url, name: af.file.name, type });
+        if (type === 'image') uploadedImages.push(url);
+        else if (type === 'video') uploadedVideos.push(url);
+        else if (type === 'audio') uploadedDocs.push(url);
+        else uploadedDocs.push(url);
+        fileMapRef.current.set(af.file.name, af.file);
+        fileMapRef.current.set(url, af.file);
+      }
+      if (af.type === 'image' || af.type === 'video' || af.type === 'audio') revokePreview(af.preview);
+    }
+
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const title = trimmed.substring(0, 30) + (trimmed.length > 30 ? '...' : '');
+      const session = await createSession(title);
+      if (session) sessionId = session.id;
+    }
+
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      type: 'user',
+      content: trimmed,
+      toolCalls: [],
+      attachments: attachmentInfo.length > 0 ? attachmentInfo : undefined,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
+    setAttachedFiles([]);
+
+    await doStream(trimmed, uploadedImages, uploadedVideos, uploadedDocs, attachmentInfo, sessionId);
+  }, [isStreaming, attachedFiles, currentSessionId, uploadFile, revokePreview, createSession, doStream]);
+
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     const hasFiles = attachedFiles.length > 0;
@@ -670,7 +723,6 @@ export function AgentChatView() {
     setCancelGesture(false);
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
 
-    // 按住不足 300ms，不启动录音，直接忽略
     if (!pressHandledRef.current) return;
 
     if (cancelGesture) {
@@ -678,7 +730,18 @@ export function AgentChatView() {
       return;
     }
     const transcript = await stopRecording();
-    if (transcript) setInput(prev => (prev ? prev + transcript : transcript));
+    if (transcript) {
+      // 语音模式：自动发送
+      if (inputMode === 'voice') {
+        setInput(transcript);
+        // 延迟一帧确保 input 更新后再发送
+        requestAnimationFrame(() => {
+          handleSendWithText(transcript);
+        });
+      } else {
+        setInput(prev => (prev ? prev + transcript : transcript));
+      }
+    }
   };
 
   // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
@@ -1742,61 +1805,55 @@ export function AgentChatView() {
             今天你有什么灵感，发送给我！
           </p>
         )}
-        {/* 动态技能推荐 — 输入时匹配 */}
-        {dynamicRecs.length > 0 && (
+        {/* 动态技能推荐 — 仅文字模式 */}
+        {inputMode === 'text' && dynamicRecs.length > 0 && (
           <SkillRecommendCards
             recommendations={dynamicRecs}
             loading={recsLoading}
             onSelect={(skill) => { setInput(`/${skill.name} `); inputRef.current?.focus(); }}
           />
         )}
-        {/* 快捷能力标签 — 输入框上方 */}
-        <div className="mb-2">
-          <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
-        </div>
+        {/* 快捷能力标签 — 仅文字模式 */}
+        {inputMode === 'text' && (
+          <div className="mb-2">
+            <CapabilityTags onSelect={(prompt) => { setInput(prompt); inputRef.current?.focus(); }} />
+          </div>
+        )}
         <div className="relative">
         {isRecording ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 animate-mic-pulse ${
-                cancelGesture ? 'bg-red-900/60' : 'bg-red-500'
-              }`}>
-                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  {cancelGesture ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" fill="none" stroke="currentColor" />
-                  ) : (
-                    <>
-                      <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
-                      <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </>
-                  )}
-                </svg>
-              </div>
-              <div className="flex-1 flex items-center gap-2">
-                <span className={`font-mono text-sm tabular-nums ${cancelGesture ? 'text-gray-500' : 'text-red-300'}`}>{formatTime(recordingTime)}</span>
-                <div className={`flex-1 px-3 py-1.5 rounded-xl text-sm min-h-[32px] flex items-center border ${
-                  cancelGesture
-                    ? 'bg-red-900/20 border-red-800/30 text-red-400'
-                    : 'bg-gray-800/80 border-white/5 text-gray-200'
-                }`}>
-                  {cancelGesture ? (
-                    <span className="text-red-400 text-xs">松手取消</span>
-                  ) : liveTranscript ? (
-                    <>
-                      <span className="truncate">{liveTranscript}</span>
-                      <span className="inline-block w-1 h-4 bg-blue-400 ml-1 animate-pulse flex-shrink-0" />
-                    </>
-                  ) : (
-                    <span className="text-gray-500">正在聆听...</span>
-                  )}
-                </div>
-                <button onClick={cancelRecording} className="px-3 py-1.5 rounded-full text-xs bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10">
-                  取消
-                </button>
-              </div>
+          /* ───── 录音状态：豆包风格 ───── */
+          <div className="flex flex-col items-center gap-3 py-2">
+            {/* 录音动画圆 + 计时 */}
+            <div className="flex items-center gap-3">
+              <div className={`w-4 h-4 rounded-full animate-pulse ${
+                cancelGesture ? 'bg-red-500' : 'bg-red-500'
+              }`} style={{ animationDuration: '0.8s' }} />
+              <span className={`font-mono text-lg tabular-nums font-medium ${
+                cancelGesture ? 'text-red-400' : 'text-red-300'
+              }`}>{formatTime(recordingTime)}</span>
             </div>
-            <p className={`text-center text-[11px] transition-colors ${cancelGesture ? 'text-red-400' : 'text-gray-500'}`}>
-              {cancelGesture ? '松手取消录音' : '松开发送，上滑可取消'}
+            {/* 实时转写 */}
+            <div className={`w-full px-4 py-2.5 rounded-xl text-sm text-center min-h-[40px] flex items-center justify-center ${
+              cancelGesture
+                ? 'bg-red-900/20 border border-red-800/30 text-red-400'
+                : 'bg-white/5 border border-white/5 text-gray-200'
+            }`}>
+              {cancelGesture ? (
+                <span className="text-red-400">松手取消</span>
+              ) : liveTranscript ? (
+                <span className="line-clamp-2">{liveTranscript}</span>
+              ) : (
+                <span className="text-gray-500 flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse rounded-full" />
+                  正在聆听...
+                </span>
+              )}
+            </div>
+            {/* 提示文字 */}
+            <p className={`text-xs transition-colors ${
+              cancelGesture ? 'text-red-400 font-medium' : 'text-gray-500'
+            }`}>
+              {cancelGesture ? '↑ 上移取消' : '松开 发送'}
             </p>
           </div>
         ) : (
@@ -1806,7 +1863,6 @@ export function AgentChatView() {
               <div className="flex gap-2 overflow-x-auto pb-1 items-end">
                 {attachedFiles.map(af => (
                   <div key={af.id} className="relative flex-shrink-0">
-                    {/* 上传状态指示 */}
                     {af.uploadedUrl ? (
                       <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center z-10">
                         <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
@@ -1913,144 +1969,37 @@ export function AgentChatView() {
               </div>
             )}
 
-            {/* 输入框 */}
-            <div className="flex items-end gap-1.5">
-              {/* 工具按钮 */}
-              <div className="relative flex items-end pb-1">
-                <button
-                  onClick={() => setShowTools(!showTools)}
-                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-                >
-                  <svg className={`w-5 h-5 text-gray-400 ${showTools ? 'rotate-45' : ''} transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </button>
-                {showTools && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowTools(false)} />
-                    <div className="absolute bottom-12 left-0 z-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-1.5 w-36">
-                      <button onClick={handlePickImage} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        图片
-                      </button>
-                      <button onClick={handlePickVideo} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        视频
-                      </button>
-                      <button onClick={handlePickDocument} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        文档
-                      </button>
-                      <button onClick={handlePickAudio} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-14 0V7a7 7 0 1114 0v4zm-6-3v4m0 0v4m0-4h2m-2 0h-2" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18v2" />
-                        </svg>
-                        音频
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* 相机拍照按钮 — 移动端打开摄像头 */}
+            {/* ───── 豆包风格输入栏 ───── */}
+            <div className="flex items-center gap-2">
+              {/* 📷 相机按钮 */}
               <button
                 onClick={handleCameraCapture}
-                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
+                className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
                 title="拍照"
               >
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
                 </svg>
               </button>
 
-              <div className="flex-1 bg-white/5 rounded-xl px-3 py-2">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setInput(val);
-                    // 粘贴后跳过实时校验，延迟重置标记
-                    if (isPastingRef.current) {
-                      isPastingRef.current = false;
-                      return;
-                    }
-                    // 检测斜杠指令
-                    const cursor = e.target.selectionStart || 0;
-                    const textBefore = val.substring(0, cursor);
-                    const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
-                    if (slashMatch) {
-                      const slashPos = textBefore.lastIndexOf('/');
-                      setSlashMenu({ show: true, filter: slashMatch[1], index: 0, pos: slashPos });
-                    } else {
-                      setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
-                    }
-                    // 去抖 150ms — 预留给搜索/API 调用等重操作
-                    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-                    debounceTimerRef.current = setTimeout(() => {
-                      // 此处可接入搜索建议等 debounced 操作
-                    }, 150);
-                  }}
-                  onPaste={(e) => {
-                    // 粘贴图片 → 转为附件上传
-                    const items = e.clipboardData?.items;
-                    if (items) {
-                      for (let i = 0; i < items.length; i++) {
-                        const item = items[i];
-                        if (item.type.startsWith('image/')) {
-                          e.preventDefault();
-                          const file = item.getAsFile();
-                          if (!file) continue;
-                          if (!validateFile(file, 'image')) continue;
-                          const attached: AttachedFile = {
-                            id: Date.now().toString() + '_' + i,
-                            file,
-                            preview: createPreview(file),
-                            type: 'image',
-                          };
-                          attachAndUpload(attached);
-                          return;
-                        }
-                      }
-                    }
-                    isPastingRef.current = true;
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder={attachedFiles.length > 0 ? '添加描述...' : placeholderText}
-                  rows={1}
-                  className="w-full bg-transparent text-white text-sm placeholder-white/30 outline-none resize-none max-h-[120px] py-0.5"
-                  disabled={isStreaming}
-                />
-              </div>
-
-              {/* 发送 / 语音按钮 */}
+              {/* 中间：语音胶囊 / 文字输入 / 流式中止 */}
               {isStreaming ? (
                 <button
                   onClick={handleAbort}
-                  className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                  className="flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-sm font-medium transition-all active:scale-95"
+                  style={{
+                    background: 'rgba(239,68,68,0.15)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    color: '#FCA5A5',
+                  }}
                 >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="1" />
                   </svg>
+                  停止生成
                 </button>
-              ) : (input.trim() || attachedFiles.length > 0) ? (
-                <button
-                  onClick={handleSend}
-                  className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-blue-500 text-white hover:bg-blue-400 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              ) : (
+              ) : inputMode === 'voice' ? (
                 <button
                   onPointerDown={handlePressStart}
                   onPointerUp={handlePressEnd}
@@ -2060,23 +2009,157 @@ export function AgentChatView() {
                   onTouchEnd={handlePressEnd}
                   onTouchCancel={handlePressEnd}
                   onContextMenu={(e) => e.preventDefault()}
-                  className={`flex-shrink-0 h-9 rounded-full flex items-center justify-center select-none touch-none transition-all duration-150 ${
-                    pressingMic ? 'w-12 scale-110 shadow-lg shadow-orange-500/30' : 'w-12'
-                  } active:scale-95`}
+                  className={`flex-1 h-11 rounded-full flex items-center justify-center select-none touch-none transition-all duration-200 active:scale-[0.97] ${
+                    pressingMic ? 'scale-[1.02] shadow-lg shadow-blue-500/30' : ''
+                  }`}
                   style={{
                     background: pressingMic
-                      ? 'linear-gradient(135deg, #FB923C 0%, #F87171 100%)'
-                      : 'linear-gradient(135deg, #F97316 0%, #EF4444 100%)',
+                      ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
+                      : 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
                   }}
-                  title="按住说话"
                 >
-                  <svg className={`w-4 h-4 text-white transition-transform ${pressingMic ? 'scale-110' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                  <span className="text-white text-sm font-medium tracking-wide">
+                    {pressingMic ? '松开 发送' : '按住说话'}
+                  </span>
+                </button>
+              ) : (
+                <div className="flex-1 bg-white/5 rounded-xl px-3 py-2">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInput(val);
+                      if (isPastingRef.current) {
+                        isPastingRef.current = false;
+                        return;
+                      }
+                      const cursor = e.target.selectionStart || 0;
+                      const textBefore = val.substring(0, cursor);
+                      const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
+                      if (slashMatch) {
+                        const slashPos = textBefore.lastIndexOf('/');
+                        setSlashMenu({ show: true, filter: slashMatch[1], index: 0, pos: slashPos });
+                      } else {
+                        setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
+                      }
+                      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                      debounceTimerRef.current = setTimeout(() => {}, 150);
+                    }}
+                    onPaste={(e) => {
+                      const items = e.clipboardData?.items;
+                      if (items) {
+                        for (let i = 0; i < items.length; i++) {
+                          const item = items[i];
+                          if (item.type.startsWith('image/')) {
+                            e.preventDefault();
+                            const file = item.getAsFile();
+                            if (!file) continue;
+                            if (!validateFile(file, 'image')) continue;
+                            const attached: AttachedFile = {
+                              id: Date.now().toString() + '_' + i,
+                              file,
+                              preview: createPreview(file),
+                              type: 'image',
+                            };
+                            attachAndUpload(attached);
+                            return;
+                          }
+                        }
+                      }
+                      isPastingRef.current = true;
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={attachedFiles.length > 0 ? '添加描述...' : placeholderText}
+                    rows={1}
+                    className="w-full bg-transparent text-white text-sm placeholder-white/30 outline-none resize-none max-h-[120px] py-0.5"
+                    disabled={isStreaming}
+                  />
+                </div>
+              )}
+
+              {/* ⌨/🎤 切换按钮 */}
+              <button
+                onClick={() => setInputMode(prev => prev === 'voice' ? 'text' : 'voice')}
+                className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
+                title={inputMode === 'voice' ? '切换文字输入' : '切换语音输入'}
+              >
+                {inputMode === 'voice' ? (
+                  <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7h16M4 12h16M4 17h10" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
                     <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
+                )}
+              </button>
+
+              {/* 📎 上传按钮 + 弹出菜单 */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowTools(!showTools)}
+                  className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
+                  title="上传"
+                >
+                  <svg className={`w-5 h-5 text-gray-300 ${showTools ? 'rotate-45' : ''} transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
                 </button>
-              )}
+                {showTools && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowTools(false)} />
+                    <div className="absolute bottom-12 right-0 z-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-1.5 w-40">
+                      <button onClick={() => { setShowTools(false); handleCameraCapture(); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+                        </svg>
+                        拍照
+                      </button>
+                      <button onClick={() => { setShowTools(false); handlePickImage(); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        图片
+                      </button>
+                      <button onClick={() => { setShowTools(false); handlePickVideo(); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        视频
+                      </button>
+                      <button onClick={() => { setShowTools(false); handlePickDocument(); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        文档
+                      </button>
+                      <button onClick={() => { setShowTools(false); handlePickAudio(); }} className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-700 text-sm text-gray-200">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                        音频
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* 文字模式下有内容时显示发送按钮 */}
+            {inputMode === 'text' && (input.trim() || attachedFiles.length > 0) && !isStreaming && (
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSend}
+                  className="px-5 py-2 rounded-full text-sm font-medium text-white transition-all active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}
+                >
+                  发送
+                </button>
+              </div>
+            )}
           </div>
         )}
         </div>
