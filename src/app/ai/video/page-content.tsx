@@ -10,7 +10,7 @@ import {
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { MediaPicker } from '@/components/MediaPicker';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
@@ -265,7 +265,6 @@ function AIVideoContent() {
   useEffect(() => {
     if (hookError) setGenError(hookError);
   }, [hookError]);
-
 
   // 工作流：从 session.accumulated_handoff 预填
   useEffect(() => {
@@ -1524,7 +1523,7 @@ function AIVideoContent() {
         </div>
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

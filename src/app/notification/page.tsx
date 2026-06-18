@@ -1,12 +1,11 @@
 'use client';
 
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, TrendingUp, Settings, CheckCheck } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute, LoadingSpinner } from '@/components';
 
 const filters = ['全部', '热点', '系统'];
@@ -253,7 +252,7 @@ function NotificationContent() {
         )}
       </div>
 
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

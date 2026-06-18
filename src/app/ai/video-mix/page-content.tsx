@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, type PageKey } from '@/components/BottomNav';
+import { type PageKey } from "@/components/BottomNav";
 import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { LoadingSpinner } from '@/components/loading-spinner';
@@ -451,7 +451,7 @@ export default function VideoMixPageContent() {
             </div>
           )}
         </div>
-        <BottomNav activePage="ai" onNavigate={handleNavigate} />
+        
       </div>
     </ProtectedRoute>
   );

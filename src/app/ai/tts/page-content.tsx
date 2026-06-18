@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Music, Play, Download, FolderOpen, RefreshCw, Volume2, Clock, Mic, ChevronDown, User, UserPlus, Upload, CheckCircle2, Loader2, AlertCircle, Sparkles, X } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components';
@@ -120,7 +120,6 @@ function TTSPageContent() {
       .then((d) => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {});
   }, []);
-
 
   const toggleInspiration = (id: string | number) => {
     const next = new Set(selectedIds);
@@ -824,7 +823,7 @@ function TTSPageContent() {
         </div>
       )}
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

@@ -1,12 +1,11 @@
 'use client';
 
-
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import { ExternalLink, TrendingUp, CheckCircle, XCircle, ArrowLeft, Clock, Eye, MessageSquare, ThumbsUp, Share2, Copy, Check } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useToast } from '@/components/Toast';
 import { ProtectedRoute, LoadingSpinner } from '@/components';
@@ -476,7 +475,7 @@ function HotspotDetailContent() {
         </PrimaryButton>
       </div>
 
-      <BottomNav activePage="hotspot" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

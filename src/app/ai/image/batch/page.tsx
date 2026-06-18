@@ -7,7 +7,7 @@ import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
 import { BatchProgressCard } from '@/components/BatchProgressCard';
 import { useBatchProgress } from '@/hooks/use-batch-tasks';
@@ -338,7 +338,7 @@ function BatchImageContent() {
         )}
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

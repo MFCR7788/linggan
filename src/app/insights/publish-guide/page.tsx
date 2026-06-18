@@ -7,7 +7,7 @@ import { GlassCard } from '@/components/GlassCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
 import { apiClient } from '@/lib/api-client';
 import { PLATFORMS, type PlatformId } from '@/lib/platforms/types';
@@ -292,7 +292,7 @@ function PublishGuideContent() {
         )}
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

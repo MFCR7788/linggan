@@ -6,7 +6,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useToast } from "@/components/Toast";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import FormattedText from "@/components/FormattedText";
@@ -381,7 +381,6 @@ function AICopywritingContent() {
       } else {
         setNoAiContents(standardArr);
       }
-
 
       const content = Array.isArray(standardContent) ? standardContent[0] : standardContent;
       if (isInWorkflow && content) {
@@ -936,7 +935,7 @@ function AICopywritingContent() {
 
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
 
       <Step1MaterialRefineModal
         open={refineModalOpen}

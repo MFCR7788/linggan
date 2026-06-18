@@ -12,7 +12,7 @@ import {
 import { GlassCard } from '@/components/GlassCard';
 import { MediaPicker } from '@/components/MediaPicker';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
@@ -1979,7 +1979,7 @@ function DigitalHumanContent() {
         </div>
       )}
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

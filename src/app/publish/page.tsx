@@ -8,7 +8,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
 import { WorkflowStepper } from '@/components/WorkflowStepper';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
 import { apiClient } from '@/lib/api-client';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
@@ -500,7 +500,7 @@ function PublishContent() {
         )}
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

@@ -6,7 +6,7 @@ import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, Im
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner } from "@/components";
 import FormattedText from "@/components/FormattedText";
@@ -560,7 +560,6 @@ function InspirationDetailContent() {
                 <FormattedText text={inspiration.original_text || "暂无原始内容"} color="#E5E7EB" fontSize={14} lineHeight={1.7} />
               )}
             </GlassCard>
-
 
             {/* 生成提示词 */}
             {inspiration.prompt && (

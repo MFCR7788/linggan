@@ -2,8 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, type PageKey } from '@/components/BottomNav';
-
+import { type PageKey } from "@/components/BottomNav";
 export default function TermsPage() {
   const router = useRouter();
 
@@ -131,7 +130,7 @@ export default function TermsPage() {
           </p>
         </Section>
       </div>
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

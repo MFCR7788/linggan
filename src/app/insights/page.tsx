@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { BarChart3, Eye, Heart, MessageCircle, Share2, Bookmark, TrendingUp, ChevronRight, Sparkles } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
 import { apiClient } from '@/lib/api-client';
@@ -288,7 +288,7 @@ function InsightsContent() {
         )}
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

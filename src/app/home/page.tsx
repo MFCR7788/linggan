@@ -1,11 +1,10 @@
 "use client";
 
-
 import { Search, Bell, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
 import { useRouter } from "next/navigation";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -511,10 +510,7 @@ function HomeContent() {
         )}
       </div>
 
-      <BottomNav
-        activePage="home"
-        onNavigate={handleNavigate}
-      />
+      
     </div>
   );
 }

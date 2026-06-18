@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { GlassCard } from '@/components/GlassCard';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { ErrorState } from '@/components/error-state';
@@ -395,7 +395,7 @@ function SkillsContent() {
         )}
       </div>
 
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
 
       {/* 创建技能弹窗 */}
       {showCreate && (

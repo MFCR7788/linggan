@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
@@ -527,7 +527,6 @@ function InspirationLibraryContent() {
     else next.add(tagId);
     setSelectedTagIds(next);
   };
-
 
   // ====== 统一卡片(所有类型) ======
   const renderCard = (item: any) => {
@@ -1170,7 +1169,7 @@ function InspirationLibraryContent() {
         )}
       </div>
 
-      <BottomNav activePage="inspiration" onNavigate={(page) => handleNavigate(page)} />
+      
 
       {/* 编辑弹窗 */}
       {editingItem && (

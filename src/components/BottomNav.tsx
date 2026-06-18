@@ -1,12 +1,10 @@
+"use client";
+
 import { useEffect, useRef, useState, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Home, BookOpen, Sparkles, Wand2, User } from "lucide-react";
 
 export type PageKey = "home" | "inspiration" | "ai" | "hotspot" | "profile" | "login" | "inspiration-detail" | "ai-copywriting" | "ai-image" | "ai-video" | "ai-tts" | "ai-digital-human" | "ai-ads" | "hotspot-detail" | "hotspot-library" | "notification" | "capture" | "agent" | "schedule" | "profile-help" | "profile-settings" | "profile-integrations" | "profile-memory" | "profile-skills" | "schedule-detail";
-
-interface BottomNavProps {
-  activePage: PageKey;
-  onNavigate: (page: PageKey) => void;
-}
 
 const items = [
   { key: "home" as PageKey, label: "首页", Icon: Home, path: "/home" },
@@ -25,6 +23,17 @@ const PAGE_ROUTES: Record<string, string> = {
   profile: "/profile",
   login: "/login",
 };
+
+/** pathname → 底部 tab 映射 */
+function getActiveTabFromPath(pathname: string): PageKey {
+  if (pathname.startsWith("/inspiration")) return "inspiration";
+  if (pathname.startsWith("/agent")) return "agent";
+  if (pathname.startsWith("/ai") || pathname.startsWith("/publish") || pathname.startsWith("/insights") || pathname.startsWith("/workflow")) return "ai";
+  if (pathname.startsWith("/hotspot")) return "hotspot";
+  if (pathname.startsWith("/profile") || pathname.startsWith("/notification") || pathname.startsWith("/privacy") || pathname.startsWith("/terms") || pathname.startsWith("/support")) return "profile";
+  if (pathname.startsWith("/schedule") || pathname.startsWith("/capture")) return "home";
+  return "home";
+}
 
 function getPageUrl(key: PageKey): string {
   return `${window.location.origin}${PAGE_ROUTES[key] || `/${key}`}`;
@@ -49,16 +58,15 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function BottomNav({
-  activePage,
-  onNavigate
-}: BottomNavProps) {
-  const activeTab = items.find(i => i.key === activePage)?.key ?? "home";
+export function BottomNav() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const activeTab = getActiveTabFromPath(pathname);
+
   const [contextMenu, setContextMenu] = useState<{ pageKey: PageKey; x: number; y: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 点击外部关闭菜单
   useEffect(() => {
     if (!contextMenu) return;
     const close = (e: MouseEvent | TouchEvent) => {
@@ -73,6 +81,10 @@ export function BottomNav({
       document.removeEventListener("touchstart", close);
     };
   }, [contextMenu]);
+
+  const handleNavigate = useCallback((key: PageKey) => {
+    router.push(PAGE_ROUTES[key] || `/${key}`);
+  }, [router]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, key: PageKey) => {
     e.preventDefault();
@@ -95,7 +107,7 @@ export function BottomNav({
 
   const handleCopyLink = useCallback(async (key: PageKey) => {
     const url = getPageUrl(key);
-    const ok = await copyToClipboard(url);
+    await copyToClipboard(url);
     setContextMenu(null);
   }, []);
 
@@ -116,11 +128,8 @@ export function BottomNav({
   return (
     <>
       <div
-        className="sticky bottom-0 left-0 right-0"
-        style={{
-          zIndex: 50,
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
+        className="fixed bottom-0 left-0 right-0"
+        style={{ zIndex: 50 }}
       >
         <div
           className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
@@ -134,7 +143,7 @@ export function BottomNav({
             return (
               <button
                 key={key}
-                onClick={() => onNavigate(key)}
+                onClick={() => handleNavigate(key)}
                 onContextMenu={(e) => handleContextMenu(e, key)}
                 onTouchStart={(e) => handleTouchStart(e, key)}
                 onTouchEnd={handleTouchEnd}
@@ -177,7 +186,6 @@ export function BottomNav({
         </div>
       </div>
 
-      {/* 长按上下文菜单 */}
       {contextMenu && (
         <div
           ref={menuRef}
@@ -209,7 +217,7 @@ export function BottomNav({
             分享页面
           </button>
           <button
-            onClick={() => onNavigate(contextMenu.pageKey)}
+            onClick={() => handleNavigate(contextMenu.pageKey)}
             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/10 active:bg-white/15 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -4,6 +4,8 @@ import { StarBackground } from "@/components/StarBackground";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
 import { ToastProvider } from "@/components/Toast";
 import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
+import { TopNavProvider } from "@/components/TopNavContext";
+import { AppShell } from "@/components/AppShell";
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'default-cache';
@@ -63,20 +65,14 @@ export default function RootLayout({
         />
         {/* 星空背景 */}
         <StarBackground />
-        {/* 容器: 始终以手机端宽度展示，桌面端居中，两侧露出星空背景 */}
-        <main
-          className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] md:max-w-[720px] lg:max-w-[1024px]"
-          style={{
-            minHeight: "100vh",
-          }}
-        >
+        <TopNavProvider>
           <ReactQueryProvider>
             <ToastProvider>
-              {children}
+              <AppShell>{children}</AppShell>
               <InsufficientCreditsModal />
             </ToastProvider>
           </ReactQueryProvider>
-        </main>
+        </TopNavProvider>
         {/* PWA Service Worker 注册 */}
         <script
           dangerouslySetInnerHTML={{

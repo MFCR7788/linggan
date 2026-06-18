@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { FileText, Image as ImageIcon, Video as VideoIcon, Music, Mic, ChevronRight, Play, FileAudio, Grid3x3, BarChart3, Send, TrendingUp, Scissors, Wand2, Layers, PenTool } from "lucide-react";
 import { GlassCard } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components";
 import { Toast } from "@/components/Toast";
@@ -229,7 +229,7 @@ function AICreationContent() {
         </div>
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <AccountTypeOnboarding open={showOnboarding} onClose={closeOnboarding} />
     </div>

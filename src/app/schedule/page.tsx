@@ -1,10 +1,9 @@
 "use client";
 
-
 import { useState } from "react";
 import { Calendar, Clock, MapPin, CheckCircle, XCircle, ChevronRight, Trash2, Plus, X } from "lucide-react";
 import { TopNav } from "@/components/TopNav";
-import { BottomNav, PageKey } from "@/components/BottomNav";
+import { PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
 import { useRouter } from "next/navigation";
 import { useSchedules, useUpdateSchedule, useDeleteSchedule, useCreateSchedule } from "@/hooks/use-schedule";
@@ -342,10 +341,7 @@ function ScheduleContent() {
         </div>
       )}
 
-      <BottomNav
-        activePage="home"
-        onNavigate={handleNavigate}
-      />
+      
     </div>
   );
 }

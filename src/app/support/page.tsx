@@ -2,8 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, type PageKey } from '@/components/BottomNav';
-
+import { type PageKey } from "@/components/BottomNav";
 // Metadata must be exported from a separate layout or generateMetadata
 // This page is client-rendered; for meta tags, wrap in a layout.ts
 
@@ -117,7 +116,7 @@ export default function SupportPage() {
           <InfoRow label="应用网址" value="https://ai.zjsifan.com" />
         </Section>
       </div>
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

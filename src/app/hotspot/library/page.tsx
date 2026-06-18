@@ -1,12 +1,11 @@
 'use client';
 
-
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, SlidersHorizontal, ChevronDown, ChevronUp, TrendingUp, ExternalLink, Loader2 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute, LoadingSpinner } from '@/components';
 
 interface HotspotItem {
@@ -303,7 +302,7 @@ function HotspotLibraryContent() {
         )}
       </div>
 
-      <BottomNav activePage="hotspot" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

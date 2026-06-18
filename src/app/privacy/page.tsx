@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Shield, FileText, Database, Bell, Users, ExternalLink } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, type PageKey } from '@/components/BottomNav';
-
+import { type PageKey } from "@/components/BottomNav";
 const sections = [
   {
     icon: <FileText size={18} />,
@@ -109,7 +108,7 @@ export default function PrivacyPage() {
           © 2026 灵集 LingJi. All rights reserved.
         </p>
       </div>
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

@@ -11,12 +11,11 @@ import {
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { useUser } from '@/hooks/use-user';
 import { ProtectedRoute } from '@/components';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-
 
 interface UserStats {
   inspirationCount: number;
@@ -292,7 +291,7 @@ function ProfileContent() {
         )}
       </div>
 
-      <BottomNav activePage="profile" onNavigate={handleNavigate} />
+      
     </div>
   );
 }

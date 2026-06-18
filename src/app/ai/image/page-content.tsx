@@ -1,12 +1,11 @@
 'use client';
 
-
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Zap, ChevronDown, ChevronUp, Download, Save, RefreshCw, Palette, Ratio, AlertCircle, ImageIcon, Check, Sparkles, Layers, Wand2, VideoIcon, X, FileText, CheckCircle2, HelpCircle, Copy, RotateCcw } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProtectedRoute } from '@/components';
 import { Toast } from '@/components/Toast';
@@ -1115,7 +1114,7 @@ function AIImageContent() {
         )}
       </div>
 
-      <BottomNav activePage="ai" onNavigate={handleNavigate} />
+      
 
       {lightboxUrl && (
         <div

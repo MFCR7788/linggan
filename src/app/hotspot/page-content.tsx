@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
-import { BottomNav, PageKey } from '@/components/BottomNav';
+import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute, LoadingSpinner } from '@/components';
 import { formatRelativeTime, getPlatformColor, PAGE_ROUTES } from '@/lib/style-constants';
 import { PRESET_CATEGORIES } from '@/lib/preset-keywords';
@@ -1208,7 +1208,7 @@ function HotspotRadarInner() {
         </div>
       </div>
 
-      <BottomNav activePage="hotspot" onNavigate={handleNavigate} />
+      
     </div>
   );
 }
