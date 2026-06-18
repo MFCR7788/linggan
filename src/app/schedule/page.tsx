@@ -90,14 +90,14 @@ function ScheduleContent() {
   const isPast = (iso: string) => new Date(iso) < new Date();
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col" style={{ height: "100dvh" }}>
       <TopNav
         title="日程管理"
         showBack
         onBack={() => router.push("/home")}
       />
 
-      <div className="flex-1 px-4 pt-[60px] pb-24">
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 custom-scrollbar">
         {/* 状态筛选 */}
         <div className="flex gap-2 mb-4 overflow-x-auto">
           {STATUS_FILTERS.map(({ key, label }) => (

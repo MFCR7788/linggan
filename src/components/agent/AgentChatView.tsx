@@ -696,20 +696,26 @@ export function AgentChatView() {
     setIsStreaming(false);
   };
 
-  // 按住说话手势
+  // 按住说话手势 — pointer + touch 双兼容，防重复触发
   const cancelGestureRef = useRef(false);
+  const touchActiveRef = useRef(false);
 
-  const handlePressStart = (e: React.PointerEvent) => {
-    if (e.button !== undefined && e.button !== 0) return;
+  const handlePressStart = (e: React.PointerEvent | React.TouchEvent) => {
+    // 防止 pointer + touch 双重触发
+    if (e.nativeEvent.type === 'pointerdown' && touchActiveRef.current) return;
+    if (e.nativeEvent.type === 'touchstart') {
+      touchActiveRef.current = true;
+      setTimeout(() => { touchActiveRef.current = false; }, 500);
+    }
+    if ('button' in e && e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     setPressingMic(true);
     setCancelGesture(false);
     cancelGestureRef.current = false;
-    const clientY = e.clientY;
+    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
     pressStartYRef.current = clientY || 0;
     pressHandledRef.current = false;
     if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    // 200ms 防误触后开始录音
     pressTimerRef.current = setTimeout(() => {
       pressHandledRef.current = true;
       if (navigator.vibrate) navigator.vibrate(30);
@@ -717,12 +723,13 @@ export function AgentChatView() {
     }, 200);
   };
 
-  const handlePressEnd = async () => {
+  const handlePressEnd = async (e?: React.PointerEvent | React.TouchEvent) => {
+    // 防止 pointer + touch 双重触发
+    if (e && e.nativeEvent.type === 'pointerup' && touchActiveRef.current) return;
     setPressingMic(false);
     setCancelGesture(false);
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
 
-    // 按住不足 200ms，视为误触，不启动录音
     if (!pressHandledRef.current) return;
 
     if (cancelGestureRef.current) {
@@ -738,9 +745,10 @@ export function AgentChatView() {
   };
 
   // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
-  const handleRecordingPointerMove = (e: React.PointerEvent) => {
+  const handleRecordingMove = (e: React.PointerEvent | React.TouchEvent) => {
     if (!isRecording) return;
-    const dy = pressStartYRef.current - e.clientY;
+    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
+    const dy = pressStartYRef.current - clientY;
     cancelGestureRef.current = dy > 60;
     setCancelGesture(dy > 60);
   };
@@ -1989,9 +1997,13 @@ export function AgentChatView() {
                   onPointerDown={handlePressStart}
                   onPointerUp={handlePressEnd}
                   onPointerCancel={handlePressEnd}
-                  onPointerMove={handleRecordingPointerMove}
+                  onPointerMove={handleRecordingMove}
+                  onTouchStart={handlePressStart}
+                  onTouchEnd={handlePressEnd}
+                  onTouchCancel={handlePressEnd}
+                  onTouchMove={handleRecordingMove}
                   onContextMenu={(e) => e.preventDefault()}
-                  className={`flex-1 h-11 rounded-full flex items-center justify-center select-none touch-none transition-all duration-200 active:scale-[0.97] ${
+                  className={`flex-1 h-11 rounded-full flex items-center justify-center select-none transition-all duration-200 active:scale-[0.97] ${
                     pressingMic ? 'scale-[1.02] shadow-lg shadow-red-500/30' : ''
                   }`}
                   style={{

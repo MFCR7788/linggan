@@ -114,25 +114,31 @@ export function useVoiceRecording() {
     if (punctuateTimerRef.current) { clearTimeout(punctuateTimerRef.current); punctuateTimerRef.current = null; }
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
 
+    // 立即更新 UI，不等标点 API
+    setIsRecording(false);
+    setRecordingTime(0);
+    setLiveTranscript('');
+
     const remaining = finalTranscriptRef.current.slice(lastPunctuatedLenRef.current);
     let finalText = punctuatedTextRef.current + remaining;
     if (remaining.trim()) {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
         const res = await fetch('/api/ai/punctuate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: remaining }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         const data = await res.json();
         if (data.success && data.data?.text) {
           finalText = punctuatedTextRef.current + data.data.text;
         }
-      } catch { /* ignore */ }
+      } catch { /* ignore, use unpunctuated text */ }
     }
     const transcript = finalText.trim() || finalTranscriptRef.current.trim();
-    setIsRecording(false);
-    setRecordingTime(0);
-    setLiveTranscript('');
     return transcript;
   }, []);
 
