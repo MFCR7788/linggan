@@ -696,12 +696,11 @@ export function AgentChatView() {
     setIsStreaming(false);
   };
 
-  // 按住说话手势 — pointer + touch 双兼容，防重复触发
+  // 按住说话手势 — pointer + touch 双兼容
   const cancelGestureRef = useRef(false);
   const touchActiveRef = useRef(false);
 
   const handlePressStart = (e: React.PointerEvent | React.TouchEvent) => {
-    // 防止 pointer + touch 双重触发
     if (e.nativeEvent.type === 'pointerdown' && touchActiveRef.current) return;
     if (e.nativeEvent.type === 'touchstart') {
       touchActiveRef.current = true;
@@ -714,33 +713,30 @@ export function AgentChatView() {
     cancelGestureRef.current = false;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
     pressStartYRef.current = clientY || 0;
-    pressHandledRef.current = false;
-    if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    pressTimerRef.current = setTimeout(() => {
-      pressHandledRef.current = true;
-      if (navigator.vibrate) navigator.vibrate(30);
-      startRecording();
-    }, 200);
+    // 立即开始录音，不等延迟
+    pressHandledRef.current = true;
+    if (navigator.vibrate) navigator.vibrate(30);
+    startRecording();
   };
 
   const handlePressEnd = async (e?: React.PointerEvent | React.TouchEvent) => {
-    // 防止 pointer + touch 双重触发
     if (e && e.nativeEvent.type === 'pointerup' && touchActiveRef.current) return;
     setPressingMic(false);
     setCancelGesture(false);
-    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
-
-    if (!pressHandledRef.current) return;
 
     if (cancelGestureRef.current) {
       cancelRecording();
       cancelGestureRef.current = false;
       return;
     }
-    const transcript = await stopRecording();
-    if (transcript) {
-      setInput(transcript);
-      handleSendWithText(transcript);
+    try {
+      const transcript = await stopRecording();
+      if (transcript) {
+        setInput(transcript);
+        handleSendWithText(transcript);
+      }
+    } catch {
+      cancelRecording();
     }
   };
 

@@ -124,7 +124,7 @@ function HomeContent() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh" }}>
+    <div className="flex flex-col min-h-screen">
       <TopNav
         title={
           <div className="flex items-center gap-2">
@@ -140,7 +140,7 @@ function HomeContent() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24 space-y-5 custom-scrollbar">
+      <div className="flex-1 px-4 pt-4 pb-24 space-y-5">
         {/* 问候语 */}
         <div className="px-1">
           <h2 style={{ color: "#FFFFFF", fontSize: 24, fontWeight: 700 }}>

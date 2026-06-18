@@ -119,11 +119,11 @@ function AICreationContent() {
   );
 
   return (
-    <div className="flex flex-col" style={{ height: "100dvh" }}>
+    <div className="flex flex-col min-h-screen pb-20">
       <TopNav title="AI 工具" />
       <CreditsWarningBanner />
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4 space-y-5 custom-scrollbar">
+      <div className="flex-1 px-4 pt-4 space-y-5">
         {/* ─── AI 创作 ─── */}
         <div>
           <p style={{ ...sectionLabel, marginBottom: 8 }}>AI 创作</p>
