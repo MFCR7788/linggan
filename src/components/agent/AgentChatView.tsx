@@ -1338,7 +1338,6 @@ export function AgentChatView() {
             </button>
           )}
         </div>
-        </div>
 
         {/* 新建对话 */}
         <button
