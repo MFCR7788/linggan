@@ -20,6 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           height: "100vh",
           overflowY: "auto",
           overflowX: "hidden",
+          overscrollBehavior: "none",
           paddingTop: hide ? "env(safe-area-inset-top)" : `calc(52px + env(safe-area-inset-top))`,
           paddingBottom: hide ? 0 : `calc(80px + env(safe-area-inset-bottom))`,
         }}
