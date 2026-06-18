@@ -1483,8 +1483,8 @@ export function AgentChatView() {
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto py-4 space-y-1"
         style={{
-          paddingTop: "calc(52px + env(safe-area-inset-top))",
-          paddingBottom: "128px",
+          paddingTop: 52,
+          paddingBottom: 128,
         }}
       >
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
