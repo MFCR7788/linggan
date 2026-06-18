@@ -17,9 +17,8 @@
 
 html {
   background: #0A1629;
-  /* iOS 禁止橡皮筋回弹，防止 BottomNav 看起来在移动 */
+  /* iOS 禁止橡皮筋回弹 */
   overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
 }
 
 body {

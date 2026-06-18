@@ -125,9 +125,7 @@ export function BottomNav({
         <div
           className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
           style={{
-            background: "rgba(10, 22, 41, 0.95)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
+            background: "rgba(10, 22, 41, 0.98)",
             borderTop: "1px solid rgba(255,255,255,0.15)",
           }}
         >

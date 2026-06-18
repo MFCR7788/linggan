@@ -96,7 +96,29 @@ export function AgentChatView() {
   const [currentTool, setCurrentTool] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [showTools, setShowTools] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
+
+  // 检测语音识别是否可用
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      setInputMode('text');
+    } else {
+      // WKWebView 中 SpeechRecognition 可能存在但不工作
+      try {
+        const test = new SpeechRecognition();
+        if (!test || typeof test.start !== 'function') {
+          setSpeechSupported(false);
+          setInputMode('text');
+        }
+      } catch {
+        setSpeechSupported(false);
+        setInputMode('text');
+      }
+    }
+  }, []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
@@ -2068,7 +2090,8 @@ export function AgentChatView() {
                 </div>
               )}
 
-              {/* ⌨/🎤 切换按钮 */}
+              {/* ⌨/🎤 切换按钮 — 仅语音可用时显示 */}
+              {speechSupported && (
               <button
                 onClick={() => setInputMode(prev => prev === 'voice' ? 'text' : 'voice')}
                 className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-90"
@@ -2085,6 +2108,7 @@ export function AgentChatView() {
                   </svg>
                 )}
               </button>
+              )}
 
               {/* 📎 上传按钮 + 弹出菜单 */}
               <div className="relative">
