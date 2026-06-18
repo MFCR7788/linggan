@@ -140,7 +140,7 @@ function HomeContent() {
         }
       />
 
-      <div className="flex-1 px-4 pt-4 pb-24 space-y-5">
+      <div className="flex-1 px-4 pt-[60px] pb-24 space-y-5">
         {/* 问候语 */}
         <div className="px-1">
           <h2 style={{ color: "#FFFFFF", fontSize: 24, fontWeight: 700 }}>

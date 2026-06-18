@@ -157,7 +157,7 @@ function ProfileContent() {
         }
       />
 
-      <div className="flex-1 px-4 pt-4 space-y-4">
+      <div className="flex-1 px-4 pt-[60px] space-y-4">
         {userLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 opacity-30" />

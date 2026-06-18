@@ -697,25 +697,24 @@ export function AgentChatView() {
   };
 
   // 按住说话手势
-  const handlePressStart = (e: React.PointerEvent | React.TouchEvent) => {
-    if ('button' in e && e.button !== undefined && e.button !== 0) return;
+  const cancelGestureRef = useRef(false);
+
+  const handlePressStart = (e: React.PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
-    // 立即高亮反馈
     setPressingMic(true);
     setCancelGesture(false);
-    // 记录按下 Y 坐标，用于上滑取消检测
-    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as React.PointerEvent).clientY;
+    cancelGestureRef.current = false;
+    const clientY = e.clientY;
     pressStartYRef.current = clientY || 0;
-
     pressHandledRef.current = false;
     if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+    // 200ms 防误触后开始录音
     pressTimerRef.current = setTimeout(() => {
-      if (pressHandledRef.current) return;
       pressHandledRef.current = true;
-      // 录音开始 → 震动反馈
       if (navigator.vibrate) navigator.vibrate(30);
       startRecording();
-    }, 300);
+    }, 200);
   };
 
   const handlePressEnd = async () => {
@@ -723,24 +722,18 @@ export function AgentChatView() {
     setCancelGesture(false);
     if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
 
+    // 按住不足 200ms，视为误触，不启动录音
     if (!pressHandledRef.current) return;
 
-    if (cancelGesture) {
+    if (cancelGestureRef.current) {
       cancelRecording();
+      cancelGestureRef.current = false;
       return;
     }
     const transcript = await stopRecording();
     if (transcript) {
-      // 语音模式：自动发送
-      if (inputMode === 'voice') {
-        setInput(transcript);
-        // 延迟一帧确保 input 更新后再发送
-        requestAnimationFrame(() => {
-          handleSendWithText(transcript);
-        });
-      } else {
-        setInput(prev => (prev ? prev + transcript : transcript));
-      }
+      setInput(transcript);
+      handleSendWithText(transcript);
     }
   };
 
@@ -748,6 +741,7 @@ export function AgentChatView() {
   const handleRecordingPointerMove = (e: React.PointerEvent) => {
     if (!isRecording) return;
     const dy = pressStartYRef.current - e.clientY;
+    cancelGestureRef.current = dy > 60;
     setCancelGesture(dy > 60);
   };
 
@@ -1821,35 +1815,26 @@ export function AgentChatView() {
         )}
         <div className="relative">
         {isRecording ? (
-          /* ───── 录音状态：豆包风格 ───── */
+          /* ───── 录音中 ───── */
           <div className="flex flex-col items-center gap-3 py-2">
-            {/* 录音动画圆 + 计时 */}
-            <div className="flex items-center gap-3">
-              <div className={`w-4 h-4 rounded-full animate-pulse ${
+            {/* 录音动画指示 */}
+            <div className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full animate-pulse ${
                 cancelGesture ? 'bg-red-500' : 'bg-red-500'
-              }`} style={{ animationDuration: '0.8s' }} />
-              <span className={`font-mono text-lg tabular-nums font-medium ${
+              }`} style={{ animationDuration: '0.6s' }} />
+              <span className={`text-sm font-medium ${
                 cancelGesture ? 'text-red-400' : 'text-red-300'
-              }`}>{formatTime(recordingTime)}</span>
+              }`}>
+                {cancelGesture ? '松手取消' : '正在聆听...'}
+              </span>
             </div>
             {/* 实时转写 */}
-            <div className={`w-full px-4 py-2.5 rounded-xl text-sm text-center min-h-[40px] flex items-center justify-center ${
-              cancelGesture
-                ? 'bg-red-900/20 border border-red-800/30 text-red-400'
-                : 'bg-white/5 border border-white/5 text-gray-200'
-            }`}>
-              {cancelGesture ? (
-                <span className="text-red-400">松手取消</span>
-              ) : liveTranscript ? (
+            {liveTranscript && (
+              <div className="w-full px-4 py-2.5 rounded-xl text-sm text-center bg-white/5 border border-white/5 text-gray-200">
                 <span className="line-clamp-2">{liveTranscript}</span>
-              ) : (
-                <span className="text-gray-500 flex items-center gap-2">
-                  <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse rounded-full" />
-                  正在聆听...
-                </span>
-              )}
-            </div>
-            {/* 提示文字 */}
+              </div>
+            )}
+            {/* 提示 */}
             <p className={`text-xs transition-colors ${
               cancelGesture ? 'text-red-400 font-medium' : 'text-gray-500'
             }`}>
@@ -2005,12 +1990,9 @@ export function AgentChatView() {
                   onPointerUp={handlePressEnd}
                   onPointerCancel={handlePressEnd}
                   onPointerMove={handleRecordingPointerMove}
-                  onTouchStart={handlePressStart}
-                  onTouchEnd={handlePressEnd}
-                  onTouchCancel={handlePressEnd}
                   onContextMenu={(e) => e.preventDefault()}
                   className={`flex-1 h-11 rounded-full flex items-center justify-center select-none touch-none transition-all duration-200 active:scale-[0.97] ${
-                    pressingMic ? 'scale-[1.02] shadow-lg shadow-blue-500/30' : ''
+                    pressingMic ? 'scale-[1.02] shadow-lg shadow-red-500/30' : ''
                   }`}
                   style={{
                     background: pressingMic

@@ -123,7 +123,7 @@ function AICreationContent() {
       <TopNav title="AI 工具" />
       <CreditsWarningBanner />
 
-      <div className="flex-1 px-4 pt-4 space-y-5">
+      <div className="flex-1 px-4 pt-[60px] space-y-5">
         {/* ─── AI 创作 ─── */}
         <div>
           <p style={{ ...sectionLabel, marginBottom: 8 }}>AI 创作</p>

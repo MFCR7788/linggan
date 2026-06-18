@@ -97,7 +97,7 @@ function ScheduleContent() {
         onBack={() => router.push("/home")}
       />
 
-      <div className="flex-1 px-4 pt-4 pb-24">
+      <div className="flex-1 px-4 pt-[60px] pb-24">
         {/* 状态筛选 */}
         <div className="flex gap-2 mb-4 overflow-x-auto">
           {STATUS_FILTERS.map(({ key, label }) => (

@@ -14,9 +14,9 @@ interface TopNavProps {
 export function TopNav({ title, left, right, onBack, showBack = false, showShare = false, onShare }: TopNavProps) {
   return (
     <div
-      className="flex items-center justify-between px-4 py-3 sticky top-0 z-40"
+      className="fixed top-0 left-0 right-0 flex items-center justify-between px-4 py-3 z-40 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto"
       style={{
-        background: "rgba(10, 22, 41, 0.7)",
+        background: "rgba(10, 22, 41, 0.85)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(255,255,255,0.1)",
