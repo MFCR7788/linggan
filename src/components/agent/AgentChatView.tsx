@@ -1276,7 +1276,7 @@ export function AgentChatView() {
           paddingTop: "env(safe-area-inset-top)",
         }}
       >
-        <div className="relative flex items-center px-4 py-3 border-b border-white/10 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto">
+        <div className="relative flex items-center px-4 pb-3 border-b border-white/10 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto" style={{ paddingTop: "calc(0.25rem + env(safe-area-inset-top))" }}>
         {/* 返回按钮 */}
         <button
           onClick={() => router.back()}
@@ -1288,10 +1288,10 @@ export function AgentChatView() {
         </button>
 
         {/* 会话选择器 — 居中 */}
-        <div className="flex-1 flex justify-center items-center gap-2">
+        <div className="flex-1 flex justify-center items-center gap-1.5">
           <button
             onClick={() => setShowSessionList(!showSessionList)}
-            className="flex items-center gap-1.5 max-w-[200px]"
+            className="flex items-center gap-1.5 max-w-[180px]"
           >
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1307,20 +1307,10 @@ export function AgentChatView() {
                 }}
                 onBlur={saveEditTitle}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-gray-700 text-white text-sm rounded px-1.5 py-0.5 outline-none max-w-[140px]"
+                className="bg-gray-700 text-white text-sm rounded px-1.5 py-0.5 outline-none max-w-[120px]"
               />
             ) : (
-              <span
-                className="truncate text-sm text-white cursor-default"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  const sid = currentSessionId;
-                  const title = sessions.find(s => s.id === sid)?.title || '对话助手';
-                  if (sid) startEditTitle(sid, title);
-                }}
-                title="双击修改名称"
-              >
+              <span className="truncate text-sm text-white">
                 {currentSessionId
                   ? sessions.find(s => s.id === currentSessionId)?.title || '对话助手'
                   : '对话助手'}
@@ -1330,6 +1320,24 @@ export function AgentChatView() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
+          {/* 铅笔编辑按钮 */}
+          {currentSessionId && editingTitle !== currentSessionId && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const sid = currentSessionId;
+                const title = sessions.find(s => s.id === sid)?.title || '对话助手';
+                if (sid) startEditTitle(sid, title);
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 flex-shrink-0"
+              title="修改名称"
+            >
+              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
+        </div>
         </div>
 
         {/* 新建对话 */}
@@ -1836,9 +1844,9 @@ export function AgentChatView() {
         )}
         <div className="relative">
         {isRecording ? (
-          /* ───── 微信风格录音浮层 ───── */
+          /* ───── 录音浮层 ───── */
           <div
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
             style={{ background: "rgba(0,0,0,0.85)" }}
           >
             {/* 顶部取消区域 */}
