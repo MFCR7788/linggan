@@ -131,6 +131,7 @@ export function BottomNav() {
         className="fixed bottom-0 left-0 right-0"
         style={{
           zIndex: 50,
+          background: "rgba(10, 22, 41, 0.98)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
