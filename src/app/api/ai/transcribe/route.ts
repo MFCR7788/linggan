@@ -1,18 +1,17 @@
 // 语音转文字 — 百炼 Paraformer（本地 FunASR 优先，降级 DashScope 云 API）
-// POST /api/ai/transcribe  body: FormData { audio: File }
+// POST /api/ai/transcribe  body: FormData { audio: File (WAV 16kHz mono) }
+// 浏览器端已通过 AudioContext 转为 WAV，此处直接调 recognizeAudio
 import { NextResponse } from "next/server";
 import { writeFile, unlink, mkdir } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { execSync } from "child_process";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   let tempDir: string | null = null;
-  let audioPath: string | null = null;
   let wavPath: string | null = null;
 
   try {
@@ -25,29 +24,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 写入临时文件
+    // 写入临时 WAV 文件
     tempDir = join(tmpdir(), `lingji-asr-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
-
-    const ext = audioFile.name.split(".").pop() || "webm";
-    audioPath = join(tempDir, `input.${ext}`);
-    const buffer = Buffer.from(await audioFile.arrayBuffer());
-    await writeFile(audioPath, buffer);
-
-    // 尝试转为 WAV（ffmpeg 可用时）
     wavPath = join(tempDir, "audio.wav");
-    try {
-      execSync(
-        `ffmpeg -y -i "${audioPath}" -ar 16000 -ac 1 -sample_fmt s16 "${wavPath}"`,
-        { timeout: 15000, stdio: "pipe" }
-      );
-    } catch {
-      // ffmpeg 不可用或转换失败，尝试用原始文件
-      console.warn("[transcribe] ffmpeg 转换失败，使用原始格式");
-      wavPath = audioPath;
-    }
+    const buffer = Buffer.from(await audioFile.arrayBuffer());
+    await writeFile(wavPath, buffer);
 
-    // 调 recognizeAudio（优先本地 FunASR，降级 DashScope）
+    // 调 recognizeAudio（优先本地 FunASR Docker，降级 DashScope Paraformer API）
     const { recognizeAudio } = await import("@/lib/ai/funasr-client");
     const result = await recognizeAudio(wavPath);
 
@@ -75,11 +59,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   } finally {
-    // 清理临时文件
-    if (audioPath) unlink(audioPath).catch(() => {});
-    if (wavPath && wavPath !== audioPath) unlink(wavPath).catch(() => {});
+    if (wavPath) unlink(wavPath).catch(() => {});
     if (tempDir) {
-      // rmdir 仅在空目录时成功
       import("fs/promises")
         .then(({ rmdir }) => rmdir(tempDir!).catch(() => {}))
         .catch(() => {});
