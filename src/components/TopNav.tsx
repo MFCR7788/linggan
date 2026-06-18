@@ -46,7 +46,10 @@ export function TopNavBar() {
         borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}
     >
-      <div className="flex items-center justify-between px-4 py-3 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto">
+      <div
+        className="flex items-center justify-between px-4 py-3 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto"
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <div className="flex items-center gap-2 min-w-[40px]">
           {showBack && (
             <button onClick={onBack} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
