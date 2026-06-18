@@ -131,16 +131,15 @@ export function BottomNav() {
         className="fixed bottom-0 left-0 right-0"
         style={{
           zIndex: 50,
-          background: "rgba(10, 22, 41, 0.98)",
+          background: "rgba(10, 22, 41, 0.95)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderTop: "1px solid rgba(255,255,255,0.1)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
         <div
           className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
-          style={{
-            background: "rgba(10, 22, 41, 0.98)",
-            borderTop: "1px solid rgba(255,255,255,0.15)",
-          }}
         >
           {items.map(({ key, label, Icon, isCenter }) => {
             const isActive = activeTab === key;

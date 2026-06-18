@@ -1276,8 +1276,15 @@ export function AgentChatView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* 顶部 — 返回 + 会话选择器 + 新建 */}
-      <div className="relative flex items-center px-4 py-3 border-b border-white/10">
+      {/* 顶部 — 返回 + 会话选择器 + 新建（fixed，与 TopNavBar 同级贴顶） */}
+      <div
+        className="fixed top-0 left-0 right-0 z-40"
+        style={{
+          background: "rgba(10, 22, 41, 0.97)",
+          paddingTop: "env(safe-area-inset-top)",
+        }}
+      >
+        <div className="relative flex items-center px-4 py-3 border-b border-white/10 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto">
         {/* 返回按钮 */}
         <button
           onClick={() => router.back()}
@@ -1426,6 +1433,7 @@ export function AgentChatView() {
             </div>
           </>
         )}
+        </div>
       </div>
 
       {/* 流程引导头部 — 始终可见（非滚动区域） */}
@@ -1478,8 +1486,15 @@ export function AgentChatView() {
         </div>
       )}
 
-      {/* 消息列表 — pb-32 给固定输入框留空间 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-4 space-y-1 pb-32">
+      {/* 消息列表 — fixed header/footer 留空间 */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto py-4 space-y-1"
+        style={{
+          paddingTop: "calc(52px + env(safe-area-inset-top))",
+          paddingBottom: "128px",
+        }}
+      >
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
           <div className="flex flex-col items-center justify-center h-full px-6 text-center">
             {/* Logo */}
