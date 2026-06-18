@@ -704,31 +704,23 @@ export function AgentChatView() {
     setIsStreaming(false);
   };
 
-  // 按住说话手势 — pointer + touch 双兼容，MediaRecorder 录音
+  // 按住说话手势 — touch(移动端) + mouse(桌面) 分开发，避免双事件冲突
   const cancelGestureRef = useRef(false);
-  const touchActiveRef = useRef(false);
 
-  const handlePressStart = (e: React.PointerEvent | React.TouchEvent) => {
-    if (e.nativeEvent.type === 'pointerdown' && touchActiveRef.current) return;
-    if (e.nativeEvent.type === 'touchstart') {
-      touchActiveRef.current = true;
-      setTimeout(() => { touchActiveRef.current = false; }, 500);
-    }
-    if ('button' in e && e.button !== undefined && e.button !== 0) return;
+  const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if ('button' in e && (e as React.MouseEvent).button !== 0) return;
     e.preventDefault();
     setPressingMic(true);
     setCancelGesture(false);
     cancelGestureRef.current = false;
-    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as React.MouseEvent).clientY;
     pressStartYRef.current = clientY || 0;
     pressHandledRef.current = true;
     if (navigator.vibrate) navigator.vibrate(30);
-    // 立即开始录音（startRecording 内部异步获取麦克风权限）
     startRecording();
   };
 
-  const handlePressEnd = async (e?: React.PointerEvent | React.TouchEvent) => {
-    if (e && e.nativeEvent.type === 'pointerup' && touchActiveRef.current) return;
+  const handlePressEnd = async () => {
     setPressingMic(false);
     setCancelGesture(false);
 
@@ -751,9 +743,9 @@ export function AgentChatView() {
   };
 
   // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
-  const handleRecordingMove = (e: React.PointerEvent | React.TouchEvent) => {
+  const handleRecordingMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isRecording) return;
-    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0]?.clientY : (e as React.PointerEvent).clientY;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as React.MouseEvent).clientY;
     const dy = pressStartYRef.current - clientY;
     cancelGestureRef.current = dy > 60;
     setCancelGesture(dy > 60);
@@ -2047,10 +2039,9 @@ export function AgentChatView() {
                 </button>
               ) : inputMode === 'voice' ? (
                 <button
-                  onPointerDown={handlePressStart}
-                  onPointerUp={handlePressEnd}
-                  onPointerCancel={handlePressEnd}
-                  onPointerMove={handleRecordingMove}
+                  onMouseDown={handlePressStart}
+                  onMouseUp={handlePressEnd}
+                  onMouseMove={handleRecordingMove}
                   onTouchStart={handlePressStart}
                   onTouchEnd={handlePressEnd}
                   onTouchCancel={handlePressEnd}
