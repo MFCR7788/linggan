@@ -13,6 +13,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
 };
 
 const fontFamily =
@@ -49,8 +50,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body style={{ margin: 0, padding: 0, minHeight: "100%", fontFamily }}>
+    <html lang="zh-CN" style={{ background: "#0A1629" }}>
+      <body style={{ margin: 0, padding: 0, minHeight: "100%", fontFamily, background: "#0A1629" }}>
         {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{
