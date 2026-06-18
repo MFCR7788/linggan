@@ -12,7 +12,6 @@ async function blobToWav(audioBlob: Blob): Promise<Blob> {
   try {
     audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
   } catch {
-    // decodeAudioData 可能失败（如格式不支持），回退到原始 blob
     throw new Error('音频解码失败');
   }
 
@@ -30,8 +29,8 @@ async function blobToWav(audioBlob: Blob): Promise<Blob> {
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);       // PCM
-  view.setUint16(22, 1, true);       // mono
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
@@ -53,13 +52,12 @@ export function useVoiceRecording() {
   const { showToast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [liveTranscript, setLiveTranscript] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  /** 录音真正就绪的 Promise — 解决 startRecording 异步竞态 */
   const readyPromiseRef = useRef<Promise<void> | null>(null);
+  const mimeTypeRef = useRef<string>('audio/webm');
 
   useEffect(() => {
     if (isRecording) {
@@ -83,7 +81,6 @@ export function useVoiceRecording() {
   const startRecording = useCallback(async (): Promise<void> => {
     if (mediaRecorderRef.current) return;
 
-    // 创建 Promise 追踪录音就绪
     let resolveReady!: () => void;
     readyPromiseRef.current = new Promise<void>((r) => { resolveReady = r; });
 
@@ -96,6 +93,7 @@ export function useVoiceRecording() {
         : MediaRecorder.isTypeSupported('audio/mp4')
           ? 'audio/mp4'
           : 'audio/webm';
+      mimeTypeRef.current = mimeType;
 
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
@@ -115,7 +113,6 @@ export function useVoiceRecording() {
       recorder.start(500);
       setIsRecording(true);
       setRecordingTime(0);
-      setLiveTranscript('');
       resolveReady();
     } catch (e) {
       const err = e as Error;
@@ -127,12 +124,11 @@ export function useVoiceRecording() {
       releaseStream();
       setIsRecording(false);
       setRecordingTime(0);
-      resolveReady(); // 即使失败也 resolve，避免 handlePressEnd 死等
+      resolveReady();
     }
   }, [showToast, releaseStream]);
 
   const stopRecording = useCallback(async (): Promise<string> => {
-    // 等待录音真正就绪（处理竞态：用户松手比麦克风权限弹窗快）
     if (readyPromiseRef.current) {
       await readyPromiseRef.current;
     }
@@ -146,27 +142,39 @@ export function useVoiceRecording() {
     }
 
     return new Promise((resolve) => {
-      recorder.onstop = async () => {
-        const mimeType = recorder.mimeType;
+      let resolved = false;
+      const safeResolve = (text: string) => {
+        if (resolved) return;
+        resolved = true;
         releaseStream();
         setIsRecording(false);
         setRecordingTime(0);
+        resolve(text);
+      };
 
-        const blob = new Blob(chunksRef.current, { type: mimeType });
+      // 超时保护：5 秒后强制结束
+      const timeout = setTimeout(() => {
+        console.warn('[voice] onstop 超时，强制结束');
+        // 强制停止并收集已有数据
+        try { recorder.stop(); } catch {}
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
+        safeResolve(blob.size > 200 ? '（录音数据）' : '');
+      }, 5000);
+
+      recorder.onstop = async () => {
+        clearTimeout(timeout);
+
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
         if (blob.size < 200) {
-          showToast('录音太短，请重试', 'warning');
-          resolve('');
+          safeResolve('');
           return;
         }
 
         try {
-          // 浏览器端转 WAV（解决 webm→WAV 格式不匹配）
           let wavBlob: Blob;
           try {
             wavBlob = await blobToWav(blob);
           } catch {
-            // 解码失败，用原始格式试试
-            console.warn('[voice] WAV 转换失败，使用原始格式');
             wavBlob = blob;
           }
 
@@ -174,32 +182,44 @@ export function useVoiceRecording() {
           formData.append('audio', wavBlob, 'recording.wav');
 
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 30000);
+          const apiTimeout = setTimeout(() => controller.abort(), 30000);
           const res = await fetch('/api/ai/transcribe', {
             method: 'POST',
             body: formData,
             signal: controller.signal,
           });
-          clearTimeout(timeout);
+          clearTimeout(apiTimeout);
 
           const data = await res.json();
           if (data.success && data.data?.text) {
-            resolve(data.data.text);
+            safeResolve(data.data.text);
           } else {
-            console.warn('[voice] 转写失败:', data.error);
             showToast(data.error || '语音识别失败，请重试', 'warning');
-            resolve('');
+            safeResolve('');
           }
         } catch (e) {
           if (e instanceof DOMException && e.name === 'AbortError') {
             showToast('语音识别超时，请重试', 'warning');
           } else {
-            console.error('[voice] 转写请求异常:', e);
             showToast('网络异常，请重试', 'warning');
           }
-          resolve('');
+          safeResolve('');
         }
       };
+
+      // 如果 onstop 已经不会再触发（recorder 已经 inactive），手动触发
+      if (recorder.state === 'inactive') {
+        clearTimeout(timeout);
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current });
+        if (blob.size < 200) {
+          safeResolve('');
+        } else {
+          // 模拟 onstop 流程
+          recorder.onstop = null as any;
+          recorder.dispatchEvent(new Event('stop'));
+        }
+        return;
+      }
 
       recorder.stop();
     });
@@ -212,18 +232,16 @@ export function useVoiceRecording() {
         releaseStream();
         setIsRecording(false);
         setRecordingTime(0);
-        setLiveTranscript('');
       };
       recorder.stop();
     } else {
       releaseStream();
       setIsRecording(false);
       setRecordingTime(0);
-      setLiveTranscript('');
     }
   }, [releaseStream]);
 
-  return { isRecording, recordingTime, liveTranscript, startRecording, stopRecording, cancelRecording };
+  return { isRecording, recordingTime, startRecording, stopRecording, cancelRecording };
 }
 
 export function formatTime(s: number) {

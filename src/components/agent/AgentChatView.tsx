@@ -17,7 +17,7 @@ import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { parseParamCards, formatParamValues } from '@/lib/agent/param-parser';
 import { ParamCard } from '@/components/agent/ParamCard';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
-import { useVoiceRecording, formatTime } from '@/hooks/use-voice-recording';
+import { useVoiceRecording } from '@/hooks/use-voice-recording';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { useAgentSessions } from '@/hooks/use-agent-sessions';
 import type { AttachedFile } from '@/hooks/use-file-upload';
@@ -213,7 +213,7 @@ export function AgentChatView() {
 
   // 语音录制
   const voice = useVoiceRecording();
-  const { isRecording, recordingTime, liveTranscript, startRecording, stopRecording, cancelRecording } = voice;
+  const { isRecording, startRecording, stopRecording, cancelRecording } = voice;
   const [pressingMic, setPressingMic] = useState(false);        // 按住瞬间高亮
   const [cancelGesture, setCancelGesture] = useState(false);    // 上滑取消状态
   const pressStartYRef = useRef(0);                              // 按下 Y 坐标，用于检测上滑
@@ -1829,31 +1829,63 @@ export function AgentChatView() {
         )}
         <div className="relative">
         {isRecording ? (
-          /* ───── 录音中 ───── */
-          <div className="flex flex-col items-center gap-3 py-2">
-            {/* 录音动画指示 */}
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full animate-pulse ${
-                cancelGesture ? 'bg-red-500' : 'bg-red-500'
-              }`} style={{ animationDuration: '0.6s' }} />
-              <span className={`text-sm font-medium ${
-                cancelGesture ? 'text-red-400' : 'text-red-300'
+          /* ───── 微信风格录音浮层 ───── */
+          <div
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.85)" }}
+          >
+            {/* 顶部取消区域 */}
+            <div
+              className={`w-48 h-16 rounded-2xl flex items-center justify-center mb-8 transition-all ${
+                cancelGesture ? 'bg-red-500/30 scale-110' : 'bg-white/5'
+              }`}
+            >
+              <span className={`text-sm font-medium transition-colors ${
+                cancelGesture ? 'text-red-400' : 'text-gray-500'
               }`}>
-                {cancelGesture ? '松手取消' : '正在聆听...'}
+                {cancelGesture ? '松开 取消' : '↑ 上滑取消'}
               </span>
             </div>
-            {/* 实时转写 */}
-            {liveTranscript && (
-              <div className="w-full px-4 py-2.5 rounded-xl text-sm text-center bg-white/5 border border-white/5 text-gray-200">
-                <span className="line-clamp-2">{liveTranscript}</span>
+
+            {/* 麦克风图标 + 波形动画 */}
+            <div className="flex flex-col items-center gap-6">
+              <div
+                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  cancelGesture ? 'bg-red-500/40 scale-90' : 'bg-white/10 scale-100'
+                }`}
+              >
+                <svg className={`w-10 h-10 transition-colors ${cancelGesture ? 'text-red-400' : 'text-white'}`} fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
+                  <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
               </div>
-            )}
-            {/* 提示 */}
-            <p className={`text-xs transition-colors ${
-              cancelGesture ? 'text-red-400 font-medium' : 'text-gray-500'
-            }`}>
-              {cancelGesture ? '↑ 上移取消' : '松开 发送'}
-            </p>
+
+              {/* 波形条 */}
+              <div className="flex items-center gap-1 h-12">
+                {[1,2,3,4,5,4,3,2,1,3,5,7,5,3,1].map((h, i) => (
+                  <div
+                    key={i}
+                    className={`w-1 rounded-full transition-all ${
+                      cancelGesture ? 'bg-red-400/60' : 'bg-blue-400/80'
+                    }`}
+                    style={{
+                      height: `${h * 4}px`,
+                      animation: `mic-pulse ${0.8 + (i % 5) * 0.1}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.05}s`,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 底部提示 */}
+            <div className="mt-12">
+              <p className={`text-base font-medium transition-colors ${
+                cancelGesture ? 'text-red-400' : 'text-white/70'
+              }`}>
+                {cancelGesture ? '松手取消录音' : '松开 发送'}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
