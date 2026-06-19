@@ -30,9 +30,9 @@ jobs:
       - name: Package
         run: |
           mkdir deploy-pkg
-          cp -r .next public package.json next.config.mjs deploy-pkg/
+          cp -r .next public package.json package-lock.json next.config.mjs deploy-pkg/
           cd deploy-pkg
-          npm install --omit=dev --prefer-offline --no-audit --no-fund
+          npm ci --omit=dev --prefer-offline --no-audit --no-fund
           cd ..
           tar czf deploy.tar.gz deploy-pkg
 
