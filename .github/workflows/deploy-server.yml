@@ -22,9 +22,11 @@ jobs:
 
       - name: Install & Build
         run: |
-          npm cache clean --force
           npm ci --no-audit --no-fund
+          npm ls tailwindcss 2>/dev/null || npm install tailwindcss
           npm run build
+        env:
+          NODE_ENV: production
         env:
           NODE_ENV: production
 
