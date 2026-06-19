@@ -16,6 +16,11 @@ platform :ios do
       api_key: api_key
     )
 
+    # Allow xcodebuild to access signing keys without prompting (required for CI)
+    if ENV["MATCH_KEYCHAIN_NAME"]
+      sh("security", "set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ENV["MATCH_KEYCHAIN_PASSWORD"], ENV["MATCH_KEYCHAIN_NAME"])
+    end
+
     build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
 
     build_app(
