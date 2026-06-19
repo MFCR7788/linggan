@@ -80,6 +80,8 @@ jobs:
           security unlock-keychain -p "ci-temp-password" ~/Library/Keychains/ci.keychain-db
           security set-keychain-settings -lut 21600 ~/Library/Keychains/ci.keychain-db
           security default-keychain -s ~/Library/Keychains/ci.keychain-db
+          # Allow xcodebuild to access the keychain without prompting (critical for CI)
+          security set-key-partition-list -S apple-tool:,apple: -s -k "ci-temp-password" ~/Library/Keychains/ci.keychain-db
 
       - name: Build and upload to TestFlight
         working-directory: ios
