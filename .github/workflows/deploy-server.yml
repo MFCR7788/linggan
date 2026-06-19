@@ -24,9 +24,9 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           ls node_modules/tailwindcss || npm install tailwindcss@^3.4.0
-          npm run build
+          NODE_ENV=production npm run build
         env:
-          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
 
       - name: Package
         run: |
