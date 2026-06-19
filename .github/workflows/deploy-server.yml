@@ -23,6 +23,7 @@ jobs:
       - name: Install & Build
         run: |
           npm install --no-audit --no-fund
+          ls node_modules/tailwindcss || npm install tailwindcss@^3.4.0
           npm run build
         env:
           NODE_ENV: production
