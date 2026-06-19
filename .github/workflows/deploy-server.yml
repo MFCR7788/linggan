@@ -22,8 +22,7 @@ jobs:
 
       - name: Install & Build
         run: |
-          npm install --prefer-offline --no-audit --no-fund
-          npm ls jsonwebtoken || npm install jsonwebtoken
+          npm install --no-audit --no-fund
           npm run build
         env:
           NODE_ENV: production
