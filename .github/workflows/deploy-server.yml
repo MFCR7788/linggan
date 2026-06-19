@@ -20,50 +20,42 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit --no-fund
-
-      - name: Build Next.js
-        run: npm run build
+      - name: Install & Build
+        run: |
+          npm ci --prefer-offline --no-audit --no-fund
+          npm run build
         env:
           NODE_ENV: production
 
-      - name: Create deploy package
+      - name: Package
         run: |
-          mkdir -p deploy-pkg
-          cp -r .next deploy-pkg/
-          cp -r public deploy-pkg/
-          cp package.json next.config.mjs deploy-pkg/
-          # install production-only deps for the package
+          mkdir deploy-pkg
+          cp -r .next public package.json next.config.mjs deploy-pkg/
           cd deploy-pkg
           npm install --omit=dev --prefer-offline --no-audit --no-fund
+          cd ..
+          tar czf deploy.tar.gz deploy-pkg
 
-      - name: Deploy to ECS
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "deploy-pkg/*"
-          target: "/opt/lingji-new"
-          strip_components: 1
-          rm: true
-          timeout: 300s
+      - name: Transfer to ECS
+        run: |
+          echo "${{ secrets.SERVER_SSH_KEY }}" > deploy_key
+          chmod 600 deploy_key
+          cat deploy.tar.gz | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cat > /opt/deploy.tar.gz"
 
-      - name: Restart service
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          timeout_minutes: 2
-          script: |
+      - name: Restart on ECS
+        run: |
+          echo "${{ secrets.SERVER_SSH_KEY }}" > deploy_key
+          chmod 600 deploy_key
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} '
             set -e
-            # activate swap
             swapon /swapfile 2>/dev/null || true
 
-            # write env file
-            cat > /opt/lingji-new/.env.local << 'EOF'
+            cd /opt
+            rm -rf deploy-pkg lingji-new 2>/dev/null || true
+            tar xzf deploy.tar.gz
+            rm -f deploy.tar.gz
+
+            cat > deploy-pkg/.env.local << ENVEOF
             DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
             CRON_SECRET=${{ secrets.CRON_SECRET }}
             ARK_API_KEY=${{ secrets.ARK_API_KEY }}
@@ -74,28 +66,19 @@ jobs:
             SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}
             OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
-            HEYGEN_API_KEY=${{ secrets.HEYGEN_API_KEY }}
-            JINA_API_KEY=${{ secrets.JINA_API_KEY }}
-            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
-            PIXABAY_API_KEY=${{ secrets.PIXABAY_API_KEY }}
-            UNSPLASH_ACCESS_KEY=${{ secrets.UNSPLASH_ACCESS_KEY }}
-            WECHAT_MP_APP_SECRET=${{ secrets.WECHAT_MP_APP_SECRET }}
-            WEIBO_APP_SECRET=${{ secrets.WEIBO_APP_SECRET }}
-            EOF
+            ENVEOF
 
-            # swap old and new
             if [ -d /opt/lingji ]; then
               rm -rf /opt/lingji-old 2>/dev/null || true
               mv /opt/lingji /opt/lingji-old
             fi
-            mv /opt/lingji-new /opt/lingji
+            mv deploy-pkg /opt/lingji
 
-            # restart pm2
             pm2 stop lingji 2>/dev/null || true
             pm2 delete lingji 2>/dev/null || true
             cd /opt/lingji
             pm2 start node_modules/next/dist/bin/next --name lingji -- start -p 3000
             pm2 save
-
             echo "=== deploy OK ==="
             pm2 list
+          '
