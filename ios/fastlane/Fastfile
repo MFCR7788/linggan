@@ -9,30 +9,46 @@ platform :ios do
       key_filepath: "fastlane/AuthKey_52H698RFZF.p8"
     )
 
-    match(
-      type: "appstore",
-      readonly: true,
-      app_identifier: "com.mfcr7788.lingji",
-      api_key: api_key
-    )
-
-    # Allow xcodebuild to access signing keys without prompting (required for CI)
-    if ENV["MATCH_KEYCHAIN_NAME"]
-      sh("security", "set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ENV["MATCH_KEYCHAIN_PASSWORD"], ENV["MATCH_KEYCHAIN_NAME"])
-    end
-
     build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
 
-    build_app(
-      scheme: "App",
-      project: "App/App.xcodeproj",
-      export_method: "app-store",
-      output_directory: "./build",
-      include_symbols: true,
-      xcargs: "CURRENT_PROJECT_VERSION=#{build_number} IPHONEOS_DEPLOYMENT_TARGET=16.0"
+    # Create export options for automatic signing
+    require 'plist'
+    FileUtils.mkdir_p("build")
+    File.write("build/exportOptions.plist", {
+      method: "app-store",
+      signingStyle: "automatic",
+      destination: "upload",
+      teamID: "698S6LL5G6"
+    }.to_plist)
+
+    # Archive with automatic signing (no match, no keychain management)
+    sh("xcodebuild", "archive",
+       "-project", "App/App.xcodeproj",
+       "-scheme", "App",
+       "-archivePath", "build/App.xcarchive",
+       "-destination", "generic/platform=iOS",
+       "-allowProvisioningUpdates",
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "52H698RFZF",
+       "-authenticationKeyPath", "fastlane/AuthKey_52H698RFZF.p8",
+       "CURRENT_PROJECT_VERSION=#{build_number}",
+       "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
+    # Export archive to IPA
+    sh("xcodebuild", "-exportArchive",
+       "-archivePath", "build/App.xcarchive",
+       "-exportPath", "build",
+       "-exportOptionsPlist", "build/exportOptions.plist",
+       "-allowProvisioningUpdates",
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "52H698RFZF",
+       "-authenticationKeyPath", "fastlane/AuthKey_52H698RFZF.p8"
+    )
+
+    # Upload IPA to TestFlight
     upload_to_testflight(
+      ipa: "build/App.ipa",
       skip_waiting_for_build_processing: true,
       api_key: api_key
     )

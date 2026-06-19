@@ -68,18 +68,8 @@ jobs:
           bundler-cache: true
           working-directory: ios
 
-      - name: Configure git auth for Match
-        run: git config --global url."https://x-access-token:${{ secrets.MATCH_PASSWORD }}@github.com/".insteadOf "https://github.com/"
-
       - name: Write App Store Connect API Key
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
-
-      - name: Set up temporary keychain for code signing
-        run: |
-          security create-keychain -p "ci-temp-password" ~/Library/Keychains/ci.keychain-db
-          security unlock-keychain -p "ci-temp-password" ~/Library/Keychains/ci.keychain-db
-          security set-keychain-settings -lut 21600 ~/Library/Keychains/ci.keychain-db
-          security default-keychain -s ~/Library/Keychains/ci.keychain-db
 
       - name: Build and upload to TestFlight
         working-directory: ios
@@ -87,14 +77,8 @@ jobs:
           xcodebuild -version
           bundle exec fastlane beta
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-          MATCH_KEYCHAIN_NAME: /Users/runner/Library/Keychains/ci.keychain-db
-          MATCH_KEYCHAIN_PASSWORD: ci-temp-password
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
   build-android:
     if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' }}
