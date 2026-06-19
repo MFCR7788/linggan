@@ -2,7 +2,7 @@
 //
 // 配置:
 //   GitHub 仓库 Settings → Webhooks → Add webhook
-//     Payload URL:  https://ai.zjsifan.com/api/webhook/deploy
+//     Payload URL:  https://zjsifan.com/api/webhook/deploy
 //     Content type: application/json
 //     Secret:       <与 GITHUB_WEBHOOK_SECRET 一致>
 //     Events:       Just the push event

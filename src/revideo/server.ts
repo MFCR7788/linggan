@@ -27,7 +27,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 const server = createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', process.env.LINGJI_APP_ORIGIN || 'https://ai.zjsifan.com');
+  res.setHeader('Access-Control-Allow-Origin', process.env.LINGJI_APP_ORIGIN || 'https://zjsifan.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');

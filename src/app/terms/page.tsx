@@ -122,7 +122,7 @@ export default function TermsPage() {
             fontSize: 14,
           }}>
             <p style={{ marginBottom: 6 }}>邮箱：229888777@qq.com</p>
-            <p style={{ marginBottom: 6 }}>应用网址：https://ai.zjsifan.com</p>
+            <p style={{ marginBottom: 6 }}>应用网址：https://zjsifan.com</p>
             <p>应用内：个人中心 → 帮助与反馈 → 意见反馈</p>
           </div>
           <p style={{ marginTop: 24, color: '#6B7280', fontSize: 13 }}>

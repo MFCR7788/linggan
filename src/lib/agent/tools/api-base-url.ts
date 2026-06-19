@@ -15,7 +15,7 @@ export function getApiBaseUrl(): string {
 
   // 2. 生产域名硬编码 fallback
   if (process.env.NODE_ENV === 'production') {
-    _cachedBaseUrl = 'https://ai.zjsifan.com';
+    _cachedBaseUrl = 'https://zjsifan.com';
     return _cachedBaseUrl;
   }
 

@@ -5,8 +5,8 @@ const config: CapacitorConfig = {
   appName: '灵集',
   webDir: 'capacitor-preview',
   server: {
-    // Vercel 生产部署 URL
-    url: 'https://ai.zjsifan.com',
+    // 生产部署 URL (ECS)
+    url: 'https://zjsifan.com',
     cleartext: false,
   },
   plugins: {

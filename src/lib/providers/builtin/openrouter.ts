@@ -25,7 +25,7 @@ export const openrouterProfile: ProviderProfile = {
   baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
   defaultHeaders: {
     'Content-Type': 'application/json',
-    'HTTP-Referer': 'https://ai.zjsifan.com',
+    'HTTP-Referer': 'https://zjsifan.com',
     'X-Title': '灵集 LingJi',
   },
   defaultMaxTokens: 4096,
@@ -94,7 +94,7 @@ export async function callOpenRouter(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://ai.zjsifan.com',
+      'HTTP-Referer': 'https://zjsifan.com',
       'X-Title': '灵集 LingJi',
     },
     body: JSON.stringify({
