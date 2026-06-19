@@ -22,7 +22,7 @@ platform :ios do
     }.to_plist)
 
     # Archive with automatic signing (no match, no keychain management)
-    key_path = File.expand_path("fastlane/AuthKey_52H698RFZF.p8")
+    key_path = File.join(__dir__, "AuthKey_52H698RFZF.p8")
     sh("xcodebuild", "archive",
        "-project", "App/App.xcodeproj",
        "-scheme", "App",
