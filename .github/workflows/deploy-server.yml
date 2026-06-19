@@ -22,11 +22,8 @@ jobs:
 
       - name: Install & Build
         run: |
-          npm ci --no-audit --no-fund
-          npm ls tailwindcss 2>/dev/null || npm install tailwindcss
+          npm install --no-audit --no-fund
           npm run build
-        env:
-          NODE_ENV: production
         env:
           NODE_ENV: production
 
@@ -68,7 +65,6 @@ jobs:
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}
-            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
             ENVEOF
 
             if [ -d /opt/lingji ]; then
