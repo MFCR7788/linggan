@@ -22,6 +22,7 @@ platform :ios do
     }.to_plist)
 
     # Archive with automatic signing (no match, no keychain management)
+    key_path = File.expand_path("fastlane/AuthKey_52H698RFZF.p8")
     sh("xcodebuild", "archive",
        "-project", "App/App.xcodeproj",
        "-scheme", "App",
@@ -30,7 +31,7 @@ platform :ios do
        "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "52H698RFZF",
-       "-authenticationKeyPath", "fastlane/AuthKey_52H698RFZF.p8",
+       "-authenticationKeyPath", key_path,
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
@@ -43,7 +44,7 @@ platform :ios do
        "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "52H698RFZF",
-       "-authenticationKeyPath", "fastlane/AuthKey_52H698RFZF.p8"
+       "-authenticationKeyPath", key_path
     )
 
     # Upload IPA to TestFlight
