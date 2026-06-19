@@ -39,7 +39,7 @@ jobs:
           npm install --omit=dev --prefer-offline --no-audit --no-fund
 
       - name: Deploy to ECS
-        uses: appleboy/scp-action@v0.1.10
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
