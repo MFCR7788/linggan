@@ -1,11 +1,10 @@
-name: Deploy to Alibaba Cloud
+name: Deploy to Aliyun ECS
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# 防止并发部署相互覆盖 node_modules
 concurrency:
   group: deploy-server
   cancel-in-progress: false
@@ -14,272 +13,89 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Create deploy package
+        run: |
+          mkdir -p deploy-pkg
+          cp -r .next deploy-pkg/
+          cp -r public deploy-pkg/
+          cp package.json next.config.mjs deploy-pkg/
+          # install production-only deps for the package
+          cd deploy-pkg
+          npm install --omit=dev --prefer-offline --no-audit --no-fund
+
+      - name: Deploy to ECS
+        uses: appleboy/scp-action@v0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "deploy-pkg/*"
+          target: "/opt/lingji-new"
+          strip_components: 1
+          rm: true
+          timeout: 300s
+
+      - name: Restart service
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          timeout_minutes: 20
+          password: ${{ secrets.SERVER_PASSWORD }}
+          timeout_minutes: 2
           script: |
-            set -e  # git + env 阶段失败立即停止
-            cd /var/www/lingji
+            set -e
+            # activate swap
+            swapon /swapfile 2>/dev/null || true
 
-            # 辅助函数：写入 .env.local
-            write_env_line() {
-              local key="$1" val="$2"
-              if grep -q "^${key}=" .env.local 2>/dev/null; then
-                perl -i -pe "s~^${key}=.*~${key}=${val}~" .env.local
-              else
-                echo "${key}=${val}" >> .env.local
-              fi
-            }
+            # write env file
+            cat > /opt/lingji-new/.env.local << 'EOF'
+            DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
+            CRON_SECRET=${{ secrets.CRON_SECRET }}
+            ARK_API_KEY=${{ secrets.ARK_API_KEY }}
+            VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}
+            VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            HEYGEN_API_KEY=${{ secrets.HEYGEN_API_KEY }}
+            JINA_API_KEY=${{ secrets.JINA_API_KEY }}
+            PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}
+            PIXABAY_API_KEY=${{ secrets.PIXABAY_API_KEY }}
+            UNSPLASH_ACCESS_KEY=${{ secrets.UNSPLASH_ACCESS_KEY }}
+            WECHAT_MP_APP_SECRET=${{ secrets.WECHAT_MP_APP_SECRET }}
+            WEIBO_APP_SECRET=${{ secrets.WEIBO_APP_SECRET }}
+            EOF
 
-            # ===== 阶段 1: 同步代码 + env =====
-            echo "=== git sync ==="
-            git remote -v
-            git fetch origin main
-            git reset --hard origin/main
-            git log --oneline -5
-
-            write_env_line "VOLC_TTS_APP_ID" "${{ secrets.VOLC_TTS_APP_ID }}"
-            write_env_line "VOLC_TTS_ACCESS_TOKEN" "${{ secrets.VOLC_TTS_ACCESS_TOKEN }}"
-            write_env_line "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
-            write_env_line "ARK_API_KEY" "${{ secrets.ARK_API_KEY }}"
-
-            # ===== 阶段 2: 修正 systemd 服务目录（统一使用 /var/www/lingji）=====
-            echo "=== systemd service check ==="
-            SERVICE_FILE="/etc/systemd/system/lingji.service"
-            if [ -f "$SERVICE_FILE" ]; then
-              # 检查是否指向错误目录
-              if grep -q '/opt/lingji' "$SERVICE_FILE" 2>/dev/null; then
-                echo "Fixing systemd service: /opt/lingji → /var/www/lingji"
-                sed -i 's|/opt/lingji|/var/www/lingji|g' "$SERVICE_FILE"
-                systemctl daemon-reload
-                echo "systemd service updated + daemon-reload done"
-              else
-                echo "systemd service already points to /var/www/lingji"
-              fi
-            else
-              # 不存在则创建
-              echo "Creating systemd service file"
-              cat > "$SERVICE_FILE" << 'SERVICEEOF'
-            [Unit]
-            Description=Lingji Next.js App
-            After=network.target
-
-            [Service]
-            Type=simple
-            User=deploy
-            WorkingDirectory=/var/www/lingji
-            ExecStart=/usr/bin/npm start
-            Restart=always
-            RestartSec=3
-            Environment=NODE_ENV=production
-            Environment=PORT=3000
-
-            [Install]
-            WantedBy=multi-user.target
-            SERVICEEOF
-              systemctl daemon-reload
-              systemctl enable lingji
-              echo "systemd service created + enabled"
+            # swap old and new
+            if [ -d /opt/lingji ]; then
+              rm -rf /opt/lingji-old 2>/dev/null || true
+              mv /opt/lingji /opt/lingji-old
             fi
+            mv /opt/lingji-new /opt/lingji
 
-            # 显示当前 systemd 配置
-            grep -E 'WorkingDirectory|ExecStart' "$SERVICE_FILE"
+            # restart pm2
+            pm2 stop lingji 2>/dev/null || true
+            pm2 delete lingji 2>/dev/null || true
+            cd /opt/lingji
+            pm2 start node_modules/next/dist/bin/next --name lingji -- start -p 3000
+            pm2 save
 
-            # ===== 阶段 3: 系统环境准备 =====
-            # 先停应用释放内存
-            systemctl stop lingji || true
-
-            # 清理残留的 onnxruntime 包
-            rm -rf node_modules/onnxruntime-node node_modules/onnxruntime-common 2>/dev/null || true
-
-            # 确保 swap 存在并激活
-            if [ ! -f /swapfile ]; then
-              echo "=== creating 2G swap ==="
-              dd if=/dev/zero of=/swapfile bs=1M count=2048
-              chmod 600 /swapfile
-              mkswap /swapfile
-              swapon /swapfile
-            elif ! swapon --show 2>/dev/null | grep -q /swapfile; then
-              swapon /swapfile
-            fi
-            free -m
-
-            # 安装编译工具
-            if command -v apt-get &> /dev/null; then
-              apt-get update -qq && apt-get install -y -qq build-essential python3
-            elif command -v yum &> /dev/null; then
-              yum install -y gcc-c++ make python3
-            fi
-
-            # 安装 ffmpeg
-            echo "=== ffmpeg setup ==="
-            if command -v yum &> /dev/null; then
-              yum install -y epel-release 2>/dev/null || true
-              yum install -y ffmpeg 2>/dev/null || true
-              if [ ! -x /usr/bin/ffmpeg ]; then
-                yum install -y --nogpgcheck "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm" 2>/dev/null || true
-                yum install -y ffmpeg 2>/dev/null || true
-              fi
-            elif command -v apt-get &> /dev/null; then
-              apt-get update -qq && apt-get install -y -qq ffmpeg 2>/dev/null || true
-            fi
-            if [ -x /usr/bin/ffmpeg ]; then
-              rm -f /usr/local/bin/ffmpeg 2>/dev/null || true
-              hash -r 2>/dev/null || true
-              FF="/usr/bin/ffmpeg"
-              echo "=== using package manager ffmpeg: /usr/bin/ffmpeg ==="
-            elif command -v ffmpeg &> /dev/null; then
-              FF=$(command -v ffmpeg)
-              echo "=== using existing ffmpeg: ${FF} ==="
-            else
-              echo "=== downloading static ffmpeg from GitHub ==="
-              curl -sL --connect-timeout 10 --max-time 30 \
-                "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz" \
-                -o /tmp/ffmpeg.tar.xz 2>/dev/null || true
-              if [ -f /tmp/ffmpeg.tar.xz ] && [ -s /tmp/ffmpeg.tar.xz ]; then
-                tar -xf /tmp/ffmpeg.tar.xz -C /tmp/
-                cp /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /usr/local/bin/ffmpeg 2>/dev/null || true
-                rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg-master-latest-linux64-gpl
-              fi
-              chmod +x /usr/local/bin/ffmpeg 2>/dev/null || true
-              FF="/usr/local/bin/ffmpeg"
-              echo "=== using static ffmpeg (no libass, subtitle rendering disabled) ==="
-            fi
-            write_env_line "FFMPEG_PATH" "${FF}"
-            "${FF}" -version 2>&1 | head -1 || true
-
-            # ===== 阶段 4: 构建 =====
-            set +e
-            echo "=== npm install ==="
-            npm install --prefer-offline --no-audit --no-fund --ignore-scripts
-            INSTALL_EXIT=$?
-            if [ $INSTALL_EXIT -eq 0 ]; then
-              rm -rf .next.old 2>/dev/null || true
-              if [ -d .next ]; then
-                mv .next .next.old
-              fi
-              echo "=== npm run build ==="
-              npm run build
-              BUILD_EXIT=$?
-              if [ $BUILD_EXIT -eq 0 ]; then
-                rm -rf .next.old 2>/dev/null || true
-              else
-                rm -rf .next 2>/dev/null || true
-                if [ -d .next.old ]; then
-                  mv .next.old .next
-                fi
-              fi
-            else
-              BUILD_EXIT=$INSTALL_EXIT
-            fi
-
-            # ===== 阶段 5: 重启服务 =====
-            if [ $BUILD_EXIT -eq 0 ]; then
-              echo "=== build success, restarting lingji ==="
-              echo "=== diagnostics ==="
-              echo "Chunks count: $(ls .next/static/chunks/*.js 2>/dev/null | wc -l)"
-              echo "Webpack chunks:"
-              ls -la .next/static/chunks/webpack-*.js 2>/dev/null || echo "  NONE FOUND"
-              echo "App layout/page chunks:"
-              ls -la .next/static/chunks/app/layout-*.js .next/static/chunks/app/login/page-*.js 2>/dev/null || echo "  NONE FOUND"
-              echo "Build ID: $(cat .next/BUILD_ID 2>/dev/null || echo 'no BUILD_ID')"
-              df -h / | tail -1
-              # 修正文件权限
-              echo "=== fixing permissions ==="
-              chown -R deploy:deploy /var/www/lingji
-
-              # 重写 systemd 服务文件（Restart=no 防止自动重启循环）
-              echo "=== rewriting systemd service (Restart=no) ==="
-              printf '[Unit]\nDescription=Lingji Next.js App\nAfter=network.target\n\n[Service]\nType=simple\nUser=deploy\nWorkingDirectory=/var/www/lingji\nExecStart=/usr/bin/node node_modules/next/dist/bin/next start\nRestart=no\nEnvironment=NODE_ENV=production\nEnvironment=PORT=3000\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/lingji.service
-              systemctl daemon-reload
-              echo "  service file updated (Restart=no)"
-
-              # ===== 进程调查：找出是谁在自动重启 Next.js =====
-              echo "=== process investigation ==="
-              echo "--- all next/node processes ---"
-              ps aux | grep -E '[n]ext|[n]ode' || echo "  none"
-              echo "--- port 3000 holder ---"
-              PID_3000=$(fuser 3000/tcp 2>/dev/null | tr -d ' ')
-              if [ -n "$PID_3000" ]; then
-                echo "  PID: $PID_3000"
-                echo "  PPID chain:"
-                ps -o pid,ppid,user:32,args -p "$PID_3000" 2>/dev/null || echo "  ps failed"
-                # 追查父进程链
-                CPID="$PID_3000"
-                for depth in 1 2 3 4 5; do
-                  pparent=$(ps -o ppid= -p "$CPID" 2>/dev/null | tr -d ' ')
-                  if [ -z "$pparent" ] || [ "$pparent" = "1" ] || [ "$pparent" = "0" ]; then
-                    echo "  chain ends at PID=$CPID (parent=$pparent)"
-                    break
-                  fi
-                  echo "  level $depth: PID=$CPID → parent=$pparent"
-                  ps -o pid,ppid,user:32,args -p "$pparent" 2>/dev/null || echo "  parent ps failed"
-                  CPID="$pparent"
-                done
-                echo "--- /proc/$PID_3000/status ---"
-                if [ -f "/proc/$PID_3000/status" ]; then
-                  grep -E '^(Name|Pid|PPid|State|Uid)' "/proc/$PID_3000/status"
-                  # cgroup 可以看出是否在 Docker 里
-                  grep -E 'cgroup' "/proc/$PID_3000/cgroup" 2>/dev/null | head -5 || true
-                fi
-              else
-                echo "  port 3000 is free"
-              fi
-              echo "--- check for other supervisors ---"
-              systemctl is-active docker 2>/dev/null && echo "  docker: ACTIVE" || true
-              systemctl is-active supervisord 2>/dev/null && echo "  supervisord: ACTIVE" || true
-              systemctl is-active monit 2>/dev/null && echo "  monit: ACTIVE" || true
-              ps aux | grep -E '[s]upervisord|[m]onit|[p]m2' || echo "  no supervisor/monit/pm2 found"
-              echo "--- all systemd services on port 3000 ---"
-              systemctl list-units --type=service --state=running | grep -E 'next|node|lingji' || echo "  none"
-
-              # 停服务 + 清端口
-              echo "=== stopping PM2 ==="
-              # PM2 作为 deploy 用户运行，需 su 过去操作
-              su - deploy -c "pm2 stop lingji 2>/dev/null || true" 2>/dev/null || true
-              su - deploy -c "pm2 delete lingji 2>/dev/null || true" 2>/dev/null || true
-              # 最终手段：直接杀掉 PM2 守护进程
-              su - deploy -c "pm2 kill 2>/dev/null || true" 2>/dev/null || true
-              # 禁用 PM2 开机自启（改用 systemd）
-              su - deploy -c "pm2 unstartup 2>/dev/null || true" 2>/dev/null || true
-              echo "=== stopping systemd ==="
-              systemctl stop lingji 2>&1 || true
-              sleep 2
-              echo "=== killing port 3000 (SIGKILL) ==="
-              for i in 1 2 3 4 5; do
-                fuser -k -9 3000/tcp 2>/dev/null && echo "  killed (round $i)" || { echo "  none (round $i)"; break; }
-                sleep 1
-              done
-              echo "=== port check ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN && echo "  STILL OCCUPIED!" || echo "  port 3000 is free"
-
-              # 启动 systemd 服务（Restart=no，一次启动）
-              echo "=== starting lingji ==="
-              systemctl start lingji
-              sleep 5
-              systemctl is-active --quiet lingji && echo "=== lingji service ACTIVE ===" || echo "=== lingji service NOT active ==="
-              echo "=== port 3000 ==="
-              ss -tlnp 'sport = :3000' 2>/dev/null | grep LISTEN || echo "  nothing on port 3000"
-
-              # 恢复 Restart=always（用于后续自动恢复）
-              echo "=== restoring Restart=always ==="
-              sed -i 's/Restart=no/Restart=always/' /etc/systemd/system/lingji.service
-              systemctl daemon-reload
-              echo "  Restart=always restored"
-              nginx -s reload 2>/dev/null || true
-              echo "=== nginx reloaded ==="
-            else
-              echo "=== build failed (exit $BUILD_EXIT), keeping previous build ==="
-              systemctl start lingji
-            fi
-
-            # 安装 crontab
-            chmod +x scripts/cron-runner.sh
-            crontab scripts/ecs-crontab.txt
-            echo "=== crontab installed ==="
-            crontab -l
-          command_timeout: 20m
+            echo "=== deploy OK ==="
+            pm2 list
