@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       '  echo "Copied .env.local"',
       'fi',
       '',
-      '# Enable swap, incremental production dependency install'
+      '# Enable swap, incremental production dependency install',
       'swapon /swapfile 2>/dev/null || true',
       'cd /opt/deploy-pkg',
       'echo "Installing dependencies..."',
