@@ -32,53 +32,16 @@ jobs:
         run: |
           mkdir deploy-pkg
           cp -r .next public package.json package-lock.json next.config.mjs deploy-pkg/
-          cd deploy-pkg
-          npm ci --omit=dev --prefer-offline --no-audit --no-fund
-          cd ..
+          rm -rf deploy-pkg/.next/cache
           tar czf deploy.tar.gz deploy-pkg
 
-      - name: Transfer to ECS
+      - name: Upload & Deploy
         run: |
-          echo "${{ secrets.SERVER_SSH_KEY }}" > deploy_key
-          chmod 600 deploy_key
-          cat deploy.tar.gz | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cat > /opt/deploy.tar.gz"
-
-      - name: Restart on ECS
-        run: |
-          echo "${{ secrets.SERVER_SSH_KEY }}" > deploy_key
-          chmod 600 deploy_key
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} '
-            set -e
-            swapon /swapfile 2>/dev/null || true
-
-            cd /opt
-            rm -rf deploy-pkg lingji-new 2>/dev/null || true
-            tar xzf deploy.tar.gz
-            rm -f deploy.tar.gz
-
-            cat > deploy-pkg/.env.local << ENVEOF
-            DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
-            CRON_SECRET=${{ secrets.CRON_SECRET }}
-            ARK_API_KEY=${{ secrets.ARK_API_KEY }}
-            VOLC_TTS_APP_ID=${{ secrets.VOLC_TTS_APP_ID }}
-            VOLC_TTS_ACCESS_TOKEN=${{ secrets.VOLC_TTS_ACCESS_TOKEN }}
-            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-            DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}
-            ENVEOF
-
-            if [ -d /opt/lingji ]; then
-              rm -rf /opt/lingji-old 2>/dev/null || true
-              mv /opt/lingji /opt/lingji-old
-            fi
-            mv deploy-pkg /opt/lingji
-
-            pm2 stop lingji 2>/dev/null || true
-            pm2 delete lingji 2>/dev/null || true
-            cd /opt/lingji
-            pm2 start node_modules/next/dist/bin/next --name lingji -- start -p 3000
-            pm2 save
-            echo "=== deploy OK ==="
-            pm2 list
-          '
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_SECRET }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @deploy.tar.gz \
+            --connect-timeout 60 \
+            --max-time 600 \
+            -w "\nHTTP %{http_code}\n" \
+            https://zjsifan.com/api/deploy/upload
