@@ -12,43 +12,53 @@ const CHALLENGE_TTL_MIN = 5;
 const TOKEN_TTL_MIN = 5; // 通行证有效期 (送 send-code 前)
 
 export async function GET() {
-  const seed = Math.floor(Math.random() * 1_000_000);
-  const ch = generateChallenge(seed);
-  const token = crypto.randomBytes(24).toString('hex');
-  const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MIN * 60 * 1000);
+  try {
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const ch = generateChallenge(seed);
+    const token = crypto.randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MIN * 60 * 1000);
 
-  // 计算目标字符在 positions 数组中的下标 (用 expected 字符回查)
-  const expectedIndices: number[] = [];
-  for (const target of ch.expected) {
-    const idx = ch.positions.findIndex((p, i) => p.char === target && !expectedIndices.includes(i));
-    expectedIndices.push(idx);
+    // 计算目标字符在 positions 数组中的下标 (用 expected 字符回查)
+    const expectedIndices: number[] = [];
+    for (const target of ch.expected) {
+      const idx = ch.positions.findIndex((p, i) => p.char === target && !expectedIndices.includes(i));
+      expectedIndices.push(idx);
+    }
+
+    const supabase = createAdminClient();
+    const { error } = await supabase.from('click_captchas').insert({
+      token,
+      positions: ch.positions,
+      expected_indices: expectedIndices,
+      width: ch.width,
+      height: ch.height,
+      hit_radius: ch.hitRadius,
+      used: false,
+      expires_at: expiresAt.toISOString(),
+    });
+
+    if (error) {
+      console.error('[ClickCaptcha] 存储失败:', error);
+      return NextResponse.json({ error: '生成验证码失败', detail: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      token,
+      width: ch.width,
+      height: ch.height,
+      bgImage: ch.bgImage,
+      expected: ch.expected, // 客户端要显示 "请依次点击: X Y Z"
+      expiresAt: expiresAt.toISOString(),
+    });
+  } catch (err) {
+    // createAdminClient() 在 NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 缺失时会抛错。
+    // 不捕获则 Next.js 返回空 body 500，前端 res.json() 报 "Unexpected end of JSON input"。
+    console.error('[ClickCaptcha] GET 错误:', err);
+    return NextResponse.json(
+      { error: '生成验证码失败', detail: String(err) },
+      { status: 500 }
+    );
   }
-
-  const supabase = createAdminClient();
-  const { error } = await supabase.from('click_captchas').insert({
-    token,
-    positions: ch.positions,
-    expected_indices: expectedIndices,
-    width: ch.width,
-    height: ch.height,
-    hit_radius: ch.hitRadius,
-    used: false,
-    expires_at: expiresAt.toISOString(),
-  });
-
-  if (error) {
-    console.error('[ClickCaptcha] 存储失败:', error);
-    return NextResponse.json({ error: '生成验证码失败' }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    token,
-    width: ch.width,
-    height: ch.height,
-    bgImage: ch.bgImage,
-    expected: ch.expected, // 客户端要显示 "请依次点击: X Y Z"
-    expiresAt: expiresAt.toISOString(),
-  });
 }
 
 interface ClickPoint { x: number; y: number; }

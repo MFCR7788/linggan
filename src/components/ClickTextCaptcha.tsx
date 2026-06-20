@@ -29,6 +29,18 @@ interface ClickRecord { x: number; y: number; idx: number; }
 
 type Status = "loading" | "ready" | "verifying" | "success" | "error";
 
+// 安全解析：服务端异常时可能返回空 body 或非 JSON，直接 res.json() 会抛
+// "Unexpected end of JSON input"。这里兜底返回 {}，由调用方按 res.ok/status 处理。
+async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
 export function ClickTextCaptcha({ open, onClose, onSuccess }: ClickTextCaptchaProps) {
   const [data, setData] = useState<ChallengeData | null>(null);
   const [status, setStatus] = useState<Status>("loading");
@@ -43,9 +55,9 @@ export function ClickTextCaptcha({ open, onClose, onSuccess }: ClickTextCaptchaP
     setClicks([]);
     try {
       const res = await fetch("/api/captcha/click", { method: "GET" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "加载失败");
-      setData(json);
+      const json = await parseJsonSafe(res);
+      if (!res.ok) throw new Error((json.error as string) || `加载失败 (HTTP ${res.status})`);
+      setData(json as unknown as ChallengeData);
       setStatus("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
@@ -92,17 +104,17 @@ export function ClickTextCaptcha({ open, onClose, onSuccess }: ClickTextCaptchaP
             clicks: next.map(c => ({ x: c.x, y: c.y })),
           }),
         });
-        const json = await res.json();
+        const json = await parseJsonSafe(res);
         if (!res.ok) {
           setStatus("error");
           setShake(s => s + 1);
-          setError(json.error || "验证失败");
+          setError((json.error as string) || `验证失败 (HTTP ${res.status})`);
           setTimeout(() => loadChallenge(), 700);
           return;
         }
         setStatus("success");
         setTimeout(() => {
-          onSuccess(json.captchaToken);
+          onSuccess(json.captchaToken as string);
           onClose();
         }, 350);
       } catch (err) {
