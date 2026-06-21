@@ -71,6 +71,7 @@ platform :ios do
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "52H698RFZF",
        "-authenticationKeyPath", key_path,
+       "DEVELOPMENT_TEAM=698S6LL5G6",
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
