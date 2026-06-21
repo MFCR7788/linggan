@@ -16,6 +16,7 @@ platform :ios do
     app_dir = File.join(ios_dir, "App")
     xcodeproj_path = File.join(app_dir, "App.xcodeproj")
     package_swift = File.join(app_dir, "CapApp-SPM", "Package.swift")
+    build_dir = File.join(ios_dir, "build")
 
     # 诊断
     UI.message("ios_dir: #{ios_dir}")
@@ -49,10 +50,11 @@ platform :ios do
       end
     end
 
-    # Create export options for automatic signing
-    require 'plist'
-    build_dir = File.join(ios_dir, "build")
     FileUtils.mkdir_p(build_dir)
+    key_path = File.expand_path("AuthKey_52H698RFZF.p8", __dir__)
+
+    # 创建 exportOptions.plist
+    require 'plist'
     File.write(File.join(build_dir, "exportOptions.plist"), {
       method: "app-store",
       signingStyle: "automatic",
@@ -60,8 +62,8 @@ platform :ios do
       teamID: "698S6LL5G6"
     }.to_plist)
 
-    # Archive with automatic signing (no match, no keychain management)
-    key_path = File.expand_path("AuthKey_52H698RFZF.p8", __dir__)
+    # Archive — -allowProvisioningUpdates 仅在此步骤有效
+    # 通过 App Store Connect API Key 认证，让 Xcode 自动管理签名
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
        "-scheme", "App",
@@ -76,12 +78,11 @@ platform :ios do
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
-    # Export archive to IPA
+    # Export archive to IPA — 不传 -allowProvisioningUpdates
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
        "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
-       "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "52H698RFZF",
        "-authenticationKeyPath", key_path
