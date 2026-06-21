@@ -71,6 +71,13 @@ jobs:
       - name: Write App Store Connect API Key
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
 
+      - name: Diagnostic - check ios directory structure
+        run: |
+          echo "=== pwd ===" && pwd
+          echo "=== ios/ ===" && ls -la ios/
+          echo "=== ios/App/ ===" && ls -la ios/App/ || echo "ios/App/ does not exist!"
+          echo "=== ios/App/App.xcodeproj ===" && ls -la ios/App/App.xcodeproj || echo "xcodeproj does not exist!"
+
       - name: Build and upload to TestFlight
         working-directory: ios
         run: |

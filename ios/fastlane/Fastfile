@@ -11,30 +11,49 @@ platform :ios do
 
     build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
 
-    # 诊断：列出 App/ 目录确认文件结构
-    UI.message("App/ 目录内容:")
-    Dir.children("App").each { |f| UI.message("  #{f}") }
+    # 使用绝对路径，避免 fastlane CWD 切换导致找不到文件
+    ios_dir = File.expand_path("..", __dir__)  # __dir__ = ios/fastlane/
+    app_dir = File.join(ios_dir, "App")
+    xcodeproj_path = File.join(app_dir, "App.xcodeproj")
+    package_swift = File.join(app_dir, "CapApp-SPM", "Package.swift")
 
-    # Capacitor 8 sync 可能覆盖本地工程文件 — 确保 xcodeproj 存在
-    unless File.directory?("App/App.xcodeproj")
+    # 诊断
+    UI.message("ios_dir: #{ios_dir}")
+    UI.message("app_dir: #{app_dir}")
+    if File.directory?(app_dir)
+      UI.message("App/ 目录内容:")
+      Dir.children(app_dir).each { |f| UI.message("  #{f}") }
+    else
+      UI.error("App/ 目录不存在！")
+      UI.message("ios_dir 内容:")
+      Dir.children(ios_dir).each { |f| UI.message("  #{f}") } if File.directory?(ios_dir)
+    end
+
+    # 确保 xcodeproj 存在
+    unless File.directory?(xcodeproj_path)
       UI.error("App.xcodeproj 不存在！重新运行 cap sync ios ...")
-      Dir.chdir("..") do
+      Dir.chdir(File.expand_path("../..", __dir__)) do
         sh("npx", "cap", "sync", "ios")
       end
-      # 再次适配 Xcode 16
-      if File.exist?("App/CapApp-SPM/Package.swift")
-        sh("sed", "-i", "", "s/\\.iOS(\\.v1[789])/.iOS(.v16)/g", "App/CapApp-SPM/Package.swift")
+      unless File.directory?(xcodeproj_path)
+        UI.user_error!("App/App.xcodeproj 仍然不存在，构建中止")
       end
     end
 
-    unless File.directory?("App/App.xcodeproj")
-      UI.user_error!("App.xcodeproj 仍然不存在，构建中止")
+    # 适配 Xcode 16 (最低部署目标 16.0)
+    if File.exist?(package_swift)
+      content = File.read(package_swift)
+      if content.match?(/\.iOS\(\.v1[789]\)/)
+        UI.message("修正 Package.swift iOS 版本...")
+        sh("sed", "-i", "", "s/\\.iOS(\\.v1[789])/.iOS(.v16)/g", package_swift)
+      end
     end
 
     # Create export options for automatic signing
     require 'plist'
-    FileUtils.mkdir_p("build")
-    File.write("build/exportOptions.plist", {
+    build_dir = File.join(ios_dir, "build")
+    FileUtils.mkdir_p(build_dir)
+    File.write(File.join(build_dir, "exportOptions.plist"), {
       method: "app-store",
       signingStyle: "automatic",
       destination: "upload",
@@ -44,9 +63,9 @@ platform :ios do
     # Archive with automatic signing (no match, no keychain management)
     key_path = File.expand_path("AuthKey_52H698RFZF.p8", __dir__)
     sh("xcodebuild", "archive",
-       "-project", "App/App.xcodeproj",
+       "-project", xcodeproj_path,
        "-scheme", "App",
-       "-archivePath", "build/App.xcarchive",
+       "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-destination", "generic/platform=iOS",
        "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
@@ -58,9 +77,9 @@ platform :ios do
 
     # Export archive to IPA
     sh("xcodebuild", "-exportArchive",
-       "-archivePath", "build/App.xcarchive",
-       "-exportPath", "build",
-       "-exportOptionsPlist", "build/exportOptions.plist",
+       "-archivePath", File.join(build_dir, "App.xcarchive"),
+       "-exportPath", build_dir,
+       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
        "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "52H698RFZF",
@@ -69,7 +88,7 @@ platform :ios do
 
     # Upload IPA to TestFlight
     upload_to_testflight(
-      ipa: "build/App.ipa",
+      ipa: File.join(build_dir, "App.ipa"),
       skip_waiting_for_build_processing: true,
       api_key: api_key
     )
