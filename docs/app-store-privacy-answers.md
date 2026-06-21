@@ -81,4 +81,4 @@
 - ElevenLabs（语音合成备用）
 - jina.ai（链接正文抓取）
 
-这些服务已在隐私政策 `https://ai.zjsifan.com/privacy` 中披露。
+这些服务已在隐私政策 `https://zjsifan.com/privacy` 中披露。

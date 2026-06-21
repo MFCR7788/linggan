@@ -2,7 +2,7 @@
 
 > **适用版本**: V3.0 Agent 统一入口
 > **更新日期**: 2026-06-13
-> **测试环境**: `https://ai.zjsifan.com` (生产) / `http://localhost:3000` (本地)
+> **测试环境**: `https://zjsifan.com` (生产) / `http://localhost:3000` (本地)
 > **本地启动**: `pnpm dev`
 
 ---
@@ -1181,7 +1181,7 @@ Capture 页面支持 Slash 指令快速切换模式：
 |--------|------|----------|
 | iOS 安装 | 从 TestFlight 安装 | 应用打开，加载 H5 |
 | Android 安装 | 从 Play Store 安装 | 应用打开，加载 H5 |
-| WebView 加载 | 打开 App | 加载 `https://ai.zjsifan.com` |
+| WebView 加载 | 打开 App | 加载 `https://zjsifan.com` |
 | Safe Area | 查看底部 Tab | 适配刘海屏底部安全区 |
 | 本地存储 | 登录后关闭再打开 App | 登录状态保持 |
 | 相机/相册 | 上传图片时选择拍照 | 调用原生相机 |
@@ -1195,27 +1195,27 @@ Capture 页面支持 Slash 指令快速切换模式：
 
 ```bash
 # 健康检查
-curl https://ai.zjsifan.com/api/health
+curl https://zjsifan.com/api/health
 # 预期: { "success": true, "data": { "status": "ok" } }
 
 # 用户信息 (需认证)
-curl https://ai.zjsifan.com/api/user/profile
+curl https://zjsifan.com/api/user/profile
 # 预期: { "success": true, "data": { "id": "...", "username": "..." } }
 
 # 点数余额 (需认证)
-curl https://ai.zjsifan.com/api/credits
+curl https://zjsifan.com/api/credits
 # 预期: { "success": true, "data": { "balance": ..., "tier": "..." } }
 
 # 灵感列表 (需认证)
-curl https://ai.zjsifan.com/api/inspiration?limit=5
+curl https://zjsifan.com/api/inspiration?limit=5
 # 预期: { "success": true, "data": [...] }
 
 # 热点列表 (需认证)
-curl https://ai.zjsifan.com/api/hotspot?limit=5
+curl https://zjsifan.com/api/hotspot?limit=5
 # 预期: { "success": true, "data": [...] }
 
 # 通知列表 (需认证)
-curl https://ai.zjsifan.com/api/notification
+curl https://zjsifan.com/api/notification
 # 预期: { "success": true, "data": [...] }
 ```
 
@@ -1223,42 +1223,42 @@ curl https://ai.zjsifan.com/api/notification
 
 ```bash
 # AI 对话
-curl -X POST https://ai.zjsifan.com/api/ai/chat \
+curl -X POST https://zjsifan.com/api/ai/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"你好"}]}'
 
 # AI Agent 对话 (SSE)
-curl -X POST https://ai.zjsifan.com/api/ai/agent/chat \
+curl -X POST https://zjsifan.com/api/ai/agent/chat \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"搜索最新热点"}]}'
 
 # AI 文案
-curl -X POST https://ai.zjsifan.com/api/ai/copywriting \
+curl -X POST https://zjsifan.com/api/ai/copywriting \
   -H "Content-Type: application/json" \
   -d '{"topic":"AI发展趋势","type":"公众号","style":"专业"}'
 
 # AI 图片
-curl -X POST https://ai.zjsifan.com/api/ai/image \
+curl -X POST https://zjsifan.com/api/ai/image \
   -H "Content-Type: application/json" \
   -d '{"prompt":"一只可爱的橘猫在窗台上，温馨治愈风","style":"写实摄影","ratio":"1:1"}'
 
 # AI TTS
-curl -X POST https://ai.zjsifan.com/api/ai/tts \
+curl -X POST https://zjsifan.com/api/ai/tts \
   -H "Content-Type: application/json" \
   -d '{"text":"欢迎使用灵集AI创作平台","voice":"gentle_female"}'
 
 # AI 视频
-curl -X POST https://ai.zjsifan.com/api/ai/video \
+curl -X POST https://zjsifan.com/api/ai/video \
   -H "Content-Type: application/json" \
   -d '{"text":"3个效率翻倍的AI工具...","style":"douyin_hot","language":"zh"}'
 
 # AI 数字人
-curl -X POST https://ai.zjsifan.com/api/ai/digital-human \
+curl -X POST https://zjsifan.com/api/ai/digital-human \
   -H "Content-Type: application/json" \
   -d '{"text":"大家好，今天介绍一款新产品","mode":"s2v","voice":"gentle_female"}'
 
 # 搜索
-curl -X POST https://ai.zjsifan.com/api/ai/search \
+curl -X POST https://zjsifan.com/api/ai/search \
   -H "Content-Type: application/json" \
   -d '{"query":"最新AI新闻"}'
 ```
@@ -1310,7 +1310,7 @@ curl -X POST https://ai.zjsifan.com/api/ai/search \
 
 ### Vercel 部署后验证
 
-- [ ] `https://ai.zjsifan.com` 可访问
+- [ ] `https://zjsifan.com` 可访问
 - [ ] `/api/health` 返回 200
 - [ ] 登录流程完整
 - [ ] SSE 流式响应正常 (Agent Chat)

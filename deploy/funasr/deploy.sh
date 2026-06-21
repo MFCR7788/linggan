@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # FunASR 本地部署脚本 — 灵集 ASR 服务
-# 在阿里云服务器上执行 (ai.zjsifan.com)
+# 在阿里云服务器上执行 (zjsifan.com)
 # ============================================================
 set -e
 
@@ -23,14 +23,14 @@ cd "${DEPLOY_DIR}"
 
 # 3. 复制部署文件（从项目目录）
 # 注意：如果你在本地开发机，需要先把文件 rsync 到服务器
-# rsync -avz ./deploy/funasr/ root@ai.zjsifan.com:/opt/funasr/
+# rsync -avz ./deploy/funasr/ root@zjsifan.com:/opt/funasr/
 echo ""
 echo "📁 检查部署文件..."
 for f in Dockerfile docker-compose.yml server.py requirements.txt; do
     if [ ! -f "$f" ]; then
         echo "❌ 缺少文件: $f"
         echo "   请先从项目目录 rsync 文件:"
-        echo "   rsync -avz ./deploy/funasr/ root@ai.zjsifan.com:/opt/funasr/"
+        echo "   rsync -avz ./deploy/funasr/ root@zjsifan.com:/opt/funasr/"
         exit 1
     fi
 done

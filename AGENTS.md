@@ -28,7 +28,7 @@ vitest 配置了 `globals: true`，测试文件中 `describe`/`it`/`expect`/`vi`
 - **前端**: Next.js 14 (App Router) + React 18 + TypeScript + TailwindCSS 3.4
 - **后端**: Next.js API Routes + Supabase (Postgres, Auth, Storage)
 - **AI 服务**: 阿里云 DashScope (DeepSeek, Qwen, Wan, CosyVoice) + 火山引擎豆包 + OpenRouter + HeyGen + ElevenLabs + jina.ai Reader
-- **移动端**: Capacitor 8，WebView 加载生产 URL (`https://ai.zjsifan.com`)
+- **移动端**: Capacitor 8，WebView 加载生产 URL (`https://zjsifan.com`)
 - **部署**: 阿里云 ECS (前端 + API + FunASR/Kokoro) + pm2
 - **测试**: Vitest + jsdom + @testing-library/react，Playwright 用于 E2E
 - **CI/CD**: GitHub Actions (移动端发布到 TestFlight/Play Store, 服务端部署到阿里云)

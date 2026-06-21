@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # Kokoro TTS 本地部署脚本 — 灵集 TTS 服务
-# 在阿里云服务器上执行 (ai.zjsifan.com)
+# 在阿里云服务器上执行 (zjsifan.com)
 # ============================================================
 set -e
 
@@ -26,7 +26,7 @@ for f in docker-compose.yml; do
     if [ ! -f "$f" ]; then
         echo "❌ 缺少文件: $f"
         echo "   请先从项目目录 rsync 文件:"
-        echo "   rsync -avz ./deploy/kokoro/ root@ai.zjsifan.com:/opt/kokoro/"
+        echo "   rsync -avz ./deploy/kokoro/ root@zjsifan.com:/opt/kokoro/"
         exit 1
     fi
 done
