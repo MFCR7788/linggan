@@ -32,7 +32,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
 
       - name: Build Next.js (verify only)
         run: npm run build
@@ -91,7 +91,7 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
 
       - name: Build Next.js (verify only)
         run: npm run build
