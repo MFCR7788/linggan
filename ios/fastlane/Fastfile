@@ -11,6 +11,26 @@ platform :ios do
 
     build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
 
+    # 诊断：列出 App/ 目录确认文件结构
+    UI.message("App/ 目录内容:")
+    Dir.children("App").each { |f| UI.message("  #{f}") }
+
+    # Capacitor 8 sync 可能覆盖本地工程文件 — 确保 xcodeproj 存在
+    unless File.directory?("App/App.xcodeproj")
+      UI.error("App.xcodeproj 不存在！重新运行 cap sync ios ...")
+      Dir.chdir("..") do
+        sh("npx", "cap", "sync", "ios")
+      end
+      # 再次适配 Xcode 16
+      if File.exist?("App/CapApp-SPM/Package.swift")
+        sh("sed", "-i", "", "s/\\.iOS(\\.v1[789])/.iOS(.v16)/g", "App/CapApp-SPM/Package.swift")
+      end
+    end
+
+    unless File.directory?("App/App.xcodeproj")
+      UI.user_error!("App.xcodeproj 仍然不存在，构建中止")
+    end
+
     # Create export options for automatic signing
     require 'plist'
     FileUtils.mkdir_p("build")
