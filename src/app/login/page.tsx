@@ -175,12 +175,17 @@ function LoginContent() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative">
       {/* Logo */}
       <div className="flex flex-col items-center mb-8">
-        <img
-          src="/brand/logo-mark.png"
-          alt="灵集"
-          className="w-20 h-20 mb-3"
-          style={{ filter: "drop-shadow(0 0 30px rgba(139,92,246,0.4))" }}
-        />
+        <div className="w-20 h-20 mb-3 flex items-center justify-center">
+          <img
+            src="/brand/logo-mark.png"
+            alt="灵集"
+            className="w-full h-full object-contain"
+            style={{
+              transform: "scale(1.5)",
+              filter: "drop-shadow(0 0 30px rgba(139,92,246,0.4))",
+            }}
+          />
+        </div>
         <h1
           style={{
             color: "#FFFFFF",
