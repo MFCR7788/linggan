@@ -97,7 +97,8 @@ export function AgentChatView() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [showTools, setShowTools] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
-  const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
+  const [inputMode, setInputMode] = useState<'voice' | 'text'>('text');
+  const [isTranscribing, setIsTranscribing] = useState(false); // 语音识别中状态
 
   // 检测麦克风录音是否可用（MediaRecorder + getUserMedia）
   useEffect(() => {
@@ -273,11 +274,15 @@ export function AgentChatView() {
 
   const currentSessionRef = useRef(currentSessionId);
 
+  // 消息变化后滚动到底部
   useEffect(() => {
-    requestAnimationFrame(() => {
-      const el = scrollContainerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
+    // 多次尝试确保滚动生效（DOM 更新可能延迟）
+    const scroll = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant', block: 'end' });
+    };
+    scroll();
+    setTimeout(scroll, 100);
+    setTimeout(scroll, 300);
   }, [messages]);
 
   // 同步 ref 以便 doStream 闭包中读到最新值
@@ -292,12 +297,13 @@ export function AgentChatView() {
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [input]);
 
-  // 加载会话列表
+  // 加载会话列表 → 有历史则进入最后会话底部，无历史则新建
   useEffect(() => {
     if (sessionLoadedRef.current) return;
     sessionLoadedRef.current = true;
     loadSessions().then(list => {
       if (list.length > 0) {
+        // 进入最近一次会话（列表已按更新时间降序排列）
         switchSession(list[0].id);
         loadMessages(list[0].id).then(msgs => {
           const uiMsgs: UIMessage[] = msgs.map((m: any) => {
@@ -317,6 +323,9 @@ export function AgentChatView() {
           });
           setMessages(uiMsgs);
         });
+      } else {
+        // 无历史会话 → 自动创建新会话，展示欢迎页
+        createSession();
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -723,23 +732,36 @@ export function AgentChatView() {
   const handlePressEnd = async () => {
     setPressingMic(false);
     setCancelGesture(false);
-
-    if (!pressHandledRef.current) return;
+    pressHandledRef.current = false;
 
     if (cancelGestureRef.current) {
       cancelRecording();
       cancelGestureRef.current = false;
       return;
     }
+    // 停止录音 → 识别 → 填入输入框（不自动发送，让用户确认）
     try {
+      setIsTranscribing(true);
       const transcript = await stopRecording();
+      setIsTranscribing(false);
       if (transcript) {
         setInput(transcript);
-        handleSendWithText(transcript);
+        setInputMode('text'); // 切换到文字模式展示识别结果
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     } catch {
+      setIsTranscribing(false);
       cancelRecording();
     }
+  };
+
+  // 录音中途点击停止按钮
+  const handleStopRecording = () => {
+    cancelRecording();
+    setPressingMic(false);
+    setCancelGesture(false);
+    cancelGestureRef.current = false;
+    pressHandledRef.current = false;
   };
 
   // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
@@ -1491,11 +1513,11 @@ export function AgentChatView() {
         className="flex-1 overflow-y-auto py-4 space-y-1"
         style={{
           paddingTop: 52,
-          paddingBottom: 128,
+          paddingBottom: 160,
         }}
       >
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
-          <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+          <div className="flex flex-col items-center justify-center min-h-full px-6 text-center pb-8">
             {/* Logo */}
             <img
               src="/brand/logo-mark.png"
@@ -1845,7 +1867,7 @@ export function AgentChatView() {
         {isRecording ? (
           /* ───── 录音浮层 ───── */
           <div
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-auto"
             style={{ background: "rgba(0,0,0,0.85)" }}
           >
             {/* 顶部取消区域 */}
@@ -1892,13 +1914,36 @@ export function AgentChatView() {
               </div>
             </div>
 
-            {/* 底部提示 */}
-            <div className="mt-12">
+            {/* 底部提示 + 停止按钮 */}
+            <div className="mt-12 flex flex-col items-center gap-4">
               <p className={`text-base font-medium transition-colors ${
                 cancelGesture ? 'text-red-400' : 'text-white/70'
               }`}>
                 {cancelGesture ? '松手取消录音' : '松开 发送'}
               </p>
+              {/* 停止按钮 — 点击立即取消录音 */}
+              <button
+                onClick={handleStopRecording}
+                className="pointer-events-auto w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-colors active:scale-90"
+                title="停止录音"
+              >
+                <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ) : isTranscribing ? (
+          /* ───── 识别中浮层 ───── */
+          <div
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-auto"
+            style={{ background: "rgba(0,0,0,0.85)" }}
+          >
+            <div className="flex flex-col items-center gap-6">
+              <div className="w-20 h-20 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+              <p className="text-white/70 text-base font-medium">正在识别语音...</p>
             </div>
           </div>
         ) : (
@@ -2046,17 +2091,18 @@ export function AgentChatView() {
                 </button>
               ) : inputMode === 'voice' ? (
                 <button
-                  onMouseDown={handlePressStart}
-                  onMouseUp={handlePressEnd}
-                  onMouseMove={handleRecordingMove}
-                  onTouchStart={handlePressStart}
-                  onTouchEnd={handlePressEnd}
-                  onTouchCancel={handlePressEnd}
-                  onTouchMove={handleRecordingMove}
+                  onMouseDown={isTranscribing ? undefined : handlePressStart}
+                  onMouseUp={isTranscribing ? undefined : handlePressEnd}
+                  onMouseMove={isTranscribing ? undefined : handleRecordingMove}
+                  onTouchStart={isTranscribing ? undefined : handlePressStart}
+                  onTouchEnd={isTranscribing ? undefined : handlePressEnd}
+                  onTouchCancel={isTranscribing ? undefined : handlePressEnd}
+                  onTouchMove={isTranscribing ? undefined : handleRecordingMove}
                   onContextMenu={(e) => e.preventDefault()}
+                  disabled={isTranscribing}
                   className={`flex-1 h-11 rounded-full flex items-center justify-center select-none transition-all duration-200 active:scale-[0.97] ${
                     pressingMic ? 'scale-[1.02] shadow-lg shadow-red-500/30' : ''
-                  }`}
+                  } ${isTranscribing ? 'opacity-60 cursor-not-allowed' : ''}`}
                   style={{
                     background: pressingMic
                       ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
@@ -2066,7 +2112,7 @@ export function AgentChatView() {
                   }}
                 >
                   <span className="text-white text-sm font-medium tracking-wide">
-                    {pressingMic ? '松开 发送' : '按住说话'}
+                    {isTranscribing ? '识别中...' : pressingMic ? '松开 发送' : '按住说话'}
                   </span>
                 </button>
               ) : (
