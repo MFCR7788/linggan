@@ -77,6 +77,9 @@ jobs:
           security delete-keychain "$CI_KEYCHAIN" 2>/dev/null || true
           security create-keychain -p ci-build "$CI_KEYCHAIN"
           security set-keychain-settings -lut 7200 "$CI_KEYCHAIN"
+
+          # 先设置搜索列表为 CI keychain，再导入（确保导入到正确的 keychain）
+          security list-keychains -d user -s "$CI_KEYCHAIN"
           security unlock-keychain -p ci-build "$CI_KEYCHAIN"
 
           echo "${{ secrets.DISTRIBUTION_CERT_P12 }}" | base64 -d > /tmp/distribution.p12
@@ -89,8 +92,12 @@ jobs:
             -T /usr/bin/xcodebuild
           rm -f /tmp/distribution.p12
 
-          # 设置 keychain 搜索列表为 CI keychain
-          security list-keychains -d user -s "$CI_KEYCHAIN"
+          # 设置 key partition list — 允许 codesign 等 Apple 工具从 CI (launchd) 环境访问私钥
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-build "$CI_KEYCHAIN"
+
+          echo "=== Keychain search list ==="
+          security list-keychains -d user
+          echo "=== Identities ==="
           security find-identity -v -p codesigning
 
       - name: Diagnostic - check ios directory structure
