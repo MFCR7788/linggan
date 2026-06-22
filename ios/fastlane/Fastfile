@@ -53,7 +53,6 @@ platform :ios do
     end
 
     FileUtils.mkdir_p(build_dir)
-    key_path = File.expand_path("AuthKey_XX5239JSR5.p8", __dir__)
 
     # 创建临时 keychain 用于存放分发证书
     keychain_name = "fastlane_tmp_keychain"
@@ -78,61 +77,43 @@ platform :ios do
        "-A")
     File.delete(p12_path)
 
-    # Archive — -allowProvisioningUpdates 创建 provisioning profile
+    # 使用 sigh 通过 App Store Connect API 下载分发 provisioning profile
+    UI.message("下载分发 provisioning profile...")
+    begin
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: "com.mfcr7788.lingji",
+        readonly: true,
+        skip_certificate_verification: true
+      )
+    rescue => e
+      UI.message("只读获取失败: #{e.message}，尝试创建/修复 profile...")
+      get_provisioning_profile(
+        api_key: api_key,
+        app_identifier: "com.mfcr7788.lingji",
+        skip_certificate_verification: true
+      )
+    end
+
+    profile_uuid = lane_context[SharedValues::SIGH_UUID]
+    UI.user_error!("未能获取 provisioning profile UUID") if profile_uuid.nil? || profile_uuid.empty?
+    UI.message("Provisioning profile UUID: #{profile_uuid}")
+
+    # Archive — 手动签名，使用 .p12 分发证书 + sigh 下载的 profile
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
        "-scheme", "App",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-destination", "generic/platform=iOS",
-       "-allowProvisioningUpdates",
-       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
-       "-authenticationKeyID", "XX5239JSR5",
-       "-authenticationKeyPath", key_path,
+       "CODE_SIGN_STYLE=Manual",
+       "CODE_SIGN_IDENTITY=Apple Distribution",
+       "PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid}",
        "DEVELOPMENT_TEAM=698S6LL5G6",
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
-    # 找到 archive 步骤创建的 provisioning profile
-    provisioning_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
-    profile_uuid = nil
-
-    # 先检查 provisioning profiles 目录
-    if Dir.exist?(provisioning_dir)
-      UI.message("Provisioning Profiles 目录内容:")
-      Dir.glob(File.join(provisioning_dir, "*.mobileprovision")).each do |f|
-        content = %x(/usr/bin/security cms -D -i "#{f}" 2>/dev/null)
-        if content.include?("com.mfcr7788.lingji")
-          uuid = %x(/usr/bin/security cms -D -i "#{f}" 2>/dev/null | /usr/bin/plutil -extract UUID raw - 2>/dev/null).strip
-          UI.message("找到 profile: #{uuid}")
-          profile_uuid = uuid
-          break
-        end
-      end
-    else
-      UI.message("Provisioning Profiles 目录不存在")
-    end
-
-    # 如果目录里没有，尝试从 xcarchive 中提取
-    if profile_uuid.nil?
-      UI.message("从 xcarchive 提取 provisioning profile...")
-      embedded_profile = File.join(build_dir, "App.xcarchive", "Products", "Applications", "App.app", "embedded.mobileprovision")
-      if File.exist?(embedded_profile)
-        uuid = %x(/usr/bin/security cms -D -i "#{embedded_profile}" 2>/dev/null | /usr/bin/plutil -extract UUID raw - 2>/dev/null).strip
-        UI.message("从 xcarchive 提取到 UUID: #{uuid}")
-        # 复制到 provisioning profiles 目录
-        sh("mkdir", "-p", provisioning_dir)
-        dest = File.join(provisioning_dir, "#{uuid}.mobileprovision")
-        sh("cp", embedded_profile, dest)
-        UI.message("已复制 profile 到 #{dest}")
-        profile_uuid = uuid
-
-      end
-    end
-
-    UI.user_error!("未找到 com.mfcr7788.lingji 的 provisioning profile") if profile_uuid.nil? || profile_uuid.empty?
-
-    # 创建 exportOptions.plist — 手动签名，指定证书和 profile
+    # 创建 exportOptions.plist — 手动签名
     require 'plist'
     File.write(File.join(build_dir, "exportOptions.plist"), {
       method: "app-store-connect",
@@ -143,7 +124,7 @@ platform :ios do
       provisioningProfiles: { "com.mfcr7788.lingji": profile_uuid }
     }.to_plist)
 
-    # Export archive to IPA — 手动签名，不需要网络认证
+    # Export archive to IPA
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
