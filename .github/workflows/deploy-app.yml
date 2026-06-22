@@ -72,31 +72,25 @@ jobs:
 
       - name: Import Distribution Certificate
         run: |
-          # 创建 CI 专用 keychain（避免 launchd 环境下 login keychain 访问受限）
-          CI_KEYCHAIN="$HOME/Library/Keychains/ci-build.keychain-db"
-          security delete-keychain "$CI_KEYCHAIN" 2>/dev/null || true
-          security create-keychain -p ci-build "$CI_KEYCHAIN"
-          security set-keychain-settings -lut 7200 "$CI_KEYCHAIN"
-
-          # 先设置搜索列表为 CI keychain，再导入（确保导入到正确的 keychain）
-          security list-keychains -d user -s "$CI_KEYCHAIN"
-          security unlock-keychain -p ci-build "$CI_KEYCHAIN"
-
+          # 导入分发证书到 login keychain
+          # login keychain 有完整的 WWDR 中间证书链，identity 验证需要
           echo "${{ secrets.DISTRIBUTION_CERT_P12 }}" | base64 -d > /tmp/distribution.p12
           security import /tmp/distribution.p12 \
-            -k "$CI_KEYCHAIN" \
+            -k ~/Library/Keychains/login.keychain-db \
             -P "${{ secrets.DISTRIBUTION_CERT_PASSWORD }}" \
             -A \
             -T /usr/bin/codesign \
             -T /usr/bin/security \
-            -T /usr/bin/xcodebuild
+            -T /usr/bin/xcodebuild \
+            -T /Applications/Xcode.app/Contents/Developer/usr/bin/codesign \
+            -T /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild \
+            -T /Applications/Xcode.app/Contents/Developer/usr/bin/security
           rm -f /tmp/distribution.p12
 
-          echo "=== Keychain search list ==="
-          security list-keychains -d user
-          echo "=== Identities in CI keychain ==="
-          security find-identity -v -p codesigning "$CI_KEYCHAIN"
-          echo "=== All identities ==="
+          # 重置 keychain 搜索列表（避免之前运行留下的损坏路径）
+          security list-keychains -d user -s ~/Library/Keychains/login.keychain-db
+
+          echo "=== Identities ==="
           security find-identity -v -p codesigning
 
       - name: Diagnostic - check ios directory structure
@@ -114,7 +108,6 @@ jobs:
           bundle exec fastlane beta
         env:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          KEYCHAIN_PATH: /Users/aplle/Library/Keychains/ci-build.keychain-db
           no_proxy: apple.com,icloud.com
           SSL_CERT_FILE: /etc/ssl/cert.pem
 
