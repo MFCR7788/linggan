@@ -155,11 +155,12 @@ platform :ios do
     )
 
     # 创建 exportOptions.plist — 使用 SHA1 hash 避免证书类型名不匹配
+    # destination: export 让 xcodebuild 只导出 IPA，由 fastlane 负责上传
     require 'plist'
     File.write(File.join(build_dir, "exportOptions.plist"), {
       method: "app-store-connect",
       signingStyle: "manual",
-      destination: "upload",
+      destination: "export",
       teamID: "698S6LL5G6",
       signingCertificate: dist_sha1,
       provisioningProfiles: { "com.mfcr7788.lingji": profile_uuid }
