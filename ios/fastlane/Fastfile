@@ -72,13 +72,15 @@ platform :ios do
       api_key: api_key,
       development: false,
       generate_apple_certs: true,
-      force: false
+      force: false,
+      keychain_path: keychain_path,
+      keychain_password: keychain_password
     )
 
     # 创建 exportOptions.plist
     require 'plist'
     File.write(File.join(build_dir, "exportOptions.plist"), {
-      method: "app-store",
+      method: "app-store-connect",
       signingStyle: "automatic",
       destination: "upload",
       teamID: "698S6LL5G6"
@@ -99,11 +101,15 @@ platform :ios do
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
-    # Export archive to IPA — 使用 keychain 中的证书
+    # Export archive to IPA — 需要认证才能访问 App Store Connect
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
-       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist")
+       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
+       "-allowProvisioningUpdates",
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "XX5239JSR5",
+       "-authenticationKeyPath", key_path
     )
 
     # Upload IPA to TestFlight
