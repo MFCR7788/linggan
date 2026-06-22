@@ -48,11 +48,23 @@ capacitor-preview/
 
 # fastlane
 ios/fastlane/AuthKey_*.p8
+ios/fastlane/api_key.json
+ios/fastlane/*.p12
+ios/fastlane/*.key
+ios/fastlane/*.csr
+ios/fastlane/*.cer
 ios/fastlane/report.xml
 ios/fastlane/Preview.html
 ios/fastlane/test_output/
 android/fastlane/report.xml
 android/fastlane/test_output/
+
+# certificates & keys
+*.p12
+*.key
+*.csr
+*.cer
+*.mobileprovision
 
 # Claude plans
 .claude/plans/

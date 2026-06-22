@@ -70,20 +70,25 @@ jobs:
       - name: Write App Store Connect API Key
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_XX5239JSR5.p8
 
+      - name: Import Distribution Certificate
+        run: |
+          echo "${{ secrets.DISTRIBUTION_CERT_P12 }}" | base64 -d > /tmp/distribution.p12
+          security import /tmp/distribution.p12 \
+            -k ~/Library/Keychains/login.keychain-db \
+            -P "${{ secrets.DISTRIBUTION_CERT_PASSWORD }}" \
+            -A \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/xcodebuild
+          rm -f /tmp/distribution.p12
+          security find-identity -v -p codesigning ~/Library/Keychains/login.keychain-db
+
       - name: Diagnostic - check ios directory structure
         run: |
           echo "=== pwd ===" && pwd
           echo "=== ios/ ===" && ls -la ios/
           echo "=== ios/App/ ===" && ls -la ios/App/ || echo "ios/App/ does not exist!"
           echo "=== ios/App/App.xcodeproj ===" && ls -la ios/App/App.xcodeproj || echo "xcodeproj does not exist!"
-
-      - name: Cleanup old development certificates
-        run: |
-          pip3 install --quiet --break-system-packages pyjwt cryptography requests
-          python3 scripts/revoke_dev_certs.py
-        env:
-          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_KEY_PATH: ios/fastlane/AuthKey_XX5239JSR5.p8
 
       - name: Build and upload to TestFlight
         working-directory: ios
@@ -93,9 +98,6 @@ jobs:
           bundle exec fastlane beta
         env:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          DISTRIBUTION_CERT_P12: ${{ secrets.DISTRIBUTION_CERT_P12 }}
-          DISTRIBUTION_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERT_PASSWORD }}
           no_proxy: apple.com,icloud.com
           SSL_CERT_FILE: /etc/ssl/cert.pem
 
