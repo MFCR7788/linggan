@@ -53,17 +53,21 @@ platform :ios do
     FileUtils.mkdir_p(build_dir)
     key_path = File.expand_path("AuthKey_B77NT4HS78.p8", __dir__)
 
-    # CI: 设置临时 keychain 并安装分发证书
-    # 云签名不可用，使用 API Key + cert 手动创建/安装证书
-    setup_ci(
-      force: true,
-      provider: 'xcode',
-      keychain_name: 'fastlane_tmp_keychain',
-      keychain_password: 'fastlane_tmp_password',
-      unlock: true,
-      timeout: 3600
-    )
+    # 创建临时 keychain 用于存放分发证书
+    keychain_name = "fastlane_tmp_keychain"
+    keychain_password = "fastlane_tmp_password"
+    keychain_path = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
 
+    if File.exist?(keychain_path)
+      sh("security", "delete-keychain", keychain_name) rescue nil
+    end
+    sh("security", "create-keychain", "-p", keychain_password, keychain_name)
+    sh("security", "unlock-keychain", "-p", keychain_password, keychain_name)
+    sh("security", "list-keychains", "-d", "user", "-s", keychain_name, "login.keychain-db")
+    sh("security", "default-keychain", "-s", keychain_name)
+    sh("security", "set-keychain-settings", "-t", "3600", "-u", keychain_name)
+
+    # 通过 API Key 创建/获取 iOS Distribution 证书，安装到临时 keychain
     get_certificates(
       api_key: api_key,
       development: false,
