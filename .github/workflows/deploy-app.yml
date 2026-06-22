@@ -78,6 +78,28 @@ jobs:
           echo "=== ios/App/ ===" && ls -la ios/App/ || echo "ios/App/ does not exist!"
           echo "=== ios/App/App.xcodeproj ===" && ls -la ios/App/App.xcodeproj || echo "xcodeproj does not exist!"
 
+      - name: Cleanup old development certificates
+        run: |
+          pip3 install --quiet pyjwt cryptography requests
+          python3 -c "
+import jwt, time, requests
+KEY_ID = 'XX5239JSR5'
+ISSUER_ID = '${{ secrets.APPLE_ISSUER_ID }}'
+KEY_PATH = 'ios/fastlane/AuthKey_XX5239JSR5.p8'
+with open(KEY_PATH) as f:
+    pk = f.read()
+now = int(time.time())
+token = jwt.encode({'iss': ISSUER_ID, 'iat': now-10, 'exp': now+600, 'aud': 'appstoreconnect-v1'}, pk, algorithm='ES256', headers={'kid': KEY_ID, 'typ': 'JWT'})
+h = {'Authorization': f'Bearer {token}'}
+certs = requests.get('https://api.appstoreconnect.apple.com/v1/certificates?limit=200', headers=h).json()
+for c in certs.get('data', []):
+    if c['attributes']['certificateType'] in ('IOS_DEVELOPMENT', 'DEVELOPMENT'):
+        rid = c['id']
+        r = requests.delete(f'https://api.appstoreconnect.apple.com/v1/certificates/{rid}', headers=h)
+        print(f\"Revoked {c['attributes']['name']} ({c['attributes']['serialNumber'][:12]}...) status={r.status_code}\")
+print('Cert cleanup done.')
+"
+
       - name: Build and upload to TestFlight
         working-directory: ios
         run: |
