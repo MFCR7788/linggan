@@ -96,6 +96,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           DISTRIBUTION_CERT_P12: ${{ secrets.DISTRIBUTION_CERT_P12 }}
           DISTRIBUTION_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERT_PASSWORD }}
+          https_proxy: ""
+          http_proxy: ""
 
   build-android:
     if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' }}
