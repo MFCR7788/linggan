@@ -78,11 +78,12 @@ platform :ios do
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
-    # Export archive to IPA — 不传 -allowProvisioningUpdates
+    # Export archive to IPA
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
        "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
+       "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "B77NT4HS78",
        "-authenticationKeyPath", key_path
