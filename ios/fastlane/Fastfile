@@ -61,9 +61,14 @@ platform :ios do
     current_keychains = `security list-keychains -d user`.strip
     UI.message("当前 keychain 搜索列表: #{current_keychains}")
 
-    # 如果 KEYCHAIN_PATH 指定了专用 keychain，不重置搜索列表
     if ENV["KEYCHAIN_PATH"]
       UI.message("使用 CI 专用 keychain: #{signing_keychain}")
+      # CI keychain 第一位（签名私钥），login keychain 保留（WWDR 中间证书）
+      sh("security", "list-keychains", "-d", "user", "-s", signing_keychain, login_keychain)
+      if ENV["KEYCHAIN_PASSWORD"]
+        sh("security", "unlock-keychain", "-p", ENV["KEYCHAIN_PASSWORD"], signing_keychain)
+      end
+      UI.message("CI keychain 搜索列表: #{`security list-keychains -d user`.strip}")
     else
       sh("security", "list-keychains", "-d", "user", "-s", signing_keychain)
       UI.message("已重置 keychain 搜索列表: #{`security list-keychains -d user`.strip}")
