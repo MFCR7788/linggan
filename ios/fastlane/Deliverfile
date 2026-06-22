@@ -1,8 +1,8 @@
 app_identifier("com.mfcr7788.lingji")
 api_key(
-  key_id: "52H698RFZF",
-  issuer_id: "1a2cb46c-d819-4e43-919c-4bb31e44f174",
-  key_filepath: "/Users/aplle/Documents/Zjsifan/Tools/lingji/ios/fastlane/AuthKey_52H698RFZF.p8"
+  key_id: "XX5239JSR5",
+  issuer_id: ENV["APPLE_ISSUER_ID"],
+  key_filepath: "fastlane/AuthKey_XX5239JSR5.p8"
 )
 
 # 版权
