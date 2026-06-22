@@ -78,6 +78,21 @@ platform :ios do
        "-A")
     File.delete(p12_path)
 
+    # Archive — -allowProvisioningUpdates 创建 provisioning profile
+    sh("xcodebuild", "archive",
+       "-project", xcodeproj_path,
+       "-scheme", "App",
+       "-archivePath", File.join(build_dir, "App.xcarchive"),
+       "-destination", "generic/platform=iOS",
+       "-allowProvisioningUpdates",
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "XX5239JSR5",
+       "-authenticationKeyPath", key_path,
+       "DEVELOPMENT_TEAM=698S6LL5G6",
+       "CURRENT_PROJECT_VERSION=#{build_number}",
+       "IPHONEOS_DEPLOYMENT_TARGET=16.0"
+    )
+
     # 找到 archive 步骤创建的 provisioning profile
     provisioning_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
     profile_uuid = nil
@@ -85,7 +100,6 @@ platform :ios do
       Dir.glob(File.join(provisioning_dir, "*.mobileprovision")).each do |f|
         content = %x(/usr/bin/security cms -D -i "#{f}" 2>/dev/null)
         if content.include?("com.mfcr7788.lingji")
-          # 提取 UUID
           uuid = %x(/usr/bin/security cms -D -i "#{f}" 2>/dev/null | /usr/bin/plutil -extract UUID raw - 2>/dev/null).strip
           if uuid.length > 0
             profile_uuid = uuid
@@ -107,21 +121,6 @@ platform :ios do
       signingCertificate: "Apple Distribution",
       provisioningProfiles: { "com.mfcr7788.lingji": profile_uuid }
     }.to_plist)
-
-    # Archive — -allowProvisioningUpdates 创建 provisioning profile
-    sh("xcodebuild", "archive",
-       "-project", xcodeproj_path,
-       "-scheme", "App",
-       "-archivePath", File.join(build_dir, "App.xcarchive"),
-       "-destination", "generic/platform=iOS",
-       "-allowProvisioningUpdates",
-       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
-       "-authenticationKeyID", "XX5239JSR5",
-       "-authenticationKeyPath", key_path,
-       "DEVELOPMENT_TEAM=698S6LL5G6",
-       "CURRENT_PROJECT_VERSION=#{build_number}",
-       "IPHONEOS_DEPLOYMENT_TARGET=16.0"
-    )
 
     # Export archive to IPA — 手动签名，不需要网络认证
     sh("xcodebuild", "-exportArchive",
