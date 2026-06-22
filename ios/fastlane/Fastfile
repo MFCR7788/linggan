@@ -53,6 +53,24 @@ platform :ios do
     FileUtils.mkdir_p(build_dir)
     key_path = File.expand_path("AuthKey_B77NT4HS78.p8", __dir__)
 
+    # CI: 设置临时 keychain 并安装分发证书
+    # 云签名不可用，使用 API Key + cert 手动创建/安装证书
+    setup_ci(
+      force: true,
+      provider: 'xcode',
+      keychain_name: 'fastlane_tmp_keychain',
+      keychain_password: 'fastlane_tmp_password',
+      unlock: true,
+      timeout: 3600
+    )
+
+    get_certificates(
+      api_key: api_key,
+      development: false,
+      generate_apple_certs: true,
+      force: false
+    )
+
     # 创建 exportOptions.plist
     require 'plist'
     File.write(File.join(build_dir, "exportOptions.plist"), {
@@ -62,8 +80,7 @@ platform :ios do
       teamID: "698S6LL5G6"
     }.to_plist)
 
-    # Archive — -allowProvisioningUpdates 仅在此步骤有效
-    # 通过 App Store Connect API Key 认证，让 Xcode 自动管理签名
+    # Archive — -allowProvisioningUpdates 创建 provisioning profile
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
        "-scheme", "App",
@@ -78,15 +95,11 @@ platform :ios do
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
-    # Export archive to IPA
+    # Export archive to IPA — 使用 keychain 中的证书
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
-       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
-       "-allowProvisioningUpdates",
-       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
-       "-authenticationKeyID", "B77NT4HS78",
-       "-authenticationKeyPath", key_path
+       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist")
     )
 
     # Upload IPA to TestFlight
