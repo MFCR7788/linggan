@@ -22,7 +22,7 @@ on:
 jobs:
   build-ios:
     if: ${{ github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'both' }}
-    runs-on: macos-15
+    runs-on: self-hosted
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -61,12 +61,11 @@ jobs:
           restore-keys: |
             deriveddata-${{ runner.os }}-
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.4'
-          bundler-cache: true
-          working-directory: ios
+      - name: Set up Ruby (via mise)
+        run: |
+          eval "$(mise activate bash)"
+          ruby --version
+          cd ios && bundle install
 
       - name: Write App Store Connect API Key
         run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_XX5239JSR5.p8
@@ -89,6 +88,7 @@ jobs:
       - name: Build and upload to TestFlight
         working-directory: ios
         run: |
+          eval "$(mise activate bash)"
           xcodebuild -version
           bundle exec fastlane beta
         env:
