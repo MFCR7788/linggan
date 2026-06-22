@@ -123,6 +123,7 @@ platform :ios do
         UI.message("从 xcarchive 提取到 UUID: #{uuid}")
 
         # 复制到 provisioning profiles 目录
+        FileUtils.mkdir_p(provisioning_dir)
         dest = File.join(provisioning_dir, "#{uuid}.mobileprovision")
         FileUtils.cp(embedded_profile, dest)
         profile_uuid = uuid
