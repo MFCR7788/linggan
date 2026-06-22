@@ -72,16 +72,26 @@ jobs:
 
       - name: Import Distribution Certificate
         run: |
+          # 创建 CI 专用 keychain（避免 launchd 环境下 login keychain 访问受限）
+          CI_KEYCHAIN="$HOME/Library/Keychains/ci-build.keychain-db"
+          security delete-keychain "$CI_KEYCHAIN" 2>/dev/null || true
+          security create-keychain -p ci-build "$CI_KEYCHAIN"
+          security set-keychain-settings -lut 7200 "$CI_KEYCHAIN"
+          security unlock-keychain -p ci-build "$CI_KEYCHAIN"
+
           echo "${{ secrets.DISTRIBUTION_CERT_P12 }}" | base64 -d > /tmp/distribution.p12
           security import /tmp/distribution.p12 \
-            -k ~/Library/Keychains/login.keychain-db \
+            -k "$CI_KEYCHAIN" \
             -P "${{ secrets.DISTRIBUTION_CERT_PASSWORD }}" \
             -A \
             -T /usr/bin/codesign \
             -T /usr/bin/security \
             -T /usr/bin/xcodebuild
           rm -f /tmp/distribution.p12
-          security find-identity -v -p codesigning ~/Library/Keychains/login.keychain-db
+
+          # 设置 keychain 搜索列表为 CI keychain
+          security list-keychains -d user -s "$CI_KEYCHAIN"
+          security find-identity -v -p codesigning
 
       - name: Diagnostic - check ios directory structure
         run: |
@@ -98,6 +108,7 @@ jobs:
           bundle exec fastlane beta
         env:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          KEYCHAIN_PATH: /Users/aplle/Library/Keychains/ci-build.keychain-db
           no_proxy: apple.com,icloud.com
           SSL_CERT_FILE: /etc/ssl/cert.pem
 

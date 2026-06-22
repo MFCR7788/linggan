@@ -53,15 +53,26 @@ platform :ios do
 
     FileUtils.mkdir_p(build_dir)
 
-    # 修复 keychain 搜索列表 — 重置为 login keychain
+    # keychain 路径 — CI 环境通过 KEYCHAIN_PATH 传入专用 keychain
     login_keychain = File.expand_path("~/Library/Keychains/login.keychain-db")
-    sh("security", "list-keychains", "-d", "user", "-s", login_keychain)
-    UI.message("Keychain 搜索列表: #{`security list-keychains -d user`.strip}")
+    signing_keychain = ENV["KEYCHAIN_PATH"] || login_keychain
+
+    # 诊断当前 keychain 状态
+    current_keychains = `security list-keychains -d user`.strip
+    UI.message("当前 keychain 搜索列表: #{current_keychains}")
+
+    # 如果 KEYCHAIN_PATH 指定了专用 keychain，不重置搜索列表
+    if ENV["KEYCHAIN_PATH"]
+      UI.message("使用 CI 专用 keychain: #{signing_keychain}")
+    else
+      sh("security", "list-keychains", "-d", "user", "-s", signing_keychain)
+      UI.message("已重置 keychain 搜索列表: #{`security list-keychains -d user`.strip}")
+    end
 
     # 查找分发证书 (Apple Distribution 或 iPhone Distribution)
-    identities = `security find-identity -v -p codesigning #{login_keychain} 2>&1`
+    identities = `security find-identity -v -p codesigning #{signing_keychain} 2>&1`
     dist_count = identities.scan(/(?:Apple|iPhone) Distribution/).size
-    UI.message("Login keychain 分发证书: #{dist_count}")
+    UI.message("Keychain 分发证书: #{dist_count}")
 
     if dist_count == 0
       UI.message("未找到分发证书，尝试从 P12 导入...")
@@ -69,13 +80,13 @@ platform :ios do
       p12_password = ENV["DISTRIBUTION_CERT_PASSWORD"] || "lingji123"
       if File.exist?(p12_path)
         sh("security", "import", p12_path,
-           "-k", login_keychain,
+            "-k", signing_keychain,
            "-P", p12_password,
            "-A",
            "-T", "/usr/bin/codesign",
            "-T", "/usr/bin/security",
            "-T", "/usr/bin/xcodebuild")
-        identities = `security find-identity -v -p codesigning #{login_keychain} 2>&1`
+        identities = `security find-identity -v -p codesigning #{signing_keychain} 2>&1`
         dist_count = identities.scan(/(?:Apple|iPhone) Distribution/).size
         UI.message("导入后分发证书: #{dist_count}")
       end
@@ -86,9 +97,9 @@ platform :ios do
           api_key: api_key,
           development: false,
           force: true,
-          keychain_path: login_keychain
+          keychain_path: signing_keychain
         )
-        identities = `security find-identity -v -p codesigning #{login_keychain} 2>&1`
+        identities = `security find-identity -v -p codesigning #{signing_keychain} 2>&1`
         dist_count = identities.scan(/(?:Apple|iPhone) Distribution/).size
         UI.user_error!("创建证书后仍未找到分发证书") if dist_count == 0
       end
