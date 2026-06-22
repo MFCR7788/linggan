@@ -95,22 +95,20 @@ platform :ios do
     UI.user_error!("未能获取 provisioning profile UUID") if profile_uuid.nil? || profile_uuid.empty?
     UI.message("Provisioning profile UUID: #{profile_uuid}")
 
-    # Archive — 手动签名 (用分发证书 + provisioning profile UUID)
-    # SPM 库不支持 PROVISIONING_PROFILE_SPECIFIER，但用 PROVISIONING_PROFILE (UUID) 可跨 target
+    # Archive — 跳过签名 (SPM 库不支持 provisioning profile)
+    # 所有签名在 export 阶段完成
     key_path = File.expand_path("AuthKey_XX5239JSR5.p8", __dir__)
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
        "-scheme", "App",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-destination", "generic/platform=iOS",
-       "-allowProvisioningUpdates",
        "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
        "-authenticationKeyID", "XX5239JSR5",
        "-authenticationKeyPath", key_path,
        "DEVELOPMENT_TEAM=698S6LL5G6",
-       "CODE_SIGN_STYLE=Manual",
-       "CODE_SIGN_IDENTITY=Apple Distribution",
-       "PROVISIONING_PROFILE=#{profile_uuid}",
+       "CODE_SIGNING_REQUIRED=NO",
+       "CODE_SIGNING_ALLOWED=NO",
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
