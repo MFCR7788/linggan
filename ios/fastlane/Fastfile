@@ -1,5 +1,7 @@
 default_platform(:ios)
 
+require "base64"
+
 platform :ios do
   desc "Build and upload to TestFlight"
   lane :beta do
@@ -67,15 +69,16 @@ platform :ios do
     sh("security", "default-keychain", "-s", keychain_name)
     sh("security", "set-keychain-settings", "-t", "3600", "-u", keychain_name)
 
-    # 通过 API Key 创建/获取 iOS Distribution 证书，安装到临时 keychain
-    get_certificates(
-      api_key: api_key,
-      development: false,
-      generate_apple_certs: true,
-      force: false,
-      keychain_path: keychain_path,
-      keychain_password: keychain_password
-    )
+    # 从 GitHub Secrets 解码 .p12 分发证书，导入到临时 keychain
+    p12_path = File.join(build_dir, "distribution.p12")
+    File.write(p12_path, Base64.decode64(ENV["DISTRIBUTION_CERT_P12"]))
+    sh("security", "import", p12_path,
+       "-k", keychain_path,
+       "-P", ENV["DISTRIBUTION_CERT_PASSWORD"],
+       "-T", "/usr/bin/codesign",
+       "-T", "/usr/bin/security",
+       "-A")
+    File.delete(p12_path)
 
     # 创建 exportOptions.plist
     require 'plist'
