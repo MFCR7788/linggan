@@ -69,7 +69,7 @@ jobs:
           working-directory: ios
 
       - name: Write App Store Connect API Key
-        run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_52H698RFZF.p8
+        run: echo "${{ secrets.APPLE_API_KEY_P8 }}" > ios/fastlane/AuthKey_B77NT4HS78.p8
 
       - name: Diagnostic - check ios directory structure
         run: |
