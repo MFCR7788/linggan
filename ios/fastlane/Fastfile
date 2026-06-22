@@ -113,8 +113,7 @@ platform :ios do
        "-authenticationKeyPath", key_path,
        "DEVELOPMENT_TEAM=698S6LL5G6",
        "CURRENT_PROJECT_VERSION=#{build_number}",
-       "IPHONEOS_DEPLOYMENT_TARGET=16.0",
-       "SWIFT_VERSION=5.0"
+       "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
 
     # 创建 exportOptions.plist — 手动签名
