@@ -95,8 +95,8 @@ platform :ios do
     UI.user_error!("未能获取 provisioning profile UUID") if profile_uuid.nil? || profile_uuid.empty?
     UI.message("Provisioning profile UUID: #{profile_uuid}")
 
-    # Archive — 使用分发证书 + 自动管理 provisioning profile
-    # (SPM 库如 IONCameraLib 不支持 PROVISIONING_PROFILE_SPECIFIER，所以用自动签名)
+    # Archive — 自动签名 (使用 login keychain 中的开发证书)
+    # export 阶段会用分发证书重新签名
     key_path = File.expand_path("AuthKey_XX5239JSR5.p8", __dir__)
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
@@ -108,7 +108,6 @@ platform :ios do
        "-authenticationKeyID", "XX5239JSR5",
        "-authenticationKeyPath", key_path,
        "DEVELOPMENT_TEAM=698S6LL5G6",
-       "CODE_SIGN_IDENTITY=Apple Distribution",
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
     )
