@@ -99,15 +99,18 @@ platform :ios do
     UI.user_error!("未能获取 provisioning profile UUID") if profile_uuid.nil? || profile_uuid.empty?
     UI.message("Provisioning profile UUID: #{profile_uuid}")
 
-    # Archive — 手动签名，使用 .p12 分发证书 + sigh 下载的 profile
+    # Archive — 使用自动签名，让 xcodebuild 按 target 处理
+    # (SPM 库如 IONCameraLib 不支持 PROVISIONING_PROFILE_SPECIFIER)
+    key_path = File.expand_path("AuthKey_XX5239JSR5.p8", __dir__)
     sh("xcodebuild", "archive",
        "-project", xcodeproj_path,
        "-scheme", "App",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-destination", "generic/platform=iOS",
-       "CODE_SIGN_STYLE=Manual",
-       "CODE_SIGN_IDENTITY=Apple Distribution",
-       "PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid}",
+       "-allowProvisioningUpdates",
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "XX5239JSR5",
+       "-authenticationKeyPath", key_path,
        "DEVELOPMENT_TEAM=698S6LL5G6",
        "CURRENT_PROJECT_VERSION=#{build_number}",
        "IPHONEOS_DEPLOYMENT_TARGET=16.0"
