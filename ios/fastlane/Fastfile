@@ -68,7 +68,16 @@ platform :ios do
     elsif login_dist_certs > 0
       signing_keychain = login_keychain
     else
-      UI.user_error!("未找到 Apple Distribution 证书，请先导入到 keychain")
+      UI.message("未找到 Apple Distribution 证书，通过 App Store Connect API 创建新证书...")
+      get_certificates(
+        api_key: api_key,
+        development: false,
+        force: true,
+        keychain_path: login_keychain
+      )
+      signing_keychain = login_keychain
+      dist_cert_count = `security find-identity -v -p codesigning #{login_keychain} 2>&1`.scan(/Apple Distribution/).size
+      UI.user_error!("创建证书后仍未找到 Apple Distribution 证书") if dist_cert_count == 0
     end
     UI.message("使用签名 keychain: #{signing_keychain}")
 
