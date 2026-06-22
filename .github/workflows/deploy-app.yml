@@ -98,6 +98,7 @@ jobs:
           DISTRIBUTION_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERT_PASSWORD }}
           https_proxy: ""
           http_proxy: ""
+          SSL_CERT_FILE: /etc/ssl/cert.pem
 
   build-android:
     if: ${{ github.event.inputs.platform == 'android' || github.event.inputs.platform == 'both' }}
