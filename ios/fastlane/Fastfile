@@ -54,35 +54,23 @@ platform :ios do
 
     FileUtils.mkdir_p(build_dir)
 
-    # 检查 CI 专用 keychain 中是否已有分发证书（避免 launchd 下 security import 无交互权限）
+    # 在 login keychain 中查找可用的分发证书
+    login_keychain = File.expand_path("~/Library/Keychains/login.keychain-db")
     ci_keychain = File.expand_path("~/Library/Keychains/ci-build.keychain-db")
 
-    # 确保 CI keychain 存在
-    unless File.exist?(ci_keychain)
-      UI.message("创建 CI 专用 keychain...")
-      sh("security", "create-keychain", "-p", "", ci_keychain)
-      sh("security", "set-keychain-settings", "-t", "7200", "-l", ci_keychain)
-      sh("security", "unlock-keychain", "-p", "", ci_keychain)
-    end
+    login_dist_certs = `security find-identity -v -p codesigning #{login_keychain} 2>&1`.scan(/Apple Distribution/).size
+    ci_dist_certs = `security find-identity -v -p codesigning #{ci_keychain} 2>&1`.scan(/Apple Distribution/).size
+    UI.message("login keychain 分发证书: #{login_dist_certs}, CI keychain 分发证书: #{ci_dist_certs}")
 
-    dist_cert_count = `security find-identity -v -p codesigning #{ci_keychain} 2>&1`.scan(/Apple Distribution/).size
-    UI.message("CI keychain 现有 Apple Distribution 证书数量: #{dist_cert_count}")
-
-    if dist_cert_count == 0
-      UI.message("未找到分发证书，从 GitHub Secrets 写入文件（需手动导入到 CI keychain）...")
-      # launchd 下 security import 会失败 (User interaction is not allowed)
-      # 因此只写文件，由用户从终端手动导入
-      p12_path = File.join(File.expand_path("~/actions-runner"), "distribution.p12")
-      File.write(p12_path, Base64.decode64(ENV["DISTRIBUTION_CERT_P12"]))
-      UI.message("p12 已保存到: #{p12_path}")
-      UI.message("请从终端运行以下命令导入证书：")
-      UI.message("  security unlock-keychain -p \"\" ~/Library/Keychains/ci-build.keychain-db")
-      UI.message("  security import #{p12_path} -k ~/Library/Keychains/ci-build.keychain-db -P '<证书密码>' -T /usr/bin/codesign -T /usr/bin/security -A")
-      UI.message("  rm -f #{p12_path}")
-      UI.user_error!("分发证书未导入 CI keychain，需要手动操作（见上方命令）")
+    # 选择包含分发证书的 keychain 作为签名 keychain
+    if ci_dist_certs > 0
+      signing_keychain = ci_keychain
+    elsif login_dist_certs > 0
+      signing_keychain = login_keychain
     else
-      UI.message("分发证书已存在 CI keychain，跳过导入。")
+      UI.user_error!("未找到 Apple Distribution 证书，请先导入到 keychain")
     end
+    UI.message("使用签名 keychain: #{signing_keychain}")
 
     # 使用 sigh 通过 App Store Connect API 下载分发 provisioning profile
     UI.message("下载分发 provisioning profile...")
@@ -135,10 +123,10 @@ platform :ios do
       provisioningProfiles: { "com.mfcr7788.lingji": profile_uuid }
     }.to_plist)
 
-    # 将 CI keychain 加入搜索列表，确保 xcodebuild 能找到分发证书签名
+    # 将签名 keychain 加入搜索列表，确保 xcodebuild 能找到分发证书签名
     original_keychains = `security list-keychains -d user`.strip
     UI.message("原 keychain 搜索列表: #{original_keychains}")
-    sh("security", "list-keychains", "-d", "user", "-s", "#{ci_keychain}", "#{File.expand_path("~/Library/Keychains/login.keychain-db")}")
+    sh("security", "list-keychains", "-d", "user", "-s", "#{signing_keychain}", "#{login_keychain}")
 
     begin
       # Export archive to IPA — 加 auth flags 解决 "Failed to Use Accounts"
