@@ -96,8 +96,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           DISTRIBUTION_CERT_P12: ${{ secrets.DISTRIBUTION_CERT_P12 }}
           DISTRIBUTION_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERT_PASSWORD }}
-          https_proxy: ""
-          http_proxy: ""
+          no_proxy: apple.com,icloud.com
           SSL_CERT_FILE: /etc/ssl/cert.pem
 
   build-android:
