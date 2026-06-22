@@ -127,11 +127,14 @@ platform :ios do
       provisioningProfiles: { "com.mfcr7788.lingji": profile_uuid }
     }.to_plist)
 
-    # Export archive to IPA
+    # Export archive to IPA — 加 auth flags 解决 "Failed to Use Accounts"
     sh("xcodebuild", "-exportArchive",
        "-archivePath", File.join(build_dir, "App.xcarchive"),
        "-exportPath", build_dir,
-       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist")
+       "-exportOptionsPlist", File.join(build_dir, "exportOptions.plist"),
+       "-authenticationKeyIssuerID", ENV["APPLE_ISSUER_ID"],
+       "-authenticationKeyID", "XX5239JSR5",
+       "-authenticationKeyPath", key_path
     )
 
     # Upload IPA to TestFlight
