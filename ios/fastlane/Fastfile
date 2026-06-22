@@ -72,7 +72,7 @@ platform :ios do
     end
     UI.message("使用签名 keychain: #{signing_keychain}")
 
-    # 使用 sigh 通过 App Store Connect API 下载分发 provisioning profile
+    # 使用 sigh 通过 App Store Connect API 下载/创建分发 provisioning profile
     UI.message("下载分发 provisioning profile...")
     begin
       get_provisioning_profile(
@@ -82,11 +82,11 @@ platform :ios do
         skip_certificate_verification: true
       )
     rescue => e
-      UI.message("只读获取失败: #{e.message}，尝试创建/修复 profile...")
+      UI.message("只读获取失败: #{e.message}，创建新 profile（匹配可用证书）...")
       get_provisioning_profile(
         api_key: api_key,
         app_identifier: "com.mfcr7788.lingji",
-        skip_certificate_verification: true
+        force: true
       )
     end
 
