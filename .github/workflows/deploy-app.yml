@@ -80,7 +80,7 @@ jobs:
 
       - name: Cleanup old development certificates
         run: |
-          pip3 install --quiet pyjwt cryptography requests
+          pip3 install --quiet --break-system-packages pyjwt cryptography requests
           python3 scripts/revoke_dev_certs.py
         env:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
