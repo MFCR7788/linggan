@@ -92,12 +92,11 @@ jobs:
             -T /usr/bin/xcodebuild
           rm -f /tmp/distribution.p12
 
-          # 设置 key partition list — 允许 codesign 等 Apple 工具从 CI (launchd) 环境访问私钥
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-build "$CI_KEYCHAIN"
-
           echo "=== Keychain search list ==="
           security list-keychains -d user
-          echo "=== Identities ==="
+          echo "=== Identities in CI keychain ==="
+          security find-identity -v -p codesigning "$CI_KEYCHAIN"
+          echo "=== All identities ==="
           security find-identity -v -p codesigning
 
       - name: Diagnostic - check ios directory structure
