@@ -346,7 +346,7 @@ function RadarTab({
                       {item.original_content && (
                         <div className="mt-2 mb-2">
                           <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>原文内容</p>
-                          <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                          <p className="selectable" style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
                         </div>
                       )}
 
@@ -626,7 +626,7 @@ function KeywordsTab({
                         {item.original_content && (
                           <div className="mt-2 mb-2">
                             <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 4 }}>原文内容</p>
-                            <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
+                            <p className="selectable" style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{item.original_content}</p>
                           </div>
                         )}
                         <div className="mt-2 mb-2">
@@ -772,7 +772,7 @@ function SearchTab({
                       {r.content && r.analysis?.summary && r.content !== r.analysis.summary && (
                         <div className="mb-2">
                           <p style={{ color: '#6B7280', fontSize: 12, marginBottom: 2 }}>原文内容</p>
-                          <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{r.content}</p>
+                          <p className="selectable" style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{r.content}</p>
                         </div>
                       )}
 

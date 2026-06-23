@@ -876,14 +876,14 @@ function AICopywritingContent() {
                     <summary className="cursor-pointer py-2 px-3 rounded-lg text-xs flex items-center gap-1.5" style={{ background: 'rgba(59,130,246,0.1)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.2)' }}>
                       <Search size={14} /> 研究参考资料
                     </summary>
-                    <div className="mt-2 p-3 rounded-lg text-xs leading-relaxed" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF', whiteSpace: 'pre-wrap' }}>
+                    <div className="selectable mt-2 p-3 rounded-lg text-xs leading-relaxed" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#9CA3AF', whiteSpace: 'pre-wrap' }}>
                       {researchResults}
                     </div>
                   </details>
                 )}
 
                 {/* Content */}
-                <div className="p-4 rounded-xl mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div className="selectable p-4 rounded-xl mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <FormattedText text={currentContent} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
                 </div>
 

@@ -15,10 +15,14 @@
   scrollbar-width: none;
 }
 
+/* ───── iOS 移动端体验优化 ───── */
+
 html {
   background: #0A1629;
   /* iOS 禁止橡皮筋回弹 */
   overscroll-behavior: none;
+  /* 全局禁用 iOS 长按放大镜 / 文字选择气泡 */
+  -webkit-touch-callout: none;
 }
 
 body {
@@ -26,6 +30,32 @@ body {
   padding: 0;
   /* 同样禁止回弹 */
   overscroll-behavior: none;
+  /* 全局禁止文字选择（内容区通过 .selectable 单独启用） */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 所有交互元素 — 消除 iOS 300ms 延迟 + 防止双击缩放/系统手势 */
+button, a, input, textarea, [role="button"], .touch-interactive {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 长按无系统行为（导航栏、底部 tab、卡片等固定 UI） */
+.touch-no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 内容区 — 允许文字选择（消息、文案结果、文章等） */
+.selectable,
+.selectable * {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* 确保所有媒体元素不超出屏幕宽度 */

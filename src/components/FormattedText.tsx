@@ -123,12 +123,12 @@ export default function FormattedText({
     // 单段落：检查是否是简单列表
     const lines = raw.split("\n");
     const listResult = tryRenderList(lines, color, fontSize, lineHeight);
-    if (listResult) return <div>{listResult}</div>;
-    return <p style={baseStyles(color, fontSize, lineHeight)}>{parseInline(raw)}</p>;
+    if (listResult) return <div className="selectable">{listResult}</div>;
+    return <p className="selectable" style={baseStyles(color, fontSize, lineHeight)}>{parseInline(raw)}</p>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 8 }}>
+    <div className="selectable" style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 8 }}>
       {paragraphs.map((para, pi) => {
         const lines = para.trim().split("\n");
 

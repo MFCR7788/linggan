@@ -571,7 +571,7 @@ function InspirationDetailContent() {
                   >AI</div>
                   <span style={{ color: "#C4B5FD", fontSize: 13, fontWeight: 600 }}>生成提示词</span>
                 </div>
-                <p style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <p className="selectable" style={{ color: "#E5E7EB", fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {inspiration.prompt}
                 </p>
               </GlassCard>

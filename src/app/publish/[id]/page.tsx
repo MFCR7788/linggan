@@ -150,7 +150,7 @@ function PublicationDetailContent() {
             <img src={pub.cover_url} alt="cover" className="w-full rounded-lg mb-2 max-h-48 object-cover" />
           )}
           <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{pub.title}</p>
-          <p style={{ color: '#E5E7EB', fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+          <p className="selectable" style={{ color: '#E5E7EB', fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
             {pub.content}
           </p>
           {pub.tags?.length > 0 && (

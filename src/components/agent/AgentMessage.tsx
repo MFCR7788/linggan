@@ -96,9 +96,9 @@ export function AgentMessage({
           </div>
         )}
 
-        {/* 消息气泡 — AI 消息使用 FormattedText */}
+        {/* 消息气泡 — AI 消息使用 FormattedText，内容区允许文字选择 */}
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser
+          className={`selectable rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser
               ? 'bg-blue-500 text-white rounded-br-md'
               : 'bg-white/10 text-white/90 rounded-bl-md'
           }`}

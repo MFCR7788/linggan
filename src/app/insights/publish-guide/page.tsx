@@ -308,7 +308,7 @@ function CopyBlock({ label, text, onCopy }: { label: string; text: string; onCop
         </button>
       </div>
       <div
-        className="p-2 rounded-md text-xs whitespace-pre-wrap"
+        className="selectable p-2 rounded-md text-xs whitespace-pre-wrap"
         style={{
           background: 'rgba(255,255,255,0.03)',
           color: '#E5E7EB',
