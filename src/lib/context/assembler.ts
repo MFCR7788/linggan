@@ -34,6 +34,8 @@ export interface AssembledContext {
   memoriesUsed: number;
   knowledgeUsed: number;
   skillsUsed: string[];
+  /** 所有 ContextSource 返回的 chunk（含原始数据），供后续处理使用 */
+  chunks: Array<{ source: string; raw?: unknown }>;
 }
 
 export interface ContextSource {
@@ -119,6 +121,9 @@ export class ContextAssembler {
       memoriesUsed: memoryChunk ? (memoryChunk.raw as number) ?? 0 : 0,
       knowledgeUsed: knowledgeChunk ? (knowledgeChunk.raw as number) ?? 0 : 0,
       skillsUsed: skillChunk ? (skillChunk.raw as string[]) ?? [] : [],
+      chunks: chunks
+        .filter((c): c is ContextChunk => c !== null)
+        .map((c) => ({ source: c.source, raw: c.raw })),
     };
   }
 }

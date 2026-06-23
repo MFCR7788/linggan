@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import FormattedText from '@/components/FormattedText';
+import { PromptFeedback } from './PromptFeedback';
 
 interface AgentMessageProps {
   type: 'user' | 'assistant';
@@ -19,7 +20,9 @@ interface AgentMessageProps {
   onAddSchedule?: (index: number, edited?: { title: string; scheduled_at: string; description?: string; location?: string }) => void;
   onAddAllSchedules?: () => void;
   messageId?: string;
+  sessionId?: string;
   timestamp?: Date;
+  optimization?: { original: string; framework: string; confidence: number };
   // 操作按钮
   onCopy?: () => void;
   onModify?: () => void;
@@ -35,8 +38,8 @@ interface AgentMessageProps {
 export function AgentMessage({
   type, content, toolCalls = [], attachments,
   generatedImages, generatedVideo, generatedAudio,
-  schedules, scheduledItems, schedulingId, onAddSchedule, onAddAllSchedules, messageId,
-  timestamp,
+  schedules, scheduledItems, schedulingId, onAddSchedule, onAddAllSchedules, messageId, sessionId,
+  timestamp, optimization,
   onCopy, onModify, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
@@ -302,6 +305,17 @@ export function AgentMessage({
               </div>
             ))}
           </div>
+        )}
+
+        {/* 提示词质量反馈 — AI 消息 */}
+        {!isUser && (
+          <PromptFeedback
+            messageId={messageId}
+            sessionId={sessionId}
+            optimization={optimization}
+            toolCalls={toolCalls?.map(tc => tc.tool)}
+            responseSnippet={content?.substring(0, 200)}
+          />
         )}
 
         {/* 操作按钮 — AI 消息始终可见 */}

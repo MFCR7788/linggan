@@ -31,6 +31,8 @@ import { compressHistory } from '@/lib/assistant/context-compressor';
 import { extractDocuments } from '@/lib/assistant/chat-helpers';
 import { ContextAssembler, MemorySource, KnowledgeSource, SkillSource, ComboSkillSource } from '@/lib/context';
 import { agentSkillMatcher, getAllComboSkills, getAllPresetSkills } from '@/lib/agent/skills';
+import { PromptOptimizerSource } from '@/lib/agent/prompt-optimizer';
+import type { PromptOptimizerRaw } from '@/lib/agent/prompt-optimizer';
 
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions?/i,
@@ -183,6 +185,8 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // === V2: 使用 ContextAssembler 统一组装上下文 ===
     const assembler = new ContextAssembler(AGENT_SYSTEM_PROMPT);
+    // PromptOptimizerSource priority=5，最先执行，优化用户输入
+    assembler.registerSource(new PromptOptimizerSource());
     assembler.registerSource(new MemorySource(memoryManager));
     assembler.registerSource(new KnowledgeSource(knowledgeManager));
     assembler.registerSource(new ComboSkillSource(agentSkillMatcher));
@@ -197,6 +201,21 @@ export const POST = withAuth(async ({ request, user }) => {
       historyMessages: historyMessages.length > 0 ? historyMessages : undefined,
       summaryBlock: summaryBlock || undefined,
     });
+
+    // 提取提示词优化结果并替换用户消息
+    let optimizationMeta: PromptOptimizerRaw | undefined;
+    const optChunk = assembled.chunks.find((c) => c.source === 'prompt-optimizer');
+    if (optChunk?.raw) {
+      const optRaw = optChunk.raw as PromptOptimizerRaw;
+      if (optRaw.optimized !== optRaw.original) {
+        optimizationMeta = optRaw;
+        const userMsgIdx = assembled.messages.length - 1;
+        assembled.messages[userMsgIdx] = {
+          role: 'user',
+          content: `${optRaw.optimized}\n\n[原始提问: ${optRaw.original}]`,
+        };
+      }
+    }
 
     // 注入用户预配置资产状态（数字分身 / 角色形象）
     if (presets) {
@@ -315,7 +334,19 @@ export const POST = withAuth(async ({ request, user }) => {
           }
 
           for await (const event of agentStreamLoop(assembled.messages, registry, agentContext, agentConfig, { hooks })) {
-            sendEvent(event);
+            // 将优化元数据附加到 done 事件
+            if (event.type === 'done' && optimizationMeta) {
+              sendEvent({
+                ...event,
+                optimization: {
+                  original: optimizationMeta.original,
+                  framework: optimizationMeta.frameworkName,
+                  confidence: optimizationMeta.confidence,
+                },
+              });
+            } else {
+              sendEvent(event);
+            }
             if (event.type === 'tool_call') {
               completedToolCalls.push({ tool: event.tool, params: event.params, result: { success: true, output: '' } });
             }
@@ -372,6 +403,13 @@ export const POST = withAuth(async ({ request, user }) => {
                   ...(generatedVideo ? { generatedVideo } : {}),
                   ...(generatedAudio ? { generatedAudio } : {}),
                   ...(schedules ? { schedules } : {}),
+                  ...(optimizationMeta ? {
+                    promptOptimization: {
+                      original: optimizationMeta.original,
+                      framework: optimizationMeta.frameworkName,
+                      confidence: optimizationMeta.confidence,
+                    },
+                  } : {}),
                 },
               });
             } catch (e) { console.warn('保存 Agent 消息失败:', e); }

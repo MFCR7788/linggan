@@ -98,7 +98,7 @@ export type AgentEvent =
   | { type: 'plan_generated'; plan: ExecutionPlan }
   | { type: 'edit_plan_generated'; editPlan: EditPlan }
   | { type: 'plan_progress'; goal: string; totalSteps: number; completedSteps: number; currentStep: string | null }
-  | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string; toolResults?: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }> }
+  | { type: 'done'; response: string; summary?: string; tokensUsed?: number; toolsUsed?: string[]; model?: string; toolResults?: Array<{ tool: string; params: Record<string, unknown>; result: ToolResult }>; optimization?: { original: string; framework: string; confidence: number } }
   | { type: 'error'; message: string };
 
 // ====== Agent 配置 ======

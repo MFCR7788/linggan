@@ -71,6 +71,7 @@ interface UIMessage {
   generatedAudio?: string;
   schedules?: ScheduleItem[];
   editPlan?: EditPlan;
+  optimization?: { original: string; framework: string; confidence: number };
   timestamp: Date;
 }
 
@@ -331,6 +332,7 @@ export function AgentChatView() {
               generatedVideo: meta.generatedVideo || undefined,
               generatedAudio: meta.generatedAudio || undefined,
               schedules: Array.isArray(meta.schedules) ? meta.schedules : undefined,
+              optimization: meta.promptOptimization || undefined,
               timestamp: new Date(m.created_at),
             };
           });
@@ -506,6 +508,12 @@ export function AgentChatView() {
               assistantMsgRef.current = event.response;
               setMessages((prev) =>
                 prev.map((m) => m.id === assistantId ? { ...m, content: event.response } : m)
+              );
+            }
+            // 保存提示词优化元数据
+            if (event.optimization) {
+              setMessages((prev) =>
+                prev.map((m) => m.id === assistantId ? { ...m, optimization: event.optimization } : m)
               );
             }
             setStatusText('');
@@ -1743,6 +1751,8 @@ export function AgentChatView() {
                 onAddSchedule={(idx, edited) => addToSchedule(msg, idx, edited)}
                 onAddAllSchedules={() => addToSchedule(msg)}
                 messageId={msg.id}
+                sessionId={currentSessionId || undefined}
+                optimization={msg.optimization}
                 timestamp={msg.timestamp}
                 onCopy={() => handleCopy(msg)}
                 onModify={() => handleModify(msg)}

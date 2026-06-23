@@ -39,6 +39,7 @@ import { smartSliceTool } from './smart-slice';
 import { titleOptimizerTool } from './title-optimizer';
 import { coverGeneratorTool } from './cover-generator';
 import { autoMashupTool } from './auto-mashup';
+import { optimizePromptTool } from './optimize-prompt';
 import type { ToolDefinition } from '../../types';
 
 // ── 所有工具（按版本分组） ──
@@ -68,6 +69,7 @@ const V1_0_TOOLS: ToolDefinition[] = [
   extractContentTool,
   suggestContentIdeasTool,
   generateVideoTemplateTool,
+  optimizePromptTool,
 ];
 
 /** V1.1 增强创作 + 分发工具 */
