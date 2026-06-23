@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, X, Loader2, Sparkles } from 'lucide-react';
+import { Check, X, Sparkles } from 'lucide-react';
 import {
   ACCOUNT_TYPE_PRESETS,
   type AccountTypeId,
@@ -32,10 +32,11 @@ export function AccountTypeOnboarding({
 
   if (!open) return null;
 
-  const handleConfirm = async () => {
-    if (!selected || saving) return;
+  const handleSelect = async (type: AccountTypeId) => {
+    if (saving) return;
     setSaving(true);
-    const result = await setAccountType(selected);
+    setSelected(type);
+    const result = await setAccountType(type);
     setSaving(false);
     if (result.ok) {
       onClose();
@@ -43,7 +44,6 @@ export function AccountTypeOnboarding({
         router.push('/ai');
       }
     }
-    // 失败 toast 由 hook / 调用方处理(此处不阻塞)
   };
 
   const handleSkip = () => {
@@ -102,7 +102,7 @@ export function AccountTypeOnboarding({
             return (
               <button
                 key={preset.id}
-                onClick={() => setSelected(preset.id)}
+                onClick={() => handleSelect(preset.id)}
                 className="text-left p-3 rounded-2xl transition-all active:scale-[0.97]"
                 style={{
                   background: isSelected
@@ -129,35 +129,13 @@ export function AccountTypeOnboarding({
         </div>
 
         {/* Footer */}
-        <div className="mt-5 flex items-center gap-2">
+        <div className="mt-5 flex items-center justify-center">
           <button
             onClick={handleSkip}
             className="px-4 py-2.5 rounded-xl text-sm"
             style={{ color: '#9CA3AF' }}
           >
             跳过
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!selected || saving}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{
-              background: selected
-                ? 'linear-gradient(135deg, #F472B6, #8B5CF6)'
-                : 'rgba(255,255,255,0.08)',
-              color: '#FFFFFF',
-            }}
-          >
-            {saving ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <Loader2 size={14} className="animate-spin" />
-                保存中…
-              </span>
-            ) : selected ? (
-              `开始「${ACCOUNT_TYPE_PRESETS.find((p) => p.id === selected)?.label}」之旅`
-            ) : (
-              '请选择'
-            )}
           </button>
         </div>
       </div>
