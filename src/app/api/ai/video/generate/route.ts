@@ -5,8 +5,10 @@ import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { submitVideoGenerationTask, getVideoTaskStatus, getVideoTaskStatusUniversal, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
 import { QUALITY_TIERS, type VideoProvider } from '@/lib/video-models';
-import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
+import { consume, refund, hasRefunded, InsufficientCreditsError, getBalance } from '@/lib/credits';
 import { calcAiVideoCost, CREDIT_COSTS } from '@/lib/credit-costs';
+import { checkVideoQuality } from '@/lib/tier-limits';
+import type { VideoQuality } from '@/lib/tier-limits';
 import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +19,13 @@ export const POST = withAuth(async ({ request, user }) => {
   try {
     const { storyboard, inspirations, qualityTier, firstFrameUrl, sceneFrames, lastFrameUrl, extraFrameUrls, mode, bgmStyle, subtitleStyle, subtitlePosition } = await request.json();
     const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
+
+    // 套餐档位限制
+    const { tier: userTier } = await getBalance(user.id);
+    const qualityCheck = checkVideoQuality(userTier, tier as VideoQuality);
+    if (!qualityCheck.allowed) {
+      return createApiError(qualityCheck.message!, 403);
+    }
     const videoMode: 'i2v' | 'multi' = mode === 'multi' ? 'multi' : 'i2v';
     const hasMultiFrame = videoMode === 'multi' && (lastFrameUrl || (Array.isArray(extraFrameUrls) && extraFrameUrls.length > 0));
 

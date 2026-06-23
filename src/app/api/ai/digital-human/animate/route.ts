@@ -7,8 +7,9 @@ import { createAdminClient } from '@/lib/supabase-server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { submitAnimateTask, getAnimateTaskStatus } from '@/lib/ai-services';
-import { consume, refund, hasRefunded, InsufficientCreditsError } from '@/lib/credits';
+import { consume, refund, hasRefunded, InsufficientCreditsError, getBalance } from '@/lib/credits';
 import { calcDigitalHumanCost } from '@/lib/credit-costs';
+import { checkAnimateEnabled } from '@/lib/tier-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,14 @@ export const POST = withAuth(async ({ request, user }) => {
 
     const res = resolution === '480P' ? '480P' as const : '720P' as const;
     const creditCost = calcDigitalHumanCost(res);
+
+    // Animate 功能仅创作者版及以上可用
+    const { tier } = await getBalance(user.id);
+    const animateCheck = checkAnimateEnabled(tier);
+    if (!animateCheck.allowed) {
+      return createApiError(animateCheck.message!, 403);
+    }
+
     try {
       await consume(user.id, creditCost, 'ai_digital_human', `数字人 Animate ${res}`, { mode, resolution: res });
     } catch (e) {

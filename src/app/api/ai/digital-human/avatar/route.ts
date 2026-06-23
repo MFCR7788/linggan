@@ -8,8 +8,9 @@ import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { trainAvatar, getAvatarTrainingStatus } from '@/lib/ai-services';
-import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { consume, refund, InsufficientCreditsError, getBalance } from '@/lib/credits';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
+import { checkMonthlyLimit } from '@/lib/tier-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,14 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     const creditCost = CREDIT_COSTS.digital_twin.oneTime;
+
+    // 月度次数限制
+    const { tier } = await getBalance(user.id);
+    const monthCheck = await checkMonthlyLimit(user.id, tier, 'digitalAvatar');
+    if (!monthCheck.allowed) {
+      return createApiError(monthCheck.message!, 403);
+    }
+
     try {
       await consume(user.id, creditCost, 'ai_digital_twin', '数字分身训练', { name });
     } catch (e) {

@@ -5,8 +5,10 @@ import { createApiResponse, createApiError } from '@/lib/api-utils';
 import { withAuth } from '@/lib/api-handler';
 import { generateStoryboardV2, submitVideoGenerationTask, logAiUsage, type StoryboardScene } from '@/lib/ai-services';
 import { QUALITY_TIERS } from '@/lib/video-models';
-import { consume, refund, InsufficientCreditsError } from '@/lib/credits';
+import { consume, refund, InsufficientCreditsError, getBalance } from '@/lib/credits';
 import { calcAiVideoCost } from '@/lib/credit-costs';
+import { checkVideoQuality } from '@/lib/tier-limits';
+import type { VideoQuality } from '@/lib/tier-limits';
 import { saveWorkHistory } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +43,13 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     const tier = (qualityTier === 'standard' || qualityTier === 'premium') ? qualityTier : 'fast';
+
+    // 套餐档位限制
+    const { tier: userTier } = await getBalance(user.id);
+    const qualityCheck = checkVideoQuality(userTier, tier as VideoQuality);
+    if (!qualityCheck.allowed) {
+      return createApiError(qualityCheck.message!, 403);
+    }
     const textContent = inspirations.map((i: any) => i.original_text || i.ai_summary || '').join(' ');
     const duration = durationOverride || (textContent ? calcTextDuration(textContent) : autoDuration(inspirations.length));
     const qt = QUALITY_TIERS[tier] || QUALITY_TIERS['fast'];
