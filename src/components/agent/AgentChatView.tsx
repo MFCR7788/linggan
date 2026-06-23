@@ -1955,7 +1955,7 @@ export function AgentChatView() {
           /* ───── 录音/识别浮层 ───── */
           <div
             className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-auto"
-            style={{ background: "rgba(0,0,0,0.85)" }}
+            style={{ background: "rgba(0,0,0,0.85)", touchAction: 'none', userSelect: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
             onMouseUp={handlePressEnd}
             onMouseMove={handleRecordingMove}
             onTouchEnd={handlePressEnd}
@@ -2211,9 +2211,14 @@ export function AgentChatView() {
                       : 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
                     WebkitTouchCallout: 'none',
                     WebkitUserSelect: 'none',
-                  }}
+                    userSelect: 'none',
+                    touchAction: 'manipulation',
+                  } as React.CSSProperties}
                 >
-                  <span className="text-white text-sm font-medium tracking-wide">
+                  <span
+                    className="text-white text-sm font-medium tracking-wide"
+                    style={{ pointerEvents: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+                  >
                     {pressingMic ? '松开 发送' : '按住说话'}
                   </span>
                 </button>
