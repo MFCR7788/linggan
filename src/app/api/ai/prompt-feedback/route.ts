@@ -1,8 +1,9 @@
-// POST /api/ai/prompt-feedback — 收集提示词质量反馈
+// POST /api/ai/prompt-feedback — 收集提示词质量反馈（送 1 灵力）
 
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/api-handler';
 import { savePromptFeedback } from '@/lib/agent/prompt-optimizer/feedback-store';
+import { grant } from '@/lib/credits';
 
 export const POST = withAuth(async ({ request, user }) => {
   const body = await request.json();
@@ -46,6 +47,9 @@ export const POST = withAuth(async ({ request, user }) => {
   if (!id) {
     return NextResponse.json({ success: false, error: '保存失败' }, { status: 500 });
   }
+
+  // 送 1 灵力鼓励反馈
+  grant(user.id, 1, 'admin_adjust', 'prompt_feedback', '提示词反馈奖励').catch(() => {});
 
   return NextResponse.json({ success: true, data: { id } });
 });

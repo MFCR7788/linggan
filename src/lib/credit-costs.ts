@@ -67,9 +67,9 @@ export const CREDIT_COSTS = {
     video: 3,  // 视频 ASR 60-90s,稍贵
   },
 
-  // ─── 通用文本 AI(DeepSeek 等低价 LLM,~¥0.001/次) ──
+  // ─── 通用文本 AI(DeepSeek 等低价 LLM,暂免费) ──
   ai_text: {
-    perCall: 1,  // 单次 LLM 调用:分析/改写/提炼/加标点/字幕优化等
+    perCall: 0,  // 单次 LLM 调用:分析/改写/提炼/加标点/字幕优化等 (暂免费)
   },
 
   // ─── HyperFrames 动态图形 ─────────────────────────────

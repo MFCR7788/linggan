@@ -111,6 +111,7 @@ export function AgentChatView() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [scheduledItems, setScheduledItems] = useState<Set<string>>(new Set());
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [consecutiveNoFeedback, setConsecutiveNoFeedback] = useState(0);
 
   // 账号类型选择 + 流程引导
   const [selectedAccountType, setSelectedAccountType] = useState<AccountTypePreset | null>(null);
@@ -518,6 +519,7 @@ export function AgentChatView() {
             }
             setStatusText('');
             setCurrentTool('');
+            setConsecutiveNoFeedback(prev => prev + 1);
             break;
 
           case 'error':
@@ -907,6 +909,10 @@ export function AgentChatView() {
     });
   };
 
+  const handleFeedbackGiven = useCallback(() => {
+    setConsecutiveNoFeedback(0);
+  }, []);
+
   // 消息操作
   const handleCopy = useCallback((msg: UIMessage) => {
     const text = msg.content || '';
@@ -1257,6 +1263,7 @@ export function AgentChatView() {
       };
     });
     setMessages(uiMsgs);
+    setConsecutiveNoFeedback(0);
     setIsLoadingMessages(false);
   };
 
@@ -1753,6 +1760,8 @@ export function AgentChatView() {
                 messageId={msg.id}
                 sessionId={currentSessionId || undefined}
                 optimization={msg.optimization}
+                showFeedbackReminder={msg.type === 'assistant' && consecutiveNoFeedback >= 3}
+                onFeedbackGiven={msg.type === 'assistant' ? handleFeedbackGiven : undefined}
                 timestamp={msg.timestamp}
                 onCopy={() => handleCopy(msg)}
                 onModify={() => handleModify(msg)}

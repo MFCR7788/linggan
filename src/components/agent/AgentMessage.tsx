@@ -23,6 +23,8 @@ interface AgentMessageProps {
   sessionId?: string;
   timestamp?: Date;
   optimization?: { original: string; framework: string; confidence: number };
+  showFeedbackReminder?: boolean;
+  onFeedbackGiven?: () => void;
   // 操作按钮
   onCopy?: () => void;
   onModify?: () => void;
@@ -39,7 +41,7 @@ export function AgentMessage({
   type, content, toolCalls = [], attachments,
   generatedImages, generatedVideo, generatedAudio,
   schedules, scheduledItems, schedulingId, onAddSchedule, onAddAllSchedules, messageId, sessionId,
-  timestamp, optimization,
+  timestamp, optimization, showFeedbackReminder, onFeedbackGiven,
   onCopy, onModify, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
@@ -307,7 +309,7 @@ export function AgentMessage({
           </div>
         )}
 
-        {/* 提示词质量反馈 — AI 消息 */}
+        {/* 提示词质量反馈 — AI 消息，始终可见 */}
         {!isUser && (
           <PromptFeedback
             messageId={messageId}
@@ -315,6 +317,8 @@ export function AgentMessage({
             optimization={optimization}
             toolCalls={toolCalls?.map(tc => tc.tool)}
             responseSnippet={content?.substring(0, 200)}
+            showReminder={showFeedbackReminder}
+            onFeedbackGiven={onFeedbackGiven}
           />
         )}
 
