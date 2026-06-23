@@ -27,9 +27,9 @@ interface TierMonthlyLimits {
 const TIER_MONTHLY_LIMITS: Record<CreditTier, TierMonthlyLimits> = {
   free:    { voiceClone: 0, digitalAvatar: 0,  animate: false },
   basic:   { voiceClone: 0, digitalAvatar: 0,  animate: false },
-  pro:     { voiceClone: 1, digitalAvatar: 5,  animate: true },
-  studio:  { voiceClone: 3, digitalAvatar: 20, animate: true },
-  enterprise: { voiceClone: 10, digitalAvatar: Infinity, animate: true },
+  pro:     { voiceClone: 1, digitalAvatar: 3,  animate: true },
+  studio:  { voiceClone: 2, digitalAvatar: 5,  animate: true },
+  enterprise: { voiceClone: 5, digitalAvatar: 10, animate: true },
 };
 
 const TIER_NAMES: Record<string, string> = {

@@ -21,7 +21,7 @@ UPDATE subscription_tiers SET features = '[
   "全部 AI 功能",
   "所有视频档位",
   "1 次声音复刻/月",
-  "数字分身 5 次/月",
+  "数字分身 3 次/月",
   "热点监控 5 个词",
   "优先客服"
 ]'::jsonb WHERE tier = 'pro';
@@ -30,8 +30,8 @@ UPDATE subscription_tiers SET features = '[
   "1800 credits/月",
   "全部 AI 功能",
   "所有视频档位",
-  "3 次声音复刻/月",
-  "数字分身 20 次/月",
+  "2 次声音复刻/月",
+  "数字分身 5 次/月",
   "Animate 不限",
   "热点监控 10 个词",
   "专属客服"
@@ -41,8 +41,8 @@ UPDATE subscription_tiers SET features = '[
   "6000 credits/月",
   "全部 AI 功能",
   "所有视频档位",
-  "10 次声音复刻/月",
-  "数字分身不限",
+  "5 次声音复刻/月",
+  "数字分身 10 次/月",
   "热点监控 20 个词",
   "定制模型微调",
   "B2B 合同 SLA"
