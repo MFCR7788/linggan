@@ -11,7 +11,7 @@ const TIER_KEYWORD_LIMITS: Record<CreditTier, number> = {
   basic: 2,
   pro: 5,
   studio: 10,
-  enterprise: Infinity,
+  enterprise: 20,
 };
 
 // 列出用户的关键词
@@ -70,7 +70,7 @@ export const POST = withAuth(async ({ request, user }) => {
     };
     const tierName = tierNames[tier] || '当前套餐';
     return createApiError(
-      `${tierName}最多创建 ${limit === Infinity ? '不限' : limit} 个监控词，你已有 ${activeCount} 个。请删除或停用旧的再添加`,
+      `${tierName}最多创建 ${limit} 个监控词，你已有 ${activeCount} 个。请删除或停用旧的再添加`,
       403
     );
   }

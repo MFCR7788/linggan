@@ -43,7 +43,7 @@ UPDATE subscription_tiers SET features = '[
   "所有视频档位",
   "10 次声音复刻/月",
   "数字分身不限",
-  "热点监控不限",
+  "热点监控 20 个词",
   "定制模型微调",
   "B2B 合同 SLA"
 ]'::jsonb WHERE tier = 'enterprise';
