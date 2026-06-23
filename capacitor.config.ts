@@ -4,7 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.mfcr7788.lingji',
   appName: '灵集',
   webDir: 'capacitor-preview',
-  server: {
+  server: process.env.CAPACITOR_DEV === '1' ? {
+    // 本地开发 — 设置环境变量 CAPACITOR_DEV=1
+    url: 'http://localhost:3000',
+    cleartext: true,
+  } : {
     // 生产部署 URL (ECS)
     url: 'https://zjsifan.com',
     cleartext: false,
