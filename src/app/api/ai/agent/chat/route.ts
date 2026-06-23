@@ -129,29 +129,32 @@ export const POST = withAuth(async ({ request, user }) => {
     const registry = new ToolRegistry();
     registerAllBuiltinTools(registry);
 
-    // 初始化 MCP Server（默认接入 GitHub 等，未配置 token 时优雅降级）
+    // MCP Server 后台连接（不阻塞首次响应，工具就绪后自动注册到 registry）
     const mcpManager = new MCPManager(registry);
     const defaultMCPServers = getDefaultMCPServers();
     if (defaultMCPServers.length > 0) {
-      await mcpManager.initialize(defaultMCPServers);
+      mcpManager.initialize(defaultMCPServers).catch(e => console.warn('[Agent] MCP 后台初始化失败:', e));
     }
 
     // 初始化 Hook 系统 — 审核Agent 在工具执行后自动检查生成内容质量
     const hooks = new HookManager();
     hooks.register(qualityReviewHook);
 
-    // 初始化记忆/知识/技能
+    // 并行初始化 Memory + Skills（互不依赖，减少等待时间）
     const memoryManager = new MemoryManager();
     memoryManager.addProvider(new BuiltinMemoryProvider());
     memoryManager.addProvider(new LongTermMemoryProvider());
-    await memoryManager.initialize(user.id);
 
     const knowledgeManager = new KnowledgeManager();
     knowledgeManager.addProvider(new InspirationKnowledgeProvider(user.id));
     knowledgeManager.addProvider(new PublicKnowledgeProvider());
 
     const skillsHub = new SkillsHub({ userId: user.id });
-    await skillsHub.initialize();
+
+    await Promise.all([
+      memoryManager.initialize(user.id),
+      skillsHub.initialize(),
+    ]);
 
     // 加载 combo + 预设技能到 Agent 技能匹配器（首次加载后缓存）
     if (agentSkillMatcher.getAllSkills().length === 0) {
@@ -187,12 +190,22 @@ export const POST = withAuth(async ({ request, user }) => {
 
     // === V2: 使用 ContextAssembler 统一组装上下文 ===
     const assembler = new ContextAssembler(AGENT_SYSTEM_PROMPT);
-    // PromptOptimizerSource priority=5，最先执行，优化用户输入
-    assembler.registerSource(new PromptOptimizerSource());
     assembler.registerSource(new MemorySource(memoryManager));
     assembler.registerSource(new KnowledgeSource(knowledgeManager));
     assembler.registerSource(new ComboSkillSource(agentSkillMatcher));
     assembler.registerSource(new SkillSource(skillsHub, registry));
+
+    // PromptOptimizer 与 assemble 并行启动（不阻塞上下文组装）
+    const promptOptSource = new PromptOptimizerSource();
+    const promptOptPromise = promptOptSource.fetch({
+      userId: user.id,
+      sessionId: sessionId || undefined,
+      userMessage: content,
+      images,
+      documents,
+      historyMessages: historyMessages.length > 0 ? historyMessages : undefined,
+      summaryBlock: summaryBlock || undefined,
+    });
 
     const assembled = await assembler.assemble({
       userId: user.id,
@@ -204,9 +217,12 @@ export const POST = withAuth(async ({ request, user }) => {
       summaryBlock: summaryBlock || undefined,
     });
 
-    // 提取提示词优化结果并替换用户消息
+    // 等待 PromptOptimizer（最多 1.2s），超时则跳过本次优化
     let optimizationMeta: PromptOptimizerRaw | undefined;
-    const optChunk = assembled.chunks.find((c) => c.source === 'prompt-optimizer');
+    const optChunk = await Promise.race([
+      promptOptPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),
+    ]);
     if (optChunk?.raw) {
       const optRaw = optChunk.raw as PromptOptimizerRaw;
       if (optRaw.optimized !== optRaw.original) {
