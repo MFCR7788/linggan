@@ -15,6 +15,107 @@
   scrollbar-width: none;
 }
 
+/* ───── 字体渲染优化 ───── */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ───── 聊天内容排版（豆包风格）───── */
+
+.chat-content h1,
+.chat-content .md-h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 16px 0 8px;
+  line-height: 1.4;
+}
+
+.chat-content h2,
+.chat-content .md-h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 14px 0 6px;
+  line-height: 1.4;
+}
+
+.chat-content h3,
+.chat-content .md-h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 12px 0 4px;
+  line-height: 1.5;
+}
+
+.chat-content p {
+  margin: 0 0 8px;
+  line-height: 1.75;
+}
+
+.chat-content p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-content strong {
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.chat-content ul,
+.chat-content ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.chat-content li {
+  margin-bottom: 4px;
+  line-height: 1.7;
+}
+
+.chat-content blockquote {
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
+  padding: 4px 0 4px 12px;
+  margin: 8px 0;
+  color: #D1D5DB;
+}
+
+.chat-content code {
+  font-family: "SF Mono", "Fira Code", Menlo, Monaco, monospace;
+  font-size: 0.88em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #FCA5A5;
+}
+
+.chat-content pre {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+}
+
+.chat-content pre code {
+  padding: 0;
+  background: none;
+  color: #E5E7EB;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.chat-content hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 12px 0;
+}
+
 /* ───── iOS 移动端体验优化 ───── */
 
 html {

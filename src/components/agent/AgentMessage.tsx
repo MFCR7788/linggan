@@ -98,15 +98,16 @@ export function AgentMessage({
 
         {/* 消息气泡 — AI 消息使用 FormattedText，内容区允许文字选择 */}
         <div
-          className={`selectable rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser
-              ? 'bg-blue-500 text-white rounded-br-md'
-              : 'bg-white/10 text-white/90 rounded-bl-md'
+          className={`selectable px-4 py-2.5 text-[15px] ${isUser
+              ? 'bg-[#3B7CFF] text-white rounded-2xl rounded-br-md ml-auto max-w-[85%]'
+              : 'text-[#E5E7EB]'
           }`}
+          style={isUser ? {} : { lineHeight: 1.75 }}
         >
           {isUser ? (
-            <span className="whitespace-pre-wrap">{content || ''}</span>
+            <span className="whitespace-pre-wrap" style={{ lineHeight: 1.6 }}>{content || ''}</span>
           ) : (
-            content ? <FormattedText text={content} color="#E5E7EB" fontSize={14} compact /> : (toolCalls.length > 0 ? <span className="text-white/50">正在处理...</span> : null)
+            content ? <FormattedText text={content} color="#E5E7EB" fontSize={15} /> : (toolCalls.length > 0 ? <span className="text-white/50">正在处理...</span> : null)
           )}
         </div>
 
