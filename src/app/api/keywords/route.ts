@@ -1,8 +1,18 @@
 import { createApiResponse, createApiError, getPaginationParams, createPaginatedResponse } from '@/lib/api-utils';
 import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
+import { getBalance } from '@/lib/credits';
+import type { CreditTier } from '@/lib/credits';
 
 export const dynamic = 'force-dynamic';
+
+const TIER_KEYWORD_LIMITS: Record<CreditTier, number> = {
+  free: 1,
+  basic: 2,
+  pro: 5,
+  studio: 10,
+  enterprise: Infinity,
+};
 
 // 列出用户的关键词
 export const GET = withAuth(async ({ request, user }) => {
@@ -43,6 +53,27 @@ export const POST = withAuth(async ({ request, user }) => {
   }
 
   const supabase = createAdminClient();
+
+  // 层级限制检查：按 subscription tier 限制监控词数量
+  const { tier } = await getBalance(user.id);
+  const limit = TIER_KEYWORD_LIMITS[tier] ?? 1;
+
+  const { count: activeCount } = await supabase
+    .from('monitor_keywords')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_active', true);
+
+  if (activeCount !== null && activeCount >= limit) {
+    const tierNames: Record<string, string> = {
+      free: '免费版', basic: '个人版', pro: '创作者版', studio: '工作室版', enterprise: '企业版',
+    };
+    const tierName = tierNames[tier] || '当前套餐';
+    return createApiError(
+      `${tierName}最多创建 ${limit === Infinity ? '不限' : limit} 个监控词，你已有 ${activeCount} 个。请删除或停用旧的再添加`,
+      403
+    );
+  }
 
   // 检查是否已存在
   const { data: existing } = await supabase
