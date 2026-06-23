@@ -1,4 +1,4 @@
-// 语音转文字 — 优先本地 FunASR → 降级 DashScope 兼容模式（即时返回）
+// 语音转文字 — DashScope paraformer-v2 RESTful API（base64 data URL）
 // POST /api/ai/transcribe  body: FormData { audio: File }
 import { NextResponse } from "next/server";
 import { getDashScopeApiKey } from "@/lib/runtime-config";
@@ -6,62 +6,75 @@ import { getDashScopeApiKey } from "@/lib/runtime-config";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const FUNASR_URL = process.env.FUNASR_URL || "http://localhost:10096/asr";
-const DASHSCOPE_ASR = "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/transcriptions";
+const DASHSCOPE_TASK = "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription";
 
-async function tryFunASR(audioBuffer: Buffer): Promise<{ ok: boolean; text: string }> {
-  try {
-    const base64 = audioBuffer.toString("base64");
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
-    const res = await fetch(FUNASR_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio: base64, format: "wav", sample_rate: 16000 }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    if (!res.ok) return { ok: false, text: "" };
-    const data = await res.json();
-    if (data.success && data.text) return { ok: true, text: data.text };
-    return { ok: false, text: "" };
-  } catch {
-    return { ok: false, text: "" };
-  }
-}
-
-async function tryDashScope(audioBuffer: Buffer): Promise<{ ok: boolean; text: string }> {
+async function transcribeWithDashScope(audioBase64: string): Promise<string> {
   const apiKey = getDashScopeApiKey();
-  if (!apiKey) return { ok: false, text: "" };
+  if (!apiKey) return "";
 
-  try {
-    const formData = new FormData();
-    const file = new File([new Uint8Array(audioBuffer)], "audio.wav", { type: "audio/wav" });
-    formData.append("file", file);
-    formData.append("model", "paraformer-v2");
+  const dataUrl = `data:audio/wav;base64,${audioBase64}`;
 
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 30000);
-    const res = await fetch(DASHSCOPE_ASR, {
-      method: "POST",
+  // 1. 提交任务
+  const ctrl = new AbortController();
+  const t1 = setTimeout(() => ctrl.abort(), 15000);
+  const submitRes = await fetch(DASHSCOPE_TASK, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "X-DashScope-Async": "enable",
+    },
+    body: JSON.stringify({
+      model: "paraformer-v2",
+      input: { file_urls: [dataUrl] },
+      parameters: { channel_id: [0] },
+    }),
+    signal: ctrl.signal,
+  });
+  clearTimeout(t1);
+
+  if (!submitRes.ok) return "";
+  const submitData = await submitRes.json();
+  const taskId = submitData?.output?.task_id;
+  if (!taskId) return "";
+
+  // 2. 轮询结果（最多等待 10 秒）
+  for (let i = 0; i < 6; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(() => ctrl2.abort(), 10000);
+    const pollRes = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-      body: formData,
-      signal: ctrl.signal,
+      signal: ctrl2.signal,
     });
-    clearTimeout(t);
+    clearTimeout(t2);
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.error("[transcribe] DashScope 错误:", res.status, errText.slice(0, 200));
-      return { ok: false, text: "" };
+    if (!pollRes.ok) continue;
+    const pollData = await pollRes.json();
+    const status = pollData?.output?.task_status;
+
+    if (status === "SUCCEEDED") {
+      const results = pollData?.output?.results;
+      if (Array.isArray(results)) {
+        const texts: string[] = [];
+        for (const r of results) {
+          const fileResults = r?.output?.results;
+          if (Array.isArray(fileResults)) {
+            for (const fr of fileResults) {
+              if (fr?.text) texts.push(fr.text);
+            }
+          }
+        }
+        return texts.join("").trim();
+      }
+      return "";
     }
-    const data = await res.json();
-    if (data.text) return { ok: true, text: data.text.trim() };
-    return { ok: false, text: "" };
-  } catch (e) {
-    console.error("[transcribe] DashScope 异常:", e);
-    return { ok: false, text: "" };
+
+    if (status === "FAILED") return "";
   }
+
+  return "";
 }
 
 export async function POST(request: Request) {
@@ -73,17 +86,11 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await audioFile.arrayBuffer());
+    const base64 = buffer.toString("base64");
 
-    // 1. 优先本地 FunASR
-    const local = await tryFunASR(buffer);
-    if (local.ok) {
-      return NextResponse.json({ success: true, data: { text: local.text, method: "funasr_local" } });
-    }
-
-    // 2. 降级 DashScope 兼容模式
-    const cloud = await tryDashScope(buffer);
-    if (cloud.ok) {
-      return NextResponse.json({ success: true, data: { text: cloud.text, method: "dashscope_paraformer" } });
+    const text = await transcribeWithDashScope(base64);
+    if (text) {
+      return NextResponse.json({ success: true, data: { text } });
     }
 
     return NextResponse.json({ success: false, error: "语音识别失败，请重试" }, { status: 500 });

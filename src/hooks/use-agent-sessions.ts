@@ -128,10 +128,17 @@ export function useAgentSessions() {
     }
   }, [sessions]);
 
+  const togglePin = useCallback(async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const pinned = !(session.metadata as any)?.pinned;
+    await updateMetadata(sessionId, { ...(session.metadata as any || {}), pinned });
+  }, [sessions, updateMetadata]);
+
   return {
     sessions, currentSessionId, setCurrentSessionId,
     showSessionList, setShowSessionList, isLoading,
     loadSessions, loadMessages, createSession,
-    switchSession, deleteSession, updateTitle, updateMetadata,
+    switchSession, deleteSession, updateTitle, updateMetadata, togglePin,
   };
 }

@@ -4,7 +4,7 @@
 export type FeatureVersion = 'v1.0' | 'v1.1' | 'v2.0' | 'v2.1';
 
 /** 当前上线版本 */
-export const CURRENT_VERSION: FeatureVersion = 'v1.0';
+export const CURRENT_VERSION: FeatureVersion = 'v2.1';
 
 const VERSION_ORDER: FeatureVersion[] = ['v1.0', 'v1.1', 'v2.0', 'v2.1'];
 

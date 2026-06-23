@@ -120,7 +120,7 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
       ...tool,
       handler: async () => ({
         success: true,
-        output: `"${tool.name}" 功能即将在后续版本上线，敬请期待！当前 V1.0 已支持 AI 文案、AI 图片、AI 视频、AI 配音、热点选题、灵感库等功能，如需使用请告诉我您的具体需求。`,
+        output: `"${tool.name}" 功能即将在后续版本上线，敬请期待！如需使用请告诉我您的具体需求。`,
       }),
     };
   });

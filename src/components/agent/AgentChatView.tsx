@@ -17,6 +17,7 @@ import { parseChoices, type ChoiceOption } from '@/lib/agent/choice-parser';
 import { parseParamCards, formatParamValues } from '@/lib/agent/param-parser';
 import { ParamCard } from '@/components/agent/ParamCard';
 import { AgentSSEClient } from '@/lib/agent/sse-client';
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition';
 import { useVoiceRecording } from '@/hooks/use-voice-recording';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { useAgentSessions } from '@/hooks/use-agent-sessions';
@@ -98,15 +99,6 @@ export function AgentChatView() {
   const [showTools, setShowTools] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('text');
-  const [isTranscribing, setIsTranscribing] = useState(false); // 语音识别中状态
-
-  // 检测麦克风录音是否可用（MediaRecorder + getUserMedia）
-  useEffect(() => {
-    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setSpeechSupported(false);
-      setInputMode('text');
-    }
-  }, []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
@@ -212,12 +204,33 @@ export function AgentChatView() {
     }
   }, []);
 
-  // 语音录制
-  const voice = useVoiceRecording();
-  const { isRecording, startRecording, stopRecording, cancelRecording } = voice;
+  // 语音识别（浏览器原生 SpeechRecognition API）+ MediaRecorder 降级
+  const speech = useSpeechRecognition();
+  const { isListening, liveText, supported: speechApiSupported, startListening, stopListening, cancelListening } = speech;
+  const voiceRecording = useVoiceRecording();
+  const { isRecording, startRecording, stopRecording, cancelRecording } = voiceRecording;
+  const [isTranscribing, setIsTranscribing] = useState(false);  // MediaRecorder 异步转写中
+
+  // 语音是否可用: 原生 SpeechRecognition 或 MediaRecorder 降级
+  const voiceSupported = speechApiSupported || (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getUserMedia === 'function' &&
+    typeof MediaRecorder !== 'undefined'
+  );
+
+  // 当前是否在语音输入中
+  const isVoiceActive = isListening || isRecording || isTranscribing;
   const [pressingMic, setPressingMic] = useState(false);        // 按住瞬间高亮
   const [cancelGesture, setCancelGesture] = useState(false);    // 上滑取消状态
   const pressStartYRef = useRef(0);                              // 按下 Y 坐标，用于检测上滑
+
+  // 检测语音是否可用
+  useEffect(() => {
+    setSpeechSupported(voiceSupported);
+    if (!voiceSupported) {
+      setInputMode('text');
+    }
+  }, [voiceSupported]);
 
   // 文件上传
   const fileUpload = useFileUpload();
@@ -269,7 +282,7 @@ export function AgentChatView() {
     sessions, currentSessionId,
     showSessionList, setShowSessionList, isLoading: isLoadingSessions,
     loadSessions, loadMessages, createSession,
-    switchSession, deleteSession,
+    switchSession, deleteSession, togglePin,
   } = sessionMgr;
 
   const currentSessionRef = useRef(currentSessionId);
@@ -726,7 +739,11 @@ export function AgentChatView() {
     pressStartYRef.current = clientY || 0;
     pressHandledRef.current = true;
     if (navigator.vibrate) navigator.vibrate(30);
-    startRecording();
+    if (speechApiSupported) {
+      startListening('zh-CN');
+    } else {
+      startRecording();
+    }
   };
 
   const handlePressEnd = async () => {
@@ -735,38 +752,64 @@ export function AgentChatView() {
     pressHandledRef.current = false;
 
     if (cancelGestureRef.current) {
-      cancelRecording();
+      if (speechApiSupported) cancelListening();
+      else cancelRecording();
       cancelGestureRef.current = false;
       return;
     }
-    // 停止录音 → 识别 → 填入输入框（不自动发送，让用户确认）
-    try {
-      setIsTranscribing(true);
-      const transcript = await stopRecording();
-      setIsTranscribing(false);
+
+    if (speechApiSupported) {
+      // 浏览器原生语音识别：同步获取文字 → 自动发送
+      const transcript = stopListening();
       if (transcript) {
-        setInput(transcript);
-        setInputMode('text'); // 切换到文字模式展示识别结果
-        setTimeout(() => inputRef.current?.focus(), 100);
+        await handleSendWithText(transcript);
       }
-    } catch {
-      setIsTranscribing(false);
-      cancelRecording();
+    } else {
+      // MediaRecorder 降级：异步录音 → 转写 → 自动发送
+      try {
+        setIsTranscribing(true);
+        const transcript = await stopRecording();
+        setIsTranscribing(false);
+        if (transcript) {
+          await handleSendWithText(transcript);
+        }
+      } catch {
+        setIsTranscribing(false);
+        cancelRecording();
+      }
     }
   };
 
-  // 录音中途点击停止按钮
-  const handleStopRecording = () => {
-    cancelRecording();
+  // 录音中途点击停止按钮 → 结束识别并自动发送
+  const handleStopListening = async () => {
     setPressingMic(false);
     setCancelGesture(false);
     cancelGestureRef.current = false;
     pressHandledRef.current = false;
+
+    if (speechApiSupported) {
+      const transcript = stopListening();
+      if (transcript) {
+        handleSendWithText(transcript);
+      }
+    } else {
+      try {
+        setIsTranscribing(true);
+        const transcript = await stopRecording();
+        setIsTranscribing(false);
+        if (transcript) {
+          handleSendWithText(transcript);
+        }
+      } catch {
+        setIsTranscribing(false);
+        cancelRecording();
+      }
+    }
   };
 
   // 录音中追踪手指移动 → 上滑超过 60px 进入取消状态
   const handleRecordingMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isRecording) return;
+    if (!isVoiceActive) return;
     const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as React.MouseEvent).clientY;
     const dy = pressStartYRef.current - clientY;
     cancelGestureRef.current = dy > 60;
@@ -883,6 +926,11 @@ export function AgentChatView() {
     await doStream(userMsg.content, images, [], docs, attachmentInfo, currentSessionId);
     setRegeneratingId(null);
   }, [isStreaming, messages, currentSessionId, doStream]);
+
+  const handleModify = useCallback((msg: UIMessage) => {
+    setInput(msg.content || '');
+    inputRef.current?.focus();
+  }, [setInput, setMessages]);
 
   const handleDelete = useCallback((msg: UIMessage) => {
     setMessages(prev => prev.filter(m => m.id !== msg.id));
@@ -1234,6 +1282,11 @@ export function AgentChatView() {
     if (currentSessionId === sessionId) setMessages([]);
   };
 
+  const handleTogglePin = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    togglePin(sessionId);
+  };
+
   // 账号类型 → 组合推荐 → 流程引导
   const handleStartCombo = async (combo: RecommendationCombo) => {
     const flowMeta = { comboId: combo.id, currentStep: 0 };
@@ -1318,7 +1371,7 @@ export function AgentChatView() {
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {editingTitle === currentSessionId ? (
+            {currentSessionId && editingTitle === currentSessionId ? (
               <input
                 autoFocus
                 value={editTitleValue}
@@ -1376,7 +1429,7 @@ export function AgentChatView() {
         {showSessionList && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setShowSessionList(false)} />
-            <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 w-72 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-72 overflow-y-auto">
+            <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 w-72 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-64 overflow-y-auto">
               <div className="p-2 border-b border-gray-700">
                 <button
                   onClick={handleNewSession}
@@ -1392,7 +1445,12 @@ export function AgentChatView() {
                 <div className="p-4 text-center text-gray-500 text-sm">加载中...</div>
               ) : sessions.length === 0 ? (
                 <div className="p-4 text-center text-gray-500 text-sm">暂无历史对话</div>
-              ) : sessions.map(s => (
+              ) : [...sessions].sort((a, b) => {
+                const aPinned = (a.metadata as any)?.pinned ? 1 : 0;
+                const bPinned = (b.metadata as any)?.pinned ? 1 : 0;
+                if (aPinned !== bPinned) return bPinned - aPinned;
+                return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+              }).map(s => (
                 <div
                   key={s.id}
                   onClick={() => { if (editingTitle !== s.id) handleSwitchSession(s); }}
@@ -1417,7 +1475,6 @@ export function AgentChatView() {
                   ) : (
                     <span
                       className="truncate flex-1"
-                      onClick={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -1426,6 +1483,16 @@ export function AgentChatView() {
                       title="双击修改名称"
                     >{s.title}</span>
                   )}
+                  {/* 置顶 */}
+                  <button
+                    onClick={(e) => handleTogglePin(e, s.id)}
+                    className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0 transition-opacity ${(s.metadata as any)?.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                    title={(s.metadata as any)?.pinned ? '取消置顶' : '置顶'}
+                  >
+                    <svg className={`w-3 h-3 ${(s.metadata as any)?.pinned ? 'text-amber-400' : 'text-gray-500'}`} fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
+                    </svg>
+                  </button>
                   {editingTitle !== s.id && (
                     <button
                       onMouseDown={(e) => {
@@ -1443,7 +1510,7 @@ export function AgentChatView() {
                   )}
                   <button
                     onClick={(e) => handleDeleteSession(e, s.id)}
-                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0"
+                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-600/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1513,7 +1580,7 @@ export function AgentChatView() {
         className="flex-1 overflow-y-auto py-4 space-y-1"
         style={{
           paddingTop: 52,
-          paddingBottom: 160,
+          paddingBottom: 'calc(220px + env(safe-area-inset-bottom, 0px))',
         }}
       >
         {messages.length === 0 && !isLoadingSessions && !isLoadingMessages && (
@@ -1678,6 +1745,7 @@ export function AgentChatView() {
                 messageId={msg.id}
                 timestamp={msg.timestamp}
                 onCopy={() => handleCopy(msg)}
+                onModify={() => handleModify(msg)}
                 onRegenerate={msg.type === 'assistant' ? () => handleRegenerate(msg) : undefined}
                 onDelete={() => handleDelete(msg)}
                 onSaveToInspiration={msg.type === 'assistant' ? () => handleSaveToInspiration(msg) : undefined}
@@ -1864,87 +1932,103 @@ export function AgentChatView() {
           </div>
         )}
         <div className="relative">
-        {isRecording ? (
-          /* ───── 录音浮层 ───── */
+        {isVoiceActive ? (
+          /* ───── 录音/识别浮层 ───── */
           <div
             className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-auto"
             style={{ background: "rgba(0,0,0,0.85)" }}
+            onMouseUp={handlePressEnd}
+            onMouseMove={handleRecordingMove}
+            onTouchEnd={handlePressEnd}
+            onTouchCancel={handlePressEnd}
+            onTouchMove={handleRecordingMove}
           >
-            {/* 顶部取消区域 */}
-            <div
-              className={`w-48 h-16 rounded-2xl flex items-center justify-center mb-8 transition-all ${
-                cancelGesture ? 'bg-red-500/30 scale-110' : 'bg-white/5'
-              }`}
-            >
-              <span className={`text-sm font-medium transition-colors ${
-                cancelGesture ? 'text-red-400' : 'text-gray-500'
-              }`}>
-                {cancelGesture ? '松开 取消' : '↑ 上滑取消'}
-              </span>
-            </div>
-
-            {/* 麦克风图标 + 波形动画 */}
-            <div className="flex flex-col items-center gap-6">
-              <div
-                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  cancelGesture ? 'bg-red-500/40 scale-90' : 'bg-white/10 scale-100'
-                }`}
-              >
-                <svg className={`w-10 h-10 transition-colors ${cancelGesture ? 'text-red-400' : 'text-white'}`} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
-                  <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
+            {isTranscribing ? (
+              /* ───── 识别中（MediaRecorder 降级） ───── */
+              <div className="flex flex-col items-center gap-8">
+                <div className="w-20 h-20 rounded-full bg-blue-500/20 flex items-center justify-center">
+                  <div className="w-10 h-10 border-3 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+                <p className="text-white/70 text-base">识别中...</p>
               </div>
+            ) : (
+              <>
+                {/* 顶部取消区域 */}
+                <div
+                  className={`w-48 h-16 rounded-2xl flex items-center justify-center mb-8 transition-all ${
+                    cancelGesture ? 'bg-red-500/30 scale-110' : 'bg-white/5'
+                  }`}
+                >
+                  <span className={`text-sm font-medium transition-colors ${
+                    cancelGesture ? 'text-red-400' : 'text-gray-500'
+                  }`}>
+                    {cancelGesture ? '松开 取消' : '↑ 上滑取消'}
+                  </span>
+                </div>
 
-              {/* 波形条 */}
-              <div className="flex items-center gap-1 h-12">
-                {[1,2,3,4,5,4,3,2,1,3,5,7,5,3,1].map((h, i) => (
+                {/* 实时识别文字 / 录音提示 */}
+                <div className="max-w-sm mx-6 mb-6 text-center min-h-[3rem]">
+                  {speechApiSupported ? (
+                    liveText ? (
+                      <p className="text-white text-lg font-medium leading-relaxed">{liveText}</p>
+                    ) : (
+                      <p className="text-white/40 text-base">正在聆听...</p>
+                    )
+                  ) : (
+                    <p className="text-white/40 text-base">正在录音...</p>
+                  )}
+                </div>
+
+                {/* 麦克风图标 + 波形动画 */}
+                <div className="flex flex-col items-center gap-6">
                   <div
-                    key={i}
-                    className={`w-1 rounded-full transition-all ${
-                      cancelGesture ? 'bg-red-400/60' : 'bg-blue-400/80'
+                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      cancelGesture ? 'bg-red-500/40 scale-90' : 'bg-blue-500/30 scale-100'
                     }`}
-                    style={{
-                      height: `${h * 4}px`,
-                      animation: `mic-pulse ${0.8 + (i % 5) * 0.1}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.05}s`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
+                  >
+                    <svg className={`w-10 h-10 transition-colors ${cancelGesture ? 'text-red-400' : 'text-blue-300'}`} fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
+                      <path d="M19 11a7 7 0 01-14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
 
-            {/* 底部提示 + 停止按钮 */}
-            <div className="mt-12 flex flex-col items-center gap-4">
-              <p className={`text-base font-medium transition-colors ${
-                cancelGesture ? 'text-red-400' : 'text-white/70'
-              }`}>
-                {cancelGesture ? '松手取消录音' : '松开 发送'}
-              </p>
-              {/* 停止按钮 — 点击立即取消录音 */}
-              <button
-                onClick={handleStopRecording}
-                className="pointer-events-auto w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-colors active:scale-90"
-                title="停止录音"
-              >
-                <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        ) : isTranscribing ? (
-          /* ───── 识别中浮层 ───── */
-          <div
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-auto"
-            style={{ background: "rgba(0,0,0,0.85)" }}
-          >
-            <div className="flex flex-col items-center gap-6">
-              <div className="w-20 h-20 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              </div>
-              <p className="text-white/70 text-base font-medium">正在识别语音...</p>
-            </div>
+                  {/* 波形条 */}
+                  <div className="flex items-center gap-1 h-12">
+                    {[1,2,3,4,5,4,3,2,1,3,5,7,5,3,1].map((h, i) => (
+                      <div
+                        key={i}
+                        className={`w-1 rounded-full transition-all ${
+                          (speechApiSupported && liveText) ? 'bg-green-400/80' : cancelGesture ? 'bg-red-400/60' : 'bg-blue-400/80'
+                        }`}
+                        style={{
+                          height: `${h * 4}px`,
+                          animation: `mic-pulse ${0.8 + (i % 5) * 0.1}s ease-in-out infinite`,
+                          animationDelay: `${i * 0.05}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* 底部提示 + 停止按钮 */}
+                <div className="mt-12 flex flex-col items-center gap-4">
+                  <p className={`text-base font-medium transition-colors ${
+                    cancelGesture ? 'text-red-400' : 'text-white/70'
+                  }`}>
+                    {cancelGesture ? '松手取消' : '松开 发送'}
+                  </p>
+                  <button
+                    onClick={handleStopListening}
+                    className="pointer-events-auto w-12 h-12 rounded-full bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-colors active:scale-90"
+                    title="停止并发送"
+                  >
+                    <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" rx="1" />
+                    </svg>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -2091,18 +2175,17 @@ export function AgentChatView() {
                 </button>
               ) : inputMode === 'voice' ? (
                 <button
-                  onMouseDown={isTranscribing ? undefined : handlePressStart}
-                  onMouseUp={isTranscribing ? undefined : handlePressEnd}
-                  onMouseMove={isTranscribing ? undefined : handleRecordingMove}
-                  onTouchStart={isTranscribing ? undefined : handlePressStart}
-                  onTouchEnd={isTranscribing ? undefined : handlePressEnd}
-                  onTouchCancel={isTranscribing ? undefined : handlePressEnd}
-                  onTouchMove={isTranscribing ? undefined : handleRecordingMove}
+                  onMouseDown={handlePressStart}
+                  onMouseUp={handlePressEnd}
+                  onMouseMove={handleRecordingMove}
+                  onTouchStart={handlePressStart}
+                  onTouchEnd={handlePressEnd}
+                  onTouchCancel={handlePressEnd}
+                  onTouchMove={handleRecordingMove}
                   onContextMenu={(e) => e.preventDefault()}
-                  disabled={isTranscribing}
                   className={`flex-1 h-11 rounded-full flex items-center justify-center select-none transition-all duration-200 active:scale-[0.97] ${
                     pressingMic ? 'scale-[1.02] shadow-lg shadow-red-500/30' : ''
-                  } ${isTranscribing ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  }`}
                   style={{
                     background: pressingMic
                       ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
@@ -2112,7 +2195,7 @@ export function AgentChatView() {
                   }}
                 >
                   <span className="text-white text-sm font-medium tracking-wide">
-                    {isTranscribing ? '识别中...' : pressingMic ? '松开 发送' : '按住说话'}
+                    {pressingMic ? '松开 发送' : '按住说话'}
                   </span>
                 </button>
               ) : (
@@ -2241,20 +2324,27 @@ export function AgentChatView() {
                   </>
                 )}
               </div>
-            </div>
 
-            {/* 文字模式下有内容时显示发送按钮 */}
-            {inputMode === 'text' && (input.trim() || attachedFiles.length > 0) && !isStreaming && (
-              <div className="flex justify-end">
+              {/* 发送按钮 — 始终可见，有内容时高亮 */}
+              {inputMode === 'text' && !isStreaming && (
                 <button
                   onClick={handleSend}
-                  className="px-5 py-2 rounded-full text-sm font-medium text-white transition-all active:scale-95"
-                  style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)' }}
+                  disabled={!input.trim() && attachedFiles.length === 0}
+                  className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90"
+                  title="发送"
+                  style={{
+                    background: (input.trim() || attachedFiles.length > 0)
+                      ? 'linear-gradient(135deg, #3B82F6, #8B5CF6)'
+                      : 'transparent',
+                    opacity: (input.trim() || attachedFiles.length > 0) ? 1 : 0.4,
+                  }}
                 >
-                  发送
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
         </div>

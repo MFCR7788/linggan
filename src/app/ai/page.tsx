@@ -15,6 +15,8 @@ import { useInspirations } from "@/hooks/use-inspiration";
 import { useAccountType } from "@/hooks/use-account-type";
 import { TYPE_EMOJIS, TYPE_LABELS } from "@/lib/style-constants";
 import { JargonTooltip } from "@/components/JargonTooltip";
+import { isFeatureEnabled, AI_TOOL_MIN_VERSION, type FeatureVersion } from "@/lib/feature-flags";
+
 interface AITool {
   icon: React.ReactNode;
   title: string;
@@ -22,31 +24,43 @@ interface AITool {
   color: string;
   path: string;
   badge?: string;
-  disabled?: boolean;
+  /** 对应的 AI 工具 ID（映射到 AI_TOOL_MIN_VERSION），留空表示始终可用 */
+  toolId?: string;
 }
+
+function isToolEnabled(tool: AITool): boolean {
+  if (!tool.toolId) return true;
+  const minVersion = AI_TOOL_MIN_VERSION[tool.toolId];
+  if (!minVersion) return true;
+  return isFeatureEnabled(minVersion);
+}
+
+const VERSION_LABELS: Record<FeatureVersion, string> = {
+  'v1.0': 'V1.0', 'v1.1': 'V1.1', 'v2.0': 'V2.0', 'v2.1': 'V2.1',
+};
 
 const creationTools: AITool[] = [
   { icon: <FileText size={28} />, title: "AI 文案", desc: "写小红书/公众号/短视频文案", color: "#3B82F6", path: "/ai/copywriting" },
   { icon: <ImageIcon size={28} />, title: "AI 图片", desc: "生成封面图/配图/海报", color: "#8B5CF6", path: "/ai/image" },
   { icon: <VideoIcon size={28} />, title: "AI 视频", desc: "文案自动合成短视频", color: "#F43F5E", path: "/ai/video" },
   { icon: <Music size={28} />, title: "AI 配音", desc: "文字转自然语音多音色", color: "#22C55E", path: "/ai/tts" },
-  { icon: <Mic size={28} />, title: "AI 数字人", desc: "虚拟主播替你出镜讲解", color: "#06B6D4", path: "/ai/digital-human", disabled: true, badge: "V1.1" },
-  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "6 种场景朋友圈配图", color: "#F59E0B", path: "/ai/ads", disabled: true, badge: "V1.1" },
+  { icon: <Mic size={28} />, title: "AI 数字人", desc: "虚拟主播替你出镜讲解", color: "#06B6D4", path: "/ai/digital-human", toolId: "ai-digital-human" },
+  { icon: <Grid3x3 size={28} />, title: "9 宫格", desc: "6 种场景朋友圈配图", color: "#F59E0B", path: "/ai/ads", toolId: "ai-ads" },
 ];
 
 const editTools: AITool[] = [
-  { icon: <Wand2 size={28} />, title: "智能编辑", desc: "去废话/静音/重复精剪", color: "#A78BFA", path: "/ai/smart-clip", disabled: true, badge: "V2.0" },
-  { icon: <Layers size={28} />, title: "AI 混剪", desc: "多素材智能编排+合成", color: "#F97316", path: "/ai/mashup", disabled: true, badge: "V2.0" },
-  { icon: <PenTool size={28} />, title: "封面生成", desc: "智能选帧+标题+模板", color: "#EC4899", path: "/ai/cover-generator", disabled: true, badge: "V2.0" },
-  { icon: <FileText size={28} />, title: "标题优化", desc: "多平台标题一键生成", color: "#14B8A6", path: "/ai/title-optimizer", disabled: true, badge: "V1.1" },
-  { icon: <VideoIcon size={28} />, title: "视频混剪", desc: "图文+BGM+字幕合成", color: "#6366F1", path: "/ai/video-mix", disabled: true, badge: "V2.0" },
-  { icon: <Scissors size={28} />, title: "图片编辑", desc: "去背景/变清晰/扩展", color: "#D946EF", path: "/ai/image-editor", disabled: true, badge: "V1.1" },
+  { icon: <Wand2 size={28} />, title: "智能编辑", desc: "去废话/静音/重复精剪", color: "#A78BFA", path: "/ai/smart-clip", toolId: "ai-smart-clip" },
+  { icon: <Layers size={28} />, title: "AI 混剪", desc: "多素材智能编排+合成", color: "#F97316", path: "/ai/mashup", toolId: "ai-mashup" },
+  { icon: <PenTool size={28} />, title: "封面生成", desc: "智能选帧+标题+模板", color: "#EC4899", path: "/ai/cover-generator", toolId: "ai-cover-generator" },
+  { icon: <FileText size={28} />, title: "标题优化", desc: "多平台标题一键生成", color: "#14B8A6", path: "/ai/title-optimizer", toolId: "ai-title-optimizer" },
+  { icon: <VideoIcon size={28} />, title: "视频混剪", desc: "图文+BGM+字幕合成", color: "#6366F1", path: "/ai/video-mix", toolId: "ai-video-mix" },
+  { icon: <Scissors size={28} />, title: "图片编辑", desc: "去背景/变清晰/扩展", color: "#D946EF", path: "/ai/image-editor", toolId: "ai-image-editor" },
 ];
 
 const dataTools: AITool[] = [
   { icon: <TrendingUp size={28} />, title: "热点选题", desc: "发现热门话题找灵感", color: "#EF4444", path: "/hotspot" },
-  { icon: <Send size={28} />, title: "多平台分发", desc: "一键发布到多平台", color: "#F43F5E", path: "/publish", disabled: true, badge: "V1.1" },
-  { icon: <BarChart3 size={20} />, title: "效果数据", desc: "公众号/微博数据追踪", color: "#06B6D4", path: "/insights", disabled: true, badge: "V1.1" },
+  { icon: <Send size={28} />, title: "多平台分发", desc: "一键发布到多平台", color: "#F43F5E", path: "/publish", toolId: "publish" },
+  { icon: <BarChart3 size={20} />, title: "效果数据", desc: "公众号/微博数据追踪", color: "#06B6D4", path: "/insights", toolId: "insights" },
 ];
 
 function AICreationContent() {
@@ -94,27 +108,35 @@ function AICreationContent() {
 
   const renderToolGrid = (tools: AITool[]) => (
     <div className="grid grid-cols-3 gap-2.5">
-      {tools.map(({ icon, title, desc, color, path, badge, disabled }) => (
+      {tools.map((tool) => {
+        const enabled = isToolEnabled(tool);
+        const badge = tool.toolId && !enabled
+          ? VERSION_LABELS[AI_TOOL_MIN_VERSION[tool.toolId] || 'v1.1']
+          : undefined;
+        const { icon, title, desc, color, path } = tool;
+
+        return (
         <GlassCard
           key={title}
-          hover={!disabled}
-          onClick={() => !disabled && router.push(path)}
+          hover={enabled}
+          onClick={() => enabled && router.push(path)}
           className="!p-3 flex flex-col items-center text-center gap-1.5 relative overflow-hidden"
-          style={disabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+          style={!enabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
         >
           {badge && (
             <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold"
-              style={disabled ? { background: 'rgba(255,255,255,0.1)', color: '#6B7280' } : { background: '#F59E0B', color: '#000' }}>
+              style={!enabled ? { background: 'rgba(255,255,255,0.1)', color: '#6B7280' } : { background: '#F59E0B', color: '#000' }}>
               {badge}
             </span>
           )}
-          <span style={{ color: disabled ? '#4B5563' : color, fontSize: 28 }}>{icon}</span>
-          <p style={{ color: disabled ? '#6B7280' : '#FFFFFF', fontSize: 12, fontWeight: 600 }}>
-            {disabled ? title : <JargonTooltip text={title} />}
+          <span style={{ color: !enabled ? '#4B5563' : color, fontSize: 28 }}>{icon}</span>
+          <p style={{ color: !enabled ? '#6B7280' : '#FFFFFF', fontSize: 12, fontWeight: 600 }}>
+            {!enabled ? title : <JargonTooltip text={title} />}
           </p>
           <p style={{ color: '#6B7280', fontSize: 10, lineHeight: 1.3 }}>{desc}</p>
         </GlassCard>
-      ))}
+        );
+      })}
     </div>
   );
 

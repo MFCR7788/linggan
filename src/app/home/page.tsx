@@ -377,12 +377,15 @@ function HomeContent() {
             />
           ) : filteredInspirations.length > 0 ? (
             <div className="columns-2 gap-3 [&>*]:[break-inside:avoid]">
-              {filteredInspirations.slice(0, 5).map((item: ContentItem) => {
-                const coverUrl = item.media_urls?.[0] || item.thumbnail_url;
+              {filteredInspirations.slice(0, 10).map((item: ContentItem) => {
                 const isImage = item.type === 'image';
                 const isVideo = item.type === 'video';
                 const isAudio = item.type === 'audio' || item.type === 'voice';
-                const showCover = (isImage || isVideo) && coverUrl;
+                const imageCoverUrl = isImage ? (item.media_urls?.[0] || item.thumbnail_url) : null;
+                const videoCoverUrl = isVideo ? (item.thumbnail_url || null) : null;
+                const showImageCover = !!imageCoverUrl;
+                const showVideoCover = isVideo && !!videoCoverUrl;
+                const showVideoPlaceholder = isVideo && !videoCoverUrl;
 
                 return (
                 <GlassCard
@@ -391,27 +394,48 @@ function HomeContent() {
                   onClick={() => router.push(`/inspiration/detail?id=${item.id}`)}
                   className="!p-0 mb-3 overflow-hidden"
                 >
-                  {/* 图片/视频 — 封面图 */}
-                  {showCover ? (
+                  {/* 图片封面 */}
+                  {showImageCover && (
                     <div className="relative w-full bg-gray-900/50">
                       <img
-                        src={coverUrl}
+                        src={imageCoverUrl!}
                         alt={item.title || ''}
                         loading="lazy"
                         className="w-full object-cover"
                         style={{ maxHeight: 200 }}
                       />
-                      {isVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  ) : isAudio ? (
+                  )}
+                  {/* 视频封面（有缩略图） */}
+                  {showVideoCover && (
+                    <div className="relative w-full bg-gray-900/50">
+                      <img
+                        src={videoCoverUrl!}
+                        alt={item.title || ''}
+                        loading="lazy"
+                        className="w-full object-cover"
+                        style={{ maxHeight: 200 }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* 视频占位（无缩略图） */}
+                  {showVideoPlaceholder && (
+                    <div className="relative w-full bg-gray-900/50 flex items-center justify-center py-12" style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(168,85,247,0.08))' }}>
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  {isAudio ? (
                     /* 音频 — 渐变占位 */
                     <div className="flex items-center justify-center py-8" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.08))' }}>
                       <svg className="w-8 h-8 text-green-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">

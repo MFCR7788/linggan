@@ -188,6 +188,7 @@ export async function getCurrentUser() {
       console.warn('[getCurrentUser] DEV_AUTH_SECRET 未配置，开发模式认证已禁用。请设置 DEV_AUTH_SECRET 后重启。');
     } else {
       try {
+        // 方式 1：Header 认证 (x-dev-auth-secret + x-dev-user-id 或 dev_user_id cookie)
         const headersList = headers();
         const headerSecret = headersList.get('x-dev-auth-secret');
         if (headerSecret === devAuthSecret) {
@@ -206,6 +207,21 @@ export async function getCurrentUser() {
           } catch (_) {}
         } else if (headerSecret) {
           console.warn('[getCurrentUser] DEV_AUTH_SECRET 不匹配，拒绝开发模式认证');
+        }
+
+        // 方式 2：Cookie 认证 (dev_auth_secret + dev_user_id cookie，与 middleware 一致)
+        if (!headerSecret) {
+          try {
+            const cookieStore = cookies();
+            const cookieSecret = cookieStore.get('dev_auth_secret')?.value;
+            if (cookieSecret === devAuthSecret) {
+              const devUserId = cookieStore.get('dev_user_id')?.value;
+              if (devUserId) {
+                await ensureDevUserProfile(devUserId);
+                return createDevUser(devUserId);
+              }
+            }
+          } catch (_) {}
         }
       } catch (_) {
         // headers() 不可用时走真实会话

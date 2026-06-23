@@ -172,54 +172,33 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative">
+    <div className="flex flex-col items-center px-6" style={{ paddingTop: 'max(60px, 10vh)', paddingBottom: 32 }}>
       {/* Logo */}
-      <div className="flex flex-col items-center mb-8">
-        <div className="w-20 h-20 mb-3 flex items-center justify-center">
-          <img
-            src="/brand/logo-mark.png"
-            alt="灵集"
-            className="w-full h-full object-contain"
-            style={{
-              transform: "scale(1.5)",
-              filter: "drop-shadow(0 0 30px rgba(139,92,246,0.4))",
-            }}
-          />
-        </div>
-        <h1
-          style={{
-            color: "#FFFFFF",
-            fontSize: 28,
-            fontWeight: 700,
-            letterSpacing: 2,
-          }}
-        >
-          灵集
-        </h1>
-        <p style={{ color: "#9CA3AF", fontSize: 13, marginTop: 4 }}>
-          AI 灵感创作助手
-        </p>
-        
-        {/* 测试模式提示 */}
-        {isLocalhost && (
-        <div
-          className="mt-4 px-4 py-3 rounded-lg"
-          style={{
-            background: "rgba(34,197,94,0.1)",
-            border: "1px solid rgba(34,197,94,0.3)",
-          }}
-        >
-          <p style={{ color: "#22C55E", fontSize: 11, textAlign: "center" }}>
-            🧪 本地测试模式
-          </p>
-          <p style={{ color: "#86EFAC", fontSize: 12, textAlign: "center", marginTop: 4 }}>
-            短信发送失败时会显示开发验证码
-          </p>
-        </div>
-        )}
-      </div>
+      <img
+        src="/brand/logo-mark.png"
+        alt="灵集"
+        style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12 }}
+      />
+      <h1 style={{ color: "#FFFFFF", fontSize: 20, fontWeight: 700, letterSpacing: 2, margin: 0 }}>
+        灵集
+      </h1>
+      <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 2 }}>
+        AI 灵感创作助手
+      </p>
 
-      <GlassCard className="w-full max-w-sm p-6">
+      {/* 测试模式提示 */}
+      {isLocalhost && (
+        <div
+          className="mt-3 px-3 py-1.5 rounded-lg"
+          style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)" }}
+        >
+          <p style={{ color: "#22C55E", fontSize: 11, textAlign: "center", margin: 0 }}>
+            🧪 本地测试模式 · 开发验证码可用
+          </p>
+        </div>
+      )}
+
+      <GlassCard className="w-full max-w-sm mt-5" style={{ padding: 20 }}>
         {/* Tab */}
         <div
           className="flex mb-6 rounded-xl overflow-hidden"
@@ -257,7 +236,7 @@ function LoginContent() {
         )}
 
         {tab === "login" ? (
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <form onSubmit={handleLogin} className="flex flex-col gap-3">
             <GlassInput
               icon={<Smartphone size={18} />}
               placeholder="请输入手机号"
@@ -298,7 +277,7 @@ function LoginContent() {
             </PrimaryButton>
           </form>
         ) : (
-          <form onSubmit={handleRegister} className="flex flex-col gap-4">
+          <form onSubmit={handleRegister} className="flex flex-col gap-3">
             <GlassInput
               icon={<Smartphone size={18} />}
               placeholder="请输入手机号"
@@ -347,7 +326,7 @@ function LoginContent() {
         )}
       </GlassCard>
 
-      <p className="mt-6 text-center" style={{ color: "#9CA3AF", fontSize: 11 }}>
+      <p className="mt-4 text-center" style={{ color: "#9CA3AF", fontSize: 11 }}>
         登录即表示您同意{" "}
         <span style={{ color: "#3B82F6" }}>用户协议</span>
         {" "}和{" "}

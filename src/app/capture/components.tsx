@@ -42,9 +42,9 @@ export function UserActions({ msg, copiedId, generatingId, onCopy, onShare, onMo
   const hasImage = msg.attachments?.some(a => a.type === 'image');
   return (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <ActionBtn icon={Edit3} tooltip="修改" onClick={() => onModify(msg)} />
       <ActionBtn icon={copiedId === msg.id ? Check : Clipboard} tooltip="复制" onClick={() => onCopy(msg)} />
       <ActionBtn icon={Share2} tooltip="分享" onClick={() => onShare(msg)} />
-      <ActionBtn icon={Edit3} tooltip="修改" onClick={() => onModify(msg)} />
       {hasImage && (
         <>
           <ActionBtn icon={ImageIcon} tooltip="图生图" onClick={() => onImg2Img?.(msg)}
@@ -60,7 +60,7 @@ export function UserActions({ msg, copiedId, generatingId, onCopy, onShare, onMo
 
 // ====== AI 消息操作按钮 ======
 
-export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId, schedulingId, onCopy, onSpeak, onShare, onRegenerate, onSave, onAddToSchedule, onDelete }: {
+export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId, schedulingId, onCopy, onSpeak, onShare, onRegenerate, onSave, onAddToSchedule, onModify, onDelete }: {
   msg: Message;
   copiedId: string | null;
   speakingId: string | null;
@@ -73,11 +73,13 @@ export function AiActions({ msg, copiedId, speakingId, regeneratingId, savingId,
   onRegenerate: (msg: Message) => void;
   onSave: (msg: Message) => void;
   onAddToSchedule: (msg: Message) => void;
+  onModify: (msg: Message) => void;
   onDelete: (msg: Message) => void;
 }) {
   const isSpeaking = speakingId === msg.id;
   return (
     <div className="flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity duration-150">
+      <ActionBtn icon={Edit3} tooltip="修改" onClick={() => onModify(msg)} />
       <ActionBtn icon={copiedId === msg.id ? Check : Clipboard} tooltip="复制" onClick={() => onCopy(msg)} />
       <button
         onClick={() => onSpeak(msg)}

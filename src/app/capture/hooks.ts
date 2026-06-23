@@ -177,13 +177,8 @@ export function useMessageActions() {
     }
   }, [copyMessage]);
 
-  const modifyMessage = useCallback((msg: Message, setInputText: (t: string) => void, setMessages: (fn: (prev: Message[]) => Message[]) => void, textareaRef: React.RefObject<HTMLTextAreaElement | null>) => {
+  const modifyMessage = useCallback((msg: Message, setInputText: (t: string) => void, _setMessages: (fn: (prev: Message[]) => Message[]) => void, textareaRef: React.RefObject<HTMLTextAreaElement | null>) => {
     setInputText(msg.content);
-    setMessages(prev => {
-      const idx = prev.findIndex(m => m.id === msg.id);
-      if (idx === -1) return prev;
-      return prev.slice(0, idx);
-    });
     textareaRef.current?.focus();
   }, []);
 
@@ -440,17 +435,16 @@ export function useVoiceRecording() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [isPolishing, setIsPolishing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldRestartRef = useRef(false);
-  const punctuateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastPunctuatedLenRef = useRef(0);
-  const punctuatedTextRef = useRef('');
+  const stoppingRef = useRef(false);
 
   // 录音计时器
   useEffect(() => {
-    if (isRecording) {
+    if (isRecording && !isPolishing) {
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -463,164 +457,147 @@ export function useVoiceRecording() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRecording]);
+  }, [isRecording, isPolishing]);
 
-  // 清理标点定时器
-  useEffect(() => {
-    return () => {
-      if (punctuateTimerRef.current) clearTimeout(punctuateTimerRef.current);
-    };
-  }, []);
+  /** 调用标点+纠错 API，一次性处理全文 */
+  const polishText = async (rawText: string): Promise<string> => {
+    if (!rawText.trim()) return rawText;
+    try {
+      syncDevAuthCookie();
+      const res = await fetch('/api/ai/punctuate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawText }),
+      });
+      if (!res.ok) return rawText;
+      const data = await res.json();
+      if (data.success && data.data?.text) {
+        return data.data.text.trim();
+      }
+    } catch { /* ignore */ }
+    return rawText;
+  };
 
-  // 实时补标点（防抖 1.5s，只发送新增的已确认文本）
-  const schedulePunctuate = () => {
-    if (punctuateTimerRef.current) clearTimeout(punctuateTimerRef.current);
-    punctuateTimerRef.current = setTimeout(async () => {
-      const fullText = finalTranscriptRef.current;
-      const newPart = fullText.slice(lastPunctuatedLenRef.current);
-      if (!newPart.trim()) return;
-
-      try {
-        const res = await fetch('/api/ai/punctuate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: newPart }),
-        });
-        const data = await res.json();
-        if (data.success && data.data?.text) {
-          punctuatedTextRef.current = punctuatedTextRef.current + data.data.text;
-          lastPunctuatedLenRef.current = fullText.length;
-          // 更新实时显示
-          let interim = '';
-          // 从当前 liveTranscript 提取 interim 部分
-          const currentLive = fullText; // 这是 final 部分
-          // 重新触发显示更新（下次 onresult 会用到 punctuatedTextRef）
-        }
-      } catch { /* ignore */ }
-    }, 1500);
+  /** 彻底清理录音状态 */
+  const cleanupRecording = () => {
+    shouldRestartRef.current = false;
+    stoppingRef.current = false;
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* noop */ }
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+    setIsPolishing(false);
+    setRecordingTime(0);
+    setLiveTranscript('');
   };
 
   const startRecording = () => {
-    // 防止 pointer + touch 双事件同时触发导致重复启动
-    if (recognitionRef.current) return;
+    // 防止重复启动和正在停止时启动
+    if (recognitionRef.current || stoppingRef.current) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) { showToast('您的浏览器不支持语音识别，请使用 Chrome 浏览器', 'warning'); return; }
 
     setIsRecording(true);
+    setIsPolishing(false);
     setRecordingTime(0);
     setLiveTranscript('');
     finalTranscriptRef.current = '';
-    punctuatedTextRef.current = '';
-    lastPunctuatedLenRef.current = 0;
     shouldRestartRef.current = true;
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'zh-CN';
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 3;
 
     recognition.onresult = (event: any) => {
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalTranscriptRef.current += result[0].transcript;
+          let best = result[0].transcript;
+          let bestConf = result[0].confidence || 0;
+          for (let j = 1; j < result.length; j++) {
+            if ((result[j].confidence || 0) > bestConf) {
+              best = result[j].transcript;
+              bestConf = result[j].confidence;
+            }
+          }
+          finalTranscriptRef.current += best;
         } else {
           interim += result[0].transcript;
         }
       }
-      // 实时显示：已补标点的部分 + 待补标点的新文本 + 临时结果
-      const newUnpunctuated = finalTranscriptRef.current.slice(lastPunctuatedLenRef.current);
-      setLiveTranscript(punctuatedTextRef.current + newUnpunctuated + interim);
-      // 有新确认文本时触发补标点
-      if (newUnpunctuated.trim()) {
-        schedulePunctuate();
-      }
+      setLiveTranscript(finalTranscriptRef.current + interim);
     };
 
     recognition.onerror = (event: any) => {
       console.error('语音识别错误:', event.error);
       if (event.error === 'not-allowed') {
         showToast('请允许使用麦克风权限', 'warning');
-        shouldRestartRef.current = false;
-        setIsRecording(false);
-        setRecordingTime(0);
+        cleanupRecording();
       }
-      // 'no-speech', 'aborted' 等错误不中断，让 onend 处理重连
     };
 
     recognition.onend = () => {
-      // Chrome 桌面端会在静默后自动停止，自动重启
       if (shouldRestartRef.current) {
         try {
           recognition.start();
         } catch {
-          // 如果无法重启（如权限被撤销），停止录音
-          shouldRestartRef.current = false;
-          setIsRecording(false);
-          setRecordingTime(0);
+          cleanupRecording();
         }
       }
     };
 
-    recognition.start();
-    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch {
+      showToast('无法启动语音识别，请检查麦克风权限', 'warning');
+      setIsRecording(false);
+    }
   };
 
   const stopRecording = async () => {
+    if (stoppingRef.current) return ''; // 防止重复调用
+    stoppingRef.current = true;
     shouldRestartRef.current = false;
-    if (punctuateTimerRef.current) {
-      clearTimeout(punctuateTimerRef.current);
-      punctuateTimerRef.current = null;
-    }
+
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch { /* noop */ }
       recognitionRef.current = null;
     }
-    // 最后一次补标点：发送剩余未处理文本
-    const remaining = finalTranscriptRef.current.slice(lastPunctuatedLenRef.current);
-    let finalText = punctuatedTextRef.current + remaining;
-    if (remaining.trim()) {
-      try {
-        const res = await fetch('/api/ai/punctuate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: remaining }),
-        });
-        const data = await res.json();
-        if (data.success && data.data?.text) {
-          finalText = punctuatedTextRef.current + data.data.text;
-        }
-      } catch { /* ignore */ }
+
+    const rawText = finalTranscriptRef.current.trim();
+
+    if (!rawText) {
+      cleanupRecording();
+      return '';
     }
-    const transcript = finalText.trim() || finalTranscriptRef.current.trim();
-    setIsRecording(false);
-    setRecordingTime(0);
-    setLiveTranscript('');
-    return transcript;
+
+    // 保持录音 UI，显示优化中
+    setIsPolishing(true);
+    setLiveTranscript('正在优化识别结果…');
+
+    const polished = await polishText(rawText);
+
+    cleanupRecording();
+    return polished;
   };
 
   const cancelRecording = () => {
-    shouldRestartRef.current = false;
-    if (punctuateTimerRef.current) {
-      clearTimeout(punctuateTimerRef.current);
-      punctuateTimerRef.current = null;
-    }
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    setIsRecording(false);
-    setRecordingTime(0);
-    setLiveTranscript('');
+    stoppingRef.current = false;
+    cleanupRecording();
   };
 
   return {
     isRecording, setIsRecording,
     recordingTime, setRecordingTime,
     liveTranscript,
+    isPolishing,
     recognitionRef,
     startRecording, stopRecording, cancelRecording,
   };

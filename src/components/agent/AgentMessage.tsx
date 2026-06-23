@@ -22,6 +22,7 @@ interface AgentMessageProps {
   timestamp?: Date;
   // 操作按钮
   onCopy?: () => void;
+  onModify?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
   onSaveToInspiration?: () => void;
@@ -36,7 +37,7 @@ export function AgentMessage({
   generatedImages, generatedVideo, generatedAudio,
   schedules, scheduledItems, schedulingId, onAddSchedule, onAddAllSchedules, messageId,
   timestamp,
-  onCopy, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
+  onCopy, onModify, onRegenerate, onDelete, onSaveToInspiration, onSpeak, onShare, isCopied, isRegenerating,
 }: AgentMessageProps) {
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -305,7 +306,12 @@ export function AgentMessage({
 
         {/* 操作按钮 — AI 消息始终可见 */}
         {!isUser && onCopy && (
-          <div className="flex items-center gap-0.5 mt-1.5 opacity-70 hover:opacity-100 transition-opacity duration-150">
+          <div className="flex items-center gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <ActionBtn
+              icon={EditIcon}
+              tooltip="修改"
+              onClick={onModify || (() => {})}
+            />
             <ActionBtn
               icon={isCopied ? CheckIcon : CopyIcon}
               tooltip="复制"
@@ -348,6 +354,11 @@ export function AgentMessage({
 
         {isUser && onCopy && (
           <div className="flex items-center gap-0.5 mt-1.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <ActionBtn
+              icon={EditIcon}
+              tooltip="修改"
+              onClick={onModify || (() => {})}
+            />
             <ActionBtn
               icon={isCopied ? CheckIcon : CopyIcon}
               tooltip="复制"
@@ -564,6 +575,15 @@ function ShareIcon({ size }: { size: number }) {
       <circle cx="18" cy="19" r="3" />
       <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
       <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  );
+}
+
+function EditIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   );
 }

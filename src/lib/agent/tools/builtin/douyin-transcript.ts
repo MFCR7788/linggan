@@ -213,7 +213,7 @@ async function extractSingleVideo(url: string, fastOnly: boolean): Promise<Extra
 
 function extractUrls(text: string): string[] {
   const patterns = [
-    /https?:\/\/v\.douyin\.com\/[A-Za-z0-9]+\/?/g,
+    /https?:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/?/g,
     /https?:\/\/www\.douyin\.com\/video\/\d+/g,
     /https?:\/\/www\.iesdouyin\.com\/share\/video\/\d+/g,
   ];
