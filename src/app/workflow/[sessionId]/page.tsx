@@ -50,7 +50,7 @@ function WorkflowPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: '#0A0A0A' }}>
-        <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 opacity-40" />
+        <img src="/brand/logo-mark.svg" alt="灵集" className="w-12 h-12 opacity-40" />
         <LoadingSpinner text="加载工作流..." />
       </div>
     );
@@ -59,7 +59,7 @@ function WorkflowPage() {
   if (error || !session) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: '#0A0A0A' }}>
-        <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10 mb-2 opacity-40" />
+        <img src="/brand/logo-mark.svg" alt="灵集" className="w-10 h-10 mb-2 opacity-40" />
         <p style={{ color: '#FCA5A5', fontSize: 14 }}>会话不存在或已过期</p>
         <a href="/ai" style={{ color: '#93C5FD', fontSize: 13 }}>返回 AI 创作中心</a>
       </div>

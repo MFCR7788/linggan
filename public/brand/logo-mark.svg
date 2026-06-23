@@ -16,41 +16,42 @@
   <rect width="240" height="240" rx="52" fill="#0F1D33"/>
 
   <!-- 光晕 -->
-  <circle cx="120" cy="112" r="85" fill="url(#glowM)"/>
+  <circle cx="120" cy="114" r="98" fill="url(#glowM)"/>
 
   <!-- 中心菱形 -->
-  <g transform="translate(120,112)">
-    <ellipse cx="0" cy="0" rx="58" ry="58" fill="#8B5CF6" opacity="0.10"/>
-    <ellipse cx="0" cy="0" rx="42" ry="42" fill="#3B82F6" opacity="0.15"/>
-    <rect x="-22" y="-22" width="44" height="44" rx="10" fill="url(#gradM)" transform="rotate(45)"/>
-    <circle cx="0" cy="0" r="7" fill="#FFFFFF" opacity="0.9"/>
+  <g transform="translate(120,114)">
+    <ellipse cx="0" cy="0" rx="72" ry="72" fill="#8B5CF6" opacity="0.08"/>
+    <ellipse cx="0" cy="0" rx="54" ry="54" fill="#3B82F6" opacity="0.12"/>
+    <ellipse cx="0" cy="0" rx="38" ry="38" fill="#3B82F6" opacity="0.18"/>
+    <rect x="-30" y="-30" width="60" height="60" rx="14" fill="url(#gradM)" transform="rotate(45)"/>
+    <circle cx="0" cy="0" r="9" fill="#FFFFFF" opacity="0.9"/>
   </g>
 
   <!-- 四角节点 -->
   <g fill="url(#gradM)" opacity="0.55">
     <!-- 左上 -->
-    <circle cx="44" cy="44" r="5"/>
-    <circle cx="34" cy="54" r="3.5"/>
-    <circle cx="54" cy="34" r="3.5"/>
+    <circle cx="28" cy="28" r="6"/>
+    <circle cx="18" cy="40" r="4"/>
+    <circle cx="40" cy="18" r="4"/>
     <!-- 右上 -->
-    <circle cx="196" cy="44" r="5"/>
-    <circle cx="186" cy="54" r="3.5"/>
-    <circle cx="206" cy="34" r="3.5"/>
+    <circle cx="212" cy="28" r="6"/>
+    <circle cx="200" cy="40" r="4"/>
+    <circle cx="222" cy="18" r="4"/>
     <!-- 左下 -->
-    <circle cx="44" cy="196" r="5"/>
-    <circle cx="34" cy="186" r="3.5"/>
-    <circle cx="54" cy="206" r="3.5"/>
+    <circle cx="28" cy="212" r="6"/>
+    <circle cx="18" cy="200" r="4"/>
+    <circle cx="40" cy="222" r="4"/>
     <!-- 右下 -->
-    <circle cx="196" cy="196" r="5"/>
-    <circle cx="186" cy="186" r="3.5"/>
-    <circle cx="206" cy="206" r="3.5"/>
+    <circle cx="212" cy="212" r="6"/>
+    <circle cx="200" cy="200" r="4"/>
+    <circle cx="222" cy="222" r="4"/>
   </g>
 
   <!-- 连接线 -->
   <g stroke="url(#gradM)" stroke-width="1.2" stroke-linecap="round" fill="none" opacity="0.18">
-    <line x1="44" y1="44" x2="105" y2="95"/>
-    <line x1="196" y1="44" x2="135" y2="95"/>
-    <line x1="44" y1="196" x2="105" y2="129"/>
-    <line x1="196" y1="196" x2="135" y2="129"/>
+    <line x1="28" y1="28" x2="104" y2="98"/>
+    <line x1="212" y1="28" x2="136" y2="98"/>
+    <line x1="28" y1="212" x2="104" y2="130"/>
+    <line x1="212" y1="212" x2="136" y2="130"/>
   </g>
 </svg>

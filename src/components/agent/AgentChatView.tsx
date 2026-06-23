@@ -1587,7 +1587,7 @@ export function AgentChatView() {
           <div className="flex flex-col items-center justify-center min-h-full px-6 text-center pb-8">
             {/* Logo */}
             <img
-              src="/brand/logo-mark.png"
+              src="/brand/logo-mark.svg"
               alt="灵集"
               className="w-20 h-20 mb-5"
               style={{ filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.5))' }}

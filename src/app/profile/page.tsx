@@ -159,12 +159,12 @@ function ProfileContent() {
       <div className="flex-1 px-4 pt-4 space-y-4">
         {userLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 opacity-30" />
+            <img src="/brand/logo-mark.svg" alt="灵集" className="w-12 h-12 opacity-30" />
             <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
           </div>
         ) : userError ? (
           <GlassCard className="!p-5 text-center">
-            <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10 mx-auto mb-3 opacity-40" />
+            <img src="/brand/logo-mark.svg" alt="灵集" className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p style={{ color: '#FCA5A5', fontSize: 14 }}>加载用户信息失败</p>
             <p style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{(userError as Error)?.message}</p>
           </GlassCard>

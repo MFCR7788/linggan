@@ -21,45 +21,45 @@
   <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#bgGrad)"/>
 
   <!-- 大光晕 -->
-  <circle cx="512" cy="470" r="320" fill="url(#glow)"/>
+  <circle cx="512" cy="474" r="380" fill="url(#glow)"/>
 
   <!-- 中心菱形火花 -->
-  <g transform="translate(512,470)">
+  <g transform="translate(512,474)">
     <!-- 外层光晕 -->
-    <ellipse cx="0" cy="0" rx="260" ry="260" fill="#8B5CF6" opacity="0.06"/>
-    <ellipse cx="0" cy="0" rx="180" ry="180" fill="#8B5CF6" opacity="0.10"/>
-    <ellipse cx="0" cy="0" rx="120" ry="120" fill="#3B82F6" opacity="0.15"/>
+    <ellipse cx="0" cy="0" rx="300" ry="300" fill="#8B5CF6" opacity="0.06"/>
+    <ellipse cx="0" cy="0" rx="210" ry="210" fill="#8B5CF6" opacity="0.10"/>
+    <ellipse cx="0" cy="0" rx="140" ry="140" fill="#3B82F6" opacity="0.15"/>
     <!-- 菱形主体 -->
-    <rect x="-95" y="-95" width="190" height="190" rx="40" fill="url(#diamond)" transform="rotate(45)"/>
+    <rect x="-130" y="-130" width="260" height="260" rx="56" fill="url(#diamond)" transform="rotate(45)"/>
     <!-- 内核高光 -->
-    <circle cx="0" cy="0" r="32" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="0" cy="0" r="40" fill="#FFFFFF" opacity="0.9"/>
   </g>
 
   <!-- 四角节点 -->
   <g fill="url(#diamond)" opacity="0.55">
     <!-- 左上 -->
-    <circle cx="192" cy="192" r="22"/>
-    <circle cx="148" cy="236" r="14"/>
-    <circle cx="236" cy="148" r="14"/>
+    <circle cx="140" cy="140" r="26"/>
+    <circle cx="96" cy="188" r="16"/>
+    <circle cx="188" cy="96" r="16"/>
     <!-- 右上 -->
-    <circle cx="832" cy="192" r="22"/>
-    <circle cx="788" cy="236" r="14"/>
-    <circle cx="876" cy="148" r="14"/>
+    <circle cx="884" cy="140" r="26"/>
+    <circle cx="840" cy="188" r="16"/>
+    <circle cx="928" cy="96" r="16"/>
     <!-- 左下 -->
-    <circle cx="192" cy="832" r="22"/>
-    <circle cx="148" cy="788" r="14"/>
-    <circle cx="236" cy="876" r="14"/>
+    <circle cx="140" cy="884" r="26"/>
+    <circle cx="96" cy="840" r="16"/>
+    <circle cx="188" cy="928" r="16"/>
     <!-- 右下 -->
-    <circle cx="832" cy="832" r="22"/>
-    <circle cx="788" cy="788" r="14"/>
-    <circle cx="876" cy="876" r="14"/>
+    <circle cx="884" cy="884" r="26"/>
+    <circle cx="840" cy="840" r="16"/>
+    <circle cx="928" cy="928" r="16"/>
   </g>
 
   <!-- 细连接线 -->
   <g stroke="url(#diamond)" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.18">
-    <line x1="192" y1="192" x2="440" y2="400"/>
-    <line x1="832" y1="192" x2="584" y2="400"/>
-    <line x1="192" y1="832" x2="440" y2="540"/>
-    <line x1="832" y1="832" x2="584" y2="540"/>
+    <line x1="140" y1="140" x2="430" y2="406"/>
+    <line x1="884" y1="140" x2="594" y2="406"/>
+    <line x1="140" y1="884" x2="430" y2="542"/>
+    <line x1="884" y1="884" x2="594" y2="542"/>
   </g>
 </svg>
