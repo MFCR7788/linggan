@@ -15,6 +15,7 @@
     "@alicloud/dysmsapi20170525": "^4.5.1",
     "@alicloud/openapi-client": "^0.4.15",
     "@alicloud/tea-util": "^1.4.11",
+    "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.3.4",
     "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.4",

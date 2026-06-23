@@ -71,16 +71,18 @@ export const POST = withAuth(async ({ request, user }) => {
     }
 
     const creditCost = CREDIT_COSTS.ai_text.perCall;
-    try {
-      await consume(user.id, creditCost, 'ai_chat', 'Agent 对话', { contentLen: content.length });
-    } catch (e) {
-      if (e instanceof InsufficientCreditsError) {
-        return NextResponse.json(
-          { success: false, error: `余额不足: 需要 ${creditCost} 灵力，当前 ${e.available} 灵力`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
-          { status: 402 }
-        );
+    if (creditCost > 0) {
+      try {
+        await consume(user.id, creditCost, 'ai_chat', 'Agent 对话', { contentLen: content.length });
+      } catch (e) {
+        if (e instanceof InsufficientCreditsError) {
+          return NextResponse.json(
+            { success: false, error: `余额不足: 需要 ${creditCost} 灵力，当前 ${e.available} 灵力`, code: 'INSUFFICIENT_CREDITS', data: { required: creditCost, available: e.available } },
+            { status: 402 }
+          );
+        }
+        throw e;
       }
-      throw e;
     }
 
     const supabase = createAdminClient();
