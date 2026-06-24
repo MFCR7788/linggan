@@ -325,7 +325,7 @@ function HomeContent() {
                 <span style={{ fontSize: 32 }}>📅</span>
                 <p className="text-body mt-2 mb-1" style={{ color: "#9CA3AF" }}>暂无日程安排</p>
                 <p className="text-sm mb-3" style={{ color: "#6B7280" }}>
-                  在灵感助手中输入"明天下午3点开会"，<br />AI 会帮你自动提取并添加日程
+                  在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
                 </p>
                 <button
                   onClick={() => handleNavigate("capture")}
@@ -371,7 +371,7 @@ function HomeContent() {
         {searchQuery && (
           <div className="px-2">
             <p className="text-sm" style={{ color: "#9CA3AF" }}>
-              搜索 "{searchQuery}" 的结果
+              搜索 &ldquo;{searchQuery}&rdquo; 的结果
             </p>
           </div>
         )}
