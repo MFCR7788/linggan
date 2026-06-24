@@ -247,11 +247,11 @@ export default function FormattedText({
         if (headingMatch && lines.length === 1) {
           const level = headingMatch[1].length;
           const Tag = `h${level}` as keyof JSX.IntrinsicElements;
-          return React.createElement(Tag, {
-            key: pi,
-            style: headingStyles[level],
-            children: renderInline(tokenizeInline(headingMatch[2]), color, fontSize),
-          });
+          return React.createElement(
+            Tag,
+            { key: pi, style: headingStyles[level] },
+            renderInline(tokenizeInline(headingMatch[2]), color, fontSize),
+          );
         }
 
         // 引用
@@ -297,10 +297,11 @@ function renderBlock(
     const headingMatch = cleanLines[0].match(/^(#{1,3})\s+(.+)/);
     if (headingMatch) {
       const level = headingMatch[1].length;
-      return React.createElement(`h${level}` as keyof JSX.IntrinsicElements, {
-        style: headingStyles[level],
-        children: renderInline(tokenizeInline(headingMatch[2]), color, fontSize),
-      });
+      return React.createElement(
+        `h${level}` as keyof JSX.IntrinsicElements,
+        { style: headingStyles[level] },
+        renderInline(tokenizeInline(headingMatch[2]), color, fontSize),
+      );
     }
   }
 
