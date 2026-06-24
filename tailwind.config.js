@@ -37,6 +37,12 @@ export default {
           'monospace',
         ],
       },
+      fontSize: {
+        h1: ['1.5rem', { lineHeight: '1.4', fontWeight: '700' }],
+        h2: ['1.125rem', { lineHeight: '1.4', fontWeight: '600' }],
+        body: ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
+        aux: ['0.8125rem', { lineHeight: '1.5', fontWeight: '400' }],
+      },
     },
   },
   plugins: [],

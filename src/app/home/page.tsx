@@ -1,18 +1,88 @@
 "use client";
 
-import { Search, Bell, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar } from "lucide-react";
+import { Search, Bell, TrendingUp, ChevronRight, FileText, BookOpen, Radio, Sparkles, Flame, Calendar, Plus, Play } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
+import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useInspirations } from "@/hooks/use-inspiration";
-import { useSchedules } from "@/hooks/use-schedule";
+import { useSchedules, useCreateSchedule, useUpdateSchedule } from "@/hooks/use-schedule";
 import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
+import { useSwipe } from "@/hooks/use-swipe";
 import { TYPE_EMOJIS, PAGE_ROUTES } from "@/lib/style-constants";
-import type { ContentItem } from "@/types";
+import type { ContentItem, Schedule } from "@/types";
+
+function ScheduleCard({ schedule, onComplete, onNavigate }: {
+  schedule: Schedule;
+  onComplete: (id: string) => void;
+  onNavigate: () => void;
+}) {
+  const scheduleDate = new Date(schedule.scheduled_at);
+  const isToday = scheduleDate.toDateString() === new Date().toDateString();
+  const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduleDate.toDateString();
+  const swipe = useSwipe({
+    onSwipeRight: () => onComplete(schedule.id),
+  });
+
+  return (
+    <GlassCard
+      hover
+      onClick={onNavigate}
+      className="!p-4 touch-pan-y"
+      {...swipe}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center"
+          style={{
+            background: `${schedule.color || "#3B82F6"}22`,
+            border: `1px solid ${schedule.color || "#3B82F6"}44`,
+          }}
+        >
+          <span style={{ fontSize: 16, fontWeight: 700, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+            {scheduleDate.getDate()}
+          </span>
+          <span style={{ fontSize: 10, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
+            {scheduleDate.toLocaleDateString("zh-CN", { month: "short" })}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <p className="text-body text-white font-semibold truncate">
+                {schedule.title}
+              </p>
+              {schedule.remind_before && schedule.remind_before > 0 && (
+                <Bell size={12} color="#8B5CF6" className="flex-shrink-0" />
+              )}
+            </div>
+            <GlassBadge color="primary">待处理</GlassBadge>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs" style={{ color: "#9CA3AF" }}>
+              {isToday ? "今天" : isTomorrow ? "明天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
+              {" "}
+              {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            {schedule.location && (
+              <>
+                <span style={{ color: "#4B5563" }}>·</span>
+                <span className="text-xs truncate" style={{ color: "#9CA3AF" }}>
+                  {schedule.location}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="text-xs mt-2 text-right" style={{ color: 'rgba(255,255,255,0.2)' }}>← 右滑完成</p>
+    </GlassCard>
+  );
+}
 
 interface HotTopic {
   id: number;
@@ -34,6 +104,9 @@ function HomeContent() {
   const router = useRouter();
   const { data: inspirationsData, isLoading } = useInspirations({ limit: 50 });
   const { data: schedulesData, isLoading: schedulesLoading, isError: schedulesError } = useSchedules({ limit: 50 });
+  const createSchedule = useCreateSchedule();
+  const updateSchedule = useUpdateSchedule();
+  const { showToast } = useToast();
   useNotificationScheduler();
   const [searchQuery, setSearchQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
@@ -51,6 +124,7 @@ function HomeContent() {
   };
   const [hotTopics, setHotTopics] = useState<HotTopic[]>([]);
   const [hotLoading, setHotLoading] = useState(true);
+  const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
   usePageTitle('首页');
 
   useEffect(() => {
@@ -85,7 +159,6 @@ function HomeContent() {
         const bTime = new Date(b.scheduled_at || 0).getTime();
         const aIsFuture = aTime >= now.getTime();
         const bIsFuture = bTime >= now.getTime();
-        // 未来的排在前（升序），过去的排在后（降序，最近过去优先）
         if (aIsFuture && bIsFuture) return aTime - bTime;
         if (!aIsFuture && !bIsFuture) return bTime - aTime;
         return aIsFuture ? -1 : 1;
@@ -93,7 +166,7 @@ function HomeContent() {
       .slice(0, 5);
   }, [schedulesData]);
 
-  // 过滤灵感（使用 useMemo 避免每次渲染重复计算）
+  // 过滤灵感
   const filteredInspirations = useMemo(() => {
     if (searchQuery.trim() === "") return recentInspirations;
     const query = searchQuery.toLowerCase();
@@ -114,12 +187,36 @@ function HomeContent() {
     );
   }, [searchQuery, hotTopics]);
 
-  // 检查是否有搜索结果
   const hasSearchResults = searchQuery.trim() !== "" && (filteredInspirations.length > 0 || filteredHotTopics.length > 0);
   const hasNoResults = searchQuery.trim() !== "" && filteredInspirations.length === 0 && filteredHotTopics.length === 0;
 
   const handleNavigate = (page: PageKey) => {
     router.push(PAGE_ROUTES[page] || "/home");
+  };
+
+  const handleExecute = async (e: React.MouseEvent, item: ContentItem) => {
+    e.stopPropagation();
+    const itemId = item.id;
+    setExecutingIds(prev => new Set(prev).add(itemId));
+    try {
+      const tomorrow = new Date(Date.now() + 86400000);
+      tomorrow.setHours(9, 0, 0, 0);
+      await createSchedule.mutateAsync({
+        title: item.title || item.prompt || '未命名灵感',
+        scheduled_at: tomorrow.toISOString(),
+        color: '#3B82F6',
+        source_content_id: item.id,
+      });
+      showToast('已添加到明日待办 ✨', 'success');
+    } catch {
+      showToast('添加失败，请重试', 'error');
+    } finally {
+      setExecutingIds(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -140,45 +237,48 @@ function HomeContent() {
       />
 
       <div className="flex-1 px-4 pt-4 pb-24 space-y-5">
-        {/* 问候语 */}
+        {/* 问候 + 数据概览 */}
         <div className="px-1">
-          <h2 style={{ color: "#FFFFFF", fontSize: 24, fontWeight: 700 }}>
-            你好，创作者
-          </h2>
-          <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 4 }}>
-            今天有什么灵感？
-          </p>
+          <h1 className="text-h1 text-white">你好，创作者</h1>
+          <p className="text-aux mt-1">今天有什么灵感？</p>
+          {/* 概览数据 */}
+          <div className="flex gap-3 mt-4">
+            {[
+              { label: '待办', count: sortedSchedules.length, color: '#F59E0B', onClick: () => router.push('/schedule') },
+              { label: '灵感', count: recentInspirations.length, color: '#3B82F6', onClick: () => router.push('/inspiration') },
+              { label: '热点', count: hotTopics.length, color: '#EF4444', onClick: () => router.push('/hotspot') },
+            ].map(({ label, count, color, onClick }) => (
+              <button
+                key={label}
+                onClick={onClick}
+                className="flex-1 rounded-xl p-3 text-center transition-all active:scale-95"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                <p className="text-h1" style={{ color }}>{count}</p>
+                <p className="text-aux">{label}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* 快捷入口 2x2 网格 */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* 快捷入口一行 */}
+        <div className="flex gap-2">
           {[
-            { key: "inspiration", label: "灵感库", Icon: BookOpen, color: "#3B82F6", desc: "管理你的灵感" },
-            { key: "hotspot", label: "热点雷达", Icon: Radio, color: "#EF4444", desc: "追踪热门话题" },
-            { key: "ai", label: "AI创作", Icon: Sparkles, color: "#8B5CF6", desc: "AI 辅助创作" },
-            { key: "schedule", label: "日程管理", Icon: Calendar, color: "#10B981", desc: "查看日程安排" },
-          ].map(({ key, label, Icon, color, desc }) => (
+            { key: "capture", label: "快速采集", emoji: "✍️", color: "#3B82F6" },
+            { key: "inspiration", label: "灵感库", emoji: "💡", color: "#8B5CF6" },
+            { key: "agent", label: "AI助手", emoji: "🤖", color: "#10B981" },
+          ].map(({ key, label, emoji, color }) => (
             <button
               key={key}
               onClick={() => handleNavigate(key as PageKey)}
-              className="flex flex-col items-start p-4 rounded-xl text-left transition-all active:scale-95"
+              className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl transition-all active:scale-95"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                backdropFilter: "blur(8px)",
+                background: `${color}18`,
+                border: `1px solid ${color}33`,
               }}
             >
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
-                style={{
-                  background: `${color}22`,
-                  border: `1px solid ${color}44`,
-                }}
-              >
-                <Icon size={22} color={color} />
-              </div>
-              <span style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }}>{label}</span>
-              <span style={{ color: "#9CA3AF", fontSize: 12, marginTop: 2 }}>{desc}</span>
+              <span style={{ fontSize: 20 }}>{emoji}</span>
+              <span className="text-body text-white font-semibold">{label}</span>
             </button>
           ))}
         </div>
@@ -187,14 +287,8 @@ function HomeContent() {
         {!searchQuery && (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
-                日程安排
-              </h3>
-              <button
-                onClick={() => handleNavigate("schedule")}
-                className="flex items-center gap-1"
-                style={{ color: "#3B82F6", fontSize: 13 }}
-              >
+              <h3 className="text-h2 text-white">日程安排</h3>
+              <button onClick={() => handleNavigate("schedule")} className="flex items-center gap-1 text-aux">
                 查看全部 <ChevronRight size={14} />
               </button>
             </div>
@@ -202,96 +296,36 @@ function HomeContent() {
             {schedulesLoading ? (
               <GlassCard className="!p-5 text-center">
                 <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin mx-auto" />
-                <p style={{ color: "#9CA3AF", fontSize: 13, marginTop: 8 }}>加载日程...</p>
+                <p className="text-aux mt-2">加载日程...</p>
               </GlassCard>
             ) : schedulesError ? (
               <GlassCard className="!p-5 text-center">
                 <span style={{ fontSize: 32 }}>⚠️</span>
-                <p style={{ color: "#F87171", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
-                  日程加载失败
-                </p>
-                <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5 }}>
-                  请检查数据库连接或稍后重试
-                </p>
+                <p className="text-body mt-2 mb-1" style={{ color: "#F87171" }}>日程加载失败</p>
+                <p className="text-sm" style={{ color: "#6B7280" }}>请检查数据库连接或稍后重试</p>
               </GlassCard>
             ) : sortedSchedules.length > 0 ? (
               <div className="space-y-3">
-                {sortedSchedules.map((schedule) => {
-                  const scheduleDate = new Date(schedule.scheduled_at);
-                  const isToday = scheduleDate.toDateString() === new Date().toDateString();
-                  const isTomorrow = new Date(Date.now() + 86400000).toDateString() === scheduleDate.toDateString();
-                  const statusColor = "primary";
-                  const statusLabel = "待处理";
-
-                  return (
-                    <GlassCard
-                      key={schedule.id}
-                      hover
-                      onClick={() => router.push("/schedule")}
-                      className="!p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* 日期徽章 */}
-                        <div
-                          className="flex-shrink-0 w-12 h-12 rounded-xl flex flex-col items-center justify-center"
-                          style={{
-                            background: `${schedule.color || "#3B82F6"}22`,
-                            border: `1px solid ${schedule.color || "#3B82F6"}44`,
-                          }}
-                        >
-                          <span style={{ fontSize: 16, fontWeight: 700, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
-                            {scheduleDate.getDate()}
-                          </span>
-                          <span style={{ fontSize: 10, color: schedule.color || "#3B82F6", lineHeight: 1 }}>
-                            {scheduleDate.toLocaleDateString("zh-CN", { month: "short" })}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <p
-                                style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}
-                                className="truncate"
-                              >
-                                {schedule.title}
-                              </p>
-                              {schedule.remind_before && schedule.remind_before > 0 && (
-                                <Bell size={12} color="#8B5CF6" className="flex-shrink-0" />
-                              )}
-                            </div>
-                            <GlassBadge color={statusColor as "success" | "error" | "primary"}>
-                              {statusLabel}
-                            </GlassBadge>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span style={{ color: "#9CA3AF", fontSize: 12 }}>
-                              {isToday ? "今天" : isTomorrow ? "明天" : `${scheduleDate.getMonth() + 1}月${scheduleDate.getDate()}日`}
-                              {" "}
-                              {scheduleDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                            {schedule.location && (
-                              <>
-                                <span style={{ color: "#4B5563" }}>·</span>
-                                <span style={{ color: "#9CA3AF", fontSize: 12 }} className="truncate">
-                                  {schedule.location}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </GlassCard>
-                  );
-                })}
+                {sortedSchedules.map((schedule) => (
+                  <ScheduleCard
+                    key={schedule.id}
+                    schedule={schedule}
+                    onComplete={async (id) => {
+                      try {
+                        await updateSchedule.mutateAsync({ id, data: { status: 'completed' } });
+                        showToast('已完成 ✓', 'success');
+                      } catch { showToast('操作失败', 'error'); }
+                    }}
+                    onNavigate={() => router.push("/schedule")}
+                  />
+                ))}
               </div>
             ) : (
               <GlassCard className="!p-5 text-center">
                 <span style={{ fontSize: 32 }}>📅</span>
-                <p style={{ color: "#9CA3AF", fontSize: 14, marginTop: 8, marginBottom: 4 }}>
-                  暂无日程安排
-                </p>
-                <p style={{ color: "#6B7280", fontSize: 12, lineHeight: 1.5, marginBottom: 12 }}>
-                  在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
+                <p className="text-body mt-2 mb-1" style={{ color: "#9CA3AF" }}>暂无日程安排</p>
+                <p className="text-sm mb-3" style={{ color: "#6B7280" }}>
+                  在灵感助手中输入"明天下午3点开会"，<br />AI 会帮你自动提取并添加日程
                 </p>
                 <button
                   onClick={() => handleNavigate("capture")}
@@ -321,19 +355,11 @@ function HomeContent() {
             placeholder="搜索灵感和热点..."
             value={inputValue}
             onChange={(e) => handleSearchInput(e.target.value)}
-            className="flex-1 bg-transparent outline-none"
-            style={{
-              color: "#E5E7EB",
-              fontSize: 14,
-              border: "none",
-              background: "transparent"
-            }}
+            className="flex-1 bg-transparent outline-none text-body"
+            style={{ color: "#E5E7EB" }}
           />
           {searchQuery && (
-            <button
-              onClick={clearSearch}
-              className="p-1 rounded-full hover:bg-white/10"
-            >
+            <button onClick={clearSearch} className="p-1 rounded-full hover:bg-white/10">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M1 1L13 13M1 13L13 1" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round"/>
               </svg>
@@ -344,8 +370,8 @@ function HomeContent() {
         {/* 搜索结果提示 */}
         {searchQuery && (
           <div className="px-2">
-            <p style={{ color: "#9CA3AF", fontSize: 12 }}>
-              搜索 &quot;{searchQuery}&quot; 的结果
+            <p className="text-sm" style={{ color: "#9CA3AF" }}>
+              搜索 "{searchQuery}" 的结果
             </p>
           </div>
         )}
@@ -353,14 +379,10 @@ function HomeContent() {
         {/* Recent Inspirations */}
         <div style={{ display: searchQuery && filteredInspirations.length === 0 ? "none" : "block" }}>
           <div className="flex items-center justify-between mb-3">
-            <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
+            <h3 className="text-h2 text-white">
               {searchQuery ? "灵感搜索结果" : "最近灵感"}
             </h3>
-            <button
-              onClick={() => handleNavigate("inspiration")}
-              className="flex items-center gap-1"
-              style={{ color: "#3B82F6", fontSize: 13 }}
-            >
+            <button onClick={() => handleNavigate("inspiration")} className="flex items-center gap-1 text-aux">
               查看全部 <ChevronRight size={14} />
             </button>
           </div>
@@ -386,6 +408,7 @@ function HomeContent() {
                 const showImageCover = !!imageCoverUrl;
                 const showVideoCover = isVideo && !!videoCoverUrl;
                 const showVideoPlaceholder = isVideo && !videoCoverUrl;
+                const isExecuting = executingIds.has(item.id);
 
                 return (
                 <GlassCard
@@ -436,7 +459,6 @@ function HomeContent() {
                     </div>
                   )}
                   {isAudio ? (
-                    /* 音频 — 渐变占位 */
                     <div className="flex items-center justify-center py-8" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.08))' }}>
                       <svg className="w-8 h-8 text-green-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -447,19 +469,37 @@ function HomeContent() {
                   {/* 文字信息 */}
                   <div className="p-3">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <span style={{ fontSize: 13 }}>{TYPE_EMOJIS[item.type] || '✨'}</span>
-                      <span style={{ color: '#6B7280', fontSize: 10 }}>
+                      <span className="text-aux">{TYPE_EMOJIS[item.type] || '✨'}</span>
+                      <span className="text-xs" style={{ color: '#6B7280' }}>
                         {new Date(item.created_at).toLocaleDateString('zh-CN')}
                       </span>
                     </div>
-                    <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, lineHeight: 1.4 }} className="line-clamp-2">
+                    <p className="text-body text-white font-semibold line-clamp-2" style={{ lineHeight: 1.4 }}>
                       {item.title || item.prompt || item.original_text?.substring(0, 40) || '未命名灵感'}
                     </p>
                     {item.original_text && item.original_text !== (item.title || '') && (
-                      <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4, lineHeight: 1.4 }} className="line-clamp-2">
+                      <p className="text-xs mt-1 line-clamp-2" style={{ color: '#9CA3AF', lineHeight: 1.4 }}>
                         {item.original_text}
                       </p>
                     )}
+                    {/* → 执行按钮 */}
+                    <button
+                      onClick={(e) => handleExecute(e, item)}
+                      disabled={isExecuting}
+                      className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95 disabled:opacity-50"
+                      style={{
+                        background: 'rgba(59,130,246,0.15)',
+                        color: '#93C5FD',
+                        border: '1px solid rgba(59,130,246,0.25)',
+                      }}
+                    >
+                      {isExecuting ? (
+                        <span className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                      ) : (
+                        <Play size={12} />
+                      )}
+                      {isExecuting ? '添加中...' : '→ 执行'}
+                    </button>
                   </div>
                 </GlassCard>
                 );
@@ -471,14 +511,10 @@ function HomeContent() {
         {/* Hot Topics */}
         <div style={{ display: searchQuery && filteredHotTopics.length === 0 ? "none" : "block" }}>
           <div className="flex items-center justify-between mb-3">
-            <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>
+            <h3 className="text-h2 text-white">
               {searchQuery ? "热点搜索结果" : "最新热点"}
             </h3>
-            <button
-              onClick={() => handleNavigate("hotspot")}
-              className="flex items-center gap-1"
-              style={{ color: "#3B82F6", fontSize: 13 }}
-            >
+            <button onClick={() => handleNavigate("hotspot")} className="flex items-center gap-1 text-aux">
               查看全部 <ChevronRight size={14} />
             </button>
           </div>
@@ -496,7 +532,7 @@ function HomeContent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex gap-1.5">
-                          <span style={{ fontSize: 12, color: "#EF4444", fontWeight: 600 }}>{item.heat}</span>
+                          <span className="text-xs font-semibold" style={{ color: "#EF4444" }}>{item.heat}</span>
                           <GlassBadge style={{ background: item.platformColor + "33", color: item.platformColor, border: `1px solid ${item.platformColor}44` }}>
                             {item.platform}
                           </GlassBadge>
@@ -509,7 +545,7 @@ function HomeContent() {
                           <TrendingUp size={12} /> 一键转灵感
                         </button>
                       </div>
-                      <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }} className="line-clamp-2">
+                      <p className="text-body text-white font-semibold line-clamp-2">
                         {item.title}
                       </p>
                     </div>
@@ -524,17 +560,23 @@ function HomeContent() {
         {hasNoResults && (
           <GlassCard className="!p-6 text-center">
             <Search size={32} color="#9CA3AF" className="mx-auto mb-3" />
-            <p style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-              没有找到相关结果
-            </p>
-            <p style={{ color: "#9CA3AF", fontSize: 12 }}>
-              试试其他关键词
-            </p>
+            <p className="text-body text-white font-semibold mb-1">没有找到相关结果</p>
+            <p className="text-sm" style={{ color: "#9CA3AF" }}>试试其他关键词</p>
           </GlassCard>
         )}
       </div>
 
-      
+      {/* 浮动 "+" 快速采集按钮 */}
+      <button
+        onClick={() => handleNavigate("capture")}
+        className="fixed right-4 bottom-24 z-30 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105"
+        style={{
+          background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
+          boxShadow: "0 4px 24px rgba(59,130,246,0.45)",
+        }}
+      >
+        <Plus size={28} color="#FFFFFF" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }

@@ -174,9 +174,8 @@ export function BottomNav() {
                     }}
                   />
                 )}
-                <span
+                <span className="text-xs"
                   style={{
-                    fontSize: 10,
                     color: isCenter ? "#A5B4FC" : (isActive ? "#3B82F6" : "#9CA3AF"),
                     fontWeight: isCenter ? 600 : 400,
                   }}

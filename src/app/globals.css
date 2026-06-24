@@ -21,7 +21,35 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* rem 基准：1rem = 16px，跟随系统字体缩放 */
+  font-size: 100%;
 }
+
+/* ───── 全局字体层级 ───── */
+:root {
+  --text-h1: 1.5rem;    /* 24px — 页面标题 */
+  --text-h2: 1.125rem;  /* 18px — 卡片标题 / 章节标题 */
+  --text-body: 1rem;    /* 16px — 正文 */
+  --text-aux: 0.8125rem; /* 13px — 时间戳 / 标签 / 辅助文字 */
+  --text-sm: 0.75rem;   /* 12px — 极小文字 */
+  --text-xs: 0.625rem;  /* 10px — badge / 角标 */
+
+  --leading-heading: 1.4;
+  --leading-body: 1.6;
+  --leading-relaxed: 1.75;
+
+  --weight-bold: 700;
+  --weight-semibold: 600;
+  --weight-regular: 400;
+}
+
+/* ───── 语义化字体类 ───── */
+.text-h1 { font-size: var(--text-h1); font-weight: var(--weight-bold); line-height: var(--leading-heading); }
+.text-h2 { font-size: var(--text-h2); font-weight: var(--weight-semibold); line-height: var(--leading-heading); }
+.text-body { font-size: var(--text-body); font-weight: var(--weight-regular); line-height: var(--leading-body); }
+.text-aux { font-size: var(--text-aux); font-weight: var(--weight-regular); line-height: 1.5; color: #9CA3AF; }
+.text-sm { font-size: var(--text-sm); }
+.text-xs { font-size: var(--text-xs); }
 
 /* ───── 聊天内容排版（豆包风格）───── */
 
@@ -124,6 +152,10 @@ html {
   overscroll-behavior: none;
   /* 全局禁用 iOS 长按放大镜 / 文字选择气泡 */
   -webkit-touch-callout: none;
+  /* 禁止 iOS 字体自动缩放（横屏/系统字号变化） */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -142,6 +174,12 @@ button, a, input, textarea, [role="button"], .touch-interactive {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Apple HIG: 触摸目标最小 44×44px — 用于导航、底部 tab、主操作按钮 */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* 长按无系统行为（导航栏、底部 tab、卡片等固定 UI） */

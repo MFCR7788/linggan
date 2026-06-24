@@ -736,6 +736,21 @@ export function AgentChatView() {
     setIsStreaming(false);
   };
 
+  // 为语音识别结果加标点（调用后端 DeepSeek 标点恢复）
+  const punctuateText = useCallback(async (text: string): Promise<string> => {
+    if (!text || text.length > 500) return text; // 过长文本跳过，避免延迟
+    try {
+      const res = await fetch('/api/ai/punctuate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.text) return data.data.text.trim();
+    } catch { /* 标点失败不影响主流程 */ }
+    return text;
+  }, []);
+
   // 按住说话手势 — touch(移动端) + mouse(桌面) 分开发，避免双事件冲突
   const cancelGestureRef = useRef(false);
 
@@ -769,19 +784,20 @@ export function AgentChatView() {
     }
 
     if (speechApiSupported) {
-      // 浏览器原生语音识别：同步获取文字 → 自动发送
       const transcript = stopListening();
       if (transcript) {
-        await handleSendWithText(transcript);
+        const punctuated = await punctuateText(transcript);
+        await handleSendWithText(punctuated);
       }
     } else {
-      // MediaRecorder 降级：异步录音 → 转写 → 自动发送
+      // MediaRecorder 降级：异步录音 → 转写 → 标点修复 → 自动发送
       try {
         setIsTranscribing(true);
         const transcript = await stopRecording();
         setIsTranscribing(false);
         if (transcript) {
-          await handleSendWithText(transcript);
+          const punctuated = await punctuateText(transcript);
+          await handleSendWithText(punctuated);
         }
       } catch {
         setIsTranscribing(false);
@@ -800,7 +816,8 @@ export function AgentChatView() {
     if (speechApiSupported) {
       const transcript = stopListening();
       if (transcript) {
-        handleSendWithText(transcript);
+        const punctuated = await punctuateText(transcript);
+        await handleSendWithText(punctuated);
       }
     } else {
       try {
@@ -808,7 +825,8 @@ export function AgentChatView() {
         const transcript = await stopRecording();
         setIsTranscribing(false);
         if (transcript) {
-          handleSendWithText(transcript);
+          const punctuated = await punctuateText(transcript);
+          await handleSendWithText(punctuated);
         }
       } catch {
         setIsTranscribing(false);

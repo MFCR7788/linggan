@@ -50,18 +50,18 @@ export function TopNavBar() {
         className="flex items-center justify-between px-4 py-3 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto"
         style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
       >
-        <div className="flex items-center gap-2 min-w-[40px]">
+        <div className="flex items-center gap-2 min-w-[44px]">
           {showBack && (
-            <button onClick={onBack} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={onBack} className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors">
               <ArrowLeft size={22} color="#E5E7EB" />
             </button>
           )}
           {left}
         </div>
-        <div style={{ color: "#FFFFFF", fontSize: 17, fontWeight: 600 }}>{title}</div>
-        <div className="flex items-center gap-2 min-w-[40px] justify-end">
+        <div className="text-h2 text-white">{title}</div>
+        <div className="flex items-center gap-2 min-w-[44px] justify-end">
           {showShare && (
-            <button onClick={onShare} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={onShare} className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors">
               <Share2 size={20} color="#E5E7EB" />
             </button>
           )}
