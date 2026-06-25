@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Clock, MapPin, CheckCircle, XCircle, ChevronRight, Trash2, Plus, X } from "lucide-react";
+import { Calendar, Clock, MapPin, CheckCircle, XCircle, ChevronRight, Trash2, Plus, X, Zap, AlertCircle } from "lucide-react";
 import { TopNav } from "@/components/TopNav";
 import { PageKey } from "@/components/BottomNav";
 import { LoadingSpinner, EmptyState, ProtectedRoute } from "@/components";
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useRouter } from "next/navigation";
 import { useSchedules, useUpdateSchedule, useDeleteSchedule, useCreateSchedule } from "@/hooks/use-schedule";
+import { useInspirations } from "@/hooks/use-inspiration";
 import { useNotificationScheduler } from "@/hooks/use-notification-scheduler";
 import { PAGE_ROUTES } from "@/lib/style-constants";
 import type { Schedule } from "@/types";
@@ -39,7 +41,16 @@ function ScheduleContent() {
   const deleteSchedule = useDeleteSchedule();
   const createSchedule = useCreateSchedule();
   const [showCreate, setShowCreate] = useState(false);
-  const [newSchedule, setNewSchedule] = useState({ title: "", description: "", scheduled_at: "", location: "" });
+  const [newSchedule, setNewSchedule] = useState({ title: "", description: "", scheduled_at: "", location: "", inspirationId: "" });
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // 查询空闲灵感（lifecycle=seed + idle>3天 + 未关联日程）
+  const { data: idleInspirations } = useInspirations({
+    lifecycle: 'seed',
+    idleDays: '3',
+    limit: 10,
+  });
 
   const handleCreate = async () => {
     if (!newSchedule.title.trim() || !newSchedule.scheduled_at) return;
@@ -49,12 +60,29 @@ function ScheduleContent() {
         description: newSchedule.description.trim() || undefined,
         scheduled_at: new Date(newSchedule.scheduled_at).toISOString(),
         location: newSchedule.location.trim() || undefined,
+        source_content_id: newSchedule.inspirationId || undefined,
       });
       setShowCreate(false);
-      setNewSchedule({ title: "", description: "", scheduled_at: "", location: "" });
+      setNewSchedule({ title: "", description: "", scheduled_at: "", location: "", inspirationId: "" });
     } catch (e) {
       console.error('创建日程失败:', e);
     }
+  };
+
+  const handleQuickSchedule = (inspiration: any) => {
+    const now = new Date();
+    now.setHours(now.getHours() + 1, 0, 0, 0); // 默认明天此时
+    const defaultTime = new Date(Date.now() + 86400000);
+    defaultTime.setHours(9, 0, 0, 0);
+
+    setNewSchedule({
+      title: inspiration.title || inspiration.ai_summary?.slice(0, 50) || '未命名灵感',
+      description: inspiration.ai_summary || inspiration.original_text?.slice(0, 200) || '',
+      scheduled_at: defaultTime.toISOString().slice(0, 16),
+      location: '',
+      inspirationId: inspiration.id,
+    });
+    setShowCreate(true);
   };
 
   const handleNavigate = (page: PageKey) => {
@@ -71,12 +99,17 @@ function ScheduleContent() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除这个日程吗？')) return;
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteSchedule.mutateAsync(id);
+      await deleteSchedule.mutateAsync(deleteTarget);
     } catch (error) {
       console.error('删除日程失败:', error);
     }
+    setDeleteTarget(null);
   };
 
   const formatDateTime = (iso: string) => {
@@ -256,6 +289,85 @@ function ScheduleContent() {
             })}
           </div>
         )}
+
+        {/* ─── 智能推荐：空闲灵感转为日程 ──────────────── */}
+        {idleInspirations && (idleInspirations as any).length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowRecommendations(!showRecommendations)}
+              className="flex items-center gap-2 px-1 mb-3 w-full"
+            >
+              <Zap size={15} color="#FBBF24" />
+              <span style={{ color: '#FBBF24', fontSize: 13, fontWeight: 600 }}>
+                智能推荐 · 待安排灵感
+              </span>
+              <span
+                className="px-1.5 py-0.5 rounded-full text-xs"
+                style={{ background: 'rgba(251,191,36,0.15)', color: '#FBBF24' }}
+              >
+                {(idleInspirations as any).length}
+              </span>
+              <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 'auto' }}>
+                {showRecommendations ? '收起 ▲' : '展开 ▼'}
+              </span>
+            </button>
+
+            {showRecommendations && (
+              <div className="space-y-2">
+                {(idleInspirations as any[]).map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl p-3 transition-all"
+                    style={{
+                      background: 'rgba(251,191,36,0.04)',
+                      border: '1px solid rgba(251,191,36,0.12)',
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{ background: 'rgba(251,191,36,0.12)' }}
+                      >
+                        {item.type === 'image' ? '🖼' : item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : '💡'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: '#E5E7EB' }}>
+                          {item.title || item.ai_summary?.slice(0, 60) || '未命名灵感'}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1">
+                          {item.estimated_duration && (
+                            <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                              ⏱ {item.estimated_duration}分钟
+                            </span>
+                          )}
+                          <span style={{ color: '#6B7280', fontSize: 11 }}>
+                            {new Date(item.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
+                          </span>
+                          {item.last_action_at && (
+                            <span className="flex items-center gap-1" style={{ color: '#EF4444', fontSize: 11 }}>
+                              <AlertCircle size={10} />
+                              {Math.floor((Date.now() - new Date(item.last_action_at).getTime()) / 86400000)}天未操作
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleQuickSchedule(item); }}
+                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95"
+                        style={{
+                          background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                          color: '#FFFFFF',
+                        }}
+                      >
+                        + 日程
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 创建日程 FAB */}
@@ -341,7 +453,16 @@ function ScheduleContent() {
         </div>
       )}
 
-      
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除日程"
+        message="确定要删除这个日程吗？"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
     </div>
   );
 }

@@ -25,12 +25,12 @@ const ENV_FILE = '/opt/lingji/.env.local';
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   if (!DEPLOY_SECRET || authHeader !== `Bearer ${DEPLOY_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未授权访问' }, { status: 401 });
   }
 
   const body = request.body;
   if (!body) {
-    return NextResponse.json({ error: 'No body' }, { status: 400 });
+    return NextResponse.json({ error: '请求体为空' }, { status: 400 });
   }
 
   try {
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     );
     child.unref();
 
-    return NextResponse.json({ ok: true, message: 'Deploy scheduled' });
+    return NextResponse.json({ ok: true, message: '部署已安排' });
   } catch (err) {
     console.error('[deploy/upload]', err);
     return NextResponse.json(

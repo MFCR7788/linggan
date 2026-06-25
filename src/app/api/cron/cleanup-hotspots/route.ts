@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     request.headers.get('authorization')?.replace('Bearer ', '');
 
   if (secret !== expectedSecret) {
-    return createApiError('Unauthorized', 401);
+    return createApiError('未授权访问', 401);
   }
 
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

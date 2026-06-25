@@ -1,14 +1,15 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
-  Calendar, Clock, MapPin, CheckCircle, XCircle, Trash2, ChevronLeft,
+  Calendar, Clock, MapPin, CheckCircle, XCircle, Trash2, ChevronLeft, ChevronRight,
   BookOpen, Lightbulb, ListChecks, Target, ExternalLink,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { LoadingSpinner, EmptyState, ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import FormattedText from '@/components/FormattedText';
 import { useSchedule, useUpdateSchedule, useDeleteSchedule } from '@/hooks/use-schedule';
 
@@ -42,6 +43,7 @@ function ScheduleDetailContent() {
   const { data: schedule, isLoading, isError } = useSchedule(id);
   const updateSchedule = useUpdateSchedule();
   const deleteSchedule = useDeleteSchedule();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleToggleStatus = async () => {
     if (!schedule) return;
@@ -63,13 +65,17 @@ function ScheduleDetailContent() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('确定要删除这个日程吗？')) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
     try {
       await deleteSchedule.mutateAsync(id);
       router.replace('/schedule');
     } catch (error) {
       console.error('删除日程失败:', error);
     }
+    setShowDeleteConfirm(false);
   };
 
   const formatDateTime = (iso: string) => {
@@ -104,6 +110,7 @@ function ScheduleDetailContent() {
   }
 
   const linkedInspiration = (schedule as any).linkedInspiration as LinkedInspiration | null;
+  const relatedInspirations = ((schedule as any).relatedInspirations || []) as any[];
   const { dateStr, timeStr } = formatDateTime(schedule.scheduled_at);
   const past = isPast(schedule.scheduled_at) && schedule.status === 'pending';
   const style = STATUS_STYLES[schedule.status] || STATUS_STYLES.pending;
@@ -274,6 +281,66 @@ function ScheduleDetailContent() {
           </>
         )}
 
+        {/* ─── 关联灵感推荐 ──────────────────────────── */}
+        {relatedInspirations.length > 0 && (
+          <>
+            <div className="flex items-center gap-2 px-1 mt-2">
+              <Lightbulb size={14} color="#FBBF24" />
+              <span style={{ color: '#FBBF24', fontSize: 13, fontWeight: 600 }}>相关灵感</span>
+              <span style={{ color: '#6B7280', fontSize: 11 }}>({relatedInspirations.length})</span>
+            </div>
+            <div className="space-y-2">
+              {relatedInspirations.map((item: any) => (
+                <div
+                  key={item.id}
+                  onClick={() => router.push(`/inspiration/detail?id=${item.id}`)}
+                  className="rounded-xl p-3 transition-all cursor-pointer hover:bg-white/5"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-xs flex-shrink-0">
+                        {item.type === 'image' ? '🖼' : item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : '💡'}
+                      </span>
+                      <span
+                        className="truncate text-sm"
+                        style={{ color: '#E5E7EB' }}
+                      >
+                        {item.title || item.ai_summary?.slice(0, 50) || '未命名灵感'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      {item.estimated_duration && (
+                        <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                          {item.estimated_duration}分钟
+                        </span>
+                      )}
+                      {item.lifecycle && item.lifecycle !== 'seed' && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-xs"
+                          style={{
+                            background: item.lifecycle === 'bloom' ? 'rgba(16,185,129,0.15)' :
+                                         item.lifecycle === 'growing' ? 'rgba(59,130,246,0.15)' :
+                                         'rgba(168,85,247,0.15)',
+                            color: item.lifecycle === 'bloom' ? '#6EE7B7' :
+                                    item.lifecycle === 'growing' ? '#93C5FD' : '#A78BFA',
+                          }}
+                        >
+                          {item.lifecycle === 'bloom' ? '成熟' : item.lifecycle === 'growing' ? '成长' : '萌芽'}
+                        </span>
+                      )}
+                      <ChevronRight size={14} color="#6B7280" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* ─── 没有关联灵感时的提示 ──────────────────────── */}
         {!linkedInspiration && !schedule.description && (
           <GlassCard className="!p-6">
@@ -339,6 +406,16 @@ function ScheduleDetailContent() {
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="删除日程"
+        message="确定要删除这个日程吗？"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

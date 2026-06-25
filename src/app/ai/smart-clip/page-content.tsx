@@ -102,7 +102,7 @@ export default function SmartClipPageContent() {
         setVideoUrl(urlData.publicUrl);
       }
     } catch (e) {
-      setError(`上传失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`上传失败，请重试`);
     } finally {
       setUploading(false);
     }
@@ -156,7 +156,7 @@ export default function SmartClipPageContent() {
       }
       setPhase('preview');
     } catch (e) {
-      setError(`分析失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`分析失败，请重试`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -219,7 +219,7 @@ export default function SmartClipPageContent() {
         return;
       }
     } catch (e) {
-      setError(`执行失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`执行失败，请重试`);
       setIsExecuting(false);
       setExecTaskId(null);
       setPhase('preview');

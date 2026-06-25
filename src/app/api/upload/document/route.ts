@@ -30,7 +30,7 @@ export const POST = withAuth(async ({ request, user }) => {
   }
 
   if (!DOCUMENT_ALLOWED_TYPES.includes(file.type as any)) {
-    return createApiError('UNSUPPORTED_FILE_TYPE', 415);
+    return createApiError('不支持的文件类型', 415);
   }
 
   const sizeCheck = checkDocumentSize(file);
@@ -42,7 +42,7 @@ export const POST = withAuth(async ({ request, user }) => {
   if (file.type !== 'text/plain' && file.type !== 'text/markdown') {
     const magicOk = await verifyMagicNumber(file, file.type);
     if (!magicOk) {
-      return createApiError('FILE_CONTENT_MISMATCH', 415);
+      return createApiError('文件内容与扩展名不匹配', 415);
     }
   }
 
@@ -77,7 +77,7 @@ export const POST = withAuth(async ({ request, user }) => {
 
     if (uploadError) {
       console.error('[upload/document] storage 上传失败:', uploadError);
-      return createApiError('STORAGE_UPLOAD_FAILED', 502);
+      return createApiError('文件存储失败，请重试', 502);
     }
 
     const { data: { publicUrl } } = supabase.storage

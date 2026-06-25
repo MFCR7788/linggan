@@ -162,6 +162,8 @@ export default function VideoMixPageContent() {
   const [taskStatus, setTaskStatus] = useState<MixTaskStatus | null>(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [importUrl, setImportUrl] = useState('');
+  const [importError, setImportError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   // 片段时间变化时更新转场数组
   useEffect(() => {
@@ -176,7 +178,11 @@ export default function VideoMixPageContent() {
   }, [segments.length]);
 
   const handleAddSegment = useCallback(() => {
-    if (!importUrl.trim()) return;
+    if (!importUrl.trim()) {
+      setImportError('请先输入视频 URL');
+      return;
+    }
+    setImportError('');
     const newSeg: MixSegment = {
       id: `seg-${Date.now()}`,
       videoUrl: importUrl.trim(),
@@ -224,7 +230,7 @@ export default function VideoMixPageContent() {
 
       const data = await res.json();
       if (!data.success) {
-        alert(`提交失败: ${data.error}`);
+        setSubmitError(data.error || '提交失败');
         setIsProcessing(false);
         return;
       }
@@ -245,7 +251,7 @@ export default function VideoMixPageContent() {
         }
       }, 3000);
     } catch (e) {
-      alert(`提交失败: ${e}`);
+      setSubmitError(e instanceof Error ? e.message : '网络错误，请重试');
       setIsProcessing(false);
     }
   }, [segments, transitions, bgmStyle, bgmVolume, bgmDucking, outputRes, outputAspect]);
@@ -257,7 +263,7 @@ export default function VideoMixPageContent() {
   return (
     <ProtectedRoute>
       <div className="flex flex-col h-screen bg-[#0A1629]">
-        <TopNav title="视频混剪" showBack onBack={() => router.push('/ai/video')} />
+        <TopNav title="视频混剪" showBack onBack={() => router.push('/ai')} />
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 custom-scrollbar">
           {/* 导入素材 */}
           <GlassCard className="p-4">
@@ -269,10 +275,10 @@ export default function VideoMixPageContent() {
               <input
                 type="text"
                 value={importUrl}
-                onChange={e => setImportUrl(e.target.value)}
+                onChange={e => { setImportUrl(e.target.value); setImportError(''); }}
                 placeholder="输入视频 URL..."
                 className="flex-1 px-3 py-2 rounded-lg text-sm"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#E5E7EB' }}
+                style={{ background: 'rgba(255,255,255,0.08)', border: `1px solid ${importError ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.15)'}`, color: '#E5E7EB' }}
                 onKeyDown={e => e.key === 'Enter' && handleAddSegment()}
               />
               <button
@@ -283,6 +289,9 @@ export default function VideoMixPageContent() {
                 <Plus size={16} /> 添加
               </button>
             </div>
+            {importError && (
+              <p className="text-xs mt-1.5" style={{ color: '#FCA5A5' }}>{importError}</p>
+            )}
           </GlassCard>
 
           {/* 片段列表 */}
@@ -409,6 +418,11 @@ export default function VideoMixPageContent() {
                 </select>
               </div>
 
+              {submitError && (
+                <div className="px-3 py-2 rounded-lg text-xs mb-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#FCA5A5' }}>
+                  {submitError}
+                </div>
+              )}
               {isProcessing ? (
                 <div className="flex flex-col items-center py-4 gap-2">
                   <LoadingSpinner text="处理中..." />

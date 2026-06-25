@@ -14,6 +14,7 @@ import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
 import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute, LoadingSpinner } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatRelativeTime, getPlatformColor, PAGE_ROUTES } from '@/lib/style-constants';
 import { PRESET_CATEGORIES } from '@/lib/preset-keywords';
 
@@ -872,6 +873,7 @@ function HotspotRadarInner() {
   const [showAddKeyword, setShowAddKeyword] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'today' | 'all' | 'urgent' | 'unread'>('all');
   const [pendingKeywords, setPendingKeywords] = useState<Set<string>>(new Set());
+  const [confirmDialog, setConfirmDialog] = useState<{ type: 'batch' | 'filter' } | null>(null);
 
   const authHeaders = getDevUserIdHeader();
 
@@ -933,9 +935,12 @@ function HotspotRadarInner() {
     } catch { setToast({ type: 'error', message: '网络错误' }); }
   };
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定要删除选中的 ${selectedIds.size} 条热点吗？此操作不可撤销。`)) return;
+    setConfirmDialog({ type: 'batch' });
+  };
+
+  const executeBatchDelete = async () => {
     syncDevAuthCookie();
     try {
       const res = await fetch('/api/hotspot/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ ids: [...selectedIds] }) });
@@ -950,8 +955,11 @@ function HotspotRadarInner() {
     } catch { setToast({ type: 'error', message: '网络错误' }); }
   };
 
-  const handleFilterDelete = async () => {
-    if (!confirm('确定要删除当前筛选条件下的所有热点吗？此操作不可撤销。')) return;
+  const handleFilterDelete = () => {
+    setConfirmDialog({ type: 'filter' });
+  };
+
+  const executeFilterDelete = async () => {
     syncDevAuthCookie();
     try {
       const res = await fetch('/api/hotspot/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ filters: { platform: source || undefined, importance: importance || undefined, timeRange: timeRange || undefined } }) });
@@ -1232,7 +1240,19 @@ function HotspotRadarInner() {
         </div>
       </div>
 
-      
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title="删除热点"
+        message={confirmDialog?.type === 'batch' ? `确定要删除选中的 ${selectedIds.size} 条热点吗？此操作不可撤销。` : '确定要删除当前筛选条件下的所有热点吗？此操作不可撤销。'}
+        confirmLabel="删除"
+        danger
+        onConfirm={() => {
+          if (confirmDialog?.type === 'batch') executeBatchDelete();
+          else executeFilterDelete();
+          setConfirmDialog(null);
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

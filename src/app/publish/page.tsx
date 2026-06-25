@@ -10,6 +10,7 @@ import { TopNav } from '@/components/TopNav';
 import { WorkflowStepper } from '@/components/WorkflowStepper';
 import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { apiClient } from '@/lib/api-client';
 import { useContentHandoff } from '@/hooks/use-content-handoff';
 import { PLATFORMS, type PlatformId } from '@/lib/platforms/types';
@@ -94,6 +95,7 @@ function PublishContent() {
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoadingAccounts(true);
@@ -122,20 +124,25 @@ function PublishContent() {
         setToast({ message: res.error || '获取授权链接失败', type: 'error' });
       }
     } catch (e: any) {
-      setToast({ message: e.message, type: 'error' });
+      setToast({ message: (e instanceof Error ? e.message : '') || '操作失败，请重试', type: 'error' });
     }
   };
 
   // 解除授权
-  const handleRevoke = async (accountId: string) => {
-    if (!confirm('确定解除该账号授权?')) return;
+  const handleRevoke = (accountId: string) => {
+    setRevokeTarget(accountId);
+  };
+
+  const confirmRevoke = async () => {
+    if (!revokeTarget) return;
     try {
-      await apiClient.delete(`/platforms/accounts?accountId=${accountId}`);
+      await apiClient.delete(`/platforms/accounts?accountId=${revokeTarget}`);
       setToast({ message: '已解除授权', type: 'success' });
       loadData();
     } catch (e: any) {
-      setToast({ message: e.message, type: 'error' });
+      setToast({ message: (e instanceof Error ? e.message : '') || '操作失败，请重试', type: 'error' });
     }
+    setRevokeTarget(null);
   };
 
   // 切换平台
@@ -502,6 +509,16 @@ function PublishContent() {
 
       
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={!!revokeTarget}
+        title="解除授权"
+        message="确定解除该账号授权?"
+        confirmLabel="解除"
+        danger
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTarget(null)}
+      />
     </div>
   );
 }

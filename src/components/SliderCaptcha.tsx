@@ -256,7 +256,7 @@ export function SliderCaptcha({ open, onClose, onSuccess }: SliderCaptchaProps) 
             <span style={{ color: "#EF4444", fontSize: 12 }}>{error}</span>
           ) : (
             <span style={{ color: "#6B7280", fontSize: 12 }}>
-              {data ? `有效期至 ${new Date(data.expiresAt).toLocaleTimeString()}` : ""}
+              {data ? `有效期至 ${new Date(data.expiresAt).toLocaleTimeString('zh-CN')}` : ""}
             </span>
           )}
           <button

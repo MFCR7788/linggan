@@ -23,7 +23,7 @@ export const POST = withAuth(async ({ request, user }) => {
     } = await request.json();
 
     if (!prompt) {
-      return createApiError('Prompt is required', 400);
+      return createApiError('提示词不能为空', 400);
     }
 
     // 解析 preset/style/palette
@@ -133,9 +133,9 @@ export const POST = withAuth(async ({ request, user }) => {
       });
     }
 
-    return createApiResponse(result, 'Image generated');
+    return createApiResponse(result, '图片已生成');
   } catch (error) {
     console.error('AI image generation error:', error);
-    return createApiError('Failed to generate image', 500);
+    return createApiError('生成图片失败', 500);
   }
 });

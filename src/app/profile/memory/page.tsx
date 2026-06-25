@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2, Brain, Search, Filter, X } from 'lucide-react';
 import { ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { TopNav } from '@/components/TopNav';
 import { PageKey } from "@/components/BottomNav";
 import { GlassCard } from '@/components/GlassCard';
@@ -44,6 +45,7 @@ function MemoryContent() {
   const [category, setCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: memories, isLoading, error, refetch } = useMemories({
     category: category || undefined,
@@ -61,13 +63,19 @@ function MemoryContent() {
     setSearchQuery('');
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('确定删除这条记忆吗？')) return;
+  const handleDelete = (id: string) => {
+    setDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      await deleteMemory.mutateAsync(id);
+      await deleteMemory.mutateAsync(deleteId);
       showToast('已删除', 'success');
     } catch {
       showToast('删除失败', 'error');
+    } finally {
+      setDeleteId(null);
     }
   };
 
@@ -236,7 +244,13 @@ function MemoryContent() {
         )}
       </div>
 
-      
+      <ConfirmDialog
+        open={deleteId !== null}
+        message="确定删除这条记忆吗？"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }

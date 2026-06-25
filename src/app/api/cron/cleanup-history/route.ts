@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     request.headers.get('authorization')?.replace('Bearer ', '');
 
   if (secret !== expectedSecret) {
-    return createApiError('Unauthorized', 401);
+    return createApiError('未授权访问', 401);
   }
 
   // V2.0: 从 7 天改为 30 天

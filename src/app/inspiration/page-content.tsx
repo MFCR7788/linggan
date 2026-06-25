@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand, CalendarPlus } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TopNav } from "@/components/TopNav";
 import { PageKey } from "@/components/BottomNav";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -167,6 +168,9 @@ function InspirationLibraryContent() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadToast, setUploadToast] = useState<string | null>(null);
   const [uploadHasSucceeded, setUploadHasSucceeded] = useState(false);
+
+  // 删除确认弹窗
+  const [confirmDialog, setConfirmDialog] = useState<{ type: 'batch' } | { type: 'single'; id: string } | null>(null);
 
   // 编辑状态
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -356,25 +360,33 @@ function InspirationLibraryContent() {
     }
   };
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定删除 ${selectedIds.size} 条灵感吗？`)) return;
-    await batchDelete.mutateAsync(Array.from(selectedIds));
-    const count = selectedIds.size;
-    setSelectedIds(new Set());
-    setSelectionMode(false);
-    setShowDeleteTip(`成功删除 ${count} 条灵感`);
-    router.refresh();
-    setTimeout(() => { setShowDeleteTip(null); }, 3000);
+    setConfirmDialog({ type: 'batch' });
   };
 
-  const handleSingleDelete = async (e: React.MouseEvent, id: string) => {
+  const executeConfirm = async () => {
+    if (!confirmDialog) return;
+    if (confirmDialog.type === 'batch') {
+      await batchDelete.mutateAsync(Array.from(selectedIds));
+      const count = selectedIds.size;
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      setShowDeleteTip(`成功删除 ${count} 条灵感`);
+      router.refresh();
+      setTimeout(() => { setShowDeleteTip(null); }, 3000);
+    } else {
+      await deleteInspiration.mutateAsync(confirmDialog.id);
+      setShowDeleteTip("成功删除 1 条灵感");
+      router.refresh();
+      setTimeout(() => { setShowDeleteTip(null); }, 3000);
+    }
+    setConfirmDialog(null);
+  };
+
+  const handleSingleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("确定删除这条灵感吗？")) return;
-    await deleteInspiration.mutateAsync(id);
-    setShowDeleteTip("成功删除 1 条灵感");
-    router.refresh();
-    setTimeout(() => { setShowDeleteTip(null); }, 3000);
+    setConfirmDialog({ type: 'single', id });
   };
 
   // 下载媒体文件
@@ -1432,6 +1444,14 @@ function InspirationLibraryContent() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        message={confirmDialog?.type === 'batch' ? `确定删除 ${selectedIds.size} 条灵感吗？` : '确定删除这条灵感吗？'}
+        danger
+        onConfirm={executeConfirm}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

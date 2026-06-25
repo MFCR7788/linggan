@@ -166,7 +166,7 @@ function ProfileContent() {
           <GlassCard className="!p-5 text-center">
             <img src="/brand/logo-mark.png" alt="灵集" className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p style={{ color: '#FCA5A5', fontSize: 14 }}>加载用户信息失败</p>
-            <p style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{(userError as Error)?.message}</p>
+            <p style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }}>{((userError as Error)?.message) || '加载用户信息失败'}</p>
           </GlassCard>
         ) : (
           <>

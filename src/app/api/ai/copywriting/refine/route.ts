@@ -69,10 +69,10 @@ ${inspContext || '（无）'}
     try {
       const result = await callDeepSeek(prompt, { temperature: 0.4, maxTokens: 250 });
       const refined = result.trim().replace(/^["「『]+|["」』]+$/g, '').slice(0, 500);
-      return createApiResponse({ refined, source: 'ai' }, 'Refined');
+      return createApiResponse({ refined, source: 'ai' }, '已润色');
     } catch (e) {
       // fallback：原样返回
-      return createApiResponse({ refined: userInput.trim(), source: 'fallback' }, 'Fallback');
+      return createApiResponse({ refined: userInput.trim(), source: 'fallback' }, '已降级处理');
     }
   } catch (error) {
     console.error('Refine copywriting error:', error);

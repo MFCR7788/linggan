@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, Zap, Loader2, Download, Save, Trash2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
@@ -24,6 +25,7 @@ function BatchImageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchId, setBatchId] = useState<string | null>(initialBatchId);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // 进度
   const { data: progress, isPolling } = useBatchProgress(batchId);
@@ -108,12 +110,16 @@ function BatchImageContent() {
     setToast({ message: `已下载 ${completedTasks.length} 张`, type: 'success' });
   };
 
-  const handleClear = async () => {
+  const handleClear = () => {
     if (!batchId) {
       setPromptsText('');
       return;
     }
-    if (!confirm('确定要取消当前批次所有任务并清空输入吗?')) return;
+    setShowCancelConfirm(true);
+  };
+
+  const confirmClear = async () => {
+    setShowCancelConfirm(false);
     try {
       await fetch(`/api/jobs/${batchId}`, { method: 'DELETE' });
     } catch (e) {
@@ -340,6 +346,14 @@ function BatchImageContent() {
 
       
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        message="确定要取消当前批次所有任务并清空输入吗?"
+        danger
+        onConfirm={confirmClear}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </div>
   );
 }

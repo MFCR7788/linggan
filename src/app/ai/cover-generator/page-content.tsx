@@ -67,7 +67,7 @@ export default function CoverGeneratorPageContent() {
         setVideoUrl(urlData.publicUrl);
       }
     } catch (e) {
-      setError(`上传失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`上传失败，请重试`);
     } finally {
       setUploading(false);
     }
@@ -93,7 +93,7 @@ export default function CoverGeneratorPageContent() {
       setKeyframes(data.data.keyframes);
       setTitles(data.data.titles || []);
     } catch (e) {
-      setError(`分析失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`分析失败，请重试`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -122,7 +122,7 @@ export default function CoverGeneratorPageContent() {
       if (!data.success) { setError(data.error || '生成失败'); return; }
       setCoverUrl(data.data.coverUrl);
     } catch (e) {
-      setError(`生成失败: ${e instanceof Error ? e.message : '网络错误'}`);
+      setError(`生成失败，请重试`);
     } finally {
       setIsGenerating(false);
     }

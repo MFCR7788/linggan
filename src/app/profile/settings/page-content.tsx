@@ -13,6 +13,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { GlassInput } from '@/components/GlassInput';
 import { useToast } from '@/components/Toast';
 import { ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { IntegrationSettings } from '@/components/IntegrationSettings';
 import { useUser } from '@/hooks/use-user';
 import { useAccountType } from '@/hooks/use-account-type';
@@ -517,6 +518,7 @@ function AvatarSection() {
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showDeleteAvatar, setShowDeleteAvatar] = useState(false);
 
   useEffect(() => {
     try {
@@ -604,10 +606,14 @@ function AvatarSection() {
   };
 
   const handleDelete = () => {
-    if (!confirm('确认删除当前数字分身?这不影响已生成的视频。')) return;
+    setShowDeleteAvatar(true);
+  };
+
+  const confirmDeleteAvatar = () => {
     localStorage.removeItem(AVATAR_STORAGE_KEY);
     setInfo(null);
     showToast('已删除', 'success');
+    setShowDeleteAvatar(false);
   };
 
   return (
@@ -749,6 +755,16 @@ function AvatarSection() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteAvatar}
+        title="删除数字分身"
+        message="确认删除当前数字分身?这不影响已生成的视频。"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDeleteAvatar}
+        onCancel={() => setShowDeleteAvatar(false)}
+      />
     </GlassCard>
   );
 }

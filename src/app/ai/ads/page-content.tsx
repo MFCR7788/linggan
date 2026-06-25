@@ -263,7 +263,7 @@ function AdsContent() {
       setToast({ message: '已下载 ZIP', type: 'success' });
     } catch (e: any) {
       setProgressText('');
-      setToast({ message: '打包失败: ' + e.message, type: 'error' });
+      setToast({ message: '打包失败，请重试', type: 'error' });
     }
   };
 

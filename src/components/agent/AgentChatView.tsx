@@ -342,7 +342,7 @@ export function AgentChatView() {
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [input]);
 
-  // 加载会话列表 → 有历史则进入最后会话底部，无历史则新建
+  // 加载会话列表 → 有历史则直接进最后会话，无历史则新建
   useEffect(() => {
     if (sessionLoadedRef.current) return;
     sessionLoadedRef.current = true;
@@ -350,6 +350,7 @@ export function AgentChatView() {
       if (list.length > 0) {
         // 进入最近一次会话（列表已按更新时间降序排列）
         switchSession(list[0].id);
+        setIsLoadingMessages(true);
         loadMessages(list[0].id).then(msgs => {
           const uiMsgs: UIMessage[] = msgs.map((m: any) => {
             const meta = m.metadata || {};
@@ -368,6 +369,8 @@ export function AgentChatView() {
             };
           });
           setMessages(uiMsgs);
+        }).finally(() => {
+          setIsLoadingMessages(false);
         });
       } else {
         // 无历史会话 → 自动创建新会话，展示欢迎页

@@ -787,7 +787,7 @@ function DigitalHumanContent() {
         if (!sRes.success) throw new Error(sRes.error || '写稿失败');
         script = sRes.data!.scripts[0];
       } catch (err: any) {
-        setOcError(err.message);
+        setOcError((err instanceof Error ? err.message : '') || '操作失败');
         setOcPhase('error');
         return;
       }

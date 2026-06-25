@@ -9,6 +9,7 @@ import { Toast } from '@/components/Toast';
 import { TopNav } from '@/components/TopNav';
 import { PageKey } from "@/components/BottomNav";
 import { ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { apiClient } from '@/lib/api-client';
 import { PLATFORMS, type PlatformId } from '@/lib/platforms/types';
 import { ManualMetricsForm } from '@/components/ManualMetricsForm';
@@ -39,6 +40,7 @@ function PublicationDetailContent() {
   const [pub, setPub] = useState<Publication | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -46,7 +48,7 @@ function PublicationDetailContent() {
       const res = await apiClient.get<{ publication: Publication }>(`/platforms/publications/${id}`);
       if (res.success && res.data) setPub(res.data.publication);
     } catch (e: any) {
-      setToast({ message: e.message, type: 'error' });
+      setToast({ message: (e instanceof Error ? e.message : '') || '加载失败，请重试', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -55,14 +57,18 @@ function PublicationDetailContent() {
   useEffect(() => { load(); }, [id]);
 
   const handleDelete = async () => {
-    if (!confirm('确定删除?')) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
     try {
       await apiClient.delete(`/platforms/publications/${id}`);
       setToast({ message: '已删除', type: 'success' });
       router.push('/publish');
     } catch (e: any) {
-      setToast({ message: e.message, type: 'error' });
+      setToast({ message: (e instanceof Error ? e.message : '') || '操作失败，请重试', type: 'error' });
     }
+    setShowDeleteConfirm(false);
   };
 
   const handleNavigate = (page: PageKey) => {
@@ -195,6 +201,16 @@ function PublicationDetailContent() {
 
       
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="删除发布"
+        message="确定删除?"
+        confirmLabel="删除"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

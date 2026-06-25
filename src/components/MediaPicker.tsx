@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Upload, ImageIcon, Link, Loader2, Video, Music } from 'lucide-react';
+import { Upload, ImageIcon, Link, Loader2, Video, Music, CheckCircle2 } from 'lucide-react';
 import { GlassCard } from '@/components/GlassCard';
 
 type MediaType = 'image' | 'video' | 'audio';
@@ -48,11 +48,18 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
   const [selectedInspId, setSelectedInspId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingInsp, setIsLoadingInsp] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; url: string } | null>(null);
 
   const visibleTabs = tabs || ['upload', 'inspiration', 'url'];
 
   useEffect(() => {
-    if (value) setUrl(value);
+    if (value) {
+      setUrl(value);
+      if (value.startsWith('http') && !uploadedFile) {
+        setUploadedFile({ name: value.split('/').pop() || '已上传', url: value });
+      }
+    }
   }, [value]);
 
   useEffect(() => {
@@ -69,6 +76,7 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
+    setUploadError('');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -77,12 +85,13 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
       const data = await res.json();
       if (data.success && data.data.url) {
         setUrl(data.data.url);
+        setUploadedFile({ name: data.data.fileName || file.name, url: data.data.url });
         onSelect(data.data.url);
       } else {
-        throw new Error(data.error || '上传失败');
+        setUploadError(data.error || '上传失败，请重试');
       }
     } catch {
-      // silently handled by caller via value not changing
+      setUploadError('上传失败，请检查网络后重试');
     }
     setIsUploading(false);
   };
@@ -148,17 +157,22 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
           <label
             htmlFor={id}
             className="flex flex-col items-center gap-2 py-4 px-4 rounded-xl cursor-pointer"
-            style={{ border: '2px dashed rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.03)' }}
+            style={{ border: `2px dashed ${uploadError ? 'rgba(239,68,68,0.4)' : uploadedFile ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.15)'}`, background: uploadedFile ? 'rgba(34,197,94,0.05)' : 'rgba(255,255,255,0.03)' }}
           >
             {isUploading ? (
               <Loader2 size={20} color="#67E8F9" className="animate-spin" />
+            ) : uploadedFile ? (
+              <CheckCircle2 size={20} color="#34D399" />
             ) : (
               <Upload size={20} color="#67E8F9" />
             )}
-            <span style={{ color: '#9CA3AF', fontSize: 12 }}>
-              {isUploading ? '上传中...' : `点击上传${accept === 'image' ? '图片' : accept === 'video' ? '视频' : '音频'}`}
+            <span style={{ color: uploadedFile ? '#86EFAC' : '#9CA3AF', fontSize: 12 }}>
+              {isUploading ? '上传中...' : uploadedFile ? `已上传: ${uploadedFile.name.length > 24 ? uploadedFile.name.slice(0, 24) + '...' : uploadedFile.name}` : `点击上传${accept === 'image' ? '图片' : accept === 'video' ? '视频' : '音频'}`}
             </span>
           </label>
+          {uploadError && (
+            <p className="text-xs mt-2" style={{ color: '#FCA5A5' }}>{uploadError}</p>
+          )}
         </div>
       )}
 

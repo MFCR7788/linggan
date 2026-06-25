@@ -7,6 +7,7 @@ import {
   X, Eye, EyeOff, AlertTriangle, Settings as SettingsIcon, Sparkles, Loader2,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { GlassInput } from '@/components/GlassInput';
 import { useToast } from '@/components/Toast';
@@ -52,6 +53,7 @@ export function IntegrationSettings() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [autoGenFor, setAutoGenFor] = useState<string | null>(null);
   const [autoGenValue, setAutoGenValue] = useState<string | null>(null);
+  const [clearConfirmKey, setClearConfirmKey] = useState<string | null>(null);
 
   const [degradedReason, setDegradedReason] = useState<string | null>(null);
 
@@ -74,15 +76,20 @@ export function IntegrationSettings() {
   const configuredCount = settings.filter(s => s.isConfigured).length;
   const totalCount = settings.length;
 
-  const handleDelete = async (keyName: string) => {
-    if (!confirm(`确定清空 ${keyName} 吗？此操作不可撤销。`)) return;
-    const resp = await apiClient.delete<{ ok: boolean }>(`/admin/platform-settings?keyName=${encodeURIComponent(keyName)}`);
+  const handleDelete = (keyName: string) => {
+    setClearConfirmKey(keyName);
+  };
+
+  const confirmClear = async () => {
+    if (!clearConfirmKey) return;
+    const resp = await apiClient.delete<{ ok: boolean }>(`/admin/platform-settings?keyName=${encodeURIComponent(clearConfirmKey)}`);
     if (resp.success) {
       showToast('已清空', 'success');
       load();
     } else {
       showToast(resp.error || '清空失败', 'error');
     }
+    setClearConfirmKey(null);
   };
 
   const handleAutoGenerate = async (keyName: string) => {
@@ -222,6 +229,14 @@ export function IntegrationSettings() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={clearConfirmKey !== null}
+        message={`确定清空 ${clearConfirmKey ?? ''} 吗？此操作不可撤销。`}
+        danger
+        onConfirm={confirmClear}
+        onCancel={() => setClearConfirmKey(null)}
+      />
     </div>
   );
 }

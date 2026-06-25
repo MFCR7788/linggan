@@ -7,6 +7,7 @@ import {
   Puzzle, ChevronRight, ExternalLink, Plus,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { TopNav } from '@/components/TopNav';
 import { PageKey } from "@/components/BottomNav";
 import { GlassCard } from '@/components/GlassCard';
@@ -37,6 +38,7 @@ function SkillsContent() {
   const [tab, setTab] = useState<'hub' | 'installed'>('hub');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
+  const [uninstallId, setUninstallId] = useState<string | null>(null);
 
   // 创建技能弹窗
   const [showCreate, setShowCreate] = useState(false);
@@ -155,14 +157,20 @@ function SkillsContent() {
     }
   };
 
-  const handleUninstall = async (skillId: string) => {
-    if (!confirm('确定卸载这个技能吗？')) return;
+  const handleUninstall = (skillId: string) => {
+    setUninstallId(skillId);
+  };
+
+  const confirmUninstall = async () => {
+    if (!uninstallId) return;
     try {
-      await uninstallSkill.mutateAsync(skillId);
+      await uninstallSkill.mutateAsync(uninstallId);
       showToast('已卸载', 'success');
       refetch();
     } catch {
       showToast('卸载失败', 'error');
+    } finally {
+      setUninstallId(null);
     }
   };
 
@@ -594,6 +602,14 @@ function SkillsContent() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={uninstallId !== null}
+        message="确定卸载这个技能吗？"
+        danger
+        onConfirm={confirmUninstall}
+        onCancel={() => setUninstallId(null)}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ export const POST = withAuth(async ({ request, user }) => {
     const { inspirations, type, style, noAiTaste, n, industry, userInstruction } = await request.json();
 
     if (!inspirations || !Array.isArray(inspirations)) {
-      return createApiError('Inspirations array is required', 400);
+      return createApiError('灵感素材数组不能为空', 400);
     }
 
     // 将类型ID转换为中文描述
@@ -92,6 +92,6 @@ export const POST = withAuth(async ({ request, user }) => {
     }, 'Copywriting generated');
   } catch (error) {
     console.error('AI copywriting error:', error);
-    return createApiError('Failed to generate copywriting', 500);
+    return createApiError('生成文案失败', 500);
   }
 });
