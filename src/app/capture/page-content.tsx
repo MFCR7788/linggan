@@ -837,7 +837,7 @@ function CaptureContent() {
             onMouseLeave={() => setHoveredMessageId(null)}
           >
             <div className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`max-w-[92%] flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
                 {msg.type !== 'user' && (
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                     <Sparkles size={14} color="white" />
@@ -944,7 +944,7 @@ function CaptureContent() {
               </div>
             </div>
             {msg.generatedImage?.imageUrl && (
-              <div className="max-w-[80%] mt-2">
+              <div className="max-w-[92%] mt-2">
                 <img
                   src={msg.generatedImage.imageUrl}
                   alt={msg.generatedImage.prompt}
@@ -958,7 +958,7 @@ function CaptureContent() {
               </div>
             )}
             {msg.generatedVideo && (
-              <div className="max-w-[80%] mt-2">
+              <div className="max-w-[92%] mt-2">
                 {(msg.generatedVideo.status === 'queued' || msg.generatedVideo.status === 'running') && (
                   <div className="flex items-center gap-2 bg-gray-800/80 px-4 py-3 rounded-xl">
                     <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -1093,7 +1093,7 @@ function CaptureContent() {
 
             {/* 兼容单条日程旧格式 */}
             {msg.type === 'ai' && msg.schedule && !msg.schedules && (
-              <div className="mt-2 ml-[52px] max-w-[80%]">
+              <div className="mt-2 ml-[52px] max-w-[92%]">
                 <div
                   className="rounded-xl p-3"
                   style={{
@@ -1273,7 +1273,7 @@ function CaptureContent() {
       )}
 
       {/* 底部输入 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-3" style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-3 landscape:!max-w-full" style={{ maxWidth: 480, margin: '0 auto' }}>
           <div className="flex flex-col gap-2 relative">
             {attachedFiles.length > 0 && (
               <div className="flex gap-2 overflow-x-auto">

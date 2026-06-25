@@ -15,9 +15,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       {!hide && <TopNavBar />}
       <main
-        className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] md:max-w-[720px] lg:max-w-[1024px]"
+        className="relative z-10 mx-auto bg-[#0A1629] shadow-[0_0_60px_rgba(0,0,0,0.5)] w-full max-w-[448px] landscape:max-w-full md:max-w-[720px] md:landscape:max-w-full lg:max-w-[1024px] lg:landscape:max-w-full"
         style={{
-          height: "100vh",
+          height: "100dvh",
           overflowY: "auto",
           overflowX: "hidden",
           overscrollBehavior: "none",

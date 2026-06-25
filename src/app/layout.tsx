@@ -55,7 +55,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" style={{ background: "#0A1629" }}>
-      <body style={{ margin: 0, padding: 0, height: "100vh", overflow: "hidden", fontFamily, background: "#0A1629" }}>
+      <body style={{ margin: 0, padding: 0, height: "100dvh", overflow: "hidden", fontFamily, background: "#0A1629" }}>
         {/* 渐变背景 (铺满整个 viewport, 网页端两侧可见) */}
         <div
           style={{

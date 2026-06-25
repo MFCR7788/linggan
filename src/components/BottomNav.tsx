@@ -139,7 +139,7 @@ export function BottomNav() {
         }}
       >
         <div
-          className="flex items-center justify-around px-2 py-3 max-w-[480px] mx-auto"
+          className="flex items-center justify-around px-2 py-3 max-w-[480px] landscape:max-w-full mx-auto"
         >
           {items.map(({ key, label, Icon, isCenter }) => {
             const isActive = activeTab === key;

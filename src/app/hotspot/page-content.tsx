@@ -1022,8 +1022,17 @@ function HotspotRadarInner() {
         setCheckResult(msg);
         setTimeout(() => setCheckResult(null), 3000);
       }
-      else if (res.status !== 409) console.error('添加关键词失败:', data.error);
-    } catch (err) { console.error('添加关键词网络错误:', err); }
+      else if (res.status === 409) {
+        setToast({ type: 'error', message: data.error || '该关键词已存在' });
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast({ type: 'error', message: data.error || `添加失败 (${res.status})` });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: '添加关键词网络错误，请检查网络后重试' });
+      setTimeout(() => setToast(null), 3000);
+    }
     finally { setAddingKeyword(false); }
   };
 
