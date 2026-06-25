@@ -175,7 +175,7 @@ function LoginContent() {
     <div className="flex flex-col items-center px-6" style={{ paddingTop: 'max(60px, 10vh)', paddingBottom: 32 }}>
       {/* Logo */}
       <img
-        src="/brand/logo-mark.svg"
+        src="/brand/logo-mark.png"
         alt="灵集"
         style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12 }}
       />

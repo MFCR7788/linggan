@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import nextDynamic from "next/dynamic";
 import "./globals.css";
-import { StarBackground } from "@/components/StarBackground";
 import { ReactQueryProvider } from "@/providers/react-query-provider";
+
+const StarBackground = nextDynamic(() => import("@/components/StarBackground").then(m => ({ default: m.StarBackground })), { ssr: false });
 import { ToastProvider } from "@/components/Toast";
 import { InsufficientCreditsModal } from "@/components/InsufficientCreditsModal";
 import { TopNavProvider } from "@/components/TopNavContext";
@@ -26,19 +28,19 @@ export const metadata: Metadata = {
   description: "AI 灵感创作助手",
   manifest: "/manifest.json",
   icons: {
-    icon: "/brand/favicon.svg",
-    apple: "/brand/app-icon.svg",
+    icon: "/brand/favicon.png",
+    apple: "/brand/app-icon.png",
   },
   openGraph: {
     title: "灵集 LingJi - AI 灵感创作助手",
     description: "AI 驱动的灵感收集与内容创作工具",
-    images: ["/brand/app-icon.svg"],
+    images: ["/brand/app-icon.png"],
   },
   twitter: {
     card: "summary",
     title: "灵集 LingJi",
     description: "AI 灵感创作助手",
-    images: ["/brand/app-icon.svg"],
+    images: ["/brand/app-icon.png"],
   },
   appleWebApp: {
     title: "灵集",

@@ -20,13 +20,13 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/brand/app-icon.svg",
+      "src": "/brand/app-icon.png",
       "sizes": "1024x1024",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/brand/favicon.svg",
+      "src": "/brand/favicon.png",
       "sizes": "64x64",
       "type": "image/svg+xml"
     }
@@ -37,13 +37,13 @@
       "short_name": "助手",
       "description": "与 AI 对话创作",
       "url": "/agent",
-      "icons": [{ "src": "/brand/favicon.svg", "sizes": "64x64" }]
+      "icons": [{ "src": "/brand/favicon.png", "sizes": "64x64" }]
     },
     {
       "name": "灵感库",
       "short_name": "灵感",
       "url": "/inspiration",
-      "icons": [{ "src": "/brand/favicon.svg", "sizes": "64x64" }]
+      "icons": [{ "src": "/brand/favicon.png", "sizes": "64x64" }]
     }
   ]
 }
