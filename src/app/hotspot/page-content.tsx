@@ -840,7 +840,7 @@ function HotspotRadarInner() {
   usePageTitle('热点话题');
   const [refreshing, setRefreshing] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string; action?: { label: string; onClick: () => void } } | null>(null);
 
   const [source, setSource] = useState('');
   const [monitorKeywordId, setMonitorKeywordId] = useState('');
@@ -1025,6 +1025,8 @@ function HotspotRadarInner() {
       else if (res.status === 409) {
         setToast({ type: 'error', message: data.error || '该关键词已存在' });
         setTimeout(() => setToast(null), 3000);
+      } else if (res.status === 403 && data.code === 'KEYWORD_LIMIT_REACHED') {
+        setToast({ type: 'error', message: data.error, action: { label: '升级订阅', onClick: () => router.push('/profile/billing/subscribe') } });
       } else {
         setToast({ type: 'error', message: data.error || `添加失败 (${res.status})` });
         setTimeout(() => setToast(null), 3000);
@@ -1057,7 +1059,14 @@ function HotspotRadarInner() {
           if (found) { platforms = found.platforms; break; }
         }
         const res = await fetch('/api/keywords', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ keyword: kw, platforms }) });
-        if (res.ok) successCount++;
+        if (res.ok) { successCount++; }
+        else if (res.status === 403) {
+          const data = await res.json();
+          if (data.code === 'KEYWORD_LIMIT_REACHED') {
+            setToast({ type: 'error', message: data.error, action: { label: '升级订阅', onClick: () => router.push('/profile/billing/subscribe') } });
+            break;
+          }
+        }
       } catch { /* continue */ }
     }
     setPendingKeywords(new Set());
@@ -1153,6 +1162,12 @@ function HotspotRadarInner() {
               color: toast.type === 'success' ? '#86EFAC' : '#FCA5A5',
             }}>
             {toast.type === 'success' ? <CheckCircle2 size={14} /> : <X size={14} />} {toast.message}
+            {toast.action && (
+              <button onClick={toast.action.onClick} className="ml-auto px-2.5 py-1 rounded-md text-xs font-medium flex-shrink-0"
+                style={{ background: 'rgba(59,130,246,0.3)', color: '#93C5FD' }}>
+                {toast.action.label}
+              </button>
+            )}
           </div>
         )}
         {checkResult && (

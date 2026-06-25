@@ -11,11 +11,13 @@ export function createApiResponse<T>(data: T, message?: string): NextResponse<Ap
   });
 }
 
-export function createApiError(error: string, status: number = 500): NextResponse<ApiResponse> {
+export function createApiError(error: string, status: number = 500, code?: string, data?: Record<string, unknown>): NextResponse<ApiResponse> {
   return NextResponse.json(
     {
       success: false,
-      error
+      error,
+      ...(code && { code }),
+      ...(data && { data }),
     },
     { status }
   );

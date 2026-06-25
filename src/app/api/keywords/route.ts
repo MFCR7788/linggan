@@ -69,9 +69,14 @@ export const POST = withAuth(async ({ request, user }) => {
       free: '免费版', basic: '个人版', pro: '创作者版', studio: '工作室版', enterprise: '企业版',
     };
     const tierName = tierNames[tier] || '当前套餐';
+    const tierOrder: CreditTier[] = ['free', 'basic', 'pro', 'studio', 'enterprise'];
+    const currentIdx = tierOrder.indexOf(tier);
+    const nextTier = currentIdx >= 0 && currentIdx < tierOrder.length - 1 ? tierOrder[currentIdx + 1] : null;
     return createApiError(
-      `${tierName}最多创建 ${limit} 个监控词，你已有 ${activeCount} 个。请删除或停用旧的再添加`,
-      403
+      `${tierName}最多创建 ${limit} 个监控词，你已有 ${activeCount} 个。`,
+      403,
+      'KEYWORD_LIMIT_REACHED',
+      { tier, limit, activeCount, nextTier: nextTier || undefined }
     );
   }
 
