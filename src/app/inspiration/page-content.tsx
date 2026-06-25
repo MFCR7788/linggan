@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand } from "lucide-react";
+import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand, CalendarPlus } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PageKey } from "@/components/BottomNav";
@@ -11,22 +11,22 @@ import { ProtectedRoute, LoadingSpinner, EmptyState } from "@/components";
 import { useInspirations, useCreateInspiration, useDeleteInspiration, useBatchDeleteInspiration, useUpdateInspiration } from "@/hooks/use-inspiration";
 import { useUploadQueue } from "@/hooks/use-upload-queue";
 import { useTags } from "@/hooks/use-categories";
-import { useSchedules } from "@/hooks/use-schedule";
+import { useSchedules, useCreateSchedule } from "@/hooks/use-schedule";
 import { TYPE_EMOJIS, TYPE_LABELS, STATUS_LABELS, PAGE_ROUTES } from "@/lib/style-constants";
 import { stripMarkdown } from "@/lib/text-utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 // ====== 常量 ======
 
-const typeFilters = ["全部", "灵感", "图片", "视频", "音频", "AI作品"];
+const typeFilters = ["灵感", "图片", "视频", "音频", "AI作品", "休眠中"];
 
 const typeMap: Record<string, string | undefined> = {
-  "全部": undefined,
   "灵感": "text",
   "图片": "image",
   "视频": "video",
   "音频": "audio",
   "AI作品": "ai",
+  "休眠中": "dormant",
 };
 
 const TIME_RANGES = [
@@ -158,7 +158,7 @@ function SimpleCalendar({ events, onDateClick }: { events: Map<string, any[]>; o
 
 function InspirationLibraryContent() {
   usePageTitle('灵感库');
-  const [activeFilter, setActiveFilter] = useState("全部");
+  const [activeFilter, setActiveFilter] = useState("灵感");
   const [showSavedTip, setShowSavedTip] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -181,6 +181,12 @@ function InspirationLibraryContent() {
   const [sortKey, setSortKey] = useState(0); // index into SORT_OPTIONS
   const [openDropdown, setOpenDropdown] = useState<"time" | "tag" | "sort" | null>(null);
   const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video'; url: string; title: string } | null>(null);
+
+  // 添加到日程弹窗
+  const [scheduleItem, setScheduleItem] = useState<any | null>(null);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleLocation, setScheduleLocation] = useState("");
+  const [scheduleCreating, setScheduleCreating] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -223,6 +229,7 @@ function InspirationLibraryContent() {
   const dateParams = getDateRange(timeRange);
 
   const isAiFilter = activeFilter === "AI作品";
+  const isDormantFilter = activeFilter === "休眠中";
 
   // ─── 分页状态 ──────────────────────────────────────────
   const [page, setPage] = useState(1);
@@ -230,10 +237,12 @@ function InspirationLibraryContent() {
   const PAGE_SIZE = 30;
 
   const queryParams = {
-    type: isAiFilter ? undefined : (typeMap[activeFilter] as any),
+    type: (isAiFilter || isDormantFilter) ? undefined : (typeMap[activeFilter] as any),
     page,
     limit: PAGE_SIZE,
     sourcePlatform: isAiFilter ? "ai" : undefined,
+    lifecycle: isDormantFilter ? "seed" : undefined,
+    idleDays: isDormantFilter ? "7" : undefined,
     ...dateParams,
     sortBy: SORT_OPTIONS[sortKey].sortBy,
     sortOrder: SORT_OPTIONS[sortKey].sortOrder,
@@ -266,8 +275,45 @@ function InspirationLibraryContent() {
   const updateInspiration = useUpdateInspiration();
 
   const { data: schedules = [] } = useSchedules({ limit: 10 });
+  const createSchedule = useCreateSchedule();
 
   const items = allItems;
+
+  // 添加到日程
+  const handleAddToSchedule = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    setScheduleItem(item);
+    // 默认时间设为明天上午9点
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    setScheduleTime(tomorrow.toISOString().slice(0, 16));
+    setScheduleLocation("");
+  };
+
+  const handleConfirmSchedule = async () => {
+    if (!scheduleItem || !scheduleTime) return;
+    setScheduleCreating(true);
+    try {
+      await createSchedule.mutateAsync({
+        title: scheduleItem.title || scheduleItem.original_text?.slice(0, 50) || "灵感任务",
+        description: scheduleItem.ai_summary || scheduleItem.original_text?.slice(0, 200) || "",
+        scheduled_at: new Date(scheduleTime).toISOString(),
+        location: scheduleLocation || undefined,
+        color: "#8B5CF6",
+        source_content_id: scheduleItem.id,
+      });
+      setShowInfoTip("已添加到日程");
+      setTimeout(() => setShowInfoTip(null), 2000);
+      setScheduleItem(null);
+    } catch (e) {
+      console.error("创建日程失败:", e);
+      setShowInfoTip("添加日程失败");
+      setTimeout(() => setShowInfoTip(null), 2000);
+    } finally {
+      setScheduleCreating(false);
+    }
+  };
 
   // 按日期分组（用于日历视图）
   const calendarEvents = useMemo(() => {
@@ -598,6 +644,15 @@ function InspirationLibraryContent() {
               >
                 <Trash2 size={13} color="#FCA5A5" />
               </button>
+              <button
+                onClick={(e) => handleAddToSchedule(e, item)}
+                className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(139,92,246,0.4)" }}
+                title="添加到日程"
+                aria-label="添加到日程"
+              >
+                <CalendarPlus size={13} color="#C4B5FD" />
+              </button>
             </div>
           )}
         </div>
@@ -708,7 +763,7 @@ function InspirationLibraryContent() {
                 controls
                 preload="metadata"
                 className="w-full"
-                style={{ height: 32, filter: 'invert(0.85)' }}
+                style={{ height: 40 }}
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
@@ -775,7 +830,33 @@ function InspirationLibraryContent() {
             <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">
               {new Date(item.created_at).toLocaleDateString("zh-CN")}
             </span>
-            <GlassBadge>{STATUS_LABELS[item.status] || "待处理"}</GlassBadge>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {/* 生命周期指示器 */}
+              {item.lifecycle && item.lifecycle !== 'seed' && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                  background: item.lifecycle === 'sprout' ? '#A78BFA' :
+                    item.lifecycle === 'growing' ? '#3B82F6' : '#22C55E',
+                }} title={item.lifecycle === 'sprout' ? '已排程' : item.lifecycle === 'growing' ? '执行中' : '已完成'} />
+              )}
+              {/* 空闲天数标记 */}
+              {item.last_action_at && (() => {
+                const days = Math.floor((Date.now() - new Date(item.last_action_at).getTime()) / 86400000);
+                if (days >= 7) return (
+                  <span style={{ color: '#F87171', fontSize: 9, fontWeight: 600 }} title={`${days}天未操作`}>
+                    {days > 99 ? '99+' : days}d
+                  </span>
+                );
+                return null;
+              })()}
+              {/* 预估耗时 */}
+              {item.estimated_duration && (
+                <span style={{ color: '#6B7280', fontSize: 9 }} title="预估耗时">
+                  ~{item.estimated_duration >= 60 ? `${Math.floor(item.estimated_duration / 60)}h` : `${item.estimated_duration}m`}
+                </span>
+              )}
+              <GlassBadge>{STATUS_LABELS[item.status] || "待处理"}</GlassBadge>
+            </div>
           </div>
         </div>
       </GlassCard>
@@ -970,13 +1051,13 @@ function InspirationLibraryContent() {
           }}>
           <CheckCircle size={18} color={uploadToast.includes('失败') ? "#EF4444" : "#22C55E"} />
           <span className="flex-1">{uploadToast}</span>
-          {uploadHasSucceeded && activeFilter !== "全部" && (
+          {uploadHasSucceeded && (
             <button
-              onClick={() => { setActiveFilter("全部"); setUploadToast(null); }}
+              onClick={() => { setActiveFilter("灵感"); setUploadToast(null); }}
               className="px-2 py-0.5 rounded text-xs flex-shrink-0"
               style={{ background: "rgba(34,197,94,0.3)", color: "#86EFAC" }}
             >
-              查看全部
+              查看
             </button>
           )}
         </div>
@@ -1136,9 +1217,9 @@ function InspirationLibraryContent() {
           <EmptyState icon="📝" title="还没有灵感"
             description="点击右上角上传按钮导入文件，或到灵感助手中记录灵感" />
         ) : !isLoading && !isScheduleType && items.length > 0 ? (
-          <div className="columns-2 gap-3" style={{ columnGap: '0.75rem' }}>
+          <div className="flex flex-col gap-3">
             {items.map((item: any) => (
-              <div key={item.id} className="break-inside-avoid" style={{ marginBottom: '0.75rem' }}>
+              <div key={item.id}>
                 {renderCard(item)}
               </div>
             ))}
@@ -1280,6 +1361,74 @@ function InspirationLibraryContent() {
                 style={{ outline: 'none' }}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 添加到日程弹窗 */}
+      {scheduleItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setScheduleItem(null)}
+        >
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div
+            className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5"
+            style={{ background: "#1A2332", border: "1px solid rgba(255,255,255,0.12)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 style={{ color: "#FFFFFF", fontSize: 16, fontWeight: 600 }}>添加到日程</h3>
+              <button onClick={() => setScheduleItem(null)} className="p-1 rounded" style={{ background: "rgba(255,255,255,0.1)" }}>
+                <X size={16} color="#9CA3AF" />
+              </button>
+            </div>
+
+            <p className="mb-3 line-clamp-2" style={{ color: "#D1D5DB", fontSize: 13 }}>
+              {scheduleItem.title || scheduleItem.original_text?.slice(0, 80) || "未命名灵感"}
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label style={{ color: "#9CA3AF", fontSize: 11, display: "block", marginBottom: 4 }}>时间</label>
+                <input
+                  type="datetime-local"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#E5E7EB",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ color: "#9CA3AF", fontSize: 11, display: "block", marginBottom: 4 }}>地点（可选）</label>
+                <input
+                  type="text"
+                  value={scheduleLocation}
+                  onChange={(e) => setScheduleLocation(e.target.value)}
+                  placeholder="如：会议室A / 家里"
+                  className="w-full px-3 py-2 rounded-lg text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#E5E7EB",
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleConfirmSchedule}
+              disabled={scheduleCreating || !scheduleTime}
+              className="w-full mt-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
+              style={{
+                background: scheduleCreating || !scheduleTime ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg, #8B5CF6, #6366F1)",
+                color: scheduleCreating || !scheduleTime ? "#6B7280" : "#FFFFFF",
+              }}
+            >
+              {scheduleCreating ? "添加中..." : "确认添加"}
+            </button>
           </div>
         </div>
       )}

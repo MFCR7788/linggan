@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, ImageIcon, VideoIcon } from "lucide-react";
+import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, ImageIcon, VideoIcon, CalendarPlus } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -55,6 +55,7 @@ function InspirationDetailContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id") || undefined;
   const { data: inspiration, isLoading, isError } = useInspiration(id);
+  const linkedSchedules = (inspiration as any)?.linked_schedules || [];
   const { updateStatus } = useInspirationActions();
   const updateInspiration = useUpdateInspiration();
   const { data: categories } = useCategories();
@@ -555,6 +556,28 @@ function InspirationDetailContent() {
                 </div>
               )}
 
+              {/* 音频 */}
+              {inspiration.type === 'audio' && (
+                <div>
+                  {inspiration.media_urls?.[0] ? (
+                    <audio
+                      src={inspiration.media_urls[0]}
+                      controls
+                      preload="metadata"
+                      className="w-full mb-2"
+                      style={{ height: 40 }}
+                    >
+                      您的浏览器不支持音频播放
+                    </audio>
+                  ) : (
+                    <p style={{ color: "#6B7280", fontSize: 13 }}>暂无音频文件</p>
+                  )}
+                  {inspiration.original_text && (
+                    <FormattedText text={inspiration.original_text} color="#E5E7EB" fontSize={13} lineHeight={1.6} />
+                  )}
+                </div>
+              )}
+
               {/* 文本 / 语音（默认文本展示） */}
               {(inspiration.type === 'text' || inspiration.type === 'voice' || !inspiration.type) && (
                 <FormattedText text={inspiration.original_text || "暂无原始内容"} color="#E5E7EB" fontSize={14} lineHeight={1.7} />
@@ -582,6 +605,7 @@ function InspirationDetailContent() {
               <div className="flex flex-wrap gap-2">
                 {[
                   { label: "去AI生成文案", icon: <Zap size={14} />, action: () => router.push(`/ai/copywriting?inspirationId=${id}`) },
+                  { label: "添加到日程", icon: <CalendarPlus size={14} />, action: () => router.push(`/schedule?inspirationId=${id}&title=${encodeURIComponent(inspiration?.title || '')}`) },
                   { label: "分享", icon: <Share2 size={14} />, action: shareInspiration },
                   ...(inspiration.prompt ? [
                     { label: "做同款图片", icon: <ImageIcon size={14} />, action: () => router.push(`/ai/image?prompt=${encodeURIComponent(inspiration.prompt!)}`) },
@@ -600,6 +624,41 @@ function InspirationDetailContent() {
                 ))}
               </div>
             </GlassCard>
+
+            {/* 关联日程 */}
+            {linkedSchedules.length > 0 && (
+              <GlassCard className="!p-3 mb-4" style={{ border: "1px solid rgba(139,92,246,0.3)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarPlus size={15} color="#A78BFA" />
+                  <span style={{ color: "#C4B5FD", fontSize: 13, fontWeight: 600 }}>关联日程</span>
+                  <span style={{ color: "#9CA3AF", fontSize: 11 }}>({linkedSchedules.length})</span>
+                </div>
+                <div className="space-y-2">
+                  {linkedSchedules.map((s: any) => {
+                    const sTime = new Date(s.scheduled_at).toLocaleString("zh-CN", {
+                      month: "short", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit",
+                    });
+                    const statusColors: Record<string, string> = { pending: "#F59E0B", completed: "#22C55E", cancelled: "#6B7280" };
+                    const statusLabels: Record<string, string> = { pending: "待执行", completed: "已完成", cancelled: "已取消" };
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => router.push(`/schedule/${s.id}`)}
+                        className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-colors"
+                        style={{ background: "rgba(255,255,255,0.03)" }}
+                      >
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColors[s.status] || "#6B7280" }} />
+                        <span className="flex-1 truncate" style={{ color: "#E5E7EB", fontSize: 12 }}>{s.title}</span>
+                        <span style={{ color: "#6B7280", fontSize: 10 }} className="flex-shrink-0">{sTime}</span>
+                        <span style={{ color: statusColors[s.status] || "#6B7280", fontSize: 9 }} className="flex-shrink-0">
+                          {statusLabels[s.status] || s.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </GlassCard>
+            )}
 
             <div>
               <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600, marginBottom: 10 }}>相关灵感</h3>
