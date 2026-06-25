@@ -1273,7 +1273,7 @@ function CaptureContent() {
       )}
 
       {/* 底部输入 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-3 landscape:!max-w-full" style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-3" style={{ maxWidth: 480, margin: '0 auto' }}>
           <div className="flex flex-col gap-2 relative">
             {attachedFiles.length > 0 && (
               <div className="flex gap-2 overflow-x-auto">

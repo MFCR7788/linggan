@@ -1384,7 +1384,7 @@ export function AgentChatView() {
           paddingTop: "env(safe-area-inset-top)",
         }}
       >
-        <div className="relative flex items-center px-4 pb-3 border-b border-white/10 max-w-[448px] landscape:max-w-full md:max-w-[720px] md:landscape:max-w-full lg:max-w-[1024px] lg:landscape:max-w-full mx-auto" style={{ paddingTop: "calc(0.25rem + env(safe-area-inset-top))" }}>
+        <div className="relative flex items-center px-4 pb-3 border-b border-white/10 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto" style={{ paddingTop: "calc(0.25rem + env(safe-area-inset-top))" }}>
         {/* 返回按钮 */}
         <button
           onClick={() => router.back()}
@@ -1947,7 +1947,7 @@ export function AgentChatView() {
       )}
 
       {/* 输入区域 — 固定置底 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 pt-2 pb-3 z-10 landscape:!max-w-full" style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0A1629]/95 backdrop-blur-lg border-t border-white/10 px-4 pt-2 pb-3 z-10" style={{ maxWidth: 480, margin: '0 auto' }}>
         {/* 引导语 — 欢迎状态下底部显示 */}
         {messages.length === 0 && (
           <p className="text-center text-sm text-blue-300 mb-2">

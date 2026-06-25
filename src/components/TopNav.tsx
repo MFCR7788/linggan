@@ -47,7 +47,7 @@ export function TopNavBar() {
       }}
     >
       <div
-        className="flex items-center justify-between px-4 py-3 max-w-[448px] landscape:max-w-full md:max-w-[720px] md:landscape:max-w-full lg:max-w-[1024px] lg:landscape:max-w-full mx-auto"
+        className="flex items-center justify-between px-4 py-3 max-w-[448px] md:max-w-[720px] lg:max-w-[1024px] mx-auto"
         style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-2 min-w-[44px]">
