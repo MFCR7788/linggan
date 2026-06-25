@@ -99,7 +99,7 @@ export function AgentMessage({
         {/* 消息气泡 — AI 消息使用 FormattedText，内容区允许文字选择 */}
         <div
           className={`selectable px-4 py-2.5 text-[15px] ${isUser
-              ? 'bg-[#3B7CFF] text-white rounded-2xl rounded-br-md ml-auto max-w-[92%]'
+              ? 'bg-[#3B7CFF] text-white rounded-2xl rounded-br-md ml-auto max-w-[92%] w-fit'
               : 'text-[#E5E7EB]'
           }`}
           style={isUser ? {} : { lineHeight: 1.75 }}
