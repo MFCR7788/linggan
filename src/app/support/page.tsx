@@ -17,7 +17,7 @@ export default function SupportPage() {
       case 'hotspot': router.push('/hotspot'); break;
       case 'profile': router.push('/profile'); break;
       case 'agent': router.push('/agent'); break;
-      case 'capture': router.push('/capture'); break;
+      case 'capture': router.push('/agent'); break;
       case 'login': router.push('/login'); break;
       default: router.push('/home');
     }

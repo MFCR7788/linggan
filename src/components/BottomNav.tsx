@@ -31,7 +31,7 @@ function getActiveTabFromPath(pathname: string): PageKey {
   if (pathname.startsWith("/ai") || pathname.startsWith("/publish") || pathname.startsWith("/insights") || pathname.startsWith("/workflow")) return "ai";
   if (pathname.startsWith("/hotspot")) return "hotspot";
   if (pathname.startsWith("/profile") || pathname.startsWith("/notification") || pathname.startsWith("/privacy") || pathname.startsWith("/terms") || pathname.startsWith("/support")) return "profile";
-  if (pathname.startsWith("/schedule") || pathname.startsWith("/capture")) return "home";
+  if (pathname.startsWith("/schedule")) return "home";
   return "home";
 }
 

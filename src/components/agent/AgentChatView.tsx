@@ -26,6 +26,8 @@ import type { AgentSession } from '@/hooks/use-agent-sessions';
 import { ACCOUNT_TYPE_PRESETS, type RecommendationCombo, type AccountTypePreset } from '@/lib/account-presets';
 import { scheduleNotification } from '@/lib/notification-service';
 import { CREDIT_COSTS } from '@/lib/credit-costs';
+import { useSkills } from '@/hooks/use-skills';
+import { REWRITE_STYLES } from '@/lib/style-constants';
 
 // 生成类关键词 → 预估扣点（供前端确认弹窗用）
 const GEN_COST_HINTS: { pattern: RegExp; cost: () => number; label: string }[] = [
@@ -121,6 +123,12 @@ export function AgentChatView() {
 
   // 素材选择器
   const [inspPickerOpen, setInspPickerOpen] = useState(false);
+  // 改写选择器
+  const [showRewritePicker, setShowRewritePicker] = useState(false);
+  const [isRewriting, setIsRewriting] = useState(false);
+  // 全屏输入
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showExpandBtn, setShowExpandBtn] = useState(false);
   const [inspPickerMediaType, setInspPickerMediaType] = useState<'image' | 'video'>('image');
 
   // 斜杠指令
@@ -139,14 +147,36 @@ export function AgentChatView() {
     { command: '/storyboard', label: '视频分镜脚本', desc: '分镜表和拍摄法则', cat: 'video' },
   ];
 
-  const filteredCommands = (() => {
+  const { data: installedSkills } = useSkills({ action: 'installed' });
+
+  const availableCommands = useMemo(() => {
+    const seen = new Set(OFFICIAL_COMMANDS.map(c => c.command));
+    const list = [...OFFICIAL_COMMANDS];
+    if (installedSkills) {
+      for (const s of installedSkills) {
+        const cmd = `/${s.name}`;
+        if (!seen.has(cmd)) {
+          seen.add(cmd);
+          list.push({
+            command: cmd,
+            label: s.displayName || s.name,
+            desc: (s.description || '').slice(0, 20),
+            cat: s.category || '',
+          });
+        }
+      }
+    }
+    return list;
+  }, [installedSkills]);
+
+  const filteredCommands = useMemo(() => {
     if (!slashMenu.show) return [];
     const f = slashMenu.filter.toLowerCase();
-    if (!f) return OFFICIAL_COMMANDS;
-    return OFFICIAL_COMMANDS.filter(c =>
+    if (!f) return availableCommands;
+    return availableCommands.filter(c =>
       c.command.toLowerCase().includes(f) || c.label.toLowerCase().includes(f)
     );
-  })();
+  }, [availableCommands, slashMenu]);
 
   // V3.0: 动态 placeholder — 从预设提示词随机选取
   const placeholderText = useMemo(() => {
@@ -163,7 +193,7 @@ export function AgentChatView() {
     return pool[Math.floor(Math.random() * pool.length)];
   }, []);
 
-  const selectSlashCommand = (cmd: typeof OFFICIAL_COMMANDS[0]) => {
+  const selectSlashCommand = (cmd: typeof availableCommands[0]) => {
     const ta = inputRef.current;
     const cursorPos = ta?.selectionStart || slashMenu.pos + 1;
     const before = input.substring(0, slashMenu.pos);
@@ -735,6 +765,32 @@ export function AgentChatView() {
     sseClientRef.current?.abort();
     setIsStreaming(false);
   };
+
+  // 改写 — 调用 /api/ai/rewrite
+  const executeRewrite = useCallback(async (style: string) => {
+    const text = input.trim();
+    if (text.length < 10) return;
+    setShowRewritePicker(false);
+    setIsRewriting(true);
+    try {
+      const { apiClient } = await import('@/lib/api-client');
+      const data: any = await apiClient.post('/ai/rewrite', { content: text, style });
+      if (data.success && data.response) {
+        const assistantId = crypto.randomUUID();
+        setMessages(prev => [...prev, {
+          id: assistantId,
+          type: 'assistant',
+          content: data.response,
+          toolCalls: [],
+          timestamp: new Date(),
+        }]);
+      }
+    } catch (e) {
+      console.error('[Agent] Rewrite failed:', e);
+    } finally {
+      setIsRewriting(false);
+    }
+  }, [input]);
 
   // 为语音识别结果加标点（调用后端 DeepSeek 标点恢复）
   const punctuateText = useCallback(async (text: string): Promise<string> => {
@@ -2261,6 +2317,18 @@ export function AgentChatView() {
                   </span>
                 </button>
               ) : (
+                <>
+                  {showExpandBtn && (
+                    <button
+                      onClick={() => setIsFullscreen(true)}
+                      className="flex-shrink-0 w-8 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+                      title="全屏编辑"
+                    >
+                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                    </button>
+                  )}
                 <div className="flex-1 bg-white/5 rounded-xl px-3 py-2">
                   <textarea
                     ref={inputRef}
@@ -2281,6 +2349,7 @@ export function AgentChatView() {
                       } else {
                         setSlashMenu({ show: false, filter: '', index: 0, pos: 0 });
                       }
+                      setShowExpandBtn(e.target.scrollHeight > 40);
                       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
                       debounceTimerRef.current = setTimeout(() => {}, 150);
                     }}
@@ -2314,6 +2383,7 @@ export function AgentChatView() {
                     disabled={isStreaming}
                   />
                 </div>
+                </>
               )}
 
               {/* ⌨/🎤 切换按钮 — 仅语音可用时显示 */}
@@ -2387,6 +2457,21 @@ export function AgentChatView() {
                 )}
               </div>
 
+              {/* 改写按钮 — 输入 >= 10 字时显示 */}
+              {inputMode === 'text' && !isStreaming && input.trim().length >= 10 && (
+                <button
+                  onClick={() => setShowRewritePicker(true)}
+                  disabled={isRewriting}
+                  className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full hover:bg-emerald-600/20 transition-colors active:scale-90"
+                  title="改写"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke={isRewriting ? '#6B7280' : '#34D399'} viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+              )}
+
               {/* 发送按钮 — 始终可见，有内容时高亮 */}
               {inputMode === 'text' && !isStreaming && (
                 <button
@@ -2450,6 +2535,92 @@ export function AgentChatView() {
       onSelect={handleInspirationSelect}
       mediaType={inspPickerMediaType}
     />
+
+    {/* 改写风格选择器 */}
+    {showRewritePicker && (
+      <>
+        <div className="fixed inset-0 z-40" onClick={() => setShowRewritePicker(false)} />
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-800 border border-gray-700 rounded-xl shadow-xl p-2 w-64">
+          <p className="text-xs text-gray-400 px-3 py-1.5">选择改写风格</p>
+          {REWRITE_STYLES.map(style => (
+            <button
+              key={style.key}
+              onClick={() => executeRewrite(style.key)}
+              disabled={isRewriting}
+              className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm"
+            >
+              <span className="text-gray-200">{style.label}</span>
+              <span className="text-gray-500 text-xs">{style.desc}</span>
+            </button>
+          ))}
+        </div>
+      </>
+    )}
+
+    {/* 全屏输入浮层 */}
+    {isFullscreen && (
+      <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}>
+          <span className="text-sm text-gray-300">编辑内容</span>
+          <button
+            onClick={() => setIsFullscreen(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800"
+            title="缩小"
+          >
+            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={attachedFiles.length > 0 ? '添加描述...' : placeholderText}
+          className="flex-1 w-full p-4 bg-transparent text-white placeholder-white/30 resize-none outline-none text-base leading-relaxed"
+          autoFocus
+          onPaste={async (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (!file || !validateFile(file, 'image')) continue;
+                const attached: AttachedFile = {
+                  id: Date.now().toString(),
+                  file,
+                  preview: createPreview(file),
+                  type: 'image',
+                };
+                attachAndUpload(attached);
+                return;
+              }
+            }
+          }}
+        />
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+          <div className="flex gap-2">
+            <button onClick={handleCameraCapture} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-800">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
+              </svg>
+            </button>
+            <button onClick={handlePickImage} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-800">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
+          <button
+            onClick={() => { handleSend(); setIsFullscreen(false); }}
+            className="px-6 py-2 bg-blue-600 rounded-full text-white text-sm flex items-center gap-2"
+          >
+            发送
+          </button>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

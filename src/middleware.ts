@@ -3,10 +3,24 @@ import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { checkRateLimit } from '@/lib/rate-limiter';
 
+// 短期 auth 缓存：同一 session 在短时间内避免重复 getUser() 网络调用
+const authCache = new Map<string, { userId: string; expiresAt: number }>();
+const AUTH_CACHE_TTL = 10_000; // 10 秒
+const SESSION_COOKIE_PREFIX = 'sb-fibzvsstxxkdcflvtdzu-auth-token';
+
+function getSessionCacheKey(request: NextRequest): string | null {
+  const cookies = request.cookies.getAll();
+  const parts = cookies
+    .filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX))
+    .map(c => `${c.name}=${c.value}`)
+    .sort()
+    .join(';');
+  return parts || null;
+}
+
 const protectedPaths = [
   '/home',
   '/ai',
-  '/capture',
   '/agent',
   '/hotspot',
   '/inspiration',
@@ -73,6 +87,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // 检查 auth 缓存（同一 session 10 秒内跳过网络调用）
+  const cacheKey = getSessionCacheKey(request);
+  if (cacheKey) {
+    const cached = authCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      // 缓存命中，直接放行（不清除过期条目，靠后续写入时懒清理）
+      return NextResponse.next();
+    }
+  }
+
   const response = NextResponse.next();
   const supabase = createServerClient(
     supabaseUrl,
@@ -97,18 +121,33 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (!user) {
-    // 降级：GoTrue 故障时检查自定义 auth cookie（记录日志便于监控）
+    // auth 失败时缓存 miss（不清除旧缓存，自然过期）
     if (authError) {
       console.warn('[middleware] Supabase Auth 错误，启用降级:', authError.message?.substring(0, 100));
     }
     const lingjiUserId = request.cookies.get('lingji_auth_user_id')?.value;
     if (lingjiUserId) {
+      if (cacheKey) {
+        authCache.set(cacheKey, { userId: lingjiUserId, expiresAt: Date.now() + AUTH_CACHE_TTL });
+      }
       return response;
     }
 
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     return NextResponse.redirect(loginUrl);
+  }
+
+  // auth 成功，写入缓存
+  if (cacheKey) {
+    // 懒清理过期条目（Map 超过 200 条时全量清理）
+    if (authCache.size > 200) {
+      const now = Date.now();
+      for (const [k, v] of authCache) {
+        if (v.expiresAt <= now) authCache.delete(k);
+      }
+    }
+    authCache.set(cacheKey, { userId: user.id, expiresAt: Date.now() + AUTH_CACHE_TTL });
   }
 
   return response;

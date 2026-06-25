@@ -73,7 +73,7 @@ export const PAGE_ROUTES: Record<string, string> = {
   'hotspot-library': '/hotspot/library',
   profile: '/profile',
   notification: '/notification',
-  capture: '/capture',
+  capture: '/agent',
   agent: '/agent',
   schedule: '/schedule',
   login: '/login',
@@ -94,6 +94,18 @@ export const BG_GLASS = "rgba(255,255,255,0.06)";
 export const BG_GLASS_HOVER = "rgba(255,255,255,0.1)";
 export const BORDER_GLASS = "1px solid rgba(255,255,255,0.1)";
 export const BORDER_PRIMARY = "1px solid rgba(59,130,246,0.3)";
+
+// ─── AI 改写风格 ──────────────────────────────────────────────
+
+export type RewriteStyle = 'concise' | 'detailed' | 'casual' | 'formal' | 'xiaohongshu';
+
+export const REWRITE_STYLES: { key: RewriteStyle; label: string; desc: string }[] = [
+  { key: 'concise', label: '简洁版', desc: '去掉冗余，保留核心' },
+  { key: 'detailed', label: '详细版', desc: '扩充细节，更充实' },
+  { key: 'casual', label: '更口语化', desc: '像朋友聊天一样自然' },
+  { key: 'formal', label: '更正式', desc: '措辞严谨规范' },
+  { key: 'xiaohongshu', label: '小红书风格', desc: '热情亲切，有吸引力' },
+];
 
 // 常用按钮/标签背景
 export function getFilterButtonStyle(active: boolean, activeColor = "rgba(59,130,246,0.2)") {

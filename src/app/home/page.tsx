@@ -264,7 +264,6 @@ function HomeContent() {
         {/* 快捷入口一行 */}
         <div className="flex gap-2">
           {[
-            { key: "capture", label: "快速采集", emoji: "✍️", color: "#3B82F6" },
             { key: "inspiration", label: "灵感库", emoji: "💡", color: "#8B5CF6" },
             { key: "agent", label: "AI助手", emoji: "🤖", color: "#10B981" },
           ].map(({ key, label, emoji, color }) => (
@@ -328,11 +327,11 @@ function HomeContent() {
                   在灵感助手中输入&ldquo;明天下午3点开会&rdquo;，<br />AI 会帮你自动提取并添加日程
                 </p>
                 <button
-                  onClick={() => handleNavigate("capture")}
+                  onClick={() => handleNavigate("agent")}
                   className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-opacity hover:opacity-80"
                   style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
                 >
-                  去灵感助手
+                  去AI助手
                 </button>
               </GlassCard>
             )}
@@ -566,9 +565,9 @@ function HomeContent() {
         )}
       </div>
 
-      {/* 浮动 "+" 快速采集按钮 */}
+      {/* 浮动 "+" AI助手按钮 */}
       <button
-        onClick={() => handleNavigate("capture")}
+        onClick={() => handleNavigate("agent")}
         className="fixed right-4 bottom-24 z-30 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105"
         style={{
           background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",

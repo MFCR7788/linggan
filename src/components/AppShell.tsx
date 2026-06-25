@@ -6,7 +6,7 @@ import { TopNavBar } from "@/components/TopNav";
 import { BottomNav } from "@/components/BottomNav";
 
 const HIDE_TOP_PATHS = ["/login", "/agent"];
-const HIDE_BOTTOM_PATHS = ["/login", "/agent", "/capture"];
+const HIDE_BOTTOM_PATHS = ["/login", "/agent"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

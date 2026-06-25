@@ -255,7 +255,7 @@ const features: FeatureEntry[] = [
       '适用场景：创始人 IP 日更口播、虚拟主播、同一文案矩阵号',
       '如需保留原视频场景/产品，请用下方「视频换脸（B方案）」',
     ],
-    path: '/capture',
+    path: '/agent',
   },
   {
     icon: <Globe size={20} />,
@@ -274,7 +274,7 @@ const features: FeatureEntry[] = [
       '适用场景：带货视频换主播、口播矩阵换人、品牌本地化',
       '生成时间：每 30 秒约 2-5 分钟',
     ],
-    path: '/capture',
+    path: '/agent',
   },
   {
     icon: <Globe size={20} />,
@@ -290,7 +290,7 @@ const features: FeatureEntry[] = [
       '支持批量提取：一次发送多个链接，逐个处理并汇总展示',
       '自动识别平台类型，选择最佳提取方式，失败自动降级尝试替代方案',
     ],
-    path: '/capture',
+    path: '/agent',
   },
   {
     icon: <Globe size={20} />,
@@ -306,11 +306,11 @@ const features: FeatureEntry[] = [
       '也支持在 AI 视频页底部「动态图形」独立功能区手动生成',
       '脚本上限 500 字，生成时间约 2-3 分钟',
     ],
-    path: '/capture',
+    path: '/agent',
   },
   {
     icon: <MessageCircle size={20} />,
-    title: 'AI 助手 (Capture)',
+    title: 'AI 助手',
     desc: '多模态 AI 对话助手，支持文字、图片、视频、语音输入。',
     color: '#3B82F6',
     highlights: [
@@ -321,7 +321,7 @@ const features: FeatureEntry[] = [
       '灵感采集：对话中的好想法一键保存到灵感库',
       '文件上传：支持图片、视频文件直接分析',
     ],
-    path: '/capture',
+    path: '/agent',
   },
   {
     icon: <Bell size={20} />,
