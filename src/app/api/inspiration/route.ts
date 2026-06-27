@@ -20,6 +20,8 @@ export const GET = withAuth(async ({ request, user }) => {
   const sortOrder = searchParams.get('sortOrder') || 'desc';
   const tagIds = searchParams.get('tagIds'); // 逗号分隔的 tag id 列表
   const sourcePlatform = searchParams.get('sourcePlatform'); // 按来源平台筛选（如 'ai'）
+  const lifecycle = searchParams.get('lifecycle');   // 生命周期筛选：seed/sprout/growing/bloom
+  const idleDays = searchParams.get('idleDays');     // 空闲天数筛选（last_action_at 早于 N 天前）
   // ─── AI 创作 Step 1 专用过滤(向后兼容,默认不过滤) ───
   // excludeSourcePlatforms: 逗号分隔,显式排除(如 'ai' 用于 Step 1)
   // includeSourcePlatforms: 逗号分隔,显式包含(覆盖 exclude)
@@ -81,6 +83,11 @@ export const GET = withAuth(async ({ request, user }) => {
       if (minAiSummaryLength > 0) {
         query = query.not('ai_summary', 'is', null);
       }
+      if (lifecycle) query = query.eq('lifecycle', lifecycle);
+      if (idleDays) {
+        const idleDate = new Date(Date.now() - parseInt(idleDays) * 86400000).toISOString();
+        query = query.lte('last_action_at', idleDate);
+      }
 
       const sortAsc = sortOrder === 'asc';
       const validSortFields = ['created_at', 'title', 'updated_at'];
@@ -125,6 +132,11 @@ export const GET = withAuth(async ({ request, user }) => {
   }
   if (minAiSummaryLength > 0) {
     query = query.not('ai_summary', 'is', null);
+  }
+  if (lifecycle) query = query.eq('lifecycle', lifecycle);
+  if (idleDays) {
+    const idleDate = new Date(Date.now() - parseInt(idleDays) * 86400000).toISOString();
+    query = query.lte('last_action_at', idleDate);
   }
 
   const sortAsc = sortOrder === 'asc';
@@ -257,6 +269,11 @@ export const POST = withAuth(async ({ request, user }) => {
     (e) => console.warn('[Inspiration] 向量嵌入失败:', e)
   );
 
+  // 异步 AI 复杂度预估（fire-and-forget）
+  estimateComplexity(data.id, user.id, data.title, data.original_text, data.ai_summary, normalizedType).catch(
+    (e) => console.warn('[Inspiration] 复杂度预估失败:', e)
+  );
+
   return createApiResponse(data, '灵感创建成功');
 });
 
@@ -275,5 +292,92 @@ async function indexInspirationEmbedding(
     }
   } catch (e) {
     console.warn('[Inspiration] 嵌入索引失败:', e);
+  }
+}
+
+// 异步复杂度预估（不阻塞灵感创建响应）
+async function estimateComplexity(
+  itemId: string,
+  userId: string,
+  title: string | null,
+  originalText: string | null,
+  summary: string | null,
+  type: string
+): Promise<void> {
+  try {
+    const contentSample = [title, summary, originalText?.slice(0, 500)]
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    if (!contentSample) return;
+
+    const apiKey = process.env.DASHSCOPE_API_KEY;
+    if (!apiKey) return;
+
+    const prompt = `分析以下${type === 'image' ? '图片' : type === 'video' ? '视频' : type === 'audio' ? '音频' : '文字'}内容的复杂度，返回 JSON 格式（不要 markdown 代码块）:
+{
+  "estimated_duration": <预估完成所需分钟数, 整数, 范围 5-480>,
+  "required_resources": [<所需资源列表, 如 "电脑", "相机", "设计软件", "安静环境", "参考资料">]
+}
+
+内容:
+${contentSample}
+
+只返回 JSON，不要其他内容。`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-v3',
+        messages: [
+          { role: 'system', content: '你是一个任务复杂度分析助手。只返回 JSON，不返回其他内容。' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return;
+
+    const json = await res.json();
+    const text = json?.choices?.[0]?.message?.content?.trim();
+    if (!text) return;
+
+    // 解析 JSON（容错处理 markdown 代码块）
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      try { parsed = JSON.parse(cleaned); } catch { return; }
+    }
+
+    const duration = typeof parsed.estimated_duration === 'number'
+      ? Math.max(5, Math.min(480, Math.round(parsed.estimated_duration)))
+      : null;
+    const resources = Array.isArray(parsed.required_resources)
+      ? parsed.required_resources.filter((r: any) => typeof r === 'string' && r.trim()).slice(0, 8)
+      : null;
+
+    if (duration || resources) {
+      const supabase = createAdminClient();
+      const update: Record<string, any> = {};
+      if (duration) update.estimated_duration = duration;
+      if (resources) update.required_resources = resources;
+
+      await supabase.from('content_items').update(update).eq('id', itemId).eq('user_id', userId);
+    }
+  } catch (e) {
+    // 静默失败，不影响主流程
   }
 }

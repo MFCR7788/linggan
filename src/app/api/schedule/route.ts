@@ -95,5 +95,17 @@ export const POST = withAuth(async ({ request, user }) => {
     return createApiError('创建日程失败', 500);
   }
 
+  // 如果关联了灵感，更新灵感生命周期 + last_action_at
+  if (source_content_id) {
+    supabase
+      .from('content_items')
+      .update({ lifecycle: 'sprout', last_action_at: new Date().toISOString() })
+      .eq('id', source_content_id)
+      .eq('user_id', user.id)
+      .then(({ error: updateErr }) => {
+        if (updateErr) console.warn('[Schedule] 更新灵感生命周期失败:', updateErr);
+      });
+  }
+
   return createApiResponse(data, '日程创建成功');
 });

@@ -42,7 +42,15 @@ export const GET = withAuth(async ({ user, params }) => {
     return createApiError('获取灵感详情失败', 500);
   }
 
-  return createApiResponse(data);
+  // 反向查询关联的日程
+  const { data: linkedSchedules } = await supabase
+    .from('schedules')
+    .select('id, title, scheduled_at, status, color, location')
+    .eq('source_content_id', id)
+    .eq('user_id', user.id)
+    .order('scheduled_at', { ascending: true });
+
+  return createApiResponse({ ...data, linked_schedules: linkedSchedules || [] });
 });
 
 // 更新灵感

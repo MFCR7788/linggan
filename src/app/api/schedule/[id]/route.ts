@@ -23,6 +23,7 @@ export const GET = withAuth(async ({ request, user, params }) => {
 
   // 如果有关联的灵感来源，一并返回 AI 分析数据
   let linkedInspiration = null;
+  let relatedInspirations: any[] = [];
   if (data.source_content_id) {
     const { data: inspiration } = await supabase
       .from('content_items')
@@ -32,10 +33,40 @@ export const GET = withAuth(async ({ request, user, params }) => {
       .maybeSingle();
     if (inspiration) {
       linkedInspiration = inspiration;
+
+      // 查询关联灵感（共享标签或同分类，最多 5 条）
+      const { data: linkedTags } = await supabase
+        .from('content_tags')
+        .select('tag_id')
+        .eq('content_id', inspiration.id);
+
+      const tagIds = (linkedTags || []).map((t: any) => t.tag_id);
+      if (tagIds.length > 0) {
+        const { data: relatedContentIds } = await supabase
+          .from('content_tags')
+          .select('content_id')
+          .in('tag_id', tagIds);
+
+        const relatedIds = [...new Set(
+          (relatedContentIds || []).map((r: any) => r.content_id).filter((cid: string) => cid !== inspiration.id)
+        )].slice(0, 20);
+
+        if (relatedIds.length > 0) {
+          const { data: related } = await supabase
+            .from('content_items')
+            .select('id, title, type, ai_summary, lifecycle, estimated_duration, created_at')
+            .in('id', relatedIds)
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(5);
+          relatedInspirations = related || [];
+        }
+      }
     }
   }
 
-  return createApiResponse({ ...data, linkedInspiration });
+  return createApiResponse({ ...data, linkedInspiration, relatedInspirations });
 });
 
 // 更新日程
