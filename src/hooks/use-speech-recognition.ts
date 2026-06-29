@@ -161,15 +161,12 @@ export function useSpeechRecognition() {
     [startNative, startBrowser]
   );
 
-  const stopListening = useCallback((): string => {
+  const stopListening = useCallback(async (): Promise<string> => {
     if (isNative.current) {
-      // stopNative 是 async，但接口是同步的 — 调用后立即返回 liveText
-      const text = liveText.trim();
-      stopNative(); // fire-and-forget
-      return text;
+      return await stopNative();
     }
     return stopBrowser();
-  }, [stopNative, stopBrowser, liveText]);
+  }, [stopNative, stopBrowser]);
 
   const cancelListening = useCallback(() => {
     if (isNative.current) {

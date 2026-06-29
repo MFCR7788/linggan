@@ -397,7 +397,7 @@ function HomeContent() {
               description="点击下方按钮，开始记录你的第一个灵感"
             />
           ) : filteredInspirations.length > 0 ? (
-            <div className="columns-2 gap-3 [&>*]:[break-inside:avoid]">
+            <div className="flex flex-col gap-3">
               {filteredInspirations.slice(0, 10).map((item: ContentItem) => {
                 const isImage = item.type === 'image';
                 const isVideo = item.type === 'video';

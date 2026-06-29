@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { Search, Zap, CheckCircle, Upload, Download, Trash2, CheckSquare, Square, X, ChevronDown, Play, MapPin, Clock, Pencil, FileText, AlertCircle, Expand, CalendarPlus } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SwipeableCard } from "@/components/SwipeableCard";
 import { TopNav } from "@/components/TopNav";
 import { PageKey } from "@/components/BottomNav";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -608,7 +609,7 @@ function InspirationLibraryContent() {
       return `${m}:${sec.toString().padStart(2, '0')}`;
     };
 
-    return (
+    const cardContent = (
       <GlassCard
         hover
         onClick={() => isSelecting ? toggleSelect(item.id) : handleNavigate("inspiration-detail", item.id)}
@@ -872,6 +873,14 @@ function InspirationLibraryContent() {
           </div>
         </div>
       </GlassCard>
+    );
+
+    // 选择模式下不启用手势删除
+    if (isSelecting) return cardContent;
+    return (
+      <SwipeableCard onDelete={() => setConfirmDialog({ type: 'single', id: item.id })}>
+        {cardContent}
+      </SwipeableCard>
     );
   };
 
