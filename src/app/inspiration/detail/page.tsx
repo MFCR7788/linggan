@@ -661,7 +661,7 @@ function InspirationDetailContent() {
             )}
 
             <div>
-              <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600, marginBottom: 10 }}>相关灵感</h3>
+              <h3 style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>相关灵感</h3>
               {relatedInspirations.length === 0 ? (
                 <p style={{ color: "#6B7280", fontSize: 13 }}>暂无相关灵感</p>
               ) : (
@@ -712,7 +712,7 @@ function InspirationDetailContent() {
             </div>
 
             <div>
-              <h3 style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600, marginBottom: 10 }}>相关热点</h3>
+              <h3 style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>相关热点</h3>
               <div className="space-y-3">
                 {relatedHotspots.length === 0 && (
                   <p style={{ color: "#6B7280", fontSize: 13 }}>暂无相关热点</p>

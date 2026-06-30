@@ -719,7 +719,7 @@ function AIVideoContent() {
                         <span style={{
                           background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)',
                           color: '#FFFFFF',
-                          fontSize: 8,
+                          fontSize: 9,
                           fontWeight: 700,
                           padding: '1px 5px',
                           borderRadius: 4,
@@ -1330,7 +1330,7 @@ function AIVideoContent() {
             <div className="absolute inset-3 rounded-full border-2 border-purple-400 border-b-transparent animate-spin"
               style={{ animationDuration: '0.7s', animationDirection: 'reverse' }} />
           </div>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
             {genPhase === 'submitting' ? '正在提交任务...' :
              genPhase === 'generating' ? '正在生成视频片段...' : '处理中...'}
           </p>

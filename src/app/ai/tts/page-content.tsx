@@ -477,7 +477,7 @@ function TTSPageContent() {
                 </span>
                 <span style={{
                   position: 'absolute', top: 2, right: 2,
-                  fontSize: 8, color: '#EC4899', background: 'rgba(236,72,153,0.15)',
+                  fontSize: 9, color: '#EC4899', background: 'rgba(236,72,153,0.15)',
                   padding: '0 3px', borderRadius: 4,
                 }}>
                   ⭐
@@ -658,7 +658,7 @@ function TTSPageContent() {
                       <CheckCircle2 size={14} color="#22C55E" />
                       <div className="flex-1">
                         <p style={{ color: '#86EFAC', fontSize: 11, fontWeight: 600 }}>克隆音色已就绪</p>
-                        <p style={{ color: '#6B7280', fontSize: 9, marginTop: 2, fontFamily: 'monospace' }}>
+                        <p style={{ color: '#6B7280', fontSize: 9, marginTop: 2, fontFamily: '"SF Mono", "Fira Code", Menlo, Monaco, monospace' }}>
                           {clonedVoiceId}
                         </p>
                       </div>

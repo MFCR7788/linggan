@@ -125,7 +125,7 @@ function HotspotCard({
       </div>
 
       {/* 标题 */}
-      <p style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
+      <p style={{ color: '#E5E7EB', fontSize: 14, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
         {item.title}
       </p>
 
@@ -754,7 +754,7 @@ function SearchTab({
                   <a href={r.url || '#'} target="_blank" rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="block mb-1 hover:underline"
-                    style={{ color: '#93C5FD', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>
+                    style={{ color: '#93C5FD', fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
                     {r.title} <ExternalLink size={11} className="inline" />
                   </a>
 

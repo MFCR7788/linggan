@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             color: "#E5E7EB",
           }}
         >
-          <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 mb-6 opacity-60" />
+          <img src="/brand/logo-mark.png" alt="灵集" className="w-12 h-12 mb-6 opacity-60 rounded-xl" />
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
             style={{

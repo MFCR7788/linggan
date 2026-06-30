@@ -40,8 +40,11 @@ export default {
       fontSize: {
         h1: ['1.5rem', { lineHeight: '1.4', fontWeight: '700' }],
         h2: ['1.125rem', { lineHeight: '1.4', fontWeight: '600' }],
+        subhead: ['0.875rem', { lineHeight: '1.5', fontWeight: '600' }],
         body: ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
         aux: ['0.8125rem', { lineHeight: '1.5', fontWeight: '400' }],
+        label: ['0.6875rem', { lineHeight: '1.5', fontWeight: '400' }],
+        micro: ['0.5625rem', { lineHeight: '1.3', fontWeight: '400' }],
       },
     },
   },

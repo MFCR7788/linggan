@@ -34,7 +34,7 @@ export default function SupportPage() {
       <TopNav title="帮助与支持" showBack onBack={() => router.push('/profile')} />
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 20px 60px' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src="/brand/logo-mark.png" alt="灵集" style={{ width: 48, height: 48, margin: '0 auto 12px' }} />
+          <img src="/brand/logo-mark.png" alt="灵集" style={{ width: 48, height: 48, borderRadius: 12, margin: '0 auto 12px' }} />
         </div>
         <h1 style={{
           color: '#FFFFFF',

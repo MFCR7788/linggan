@@ -106,7 +106,7 @@ function SimpleCalendar({ events, onDateClick }: { events: Map<string, any[]>; o
         <button onClick={prevMonth} className="p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.07)" }}>
           <ChevronDown size={16} color="#9CA3AF" style={{ transform: "rotate(90deg)" }} />
         </button>
-        <span style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }}>
+        <span style={{ color: "#FFFFFF", fontSize: 14, fontWeight: 600 }}>
           {viewYear}年{viewMonth + 1}月
         </span>
         <button onClick={nextMonth} className="p-1 rounded-lg" style={{ background: "rgba(255,255,255,0.07)" }}>

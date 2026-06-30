@@ -31,23 +31,54 @@ export const GET = withAuth(async ({ request, user }) => {
     query = query.lte('scheduled_at', endDate);
   }
 
-  const { data, error, count } = await query
-    .order('scheduled_at', { ascending: true })
-    .range(offset, offset + limit - 1);
+  // 先拉取全部匹配（不分页），用于应用层复合排序
+  const { data: allData, error, count } = await query
+    .order('scheduled_at', { ascending: true });
 
   if (error) {
     console.error('获取日程失败:', error);
     return createApiError('获取日程失败', 500);
   }
 
-  const totalPages = Math.ceil((count || 0) / limit);
+  // ─── 苹果日历风格排序 ──────────────────────────────
+  // 1. 状态优先级: pending → completed → cancelled
+  // 2. pending 内: 未过期（即将发生）→ 已过期
+  // 3. 未过期: 升序（最近的先）; 已过期: 降序（最近过期的先）
+  // 4. completed/cancelled: 降序（最近完成的先）
+  const sorted = [...(allData || [])].sort((a, b) => {
+    const statusOrder: Record<string, number> = { pending: 0, completed: 1, cancelled: 2 };
+    const statusDiff = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
+    if (statusDiff !== 0) return statusDiff;
+
+    const now = Date.now();
+    const aTime = new Date(a.scheduled_at).getTime();
+    const bTime = new Date(b.scheduled_at).getTime();
+
+    if (a.status === 'pending') {
+      const aPast = aTime < now;
+      const bPast = bTime < now;
+      if (!aPast && bPast) return -1; // a 即将发生, b 已过期 → a 在前
+      if (aPast && !bPast) return 1;  // a 已过期, b 即将发生 → b 在前
+      if (!aPast && !bPast) return aTime - bTime; // 都即将: 升序
+      return bTime - aTime;                         // 都已过期: 降序
+    }
+
+    // completed / cancelled: 最近完成的排前面
+    return bTime - aTime;
+  });
+
+  // 内存分页
+  const total = sorted.length;
+  const paged = sorted.slice(offset, offset + limit);
+  const totalPages = Math.ceil(total / limit);
+
   return NextResponse.json({
     success: true,
-    data: data || [],
+    data: paged,
     pagination: {
       page,
       limit,
-      total: count || 0,
+      total,
       total_pages: totalPages,
     },
   });

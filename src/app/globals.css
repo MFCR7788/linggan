@@ -27,12 +27,15 @@ html {
 
 /* ───── 全局字体层级 ───── */
 :root {
-  --text-h1: 1.5rem;    /* 24px — 页面标题 */
-  --text-h2: 1.125rem;  /* 18px — 卡片标题 / 章节标题 */
-  --text-body: 1rem;    /* 16px — 正文 */
-  --text-aux: 0.8125rem; /* 13px — 时间戳 / 标签 / 辅助文字 */
-  --text-sm: 0.75rem;   /* 12px — 极小文字 */
-  --text-xs: 0.625rem;  /* 10px — badge / 角标 */
+  --text-h1: 1.5rem;       /* 24px — 页面标题 */
+  --text-h2: 1.125rem;     /* 18px — 卡片标题 / 章节标题 */
+  --text-body: 1rem;       /* 16px — 正文 */
+  --text-subhead: 0.875rem; /* 14px — 子标题 / 段落小标题 */
+  --text-aux: 0.8125rem;   /* 13px — 时间戳 / 标签 / 辅助文字 */
+  --text-label: 0.6875rem;  /* 11px — 次级标签 / 描述文字 */
+  --text-sm: 0.75rem;      /* 12px — 极小文字 */
+  --text-xs: 0.625rem;     /* 10px — badge / 角标 */
+  --text-micro: 0.5625rem;  /*  9px — 角标编号 / 最弱标注 */
 
   --leading-heading: 1.4;
   --leading-body: 1.6;
@@ -40,16 +43,20 @@ html {
 
   --weight-bold: 700;
   --weight-semibold: 600;
+  --weight-medium: 500;
   --weight-regular: 400;
 }
 
 /* ───── 语义化字体类 ───── */
 .text-h1 { font-size: var(--text-h1); font-weight: var(--weight-bold); line-height: var(--leading-heading); }
 .text-h2 { font-size: var(--text-h2); font-weight: var(--weight-semibold); line-height: var(--leading-heading); }
+.text-subhead { font-size: var(--text-subhead); font-weight: var(--weight-semibold); line-height: 1.5; }
 .text-body { font-size: var(--text-body); font-weight: var(--weight-regular); line-height: var(--leading-body); }
 .text-aux { font-size: var(--text-aux); font-weight: var(--weight-regular); line-height: 1.5; color: #9CA3AF; }
-.text-sm { font-size: var(--text-sm); }
+.text-label { font-size: var(--text-label); font-weight: var(--weight-regular); line-height: 1.5; color: #9CA3AF; }
+.text-micro { font-size: var(--text-micro); font-weight: var(--weight-regular); line-height: 1.3; color: #6B7280; }
 .text-xs { font-size: var(--text-xs); }
+.text-sm { font-size: var(--text-sm); }
 
 /* ───── 聊天内容排版（豆包风格）───── */
 

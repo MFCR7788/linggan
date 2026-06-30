@@ -381,7 +381,7 @@ function HotspotDetailContent() {
         {/* Related Hotspots */}
         {detail.relatedHotspots && detail.relatedHotspots.length > 0 && (
           <div>
-            <h3 style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 10 }}>相关热点</h3>
+            <h3 style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>相关热点</h3>
             <div className="space-y-3">
               {detail.relatedHotspots.map((h) => (
                 <GlassCard

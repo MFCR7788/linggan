@@ -1681,7 +1681,7 @@ export function AgentChatView() {
             <img
               src="/brand/logo-mark.png"
               alt="灵集"
-              className="w-20 h-20 mb-5"
+              className="w-20 h-20 mb-5 rounded-2xl"
               style={{ filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.5))' }}
             />
 

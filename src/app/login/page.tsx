@@ -177,7 +177,7 @@ function LoginContent() {
       <img
         src="/brand/logo-mark.png"
         alt="灵集"
-        style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12 }}
+        style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 12, marginBottom: 12 }}
       />
       <h1 style={{ color: "#FFFFFF", fontSize: 20, fontWeight: 700, letterSpacing: 2, margin: 0 }}>
         灵集

@@ -862,7 +862,7 @@ function AIImageContent() {
                       style={{
                         color: '#E5E7EB',
                         fontSize: 11,
-                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                        fontFamily: '"SF Mono", "Fira Code", Menlo, Monaco, monospace',
                         background: 'rgba(0,0,0,0.3)',
                         padding: '1px 6px',
                         borderRadius: 4,

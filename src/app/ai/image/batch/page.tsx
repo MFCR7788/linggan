@@ -173,7 +173,7 @@ function BatchImageContent() {
               color: '#E5E7EB',
               minHeight: 140,
               maxHeight: 280,
-              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+              fontFamily: '"SF Mono", "Fira Code", Menlo, Monaco, monospace',
               fontSize: 12,
             }}
           />

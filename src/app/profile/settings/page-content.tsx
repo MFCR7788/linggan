@@ -72,7 +72,7 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
           <UserIcon size={16} color="#93C5FD" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>资料</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>资料</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>头像、昵称、手机号</p>
         </div>
         {!editing && (
@@ -182,7 +182,7 @@ function AccountTypeSection() {
           <Sparkles size={16} color="#F9A8D4" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>账号类型</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>账号类型</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>选择最贴近的场景,AI 创作中心会推荐对应视频组合</p>
         </div>
       </div>
@@ -274,7 +274,7 @@ function SecuritySection() {
           <Shield size={16} color="#FCA5A5" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>安全</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>安全</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>密码、登录设备、双因子</p>
         </div>
       </div>
@@ -375,7 +375,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>修改密码</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>修改密码</p>
           <button onClick={onClose} className="p-1"><X size={18} color="#9CA3AF" /></button>
         </div>
         <div className="p-4 space-y-3">
@@ -448,7 +448,7 @@ function SignOutAllModal({
           >
             <LogOut size={20} color="#FCA5A5" />
           </div>
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>退出所有设备？</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>退出所有设备？</p>
           <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
             所有其他设备会被立即退出登录。本设备也需重新登录。
           </p>
@@ -626,7 +626,7 @@ function AvatarSection() {
           <UserCircle2 size={16} color="#F9A8D4" />
         </div>
         <div className="flex-1">
-          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>数字分身</p>
+          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>数字分身</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>训练个人形象,一键生成口播视频(需 HEYGEN_API_KEY)</p>
         </div>
         {info && (
@@ -801,7 +801,7 @@ function SettingsContent() {
               <Plug size={16} color="#C4B5FD" />
             </div>
             <div>
-              <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>平台集成</p>
+              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>平台集成</p>
               <p style={{ color: '#9CA3AF', fontSize: 11 }}>6 个 V2.0.2 env · 微信公众号/微博 OAuth · AES/Cron 密钥</p>
             </div>
           </div>

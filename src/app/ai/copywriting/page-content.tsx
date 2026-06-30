@@ -598,7 +598,7 @@ function AICopywritingContent() {
                       style={{
                         background: selectedInspirations.has(item.id) ? '#3B82F6' : 'transparent',
                         border: selectedInspirations.has(item.id) ? 'none' : '1px solid rgba(255,255,255,0.3)',
-                        fontSize: 8, color: '#fff',
+                        fontSize: 9, color: '#fff',
                       }}
                     >
                       {selectedInspirations.has(item.id) ? '✓' : ''}
