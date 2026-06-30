@@ -1171,7 +1171,7 @@ function DigitalHumanContent() {
     <>
       {/* 脚本来源 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
           <span style={{ color: '#3B82F6' }}>脚本</span> · 口播内容
         </p>
         <div className="flex rounded-lg overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -1274,7 +1274,7 @@ function DigitalHumanContent() {
       {/* 音频 */}
       {ttsText && (
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#8B5CF6' }}>音频</span> · 配音
           </p>
           <div className="flex rounded-lg overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -1299,7 +1299,7 @@ function DigitalHumanContent() {
       {/* 生成 */}
       {(ttsText || audioUrl) && (
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#06B6D4' }}>生成</span> · 视频
           </p>
 
@@ -1480,7 +1480,7 @@ function DigitalHumanContent() {
   const renderAnimateMode = () => (
     <>
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
           <span style={{ color: '#EC4899' }}>🎭 角色动作迁移</span> · 静态头像 + 参考视频
         </p>
         <p style={{ color: '#9CA3AF', fontSize: 11, lineHeight: 1.6, marginBottom: 12 }}>
@@ -1624,7 +1624,7 @@ function DigitalHumanContent() {
       {/* 结果区 */}
       {animateResultUrl && (
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#22C55E' }}>✨ 生成结果</span> · 角色动作视频
           </p>
           <video src={animateResultUrl} controls className="w-full rounded-xl mb-3" />
@@ -1695,7 +1695,7 @@ function DigitalHumanContent() {
       <GlassCard>
         <div className="flex items-center gap-2 mb-3">
           <UserCircle2 size={16} color="#F9A8D4" />
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>分身:{avatarInfo.name}</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>分身:{avatarInfo.name}</p>
           <span style={{
             color: '#34D399', fontSize: 11, marginLeft: 'auto',
             padding: '2px 8px', borderRadius: 6,
@@ -1970,8 +1970,8 @@ function DigitalHumanContent() {
                   </div>
                 )}
                 <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.8))' }}>
-                  <p style={{ color: '#E5E7EB', fontSize: 11 }} className="truncate">{item.title}</p>
-                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                  <p style={{ color: '#E5E7EB', fontSize: 15 }} className="truncate">{item.title}</p>
+                  <span style={{ color: '#6B7280', fontSize: 13 }}>{item.time}</span>
                 </div>
               </div>
             ))}

@@ -125,13 +125,13 @@ function HotspotCard({
       </div>
 
       {/* 标题 */}
-      <p style={{ color: '#E5E7EB', fontSize: 14, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
+      <p style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
         {item.title}
       </p>
 
       {/* AI 摘要（1行） */}
       {item.ai_summary && (
-        <p style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
+        <p style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 1.4, marginBottom: 4 }} className="line-clamp-1">
           {item.ai_summary}
         </p>
       )}
@@ -139,7 +139,7 @@ function HotspotCard({
       {/* 底部：时间 + 相关度 + 操作 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span style={{ color: '#6B7280', fontSize: 11 }}>
+          <span style={{ color: '#6B7280', fontSize: 13 }}>
             {item.published_at ? formatRelativeTime(item.published_at) + ' · ' : ''}{formatRelativeTime(item.captured_at)}
           </span>
           <span className="px-1 rounded text-[11px]" style={{

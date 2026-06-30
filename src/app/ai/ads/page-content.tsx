@@ -394,7 +394,7 @@ function AdsContent() {
 
         {/* 主题输入（所有场景共用） */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
             {scene === 'product' ? '产品/品牌名' : scene === 'festival' ? '节日/场合' : '主题描述'}
           </p>
           <input
@@ -422,7 +422,7 @@ function AdsContent() {
         {(scene === 'product' || scene === 'lifestyle') && (
           <GlassCard>
             <div className="flex items-center justify-between mb-2">
-              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
+              <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
                 {scene === 'product' ? '卖点/特点 (3-5 个)' : '要包含的元素 (3-8 个)'}
               </p>
               <button
@@ -468,7 +468,7 @@ function AdsContent() {
         {/* 额外参数（节日氛围/色调/排版方式/风格） */}
         {(scene === 'festival' || scene === 'aesthetic' || scene === 'creative' || scene === 'hobby') && (
           <GlassCard>
-            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+            <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
               {scene === 'creative' ? '排版方式' : scene === 'aesthetic' ? '色调偏好' : scene === 'festival' ? '氛围/风格' : '风格/特点'}
               <span style={{ color: '#6B7280', fontSize: 10, marginLeft: 4 }}>(可选)</span>
             </p>
@@ -513,7 +513,7 @@ function AdsContent() {
         {/* 参考图（可选） */}
         <GlassCard>
           <div className="flex items-center justify-between mb-2">
-            <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
+            <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
               <span style={{ color: '#8B5CF6' }}>参考图</span> · 视觉风格参考
               <span style={{ color: '#6B7280', fontSize: 10, fontWeight: 400, marginLeft: 4 }}>（可选）</span>
             </p>
@@ -696,7 +696,7 @@ function AdsContent() {
         {cells && cells.length > 0 && (
           <GlassCard>
             <div className="flex items-center justify-between mb-3">
-              <p style={{ color: '#FFFFFF', fontSize: 13, fontWeight: 600 }}>
+              <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
                 📦 9 宫格素材
               </p>
               <div className="flex gap-1.5">
@@ -786,13 +786,13 @@ function AdsContent() {
                   {/* 标题 */}
                   <div className="p-1.5">
                     <p
-                      style={{ color: '#E5E7EB', fontSize: 10, fontWeight: 600, lineHeight: 1.3 }}
+                      style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 600, lineHeight: 1.3 }}
                       className="line-clamp-2"
                     >
                       {c.title}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      <span style={{ color: '#9CA3AF', fontSize: 9 }}>
+                      <span style={{ color: '#9CA3AF', fontSize: 14 }}>
                         {c.visualAngle}
                       </span>
                       <button
@@ -863,11 +863,11 @@ function AdsContent() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 500, marginBottom: 4 }} className="truncate">
+                      <p style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 500, marginBottom: 4 }} className="truncate">
                         {item.title}
                       </p>
                       <div className="flex items-center justify-between">
-                        <span style={{ color: '#6B7280', fontSize: 11 }}>
+                        <span style={{ color: '#6B7280', fontSize: 13 }}>
                           {item.time}{totalCells > 0 ? ` · ${totalCells} 张` : ''}
                         </span>
                         <span

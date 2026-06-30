@@ -11,7 +11,6 @@ function setGlobalOpen(id: string | null) {
   if (globalOpenId === id) return;
   const prev = globalOpenId;
   globalOpenId = id;
-  // 通知之前打开的卡关闭
   if (prev) {
     for (const fn of listeners) fn();
   }
@@ -30,18 +29,19 @@ interface SwipeableCardProps {
  * - 速度感知：快速轻扫即使距离不够也触发
  * - 弹性动画：未超过阈值时有回弹效果
  * - 互斥：同时只有一个卡片处于打开状态
+ * - 红色删除按钮仅左滑时渐显，日常不可见（不会透出半透明卡片）
  * - 直接操作 DOM，不经过 React state，避免重渲染
  */
 export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: SwipeableCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const deleteRef = useRef<HTMLButtonElement>(null);
   const cardIdRef = useRef<string>(`swipe-${Math.random().toString(36).slice(2, 9)}`);
 
-  // 手势状态（用 ref 避免重渲染）
   const stateRef = useRef({
     startX: 0,
     startY: 0,
-    currentX: 0,          // 当前 transform 偏移
+    currentX: 0,
     isDragging: false,
     isOpen: false,
     lastX: 0,
@@ -49,6 +49,18 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
   });
 
   const DELETE_WIDTH = 80;
+
+  // ── 更新删除按钮可见度 ──────────────────────────────────
+  const updateDeleteVisibility = useCallback((offset: number, animate: boolean) => {
+    const btn = deleteRef.current;
+    if (!btn) return;
+    const progress = Math.min(1, Math.abs(offset) / DELETE_WIDTH);
+    btn.style.transition = animate
+      ? 'opacity 0.25s ease'
+      : 'none';
+    btn.style.opacity = String(progress);
+    btn.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+  }, [DELETE_WIDTH]);
 
   // ── 注册全局关闭监听 ──────────────────────────────────
   useEffect(() => {
@@ -60,12 +72,12 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
       el.style.transform = 'translateX(0px)';
       stateRef.current.isOpen = false;
       stateRef.current.currentX = 0;
+      updateDeleteVisibility(0, true);
     };
     listeners.add(close);
     return () => { listeners.delete(close); };
-  }, []);
+  }, [updateDeleteVisibility]);
 
-  // ── 关闭当前卡（给外部调用）─────────────────────────────
   const closeCard = useCallback(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -73,10 +85,10 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
     el.style.transform = 'translateX(0px)';
     stateRef.current.isOpen = false;
     stateRef.current.currentX = 0;
+    updateDeleteVisibility(0, true);
     setGlobalOpen(null);
-  }, []);
+  }, [updateDeleteVisibility]);
 
-  // ── 打开卡片 ─────────────────────────────────────────
   const openCard = useCallback(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -85,14 +97,13 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
     el.style.transform = `translateX(-${DELETE_WIDTH}px)`;
     stateRef.current.isOpen = true;
     stateRef.current.currentX = -DELETE_WIDTH;
-  }, [DELETE_WIDTH]);
+    updateDeleteVisibility(DELETE_WIDTH, true);
+  }, [DELETE_WIDTH, updateDeleteVisibility]);
 
   // ── pointer 事件处理 ──────────────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // 点击删除按钮时不处理
     if ((e.target as HTMLElement).closest('[data-delete-btn]')) return;
 
-    // 如果有其他卡打开，先关掉
     if (globalOpenId && globalOpenId !== cardIdRef.current) {
       for (const fn of listeners) fn();
     }
@@ -107,7 +118,6 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
     const el = cardRef.current;
     if (el) {
       el.style.transition = 'none';
-      // 设置 pointer capture 以跟踪手指移出元素后的移动
       el.setPointerCapture(e.pointerId);
     }
   }, []);
@@ -119,7 +129,6 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
     const dx = e.clientX - s.startX;
     const dy = e.clientY - s.startY;
 
-    // 垂直滚动优先：如果垂直偏移 > 水平偏移 * 1.3，让给滚动
     if (Math.abs(dy) > Math.abs(dx) * 1.3 && Math.abs(dx) < 10) {
       s.isDragging = false;
       const el = cardRef.current;
@@ -127,7 +136,6 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
       return;
     }
 
-    // 只允许左滑 (dx <= 0)
     const baseOffset = s.isOpen ? -DELETE_WIDTH : 0;
     const clamped = Math.max(-DELETE_WIDTH - 10, Math.min(5, baseOffset + dx));
     s.currentX = clamped;
@@ -136,7 +144,8 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
 
     const el = cardRef.current;
     if (el) el.style.transform = `translateX(${clamped}px)`;
-  }, [DELETE_WIDTH]);
+    updateDeleteVisibility(Math.abs(clamped), false);
+  }, [DELETE_WIDTH, updateDeleteVisibility]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     const s = stateRef.current;
@@ -148,28 +157,26 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
 
     const dx = s.currentX - (s.isOpen ? -DELETE_WIDTH : 0);
     const dt = Date.now() - s.lastTime;
-    const velocity = dt > 0 ? Math.abs(dx) / dt : 0; // px/ms
+    const velocity = dt > 0 ? Math.abs(dx) / dt : 0;
 
-    // 打开条件：滑动超过阈值 40% 或 速度 > 0.4 px/ms
     const shouldOpen = (dx < -(DELETE_WIDTH * 0.35)) || (dx < 0 && velocity > 0.4);
 
     if (shouldOpen) {
       openCard();
     } else if (s.isOpen && dx > DELETE_WIDTH * 0.3) {
-      // 右滑关闭
       closeCard();
     } else if (s.isOpen) {
-      // 保持打开但回弹到完整位置
       el && (el.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)');
       el && (el.style.transform = `translateX(-${DELETE_WIDTH}px)`);
       s.currentX = -DELETE_WIDTH;
+      updateDeleteVisibility(DELETE_WIDTH, true);
     } else {
-      // 恢复到关闭位置
       el && (el.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)');
       el && (el.style.transform = 'translateX(0px)');
       s.currentX = 0;
+      updateDeleteVisibility(0, true);
     }
-  }, [DELETE_WIDTH, openCard, closeCard]);
+  }, [DELETE_WIDTH, openCard, closeCard, updateDeleteVisibility]);
 
   const handlePointerCancel = useCallback((e: React.PointerEvent) => {
     const s = stateRef.current;
@@ -180,16 +187,14 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
       el.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.0)';
       el.style.transform = s.isOpen ? `translateX(-${DELETE_WIDTH}px)` : 'translateX(0px)';
       s.currentX = s.isOpen ? -DELETE_WIDTH : 0;
+      updateDeleteVisibility(s.isOpen ? DELETE_WIDTH : 0, true);
     }
-  }, [DELETE_WIDTH]);
+  }, [DELETE_WIDTH, updateDeleteVisibility]);
 
-  // ── 阻止卡片打开时的点击穿透 ───────────────────────────
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
     if (stateRef.current.isOpen) {
-      // 点击卡片外部区域 → 关闭
       const target = e.target as HTMLElement;
       if (!target.closest('[data-delete-btn]') && cardRef.current?.contains(target)) {
-        // 点击的是卡片本身（非删除按钮），且卡片已打开 → 关闭
         e.preventDefault();
         e.stopPropagation();
         closeCard();
@@ -200,12 +205,13 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden rounded-2xl select-none"
+      className="relative overflow-hidden select-none"
       style={{ touchAction: 'pan-y' }}
       onClick={handleContainerClick}
     >
-      {/* ── 删除按钮（卡片后方） ───────────────────────── */}
+      {/* ── 删除按钮（卡片后方，关闭时完全隐藏） ──────────── */}
       <button
+        ref={deleteRef}
         data-delete-btn
         onClick={(e) => {
           e.stopPropagation();
@@ -214,7 +220,12 @@ export function SwipeableCard({ children, onDelete, deleteLabel = '删除' }: Sw
           closeCard();
         }}
         className="absolute right-0 top-0 bottom-0 flex items-center justify-center gap-1 text-white text-sm font-medium rounded-r-2xl"
-        style={{ width: DELETE_WIDTH, background: 'linear-gradient(to right, rgba(239,68,68,0.92), #EF4444)' }}
+        style={{
+          width: DELETE_WIDTH,
+          background: 'linear-gradient(to right, rgba(239,68,68,0.92), #EF4444)',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
       >
         <Trash2 size={18} color="#fff" />
         <span style={{ fontSize: 13 }}>{deleteLabel}</span>

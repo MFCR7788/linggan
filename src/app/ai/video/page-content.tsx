@@ -557,7 +557,7 @@ function AIVideoContent() {
     <>
       {/* 主题方向 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
           <span style={{ color: '#06B6D4' }}>主题</span> · 方向
         </p>
         <input
@@ -571,7 +571,7 @@ function AIVideoContent() {
 
       {/* 素材选择 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
           <span style={{ color: '#3B82F6' }}>素材</span> · 选材
         </p>
 
@@ -587,7 +587,7 @@ function AIVideoContent() {
         </div>
 
         {/* 文字灵感多选 */}
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>
+        <p style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 6 }}>
           📚 灵感库（多选文字素材）
         </p>
         <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -624,14 +624,14 @@ function AIVideoContent() {
             ))
           )}
         </div>
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 8 }}>
+        <p style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8 }}>
           已选 {selectedInspirations.size} 个素材（最多5个）
         </p>
       </GlassCard>
 
       {/* 风格预设 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
           <span style={{ color: '#8B5CF6' }}>风格</span> · 视频风格预设
         </p>
         <div className="grid grid-cols-3 gap-2">
@@ -653,14 +653,14 @@ function AIVideoContent() {
             </button>
           ))}
         </div>
-        <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 8 }}>
+        <p style={{ color: '#9CA3AF', fontSize: 13, marginTop: 8 }}>
           风格预设会自动匹配 BGM 和字幕样式
         </p>
       </GlassCard>
 
       {/* 时长选择 */}
       <GlassCard>
-        <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+        <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
           <span style={{ color: '#22C55E' }}>时长</span> · 选择视频长度
         </p>
         <div className="grid grid-cols-4 gap-2">

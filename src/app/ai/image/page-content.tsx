@@ -452,7 +452,7 @@ function AIImageContent() {
               className="flex items-center gap-2 flex-1"
               onClick={() => setPresetsOpen(!presetsOpen)}
             >
-              <span style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>快捷预设（点击自动联动比例/风格/色调）</span>
+              <span style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>快捷预设（点击自动联动比例/风格/色调）</span>
               {presetsOpen ? <ChevronUp size={16} color="#9CA3AF" /> : <ChevronDown size={16} color="#9CA3AF" />}
             </button>
             <button
@@ -495,7 +495,7 @@ function AIImageContent() {
         <div style={{ display: quickMode ? 'none' : undefined }}>
         {/* Step 1: 选材 + 输入 + 智能提示 */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#3B82F6' }}>Step 1</span> · 选材与描述
           </p>
 
@@ -617,7 +617,7 @@ function AIImageContent() {
 
         {/* Step 2: 参数设置 */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#8B5CF6' }}>Step 2</span> · 参数设置
           </p>
 
@@ -672,7 +672,7 @@ function AIImageContent() {
 
         {/* Step 3: 色调参考（有用，强化保留） */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#22C55E' }}>Step 3</span> · 色调参考
             <span style={{ color: '#6B7280', fontSize: 11, fontWeight: 400, marginLeft: 4 }}>（有用，对精准度有帮助）</span>
             {selectedPaletteId && (
@@ -719,7 +719,7 @@ function AIImageContent() {
             onClick={() => setAdvancedOpen(!advancedOpen)}
           >
             <div className="flex flex-col items-start gap-0.5">
-              <span style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>
+              <span style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>
                 <span style={{ color: '#F59E0B' }}>Step 4</span> · 高级设置
               </span>
               <span style={{ color: '#9CA3AF', fontSize: 11 }}>4 张变体 / 种子 / 负面提示</span>
@@ -1097,9 +1097,9 @@ function AIImageContent() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p style={{ color: '#E5E7EB', fontSize: 13, fontWeight: 500, marginBottom: 4 }} className="truncate">{item.title}</p>
+                      <p style={{ color: '#E5E7EB', fontSize: 15, fontWeight: 500, marginBottom: 4 }} className="truncate">{item.title}</p>
                       <div className="flex items-center justify-between">
-                        <span style={{ color: '#6B7280', fontSize: 11 }}>{item.time}</span>
+                        <span style={{ color: '#6B7280', fontSize: 13 }}>{item.time}</span>
                         <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px]"
                           style={{ background: 'rgba(59,130,246,0.15)', color: '#93C5FD' }}>
                           <RotateCcw size={10} /> 做同款

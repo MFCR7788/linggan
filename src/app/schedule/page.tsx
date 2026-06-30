@@ -217,20 +217,20 @@ function ScheduleContent() {
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                         <div className="flex items-center gap-1">
                           <Clock size={12} color="#9CA3AF" />
-                          <span style={{ color: past ? '#EF4444' : '#9CA3AF', fontSize: 12 }}>
+                          <span style={{ color: past ? '#EF4444' : '#9CA3AF', fontSize: 13 }}>
                             {past ? '已过期 ' : ''}{dateStr} {timeStr}
                           </span>
                         </div>
                         {item.location && (
                           <div className="flex items-center gap-1">
                             <MapPin size={12} color="#9CA3AF" />
-                            <span style={{ color: '#9CA3AF', fontSize: 12 }}>{item.location}</span>
+                            <span style={{ color: '#9CA3AF', fontSize: 13 }}>{item.location}</span>
                           </div>
                         )}
                       </div>
 
                       {item.description && (
-                        <p style={{ color: '#6B7280', fontSize: 12, marginTop: 4 }} className="line-clamp-2">
+                        <p style={{ color: '#6B7280', fontSize: 14, marginTop: 4 }} className="line-clamp-2">
                           {item.description}
                         </p>
                       )}

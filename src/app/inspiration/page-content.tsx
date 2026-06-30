@@ -833,14 +833,14 @@ function InspirationLibraryContent() {
 
         {/* 底部信息 */}
         <div className="p-2.5">
-          <p style={{ color: "#FFFFFF", fontSize: 12, fontWeight: 600 }} className="line-clamp-2 mb-1 break-words">
+          <p style={{ color: "#FFFFFF", fontSize: 15, fontWeight: 600 }} className="line-clamp-2 mb-1 break-words">
             {item.title ? stripMarkdown(item.title) : "未命名"}
           </p>
-          <p style={{ color: "#9CA3AF", fontSize: 10, lineHeight: 1.4 }} className="line-clamp-2 break-words">
+          <p style={{ color: "#9CA3AF", fontSize: 14, lineHeight: 1.4 }} className="line-clamp-2 break-words">
             {item.original_text ? stripMarkdown(item.original_text?.substring(0, 80)) : (item.title ? stripMarkdown(item.title) : "")}
           </p>
           <div className="flex items-center justify-between mt-1.5 gap-1.5">
-            <span style={{ color: "#6B7280", fontSize: 10 }} className="truncate">
+            <span style={{ color: "#6B7280", fontSize: 13 }} className="truncate">
               {new Date(item.created_at).toLocaleDateString("zh-CN")}
             </span>
             <div className="flex items-center gap-1 flex-shrink-0">

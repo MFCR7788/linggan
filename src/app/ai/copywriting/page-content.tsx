@@ -81,7 +81,7 @@ const STYLE_CATEGORY_LABELS: Record<string, string> = {
 
 // ─── 内联样式常量 ──────────────────────────────
 const S = {
-  sectionTitle: { color: '#FFFFFF', fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  sectionTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: 600 } as React.CSSProperties,
   stepBadge: (color: string) => ({ color, fontSize: 13, fontWeight: 700 } as React.CSSProperties),
   label: { color: '#9CA3AF', fontSize: 11 } as React.CSSProperties,
   input: {
@@ -884,7 +884,7 @@ function AICopywritingContent() {
 
                 {/* Content */}
                 <div className="selectable p-4 rounded-xl mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <FormattedText text={currentContent} color="#E5E7EB" fontSize={13} lineHeight={1.8} />
+                  <FormattedText text={currentContent} color="#E5E7EB" fontSize={14} lineHeight={1.8} />
                 </div>
 
                 {/* Primary actions */}
@@ -966,10 +966,10 @@ function AICopywritingContent() {
                 <div className="flex items-center gap-3">
                   <span style={{ fontSize: 20 }}>{item.metadata?.generatedImage ? '🖼️' : '📄'}</span>
                   <div className="flex-1 min-w-0">
-                    <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
-                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 80) || ''}</p>
+                    <p style={{ color: '#E5E7EB', fontSize: 15 }} className="truncate">{item.title}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 14 }} className="truncate mt-0.5">{item.content?.substring(0, 80) || ''}</p>
                   </div>
-                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                  <span style={{ color: '#6B7280', fontSize: 13 }}>{item.time}</span>
                 </div>
               </GlassCard>
             ))}

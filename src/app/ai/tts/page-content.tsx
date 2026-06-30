@@ -367,7 +367,7 @@ function TTSPageContent() {
       <div className="flex-1 px-4 pt-4 space-y-4">
         {/* Step 1: 文本输入 */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#22C55E' }}>文本</span> · 输入配音文本
           </p>
 
@@ -452,7 +452,7 @@ function TTSPageContent() {
 
         {/* Step 2: 声音设置 */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#8B5CF6' }}>声音</span> · 选择音色与参数
           </p>
 
@@ -719,7 +719,7 @@ function TTSPageContent() {
 
         {/* Step 3: 生成 & 预览 */}
         <GlassCard>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
             <span style={{ color: '#3B82F6' }}>生成</span> · 合成语音
           </p>
 
@@ -803,8 +803,8 @@ function TTSPageContent() {
                 <div className="flex items-center gap-3">
                   <span style={{ fontSize: 20 }}>🔊</span>
                   <div className="flex-1 min-w-0">
-                    <p style={{ color: '#E5E7EB', fontSize: 13 }} className="truncate">{item.title}</p>
-                    <p style={{ color: '#9CA3AF', fontSize: 11 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
+                    <p style={{ color: '#E5E7EB', fontSize: 15 }} className="truncate">{item.title}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 14 }} className="truncate mt-0.5">{item.content?.substring(0, 60) || ''}</p>
                     {item.audioUrl && (
                       <audio
                         controls
@@ -815,7 +815,7 @@ function TTSPageContent() {
                       />
                     )}
                   </div>
-                  <span style={{ color: '#6B7280', fontSize: 10 }}>{item.time}</span>
+                  <span style={{ color: '#6B7280', fontSize: 13 }}>{item.time}</span>
                 </div>
               </GlassCard>
             ))}
