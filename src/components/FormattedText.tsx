@@ -152,9 +152,10 @@ const codeBlockStyle: React.CSSProperties = {
 
 const quoteStyle: React.CSSProperties = {
   borderLeft: "3px solid rgba(59,130,246,0.5)",
-  padding: "4px 0 4px 12px",
-  margin: "8px 0",
+  padding: "6px 0 6px 14px",
+  margin: "12px 0",
   color: "#D1D5DB",
+  lineHeight: 1.7,
 };
 
 // ---- 主组件 ----
@@ -220,7 +221,7 @@ export default function FormattedText({
     );
   }
 
-  const gap = compact ? 6 : 10;
+  const gap = compact ? 8 : 14;
 
   return (
     <div className="selectable chat-content" style={{ display: "flex", flexDirection: "column", gap }}>
@@ -343,11 +344,11 @@ function renderList(
   const isUnordered = cleanLines.every((l) => /^[-•*]\s/.test(l.trim()));
   if (isUnordered) {
     return (
-      <ul style={{ margin: "4px 0 8px", paddingLeft: 20 }}>
+      <ul style={{ margin: "8px 0 12px", paddingLeft: 22 }}>
         {cleanLines.map((line, i) => {
           const content = line.trim().replace(/^[-•*]\s*/, "");
           return (
-            <li key={i} style={{ ...baseStyle(color, fontSize, lineHeight), marginBottom: 4, display: "list-item" }}>
+            <li key={i} style={{ ...baseStyle(color, fontSize, lineHeight), marginBottom: 6, display: "list-item", lineHeight: 1.7 }}>
               {renderInline(tokenizeInline(content), color, fontSize)}
             </li>
           );
@@ -360,11 +361,11 @@ function renderList(
   const isOrdered = cleanLines.every((l) => /^\d+[.)、]\s/.test(l.trim()));
   if (isOrdered) {
     return (
-      <ol style={{ margin: "4px 0 8px", paddingLeft: 20 }}>
+      <ol style={{ margin: "8px 0 12px", paddingLeft: 22 }}>
         {cleanLines.map((line, i) => {
           const content = line.trim().replace(/^\d+[.)、]\s*/, "");
           return (
-            <li key={i} style={{ ...baseStyle(color, fontSize, lineHeight), marginBottom: 4 }}>
+            <li key={i} style={{ ...baseStyle(color, fontSize, lineHeight), marginBottom: 6, lineHeight: 1.7 }}>
               {renderInline(tokenizeInline(content), color, fontSize)}
             </li>
           );
