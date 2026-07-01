@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User as UserIcon, Shield, Bell, Plug, ChevronRight, Lock, LogOut,
   Smartphone, Edit3, Save, X, Check, AlertTriangle, Loader2, Eye, EyeOff,
-  Sparkles, UserCircle2, Trash2, Video as VideoIcon,
+  Sparkles, UserCircle2, Trash2, Video as VideoIcon, Camera,
 } from 'lucide-react';
 import { GlassCard, GlassBadge } from '@/components/GlassCard';
 import { TopNav } from '@/components/TopNav';
@@ -19,16 +19,19 @@ import { useUser } from '@/hooks/use-user';
 import { useAccountType } from '@/hooks/use-account-type';
 import { ACCOUNT_TYPE_PRESETS, type AccountTypeId } from '@/lib/account-presets';
 import { apiClient } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase';
 
 // ====== 1. 资料 Section ======
 
 function ProfileSection({ onSaved }: { onSaved: () => void }) {
   const { data: user } = useUser();
   const { showToast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [username, setUsername] = useState(user?.username || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -41,12 +44,61 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
   const displayPhone = user?.phone || '—';
   const initial = displayName.charAt(0).toUpperCase();
 
+  // 上传头像到 Supabase Storage
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // 校验
+    if (!file.type.startsWith('image/')) {
+      showToast('仅支持图片格式', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('头像不能超过 5MB', 'error');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `avatars/${user.id}/avatar-${Date.now()}.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('lingji-media')
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage
+        .from('lingji-media')
+        .getPublicUrl(path);
+
+      const publicUrl = urlData?.publicUrl;
+      if (publicUrl) {
+        setAvatarUrl(publicUrl);
+        // 同步保存到 profile
+        await apiClient.patch('/user/profile', {
+          username: username.trim() || user.username || '',
+          avatar_url: publicUrl,
+        });
+        showToast('头像已更新', 'success');
+        onSaved();
+      }
+    } catch (err: any) {
+      showToast(err?.message || '上传失败', 'error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const resp = await apiClient.patch<{ user: any }>('/user/profile', {
         username: username.trim(),
-        avatar_url: avatarUrl.trim() || null,
+        avatar_url: avatarUrl || null,
       });
       if (resp && resp.success) {
         showToast('资料已保存', 'success');
@@ -72,7 +124,7 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
           <UserIcon size={16} color="#93C5FD" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>资料</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>资料</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>头像、昵称、手机号</p>
         </div>
         {!editing && (
@@ -87,21 +139,40 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
       </div>
 
       <div className="flex items-center gap-4 mb-4">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
+        {/* 头像 — 点击上传 */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 relative group"
           style={{
             background: avatarUrl
-              ? undefined
+              ? `url(${avatarUrl}) center/cover`
               : 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))',
             border: '2px solid rgba(59,130,246,0.5)',
-            backgroundImage: avatarUrl ? `url(${avatarUrl})` : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
             overflow: 'hidden',
           }}
         >
           {!avatarUrl && <span style={{ color: '#FFFFFF', fontWeight: 700 }}>{initial}</span>}
-        </div>
+          {/* 上传遮罩 */}
+          <div
+            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"
+            style={{ background: 'rgba(0,0,0,0.45)' }}
+          >
+            {uploading ? (
+              <Loader2 size={20} color="#fff" className="animate-spin" />
+            ) : (
+              <Camera size={18} color="#fff" />
+            )}
+          </div>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarUpload}
+        />
+
         <div className="flex-1 min-w-0">
           {editing ? (
             <GlassInput
@@ -113,7 +184,7 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
           ) : (
             <p style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 700 }}>{displayName}</p>
           )}
-          <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 4 }} className="flex items-center gap-1">
+          <p style={{ color: '#9CA3AF', fontSize: 13, marginTop: 4 }} className="flex items-center gap-1">
             <Smartphone size={11} /> {displayPhone}
           </p>
         </div>
@@ -121,13 +192,8 @@ function ProfileSection({ onSaved }: { onSaved: () => void }) {
 
       {editing && (
         <div className="space-y-3">
-          <div>
-            <p style={{ color: '#9CA3AF', fontSize: 11, marginBottom: 6 }}>头像 URL（可选，留空使用首字母）</p>
-            <GlassInput
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://..."
-            />
+          <div className="flex items-center gap-2 mb-1">
+            <p style={{ color: '#9CA3AF', fontSize: 11 }}>点击头像上传新图片（最大 5MB）</p>
           </div>
           <div
             className="px-3 py-2 rounded-lg flex items-start gap-2"
@@ -182,7 +248,7 @@ function AccountTypeSection() {
           <Sparkles size={16} color="#F9A8D4" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>账号类型</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>账号类型</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>选择最贴近的场景,AI 创作中心会推荐对应视频组合</p>
         </div>
       </div>
@@ -274,7 +340,7 @@ function SecuritySection() {
           <Shield size={16} color="#FCA5A5" />
         </div>
         <div>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>安全</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>安全</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>密码、登录设备、双因子</p>
         </div>
       </div>
@@ -375,7 +441,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>修改密码</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>修改密码</p>
           <button onClick={onClose} className="p-1"><X size={18} color="#9CA3AF" /></button>
         </div>
         <div className="p-4 space-y-3">
@@ -448,7 +514,7 @@ function SignOutAllModal({
           >
             <LogOut size={20} color="#FCA5A5" />
           </div>
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>退出所有设备？</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>退出所有设备？</p>
           <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
             所有其他设备会被立即退出登录。本设备也需重新登录。
           </p>
@@ -486,7 +552,7 @@ function NotificationSection() {
           <Bell size={16} color="#86EFAC" />
         </div>
         <div className="flex-1 text-left">
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>通知</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>通知</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>管理发布提醒、热点告警、系统消息</p>
         </div>
         <ChevronRight size={16} color="#9CA3AF" />
@@ -626,7 +692,7 @@ function AvatarSection() {
           <UserCircle2 size={16} color="#F9A8D4" />
         </div>
         <div className="flex-1">
-          <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>数字分身</p>
+          <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>数字分身</p>
           <p style={{ color: '#9CA3AF', fontSize: 11 }}>训练个人形象,一键生成口播视频(需 HEYGEN_API_KEY)</p>
         </div>
         {info && (
@@ -801,7 +867,7 @@ function SettingsContent() {
               <Plug size={16} color="#C4B5FD" />
             </div>
             <div>
-              <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 600 }}>平台集成</p>
+              <p style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600 }}>平台集成</p>
               <p style={{ color: '#9CA3AF', fontSize: 11 }}>6 个 V2.0.2 env · 微信公众号/微博 OAuth · AES/Cron 密钥</p>
             </div>
           </div>
