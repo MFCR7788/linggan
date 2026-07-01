@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, ImageIcon, VideoIcon, CalendarPlus } from "lucide-react";
+import { Share2, Zap, TrendingUp, FileText, Download, RefreshCw, AlertCircle, ImageIcon, VideoIcon, CalendarPlus, Copy, Check } from "lucide-react";
 import { GlassCard, GlassBadge } from "@/components/GlassCard";
 import { TopNav } from "@/components/TopNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -60,6 +60,7 @@ function InspirationDetailContent() {
   const updateInspiration = useUpdateInspiration();
   const { data: categories } = useCategories();
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // 编辑弹窗状态
   const [showEditModal, setShowEditModal] = useState(false);
@@ -191,6 +192,25 @@ function InspirationDetailContent() {
     }
   };
 
+  const copyContent = async () => {
+    if (!inspiration) return;
+    const parts = [
+      inspiration.title,
+      inspiration.original_text,
+      inspiration.ai_summary,
+      inspiration.prompt,
+    ].filter(Boolean);
+    const text = parts.join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      showStatus('✅ 内容已复制到剪贴板');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showStatus('❌ 复制失败');
+    }
+  };
+
   const shareInspiration = async () => {
     const url = `${window.location.origin}/inspiration/detail?id=${id}`;
     const title = inspiration?.title || '灵感详情';
@@ -307,6 +327,17 @@ function InspirationDetailContent() {
               <GlassBadge color="default">
                 {statusLabels[inspiration.status] || "正常"}
               </GlassBadge>
+              <button
+                onClick={copyContent}
+                className="ml-auto p-1.5 rounded-lg transition-all"
+                style={{
+                  background: copied ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.08)",
+                  border: copied ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(255,255,255,0.12)",
+                }}
+                title="复制内容"
+              >
+                {copied ? <Check size={15} color="#22C55E" /> : <Copy size={15} color="#9CA3AF" />}
+              </button>
             </div>
 
             <h1 style={{ color: "#FFFFFF", fontSize: 20, fontWeight: 700, lineHeight: 1.4 }}>

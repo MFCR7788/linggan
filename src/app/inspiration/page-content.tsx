@@ -1348,40 +1348,52 @@ function InspirationLibraryContent() {
       {/* 全屏预览弹窗 */}
       {previewMedia && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50"
           onClick={() => setPreviewMedia(null)}
         >
           <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(8px)" }} />
-          <div className="relative max-w-[95vw] max-h-[95vh]" onClick={(e) => e.stopPropagation()}>
-            {/* 关闭按钮 */}
-            <button
-              onClick={() => setPreviewMedia(null)}
-              className="absolute -top-10 right-0 p-1.5 rounded-lg z-10"
-              style={{ background: "rgba(255,255,255,0.1)" }}
-              aria-label="关闭"
-            >
-              <X size={20} color="#FFFFFF" />
-            </button>
-            {/* 标题 */}
-            <p className="absolute -top-10 left-0 truncate max-w-[70vw]"
-              style={{ color: "#D1D5DB", fontSize: 13, lineHeight: "32px" }}>
+          {/* 顶部关闭栏 */}
+          <div
+            className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3"
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6), transparent)" }}
+          >
+            <p className="truncate max-w-[70vw]" style={{ color: "#D1D5DB", fontSize: 14 }}>
               {previewMedia.title}
             </p>
+            <button
+              onClick={(e) => { e.stopPropagation(); setPreviewMedia(null); }}
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(255,255,255,0.15)" }}
+              aria-label="关闭"
+            >
+              <X size={18} color="#FFFFFF" />
+            </button>
+          </div>
+          {/* 媒体内容 */}
+          <div
+            className="absolute inset-0 flex items-center justify-center p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             {previewMedia.type === 'image' ? (
               <img
                 src={previewMedia.url}
                 alt={previewMedia.title}
-                className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg"
+                className="max-w-full max-h-full object-contain rounded-lg"
+                draggable={false}
               />
             ) : (
               <video
                 src={previewMedia.url}
                 controls
                 autoPlay
-                className="max-w-[95vw] max-h-[90vh] rounded-lg"
+                className="max-w-full max-h-full rounded-lg"
                 style={{ outline: 'none' }}
               />
             )}
+          </div>
+          {/* 底部关闭提示 */}
+          <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>点击任意位置关闭</span>
           </div>
         </div>
       )}
