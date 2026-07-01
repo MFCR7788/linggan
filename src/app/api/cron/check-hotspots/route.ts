@@ -1,6 +1,7 @@
 // 后台定时热点检查 - 供外部定时服务调用
+// 异步模式：收到请求立即返回 202，后台执行检查
+import { NextResponse } from 'next/server';
 import { createApiResponse, createApiError } from '@/lib/api-utils';
-import { runHotspotCheck } from '@/lib/jobs/hotspot-checker';
 import { getCronSecret } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
@@ -17,25 +18,25 @@ export async function GET(request: Request) {
     return createApiError('Unauthorized', 401);
   }
 
-  console.log('[Cron] Starting scheduled hotspot check...');
-  const startTime = Date.now();
+  console.log('[Cron] Hotspot check triggered via HTTP, starting in background...');
 
-  try {
-    const result = await runHotspotCheck();
-    const duration = Date.now() - startTime;
+  // 后台异步执行，不阻塞 HTTP 响应
+  (async () => {
+    const startTime = Date.now();
+    try {
+      const { runHotspotCheck } = await import('@/lib/jobs/hotspot-checker');
+      const result = await runHotspotCheck();
+      const duration = Date.now() - startTime;
+      console.log(`[Cron] Hotspot check completed in ${duration}ms: ${result.newCount} new, ${result.errors.length} errors, ${result.processedGroups}/${result.processedGroups + result.remainingGroups} groups`);
+    } catch (error) {
+      console.error('[Cron] Hotspot check failed:', error);
+    }
+  })();
 
-    console.log(`[Cron] Hotspot check completed in ${duration}ms: ${result.newCount} new, ${result.errors.length} errors, ${result.processedGroups}/${result.processedGroups + result.remainingGroups} groups`);
-
-    return createApiResponse({
-      newHotspots: result.newCount,
-      errors: result.errors,
-      durationMs: duration,
-      processedGroups: result.processedGroups,
-      remainingGroups: result.remainingGroups,
-      timestamp: new Date().toISOString(),
-    }, `检查完成：${result.newCount} 条新热点，${result.processedGroups} 组已处理${result.remainingGroups > 0 ? `，${result.remainingGroups} 组待下次` : ''}，耗时 ${(duration / 1000).toFixed(1)}s`);
-  } catch (error) {
-    console.error('[Cron] Hotspot check failed:', error);
-    return createApiError('热点检查失败', 500);
-  }
+  // 立即返回，不等待完成
+  return NextResponse.json({
+    success: true,
+    message: '热点检查已在后台启动',
+    timestamp: new Date().toISOString(),
+  }, { status: 202 });
 }
