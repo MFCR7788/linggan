@@ -79,6 +79,7 @@ function PublishContent() {
       const p = sp as PlatformId;
       if (ALL_PLATFORMS.includes(p)) setSelectedPlatforms([p]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   // OAuth 回调结果

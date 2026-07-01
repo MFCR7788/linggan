@@ -90,7 +90,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .from('chat_sessions')
       .insert({ user_id: user.id, title: 'AI创作' })
       .select('id')
-      .single()
+      .maybeSingle()
     ).data?.id;
 
     if (sessionId) {

@@ -97,6 +97,7 @@ export function useBatchProgress(batchId: string | null): UseBatchProgressResult
         intervalRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [batchId]);
 
   return { data, error, isLoading, isPolling, refresh, cancel };

@@ -80,7 +80,7 @@ export const GET = withAuth(async ({ user }) => {
         created_at: msg.created_at,
       })
       .select('id')
-      .single();
+      .maybeSingle();
 
     if (insertError) {
       console.error('迁移失败:', msg.id, insertError.message);

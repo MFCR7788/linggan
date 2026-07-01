@@ -17,7 +17,7 @@ export async function logAiUsage(
       .select('*')
       .eq('user_id', userId)
       .eq('month', month)
-      .single();
+      .maybeSingle();
 
     const fieldMap: Record<AiTaskType, string> = {
       ai_summary: 'ai_summary_count',

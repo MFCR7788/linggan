@@ -273,7 +273,7 @@ export async function markFailed(input: MarkFailedInput): Promise<MarkFailedResu
     .from('ai_tasks')
     .select('retry_count, max_retries')
     .eq('id', input.taskId)
-    .single();
+    .maybeSingle();
 
   if (getError || !task) {
     console.error(`[markFailed] ${input.taskId} 查询失败:`, getError?.message);

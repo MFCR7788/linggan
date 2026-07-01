@@ -73,6 +73,7 @@ export function ClickTextCaptcha({ open, onClose, onSuccess }: ClickTextCaptchaP
       setClicks([]);
       setError("");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [open]);
 
   // 处理图片点击 (要把屏幕坐标换算成 SVG 原始坐标系)

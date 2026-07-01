@@ -117,6 +117,7 @@ function AIImageContent() {
       const ids = params.inspirationId.split(',').filter(Boolean);
       setSelectedInspirations(new Set(ids));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   // 工作流：从 session.accumulated_handoff 预填
@@ -1129,7 +1130,7 @@ function AIImageContent() {
           >
             <X size={20} color="#fff" />
           </button>
-          <img src={lightboxUrl} className="max-w-[90vw] max-h-[90vh] object-contain" onClick={(e) => e.stopPropagation()} />
+          <img src={lightboxUrl} alt="" className="max-w-[90vw] max-h-[90vh] object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
 

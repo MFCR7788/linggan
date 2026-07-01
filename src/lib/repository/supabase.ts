@@ -14,7 +14,7 @@ export class SupabaseRepository<T extends { id: string }> implements Repository<
       .from(this.table)
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       if (error.code === 'PGRST116') return null; // 0 rows
@@ -42,9 +42,9 @@ export class SupabaseRepository<T extends { id: string }> implements Repository<
       .from(this.table)
       .insert(data as Record<string, unknown>)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error || !created) throw error || new Error('创建失败');
     return created as T;
   }
 
@@ -54,9 +54,9 @@ export class SupabaseRepository<T extends { id: string }> implements Repository<
       .update(data as Record<string, unknown>)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error || !updated) throw error || new Error('更新失败');
     return updated as T;
   }
 
@@ -65,9 +65,9 @@ export class SupabaseRepository<T extends { id: string }> implements Repository<
       .from(this.table)
       .upsert(data as Record<string, unknown>)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error || !result) throw error || new Error('upsert 失败');
     return result as T;
   }
 

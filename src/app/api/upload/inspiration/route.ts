@@ -109,7 +109,7 @@ export const POST = withAuth(async ({ request, user }) => {
         status: 'active',
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (insertError || !item) {
       console.error('[upload/inspiration] 入库失败:', insertError);

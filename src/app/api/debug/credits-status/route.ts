@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase-server';
 import { getBalance, getTransactions, getPackages, getTiers } from '@/lib/credits';
-import { getDebugSecret } from '@/lib/runtime-config';
+import { getDebugSecret, getSupabaseServiceRoleKey } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   // 1. 环境
   result.env = {
-    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasServiceRoleKey: !!getSupabaseServiceRoleKey(),
     hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
     nodeEnv: process.env.NODE_ENV,
     cwd: process.cwd(),

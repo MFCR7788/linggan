@@ -20,9 +20,9 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
     .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (readErr) {
+  if (readErr || !session) {
     return createApiError('会话不存在', 404);
   }
 
@@ -65,9 +65,9 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
     .update(updates)
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('完成步骤失败:', error);
     return createApiError('更新会话失败', 500);
   }

@@ -98,6 +98,7 @@ export function ChoiceCards({ block, onChange, onPickLocal, onPickInspiration }:
                 color: mediaType === 'image' ? '#FCD34D' : '#C4B5FD',
               }}
             >
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react decorative icon */}
               <Image size={14} />
               从本地选择
             </button>

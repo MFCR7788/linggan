@@ -15,10 +15,10 @@ export const GET = withAuth(async ({ user, params }) => {
     .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (error || !data) {
+    if (!data || error?.code === 'PGRST116') {
       return createApiError('热点不存在', 404);
     }
     console.error('获取热点详情失败:', error);

@@ -90,7 +90,7 @@ export async function processImageTask(task: AiTask, workerId: string): Promise<
         status: 'active',
         is_shared: false,
         category_id: null,
-      }).select('id').single();
+      }).select('id').maybeSingle();
 
       // 异步生成向量嵌入
       if (inserted?.id) {

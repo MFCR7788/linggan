@@ -99,7 +99,7 @@ export const POST = withAuth(async ({ request, user }) => {
         status: 'active',
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (insertError || !item) {
       console.error('[upload/document] 入库失败:', insertError);

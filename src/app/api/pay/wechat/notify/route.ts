@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
             external_subscription_id: decrypted.transaction_id,
           })
           .select('id')
-          .single();
+          .maybeSingle();
 
         await supabase
           .from('user_credits')

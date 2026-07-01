@@ -27,7 +27,11 @@ async function transcribeWithDashScope(audioBase64: string): Promise<string> {
     body: JSON.stringify({
       model: "paraformer-v2",
       input: { file_urls: [dataUrl] },
-      parameters: { channel_id: [0] },
+      parameters: {
+        channel_id: [0],
+        enable_punctuation_prediction: true,
+        enable_inverse_text_normalization: true,
+      },
     }),
     signal: ctrl.signal,
   });

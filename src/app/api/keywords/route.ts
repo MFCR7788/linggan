@@ -120,9 +120,9 @@ export const POST = withAuth(async ({ request, user }) => {
     .from('monitor_keywords')
     .insert(insertData)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !newKeyword) {
     console.error('创建关键词失败:', error);
     return createApiError('创建关键词失败', 500);
   }

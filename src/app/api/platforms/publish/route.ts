@@ -60,7 +60,7 @@ export const POST = withAuth(async ({ request, user }) => {
     .eq('id', accountId)
     .eq('user_id', user.id)
     .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
   if (!account) return createApiError('账号不存在或已失效', 404);
   if (account.platform !== platform) return createApiError('账号与平台不匹配', 400);
@@ -83,9 +83,9 @@ export const POST = withAuth(async ({ request, user }) => {
         scheduled_publish_at: scheduledPublishAt,
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) return createApiError(error.message, 500);
+    if (error || !pub) return createApiError(error?.message || '创建发布记录失败', 500);
     return createApiResponse({ publication: pub }, `已加入定时队列, ${scheduledPublishAt} 自动发布`);
   }
 
@@ -107,8 +107,8 @@ export const POST = withAuth(async ({ request, user }) => {
         is_manual_post: false,
       })
       .select()
-      .single();
-    if (insertErr) throw new Error(insertErr.message);
+      .maybeSingle();
+    if (insertErr || !pub) throw new Error(insertErr?.message || '创建发布记录失败');
 
     // 调平台 SDK
     let accessToken = decryptTokenUnsafe(account.access_token_encrypted);
@@ -158,8 +158,8 @@ export const POST = withAuth(async ({ request, user }) => {
       })
       .eq('id', pub.id)
       .select()
-      .single();
-    if (updateErr) throw new Error(updateErr.message);
+      .maybeSingle();
+    if (updateErr || !updated) throw new Error(updateErr?.message || '更新发布记录失败');
 
     // 5) 更新 last_used_at
     await supabase

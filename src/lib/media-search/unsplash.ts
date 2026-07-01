@@ -2,6 +2,7 @@
 // API 文档: https://unsplash.com/documentation
 
 import type { MediaSearchProvider, MediaSearchResult, SearchRequestOptions } from './types';
+import { getUnsplashAccessKey } from '@/lib/runtime-config';
 
 const UNSPLASH_API = 'https://api.unsplash.com';
 
@@ -24,13 +25,7 @@ interface UnsplashPhoto {
 }
 
 function getAccessKey(): string {
-  try {
-    // eslint-disable-next-line
-    const { getUnsplashAccessKey } = require('@/lib/runtime-config');
-    return getUnsplashAccessKey() || '';
-  } catch {
-    return typeof process !== 'undefined' ? (process.env.UNSPLASH_ACCESS_KEY || '') : '';
-  }
+  return getUnsplashAccessKey() || '';
 }
 
 function mapPhoto(p: UnsplashPhoto): MediaSearchResult {

@@ -55,6 +55,11 @@ const PLATFORM_PATTERNS: { name: string; hostPatterns: string[]; type: 'video' |
     hostPatterns: ['zhihu.com'],
     type: 'text',
   },
+  {
+    name: '视频号',
+    hostPatterns: ['channels.weixin.qq.com', 'finder.video.qq.com'],
+    type: 'video',
+  },
 ];
 
 function detectPlatform(url: string): (typeof PLATFORM_PATTERNS)[number] | null {
@@ -178,19 +183,33 @@ async function downloadViaYTDLP(url: string, workDir: string): Promise<string | 
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
 
     const outputPath = join(workDir, '%(id)s.%(ext)s');
-    await execFileAsync('python3.11', [
-      '-m', 'yt_dlp',
+    const args = [
       '--no-playlist',
       '--max-filesize', '300M',
       '-f', 'best[ext=mp4]/best',
       '-o', outputPath,
       url,
-    ], { timeout: 120000, maxBuffer: 1024 * 1024 });
+    ];
 
-    const { readdir } = await import('fs/promises');
-    const files = await readdir(workDir);
-    const videoFile = files.find((f) => f.endsWith('.mp4') || f.endsWith('.mov') || f.endsWith('.webm') || f.endsWith('.mkv'));
-    return videoFile ? join(workDir, videoFile) : null;
+    // 尝试多个 yt-dlp 安装路径
+    const candidates = [
+      { cmd: 'python3.11', args: ['-m', 'yt_dlp', ...args] },
+      { cmd: 'yt-dlp', args },
+      { cmd: 'python3', args: ['-m', 'yt_dlp', ...args] },
+    ];
+
+    for (const { cmd, args: cmdArgs } of candidates) {
+      try {
+        await execFileAsync(cmd, cmdArgs, { timeout: 120000, maxBuffer: 1024 * 1024 });
+
+        const { readdir } = await import('fs/promises');
+        const files = await readdir(workDir);
+        const videoFile = files.find((f) => f.endsWith('.mp4') || f.endsWith('.mov') || f.endsWith('.webm') || f.endsWith('.mkv'));
+        if (videoFile) return join(workDir, videoFile);
+      } catch { /* 尝试下一个 */ }
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -421,6 +440,39 @@ async function extractSingle(url: string, options: { fastOnly?: boolean } = {}):
     return { success: false, method: 'jina_text', platform: platformName, error: jinaResult.error };
   }
 
+  // 视频号：yt-dlp 不支持，尝试直接抓取页面信息
+  if (platform?.hostPatterns.some((h) => h.includes('channels.weixin.qq.com') || h.includes('finder.video.qq.com'))) {
+    // 尝试 yt-dlp（未来可能支持）
+    let tmpDir: string | null = null;
+    try {
+      tmpDir = await mkdtemp(join(tmpdir(), 'extract-'));
+      const videoPath = await downloadViaYTDLP(url, tmpDir);
+      if (videoPath) {
+        const audioPath = await extractAudio(videoPath, tmpDir);
+        const { recognizeAudio } = await import('@/lib/ai/funasr-client');
+        const asrResult = await recognizeAudio(audioPath);
+        if (asrResult.success && asrResult.text.trim()) {
+          return { success: true, transcript: asrResult.text, method: 'video_asr', platform: platformName };
+        }
+      }
+    } catch { /* 降级 */ } finally {
+      if (tmpDir) { try { await rm(tmpDir, { recursive: true, force: true }); } catch {} }
+    }
+
+    // 降级：直接抓取页面获取标题/描述
+    const fastText = await extractTextFast(url);
+    if (fastText && fastText.length > 20) {
+      return { success: true, title: fastText.split('\n')[0]?.trim(), content: fastText, transcript: fastText, method: 'jina_fast', platform: platformName };
+    }
+
+    return {
+      success: false,
+      method: 'jina_fast',
+      platform: platformName,
+      error: '视频号链接暂不支持完整提取（需要微信登录环境）。请尝试复制视频描述文字后粘贴到这里。',
+    };
+  }
+
   // 视频/混合平台 → 下载视频 + ASR
   let tmpDir: string | null = null;
   try {
@@ -516,6 +568,7 @@ export const extractContentTool: ToolDefinition = {
 - 今日头条 → 文章文字提取 / 视频文案提取
 - 腾讯新闻 → 文章全文提取
 - 知乎/公众号等 → 网页内容提取
+- 视频号(channels.weixin.qq.com) → 页面信息提取（完整视频需微信登录环境，建议复制视频描述文字）
 - 其他通用网页 → jina.ai 智能提取正文
 
 自动识别平台并选择最佳提取方式。支持批量提取多个链接。`,

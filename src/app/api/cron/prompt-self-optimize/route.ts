@@ -3,13 +3,14 @@
 
 import { NextResponse } from 'next/server';
 import { runSelfOptimization } from '@/lib/agent/prompt-optimizer/evolution/self-optimizer';
+import { getCronSecret } from '@/lib/runtime-config';
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   // CRON_SECRET 鉴权
   const authHeader = request.headers.get('authorization');
-  const expectedSecret = process.env.CRON_SECRET;
+  const expectedSecret = getCronSecret();
   if (!expectedSecret) {
     return NextResponse.json({ success: false, error: 'CRON_SECRET 未配置' }, { status: 500 });
   }

@@ -132,9 +132,9 @@ export const POST = withAuth(async ({ request, user }) => {
       status: 'new',
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('创建热点失败:', error);
     return createApiError('创建热点失败', 500);
   }

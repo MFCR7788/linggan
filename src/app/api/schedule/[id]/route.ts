@@ -15,7 +15,7 @@ export const GET = withAuth(async ({ request, user, params }) => {
     .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     return createApiError('日程不存在', 404);
@@ -83,7 +83,7 @@ export const PUT = withAuth(async ({ request, user, params }) => {
     .select('id')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!existing) {
     return createApiError('日程不存在', 404);
@@ -120,9 +120,9 @@ export const PUT = withAuth(async ({ request, user, params }) => {
     .update(updateData)
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('更新日程失败:', error);
     return createApiError('更新日程失败', 500);
   }
@@ -140,7 +140,7 @@ export const DELETE = withAuth(async ({ request, user, params }) => {
     .select('id')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!existing) {
     return createApiError('日程不存在', 404);

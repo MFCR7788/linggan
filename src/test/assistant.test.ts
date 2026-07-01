@@ -1,6 +1,15 @@
 // 灵集 AI V2.0 — Assistant 模块单元测试
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/supabase-server', () => ({
+  createAdminClient: vi.fn(),
+  createClient: vi.fn(),
+  createPgPool: vi.fn(),
+  createSupabaseServerClient: vi.fn(),
+  getCurrentUser: vi.fn(),
+}));
 import { detectIntent, type IntentType } from '@/lib/assistant/intent';
 import { buildPrompt, PROMPT_MODULES } from '@/lib/assistant/prompts';
 

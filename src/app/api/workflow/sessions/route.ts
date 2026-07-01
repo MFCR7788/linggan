@@ -100,9 +100,9 @@ export const POST = withAuth(async ({ request, user }) => {
       combo_snapshot: combo as unknown as Record<string, unknown>,
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('创建工作流会话失败:', error);
     return createApiError('创建会话失败', 500);
   }

@@ -23,7 +23,7 @@ export const GET = withAuth(async ({ request, user }) => {
       .select('id, status, progress, output, error_message, created_at, updated_at')
       .eq('id', taskId)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (error || !task) {
       return createApiError('任务不存在', 404);

@@ -255,6 +255,7 @@ function AICopywritingContent() {
     }
     if (params.industry && findIndustry(params.industry)) setSelectedIndustry(params.industry);
     if (params.style && COPYWRITING_STYLES.some(s => s.id === params.style)) setSelectedStyle(params.style);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   // ─── 工作流预填 ────────────────────────────────

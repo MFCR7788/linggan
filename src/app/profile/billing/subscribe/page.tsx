@@ -77,6 +77,7 @@ function SubscribeContent() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   useEffect(() => { load(); }, []);
 
   // 卸载时清轮询

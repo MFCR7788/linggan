@@ -50,6 +50,7 @@ function PublishGuideContent() {
       return;
     }
     loadPublications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   const loadPublications = async () => {

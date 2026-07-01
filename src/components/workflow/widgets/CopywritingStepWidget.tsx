@@ -47,6 +47,7 @@ export function CopywritingStepWidget({ handoff, onComplete, isCompleting, autoE
       }
     }
     autoRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [autoExecute, handoff.topic, handoff.text, handoff.style, handoff.industry, contentType, onComplete, onAutoError]);
 
   const handleGenerate = async () => {

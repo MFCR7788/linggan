@@ -46,7 +46,7 @@ export const GET = withAuth(async ({ user }) => {
             sort_order: basic.sort_order,
           })
           .select()
-          .single();
+          .maybeSingle();
         if (newCat) {
           db = newCat;
         }
@@ -80,7 +80,7 @@ export const GET = withAuth(async ({ user }) => {
         sort_order: basic.sort_order,
       })
       .select()
-      .single();
+      .maybeSingle();
     if (newCat) {
       created.push(newCat);
     }
@@ -130,9 +130,9 @@ export const POST = withAuth(async ({ request, user }) => {
       sort_order: sort_order || 0
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     return createApiError('创建分类失败', 500);
   }
 

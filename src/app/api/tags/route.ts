@@ -45,9 +45,9 @@ export const POST = withAuth(async ({ request, user }) => {
       color: color || '#3B82F6'
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('创建标签失败:', error);
     return createApiError('创建标签失败', 500);
   }

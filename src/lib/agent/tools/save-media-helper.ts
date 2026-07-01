@@ -34,7 +34,7 @@ export async function saveMediaToInspiration(
         .from('categories')
         .insert({ user_id: userId, name: catName, icon: type === 'image' ? '🖼️' : type === 'video' ? '🎬' : '🎵', color: '#3B82F6', sort_order: 0 })
         .select('id')
-        .single();
+        .maybeSingle();
       categoryId = newCat?.id || null;
     }
 
@@ -72,7 +72,7 @@ export async function saveMediaToInspiration(
         analysis_status: 'completed',
       })
       .select('id')
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.warn('[saveMediaToInspiration] 插入失败:', error.message);

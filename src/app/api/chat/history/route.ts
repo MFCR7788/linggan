@@ -95,7 +95,7 @@ export const GET = withAuth(async ({ request, user }) => {
       .select('*')
       .eq('id', sessionId)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
     if (!session) return createApiError('会话不存在', 404);
 
     const { data: messages } = await supabase
@@ -134,7 +134,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .from('chat_sessions')
       .insert({ user_id: user.id, title, metadata: body.metadata || {} })
       .select()
-      .single();
+      .maybeSingle();
 
     // metadata 列不存在时降级重试
     if (error && body.metadata) {
@@ -142,13 +142,13 @@ export const POST = withAuth(async ({ request, user }) => {
         .from('chat_sessions')
         .insert({ user_id: user.id, title })
         .select()
-        .single();
-      if (!fallback.error) {
+        .maybeSingle();
+      if (!fallback.error && fallback.data) {
         return createApiResponse(fallback.data);
       }
     }
 
-    if (error) return createApiError('创建失败', 500);
+    if (error || !data) return createApiError('创建失败', 500);
     return createApiResponse(data);
   }
 

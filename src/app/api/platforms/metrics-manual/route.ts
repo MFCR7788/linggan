@@ -36,7 +36,7 @@ export const POST = withAuth(async ({ request, user }) => {
     .select('id')
     .eq('id', publicationId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
   if (!pub) {
     return createApiError('无权限', 403);
   }

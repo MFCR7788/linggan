@@ -125,7 +125,7 @@ async function saveVideoWork(
     insertData.thumbnail_url = thumbnailUrl;
   }
 
-  const { data: inserted, error } = await supabase.from('content_items').insert(insertData).select('id').single();
+  const { data: inserted, error } = await supabase.from('content_items').insert(insertData).select('id').maybeSingle();
   if (error) {
     console.error('[Merge] 保存作品失败:', error.message, error.details);
     throw new Error(`保存作品失败: ${error.message}`);

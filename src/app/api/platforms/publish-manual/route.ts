@@ -54,9 +54,9 @@ export const POST = withAuth(async ({ request, user }) => {
       scheduled_publish_at: scheduledPublishAt || null,
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) return createApiError(error.message, 500);
+  if (error || !data) return createApiError(error?.message || '创建发布记录失败', 500);
   return createApiResponse(
     { publication: data },
     `已创建草稿,去 ${PLATFORMS[platform as PlatformId].name} 发布并回填`

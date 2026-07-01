@@ -7,6 +7,7 @@ import {
 
 // Mock environment variables for DashScope (HappyHorse) and Seedance (ARK)
 vi.stubEnv('HAPPYHORSE_API_KEY', 'test-happyhorse-key');
+vi.stubEnv('DASHSCOPE_API_KEY', 'test-dashscope-key');
 vi.stubEnv('DOUBAO_API_KEY', 'test-api-key');
 vi.stubEnv('SEEDANCE_IMAGE_MODEL_ARK_ID', 'ep-test-image');
 
@@ -26,18 +27,28 @@ const mockFetch = () => fetch as unknown as ReturnType<typeof vi.fn>;
 
 describe('Video Generation', () => {
   it('submits video task to DashScope HappyHorse API', async () => {
-    mockFetch().mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ output: { task_id: 'task-123' } }),
-    });
+    // First call: optimizePrompt (chat/completions) — return mock that makes it return rawPrompt
+    mockFetch()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ choices: [{ message: { content: 'enhanced prompt' } }] }),
+      })
+      // Second call: actual video API
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ output: { task_id: 'task-123' } }),
+      });
 
     const result = await submitVideoTask('test prompt', 5);
 
-    const [[url, options]] = mockFetch().mock.calls;
+    // Find the video API call (second fetch)
+    const calls = mockFetch().mock.calls;
+    const videoCall = calls.find((c: any[]) => c[0].includes('video-synthesis'));
+    const [url, options] = videoCall;
     expect(url).toContain('/services/aigc/video-generation/video-synthesis');
     const body = JSON.parse(options.body);
     expect(body.model).toBe('happyhorse-1.0-t2v');
-    expect(body.input.prompt).toContain('test prompt');
+    expect(body.input.prompt).toContain('enhanced prompt');
     expect(body.parameters.duration).toBe(5);
 
     expect(result).toEqual({
@@ -48,11 +59,16 @@ describe('Video Generation', () => {
   });
 
   it('handles API error response', async () => {
-    mockFetch().mockResolvedValueOnce({
-      ok: false,
-      status: 400,
-      text: vi.fn().mockResolvedValue('Bad request'),
-    });
+    mockFetch()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ choices: [{ message: { content: 'enhanced prompt' } }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: vi.fn().mockResolvedValue('Bad request'),
+      });
 
     const result = await submitVideoTask('test prompt', 5);
 
@@ -64,7 +80,12 @@ describe('Video Generation', () => {
   });
 
   it('handles network errors', async () => {
-    mockFetch().mockRejectedValueOnce(new Error('Network failed'));
+    mockFetch()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ choices: [{ message: { content: 'enhanced prompt' } }] }),
+      })
+      .mockRejectedValueOnce(new Error('Network failed'));
 
     const result = await submitVideoTask('test prompt', 5);
 
@@ -114,17 +135,31 @@ describe('Video Generation', () => {
 
 describe('Image Generation', () => {
   it('uses correct size parameters', async () => {
-    mockFetch().mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        data: [{ url: 'https://example.com/image.jpg' }],
-      }),
-    });
+    // First call: submit task
+    mockFetch()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          output: { task_id: 'img-task-123' },
+        }),
+      })
+      // Second call: poll status (SUCCEEDED)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          output: {
+            task_status: 'SUCCEEDED',
+            results: [{ url: 'https://example.com/image.jpg' }],
+          },
+        }),
+      });
 
-    await generateImage('test prompt', { ratio: '16:9' });
+    await generateImage('test prompt', { ratio: '16:9', skipOptimize: true });
 
-    const [[, options]] = mockFetch().mock.calls;
-    expect(JSON.parse(options.body).size).toBe('2560x1440');
+    const submitCall = mockFetch().mock.calls[0];
+    const [, options] = submitCall;
+    const body = JSON.parse(options.body);
+    expect(body.parameters.size).toContain('1440*810');
   });
 
   it('handles image API errors', async () => {
@@ -134,7 +169,7 @@ describe('Image Generation', () => {
       text: vi.fn().mockResolvedValue('Model not found'),
     });
 
-    await expect(generateImage('test prompt')).rejects.toThrow(
+    await expect(generateImage('test prompt', { skipOptimize: true })).rejects.toThrow(
       '图片生成失败: 400 Model not found'
     );
   });

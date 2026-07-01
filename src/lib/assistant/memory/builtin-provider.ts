@@ -63,9 +63,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         embedding: entry.embedding || null,
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw new Error(`保存记忆失败: ${error.message}`);
+    if (error || !data) throw new Error(`保存记忆失败: ${error?.message || '未知错误'}`);
     return mapRow(data);
   }
 

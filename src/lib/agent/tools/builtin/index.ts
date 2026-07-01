@@ -14,6 +14,8 @@ import { summarizeTool } from './summarize';
 import { synthesizeSpeechTool } from './synthesize-speech';
 import { generateCopywritingTool } from './copywriting';
 import { extractScheduleTool } from './extract-schedule';
+import { searchScheduleTool } from './search-schedule';
+import { createScheduleTool } from './create-schedule';
 import { analyzeLinkTool } from './analyze-link';
 import { saveToInspirationTool } from './save-inspiration';
 import { generateDigitalHumanTool } from './digital-human';
@@ -60,6 +62,8 @@ const V1_0_TOOLS: ToolDefinition[] = [
   synthesizeSpeechTool,
   generateCopywritingTool,
   extractScheduleTool,
+  searchScheduleTool,
+  createScheduleTool,
   analyzeLinkTool,
   saveToInspirationTool,
   searchInternetTool,
@@ -133,6 +137,6 @@ export function registerAllBuiltinTools(registry: ToolRegistry): void {
 export { webSearchTool, generateImageTool, generateVideoTool, getWeatherTool, analyzeImageTool };
 export { readDocumentTool, searchMemoryTool, searchKnowledgeTool, searchInspirationsTool };
 export { getHotspotTool, summarizeTool, synthesizeSpeechTool };
-export { generateCopywritingTool, extractScheduleTool, analyzeLinkTool, saveToInspirationTool };
+export { generateCopywritingTool, extractScheduleTool, searchScheduleTool, analyzeLinkTool, saveToInspirationTool };
 export { generateDigitalHumanTool, editImageTool, generateGridImagesTool, publishContentTool, generateAvatarVideoTool, generateAnimateVideoTool, generateEditPlanTool, generateVideoTemplateTool };
 export { searchInternetTool, douyinTranscriptTool, douyinSearchTool, composeVideoTool, extractContentTool, generateAgnesVideoTool, videoFaceSwapTool, generateHyperFramesTool, suggestContentIdeasTool, generateProductVideoTool, smartClipTool, smartSliceTool, titleOptimizerTool, coverGeneratorTool, autoMashupTool };

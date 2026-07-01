@@ -2,6 +2,7 @@
 // API 文档: https://pixabay.com/api/docs/
 
 import type { MediaSearchProvider, MediaSearchResult, SearchRequestOptions } from './types';
+import { getPixabayApiKey } from '@/lib/runtime-config';
 
 const PIXABAY_API = 'https://pixabay.com/api';
 
@@ -34,13 +35,7 @@ interface PixabayHit {
 }
 
 function getApiKey(): string {
-  try {
-    // eslint-disable-next-line
-    const { getPixabayApiKey } = require('@/lib/runtime-config');
-    return getPixabayApiKey() || '';
-  } catch {
-    return typeof process !== 'undefined' ? (process.env.PIXABAY_API_KEY || '') : '';
-  }
+  return getPixabayApiKey() || '';
 }
 
 function mapHit(h: PixabayHit): MediaSearchResult {

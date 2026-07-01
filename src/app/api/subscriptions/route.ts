@@ -68,7 +68,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .from('subscription_tiers')
       .select('*')
       .eq('tier', tier)
-      .single();
+      .maybeSingle();
 
     if (tierErr || !tierDef) {
       return createApiError('订阅档位不存在', 404);
@@ -121,7 +121,7 @@ export const POST = withAuth(async ({ request, user }) => {
         payment_method: 'mock_v203',  // 模拟支付
       })
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (subErr || !sub) {
       console.error('[Subscriptions] insert error:', subErr);

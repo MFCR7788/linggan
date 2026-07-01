@@ -6,13 +6,13 @@ import { cookies, headers } from 'next/headers';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import { createHash } from 'crypto';
-import { getAuthSalt, getDevAuthSecret } from '@/lib/runtime-config';
+import { getAuthSalt, getDevAuthSecret, getSupabaseAnonKey, getSupabaseUrl, getSupabaseServiceRoleKey, getEnv } from '@/lib/runtime-config';
 
 // 简单的服务端客户端 - 用于 API routes（不需要 cookie 处理）
 export function createClient() {
   return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    getSupabaseUrl(),
+    getSupabaseAnonKey(),
     {
       auth: {
         autoRefreshToken: false,
@@ -25,8 +25,8 @@ export function createClient() {
 // 使用 service_role key 的管理员客户端（绕过 RLS）
 export function createAdminClient() {
   return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    getSupabaseUrl(),
+    getSupabaseServiceRoleKey(),
     {
       auth: {
         autoRefreshToken: false,
@@ -47,7 +47,7 @@ export function createPgPool(): Pool {
   }
   const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== 'false';
   _pgPool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: getEnv('DATABASE_URL'),
     ssl: { rejectUnauthorized },
     max: 3,
     idleTimeoutMillis: 30000,
@@ -66,8 +66,8 @@ export function createSupabaseServerClient() {
   }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    getSupabaseUrl(),
+    getSupabaseAnonKey(),
     {
       cookies: {
         get(name: string) {
@@ -114,7 +114,7 @@ export async function saveWorkHistory(
       .from('chat_sessions')
       .upsert({ user_id: userId, title: 'AI创作' }, { onConflict: 'user_id,title', ignoreDuplicates: false })
       .select('id')
-      .single();
+      .maybeSingle();
 
     // upsert 可能因约束不存在而失败，降级为 select + insert
     let sessionId = session?.id;
@@ -131,7 +131,7 @@ export async function saveWorkHistory(
           .from('chat_sessions')
           .insert({ user_id: userId, title: 'AI创作' })
           .select('id')
-          .single();
+          .maybeSingle();
         sessionId = created?.id;
       }
     }

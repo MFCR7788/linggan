@@ -10,6 +10,14 @@ import { DEFAULT_AGENT_CONFIG } from './types';
 import { ContextEngine } from './context-engine';
 import { executeWithTimeoutAndRecovery } from './tool-timeout';
 import { defaultModelRouter } from '@/lib/providers/model-router';
+
+// 清理 Agent 输出中的 markdown 分隔线和工具调用痕迹
+function cleanupOutput(text: string): string {
+  return text
+    .replace(/^---+\s*$/gm, '')        // 独立成行的 --- 分隔线
+    .replace(/\n{3,}/g, '\n\n')        // 多余空行合并
+    .trim();
+}
 import { GoalPlanner, getCurrentStep } from './goal-planner';
 import { GoalProgressTracker } from './goal-progress';
 import { groupToolCallsForExecution } from './tools/parallelizer';
@@ -171,19 +179,20 @@ export async function* agentStreamLoop(
     }
 
     if (!hasToolCalls) {
+      const cleaned = cleanupOutput(finalContent);
       if (hooks) {
-        await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: iteration + 1, toolsUsed: [...toolsUsed] });
+        await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: cleaned, iterations: iteration + 1, toolsUsed: [...toolsUsed] });
       }
       yield {
         type: 'done',
-        response: finalContent,
-        summary: finalContent.substring(0, 50),
+        response: cleaned,
+        summary: cleaned.substring(0, 50),
         toolsUsed: [...toolsUsed],
         tokensUsed: ctxEngine.sessionTotalTokens,
         model: config.model,
         toolResults: allToolResults,
       };
-      return finalContent;
+      return cleaned;
     }
 
     // 上下文压缩
@@ -217,19 +226,20 @@ export async function* agentStreamLoop(
     yield { type: 'delta', content: finalContent };
   }
 
+  const cleaned = cleanupOutput(finalContent);
   if (hooks) {
-    await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: finalContent, iterations: maxIter, toolsUsed: [...toolsUsed] });
+    await hooks.emit('agent:end', { userId: context.userId, sessionId: context.sessionId, response: cleaned, iterations: maxIter, toolsUsed: [...toolsUsed] });
   }
   yield {
     type: 'done',
-    response: finalContent,
-    summary: finalContent.substring(0, 50),
+    response: cleaned,
+    summary: cleaned.substring(0, 50),
     toolsUsed: [...toolsUsed],
     tokensUsed: ctxEngine.sessionTotalTokens,
     model: config.model,
     toolResults: allToolResults,
   };
-  return finalContent;
+  return cleaned;
 }
 
 function parseArgs(tc: ToolCallRequest): Record<string, unknown> {

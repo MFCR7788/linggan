@@ -66,6 +66,7 @@ export function InspirationPicker({ open, onClose, onSelect, mediaType }: Inspir
         {/* 头部 */}
         <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react decorative icon */}
             {mediaType === 'image' ? <Image size={16} color="#F59E0B" /> : <Film size={16} color="#8B5CF6" />}
             <span style={{ color: '#E5E7EB', fontSize: 14, fontWeight: 600 }}>
               从灵感库选择{mediaType === 'image' ? '图片' : '视频'}
@@ -125,7 +126,8 @@ export function InspirationPicker({ open, onClose, onSelect, mediaType }: Inspir
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        {mediaType === 'image' ? <Image size={20} color="#4B5563" /> : <Film size={20} color="#4B5563" />}
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react decorative icon */}
+                      {mediaType === 'image' ? <Image size={20} color="#4B5563" /> : <Film size={20} color="#4B5563" />}
                       </div>
                     )}
                     {/* hover 遮罩 */}

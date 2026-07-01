@@ -2,6 +2,7 @@
 // 输入: 语音识别原始结果 → 输出: 优化后的字幕片段
 
 import type { OptimizedSubtitle } from './types';
+import { getDeepSeekApiKey } from '@/lib/runtime-config';
 
 interface RawSubtitleLine {
   index: number;
@@ -97,15 +98,7 @@ async function aiOptimize(
   subtitles: OptimizedSubtitle[],
   options: OptimizationOptions
 ): Promise<OptimizedSubtitle[] | null> {
-  const apiKey = (() => {
-    try {
-      // eslint-disable-next-line
-      const { getDeepSeekApiKey } = require('@/lib/runtime-config');
-      return getDeepSeekApiKey() || process.env.DEEPSEEK_API_KEY || '';
-    } catch {
-      return process.env.DEEPSEEK_API_KEY || '';
-    }
-  })();
+  const apiKey = getDeepSeekApiKey() || '';
 
   if (!apiKey || subtitles.length === 0) return null;
 

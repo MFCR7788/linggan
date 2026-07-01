@@ -3,6 +3,7 @@
 // 10+ 预设音色，按字符计费
 
 import type { TtsProvider, TtsSynthesizeOptions, TtsSynthesizeResult, TtsVoice } from '../types';
+import { getDashScopeApiKey } from '@/lib/runtime-config';
 
 const COSYVOICE_URL = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer';
 
@@ -20,13 +21,7 @@ const VOICES: TtsVoice[] = [
 ];
 
 function getApiKey(): string {
-  try {
-    // eslint-disable-next-line
-    const { getDashScopeApiKey } = require('@/lib/runtime-config');
-    return getDashScopeApiKey() || process.env.DASHSCOPE_API_KEY || '';
-  } catch {
-    return process.env.DASHSCOPE_API_KEY || '';
-  }
+  return getDashScopeApiKey() || '';
 }
 
 /** 将长文本按标点分割为多个片段（每段 ≤ 250 字符） */

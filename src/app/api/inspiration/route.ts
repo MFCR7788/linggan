@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-server';
 import { withAuth } from '@/lib/api-handler';
 import { stripMarkdown } from '@/lib/text-utils';
 import { indexContentItem } from '@/lib/assistant/embedding';
+import { getDashScopeApiKey } from '@/lib/runtime-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -201,7 +202,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .select('id')
       .eq('user_id', user.id)
       .eq('name', catName)
-      .single();
+      .maybeSingle();
     effectiveCategoryId = cat?.id || null;
   }
 
@@ -225,10 +226,10 @@ export const POST = withAuth(async ({ request, user }) => {
       analysis_status: 'completed',
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    return createApiError('创建灵感失败: ' + error.message, 500);
+  if (error || !data) {
+    return createApiError('创建灵感失败: ' + (error?.message || '未知错误'), 500);
   }
 
   // 如果有标签，创建标签关联（批量操作避免 N+1）
@@ -311,7 +312,7 @@ async function estimateComplexity(
       .trim();
     if (!contentSample) return;
 
-    const apiKey = process.env.DASHSCOPE_API_KEY;
+    const apiKey = getDashScopeApiKey();
     if (!apiKey) return;
 
     const prompt = `分析以下${type === 'image' ? '图片' : type === 'video' ? '视频' : type === 'audio' ? '音频' : '文字'}内容的复杂度，返回 JSON 格式（不要 markdown 代码块）:

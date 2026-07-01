@@ -17,6 +17,7 @@ function chain() {
     select: vi.fn(() => builder),
     insert: vi.fn(() => builder),
     update: vi.fn(() => builder),
+    upsert: vi.fn(() => builder),
     eq: vi.fn(() => builder),
     not: vi.fn(() => builder),
     lte: vi.fn(() => builder),
@@ -66,9 +67,6 @@ describe('getBalance', () => {
     // First call: maybeSingle returns null (no record)
     calls.maybeSingle = Promise.resolve({ data: null, error: null });
 
-    // Second call: insert
-    builder.insert.mockReturnValue({ select: vi.fn() });
-
     mockSupabase.from.mockReturnValue(builder);
 
     const result = await getBalance('new-user');
@@ -78,9 +76,10 @@ describe('getBalance', () => {
       lifetimeConsumed: 0,
       lifetimePurchased: 0,
     });
-    // Verify insert was called for lazy init
-    expect(builder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: 'new-user', balance: 0, tier: 'free' })
+    // Verify upsert was called for lazy init
+    expect(builder.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'new-user', balance: 0, tier: 'free' }),
+      expect.objectContaining({ onConflict: 'user_id', ignoreDuplicates: true })
     );
   });
 

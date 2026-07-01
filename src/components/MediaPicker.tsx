@@ -60,6 +60,7 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
         setUploadedFile({ name: value.split('/').pop() || '已上传', url: value });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [value]);
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export function MediaPicker({ accept, onSelect, value, compact = false, tabs, la
       .then(d => { if (d.success) setInspirations(d.data || []); })
       .catch(() => {})
       .finally(() => setIsLoadingInsp(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [accept]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

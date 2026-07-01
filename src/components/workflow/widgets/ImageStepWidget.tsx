@@ -195,6 +195,7 @@ export function ImageStepWidget({ handoff, onComplete, isCompleting, autoExecute
       }
     }
     autoRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [autoExecute, handoff.prompt, handoff.text, handoff.style, handoff.topic, handoff.imageUrl, preset, onComplete, onAutoError]);
 
   // ─── Render ─────────────────────────────────────

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       .from('captcha_tokens')
       .select('*')
       .eq('token', captchaToken)
-      .single();
+      .maybeSingle();
 
     if (passError || !pass) {
       return NextResponse.json({ error: '人机验证无效, 请重试' }, { status: 400 });

@@ -905,6 +905,7 @@ function HotspotRadarInner() {
       setInitialLoading(false);
       setRefreshing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [page, source, monitorKeywordId, importance, timeRange, sortBy, sortOrder, activeFilter]);
 
   // ─── 选择/删除操作 ─────────────────────────────
@@ -976,6 +977,7 @@ function HotspotRadarInner() {
   useEffect(() => {
     if (initialLoading) fetchData();
     else { setRefreshing(true); fetchData(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [fetchData]);
 
   // 关键词热点
@@ -987,6 +989,7 @@ function HotspotRadarInner() {
       .then((res) => res.json())
       .then((data) => { if (data.success) setKeywordHotspots((data.data || []).filter((h: any) => h.monitor_keyword_id === selectedKeywordId)); })
       .finally(() => setLoadingKeywordHotspots(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [selectedKeywordId, activeTab]);
 
   // ─── 操作 ────────────────────────────────────────

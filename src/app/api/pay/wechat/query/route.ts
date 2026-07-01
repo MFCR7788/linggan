@@ -101,7 +101,7 @@ export const GET = withAuth(async ({ request, user }) => {
                 auto_renew: true, payment_method: 'wechat_h5',
                 external_subscription_id: wxOrder.transaction_id,
               })
-              .select('id').single();
+              .select('id').maybeSingle();
             await supabase
               .from('user_credits')
               .update({

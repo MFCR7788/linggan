@@ -42,6 +42,7 @@ export function TtsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       }
     }
     autoRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [autoExecute, handoff.script, handoff.text, voice, onComplete, onAutoError]);
 
   useEffect(() => {

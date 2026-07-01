@@ -99,6 +99,10 @@ export function getSupabaseAnonKey(): string {
   return getEnv('SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || '';
 }
 
+export function getSupabaseServiceRoleKey(): string {
+  return getEnv('SUPABASE_SERVICE_ROLE_KEY') || '';
+}
+
 export function getDevAuthSecret(): string | undefined {
   return getEnv('DEV_AUTH_SECRET');
 }

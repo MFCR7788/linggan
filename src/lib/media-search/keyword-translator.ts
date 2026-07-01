@@ -1,6 +1,8 @@
 // 中文关键词翻译 — 将中文搜索词翻译为英文关键词
 // 复用 DeepSeek 做轻量翻译，不额外调用翻译 API
 
+import { getDeepSeekApiKey } from '@/lib/runtime-config';
+
 /** 简单的 LRU 翻译缓存 */
 const translationCache = new Map<string, string[]>();
 const CACHE_MAX = 200;
@@ -67,15 +69,7 @@ export async function extractSearchKeywords(
 
 async function translateWithAI(chineseText: string): Promise<string[]> {
   // 直接用 fetch 调用 DeepSeek，不依赖复杂的 LLM 抽象
-  const apiKey = (() => {
-    try {
-      // eslint-disable-next-line
-      const { getDeepSeekApiKey } = require('@/lib/runtime-config');
-      return getDeepSeekApiKey() || process.env.DEEPSEEK_API_KEY || '';
-    } catch {
-      return process.env.DEEPSEEK_API_KEY || '';
-    }
-  })();
+  const apiKey = getDeepSeekApiKey() || '';
 
   if (!apiKey) {
     // 无 API Key，直接返回中文分词

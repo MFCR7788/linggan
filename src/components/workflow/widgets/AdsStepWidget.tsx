@@ -39,6 +39,7 @@ export function AdsStepWidget({ handoff, onComplete, isCompleting, autoExecute, 
       }
     }
     autoRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [autoExecute, handoff.topic, handoff.text, handoff.imageUrl, onComplete, onAutoError]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

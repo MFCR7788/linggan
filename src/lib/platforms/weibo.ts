@@ -9,7 +9,7 @@ import type {
   PlatformMetrics,
   OAuthTokens,
 } from './types';
-import { getWeiboAppSecret } from '@/lib/runtime-config';
+import { getWeiboAppSecret, getEnv } from '@/lib/runtime-config';
 
 const API_BASE = 'https://api.weibo.com/2';
 const AUTH_BASE = 'https://api.weibo.com/oauth2';
@@ -32,7 +32,7 @@ async function weiboFetch<T = any>(url: string, options?: RequestInit): Promise<
 export class WeiboAdapter implements PlatformAdapter {
   readonly id = 'weibo' as const;
 
-  private get appKey() { return process.env.WEIBO_APP_KEY || ''; }
+  private get appKey() { return getEnv('WEIBO_APP_KEY') || ''; }
   private get appSecret() { return getWeiboAppSecret() || ''; }
 
   buildAuthorizeUrl(state: string, redirectUri: string): string {

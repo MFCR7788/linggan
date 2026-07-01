@@ -119,9 +119,9 @@ export const POST = withAuth(async ({ request, user }) => {
       source_content_id: source_content_id || null,
     })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error('创建日程失败:', error);
     return createApiError('创建日程失败', 500);
   }

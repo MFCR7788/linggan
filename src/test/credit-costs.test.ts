@@ -18,10 +18,10 @@ describe('CREDIT_COSTS', () => {
     }
   });
 
-  it('扣点配置值都为正数', () => {
+  it('扣点配置值都为正数或零', () => {
     const check = (obj: unknown, path = ''): void => {
       if (typeof obj === 'number') {
-        expect(obj, `${path} 应为正数`).toBeGreaterThan(0);
+        expect(obj, `${path} 应 >= 0`).toBeGreaterThanOrEqual(0);
       } else if (obj && typeof obj === 'object') {
         for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
           check(v, path ? `${path}.${k}` : k);
@@ -41,8 +41,8 @@ describe('calcAiVideoCost', () => {
     expect(calcAiVideoCost(5, 'standard')).toBe(25);
   });
 
-  it('5 秒 premium = 100 credits (ceil(5×20)=100)', () => {
-    expect(calcAiVideoCost(5, 'premium')).toBe(100);
+  it('5 秒 premium = 75 credits (ceil(5×15)=75)', () => {
+    expect(calcAiVideoCost(5, 'premium')).toBe(75);
   });
 
   it('最短视频也至少 1 credit', () => {

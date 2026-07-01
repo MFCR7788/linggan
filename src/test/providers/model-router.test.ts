@@ -53,8 +53,8 @@ describe('ModelRouter', () => {
     });
 
     it('解析指定模型', () => {
-      const resolved = router.resolveModel('custom-model');
-      expect(resolved.model).toBe('custom-model');
+      const resolved = router.resolveModel('test-model');
+      expect(resolved.model).toBe('test-model');
     });
 
     it('未注册 provider 抛异常', () => {

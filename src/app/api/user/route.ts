@@ -14,11 +14,11 @@ export const GET = withAuth(async ({ user }) => {
     .from('users')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !userProfile) {
     // 如果用户不存在，创建一个新的用户记录
-    if (error.code === 'PGRST116') {
+    if (!userProfile || error?.code === 'PGRST116') {
       const { data: newUser, error: createError } = await supabase
         .from('users')
         .insert({
@@ -29,9 +29,9 @@ export const GET = withAuth(async ({ user }) => {
           plan: 'free'
         })
         .select()
-        .single();
+        .maybeSingle();
 
-      if (createError) {
+      if (createError || !newUser) {
         console.error('创建用户失败:', createError);
         // 如果创建失败，返回模拟用户
         const mockUser = {
@@ -114,9 +114,9 @@ export const PUT = withAuth(async ({ request, user }) => {
     .update(updateData)
     .eq('id', user.id)
     .select('id, phone, username, avatar_url, plan, created_at, updated_at')
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     return createApiError('更新用户信息失败', 500);
   }
 

@@ -38,7 +38,7 @@ export async function savePromptFeedback(record: PromptFeedbackRecord): Promise<
       response_snippet: record.responseSnippet?.substring(0, 500) || null,
     })
     .select('id')
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('[PromptFeedback] save failed:', error);

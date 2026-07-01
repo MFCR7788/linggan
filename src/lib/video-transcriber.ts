@@ -40,6 +40,8 @@ const TRANSCRIPT_PLATFORMS = [
   "bilibili.com",
   "ixigua.com",
   "weibo.com/tv",
+  "channels.weixin.qq.com",
+  "finder.video.qq.com",
 ];
 
 export function canExtractTranscript(url: string): boolean {

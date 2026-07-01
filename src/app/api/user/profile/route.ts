@@ -23,9 +23,9 @@ export const GET = withAuth(async ({ user }) => {
     .from('users')
     .select('id, phone, username, avatar_url, plan, created_at, updated_at')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) return createApiError('用户不存在', 404);
+  if (error || !data) return createApiError('用户不存在', 404);
 
   return createApiResponse({ user: data });
 });
@@ -72,9 +72,9 @@ export const PATCH = withAuth(async ({ request, user }) => {
     .update(update)
     .eq('id', user.id)
     .select('id, phone, username, avatar_url, plan, created_at, updated_at')
-    .single();
+    .maybeSingle();
 
-  if (error) return createApiError(error.message, 500);
+  if (error || !data) return createApiError(error?.message || '更新失败', 500);
 
   return createApiResponse({ user: data }, '已保存');
 });

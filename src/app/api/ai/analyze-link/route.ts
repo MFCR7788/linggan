@@ -16,6 +16,7 @@ const VIDEO_DOMAINS = [
   'youtube.com', 'youtu.be', 'bilibili.com', 'douyin.com',
   'tiktok.com', 'vimeo.com', 'ixigua.com', 'kuaishou.com',
   'weibo.com/tv', 'mgtv.com', 'youku.com', 'tencent video',
+  'channels.weixin.qq.com', 'finder.video.qq.com',
 ];
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'];

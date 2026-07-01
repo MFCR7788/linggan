@@ -54,6 +54,7 @@ function PublicationDetailContent() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   useEffect(() => { load(); }, [id]);
 
   const handleDelete = async () => {

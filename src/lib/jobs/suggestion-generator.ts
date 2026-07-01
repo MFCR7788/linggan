@@ -48,7 +48,7 @@ export async function generateSuggestions(
     .from('users')
     .select('account_type')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   const accountType = userData?.account_type || null;
   const preset = getAccountTypePreset(accountType);

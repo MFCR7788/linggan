@@ -24,7 +24,7 @@ export const POST = withAuth(async ({ request, user }) => {
       .select('id, name, credits, bonus_credits, price_cny, is_active, validity_days')
       .eq('id', packageId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (pkgErr || !pkg) {
       return createApiError('加油包不存在或已下架', 404);

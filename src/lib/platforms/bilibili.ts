@@ -3,6 +3,7 @@
 // API 优先，Selenium 降级
 
 import type { PlatformAdapter, PublishInput, PublishResult, OAuthTokens, PlatformMetrics } from './types';
+import { getEnv } from '@/lib/runtime-config';
 
 const BILIBILI_AUTH_URL = 'https://api.bilibili.com/x/account-oauth2/v1/authorize';
 const BILIBILI_TOKEN_URL = 'https://api.bilibili.com/x/account-oauth2/v1/token';
@@ -10,8 +11,8 @@ const BILIBILI_API = 'https://member.bilibili.com';
 
 function getConfig() {
   return {
-    clientId: process.env.BILIBILI_CLIENT_ID || '',
-    clientSecret: process.env.BILIBILI_CLIENT_SECRET || '',
+    clientId: getEnv('BILIBILI_CLIENT_ID') || '',
+    clientSecret: getEnv('BILIBILI_CLIENT_SECRET') || '',
   };
 }
 

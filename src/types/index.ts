@@ -71,6 +71,10 @@ export interface ContentItem {
   original_file_size?: number;
   original_mime_type?: string;
   prompt?: string;
+  last_action_at?: string;
+  lifecycle?: 'seed' | 'sprout' | 'growing' | 'bloom';
+  estimated_duration?: number;
+  required_resources?: string[];
   created_at: string;
   updated_at: string;
 }

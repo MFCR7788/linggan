@@ -35,7 +35,7 @@ export const POST = withAuth(async ({ request, user }) => {
         .select('*')
         .eq('id', id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
       if (pkgErr || !pkg) return createApiError('加油包不存在或已下架', 404);
       amountCny = Number(pkg.price_cny);
       creditsToGrant = pkg.credits;
@@ -47,7 +47,7 @@ export const POST = withAuth(async ({ request, user }) => {
         .select('*')
         .eq('tier', id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
       if (tierErr || !tier) return createApiError('订阅档位不存在', 404);
       if (tier.tier === 'free') return createApiError('免费版无需支付', 400);
       amountCny = Number(tier.monthly_price_cny);
@@ -80,7 +80,7 @@ export const POST = withAuth(async ({ request, user }) => {
         metadata: { description },
       })
       .select('id')
-      .single();
+      .maybeSingle();
 
     if (insertErr || !payment) {
       console.error('[Pay/H5] 订单入库失败:', insertErr);

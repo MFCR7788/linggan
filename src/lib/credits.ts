@@ -113,7 +113,7 @@ export async function consume(
       p_user_id: userId,
       p_amount: amount,
     })
-    .single();
+    .maybeSingle();
 
   // RPC 不存在 → 降级到客户端两步
   if (updateError && /function.*consume_credits_atomic.*does not exist/i.test(updateError.message)) {
@@ -193,7 +193,7 @@ async function consumeCreditsFallback(
     .eq('user_id', userId)
     .eq('balance', before.balance) // 守卫:仅当余额未变才更新
     .select('balance')
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     // 并发扣点失败,重试一次
@@ -239,7 +239,7 @@ export async function grant(
       p_amount: amount,
       p_is_purchase: true,
     })
-    .single();
+    .maybeSingle();
 
   if (rpcErr) {
     return await grantCreditsFallback(userId, amount, type, source, description, metadata);
@@ -280,7 +280,7 @@ async function grantCreditsFallback(
     .eq('user_id', userId)
     .eq('balance', before.balance)
     .select('balance')
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     await supabase.from('user_credits').upsert(
@@ -330,7 +330,7 @@ export async function refund(
       p_amount: amount,
       p_is_purchase: false,
     })
-    .single();
+    .maybeSingle();
 
   if (rpcErr) {
     // 降级：两步操作 + CAS 守卫
@@ -344,7 +344,7 @@ export async function refund(
       .eq('user_id', userId)
       .eq('balance', before.balance)
       .select('balance')
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       throw new Error('退款失败:用户记录不存在或并发冲突');

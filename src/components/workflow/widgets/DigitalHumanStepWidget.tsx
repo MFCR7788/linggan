@@ -31,6 +31,7 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
         handoffData: { text: input.substring(0, 1000), script: input.substring(0, 1000), videoUrl: hookVideoUrl, firstFrame: handoff.imageUrl || '' },
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [hookPhase, hookVideoUrl, autoExecute]);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function DigitalHumanStepWidget({ handoff, onComplete, isCompleting, auto
       }
     }
     autoRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, [autoExecute, handoff.text, handoff.script, handoff.imageUrl, handoff.audioUrl, onComplete, onAutoError]);
 
   const handleGenerate = async () => {

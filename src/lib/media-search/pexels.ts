@@ -2,6 +2,7 @@
 // API 文档: https://www.pexels.com/api/documentation/
 
 import type { MediaSearchProvider, MediaSearchResult, SearchRequestOptions } from './types';
+import { getPexelsApiKey } from '@/lib/runtime-config';
 
 const PEXELS_API = 'https://api.pexels.com';
 
@@ -45,20 +46,7 @@ interface PexelsVideo {
 }
 
 function getApiKey(): string {
-  const key = typeof process !== 'undefined'
-    ? (process.env.PEXELS_API_KEY || '')
-    : '';
-  // 生产环境通过 runtime-config
-  if (!key) {
-    try {
-      // eslint-disable-next-line
-      const { getPexelsApiKey } = require('@/lib/runtime-config');
-      return getPexelsApiKey() || '';
-    } catch {
-      return '';
-    }
-  }
-  return key;
+  return getPexelsApiKey() || '';
 }
 
 function mapPhoto(p: PexelsPhoto): MediaSearchResult {

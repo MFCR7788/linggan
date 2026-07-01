@@ -91,6 +91,7 @@ function TTSPageContent() {
     if (params.text || params.script) {
       setText((params.text || params.script || '').slice(0, 1500));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   // 工作流：从 session.accumulated_handoff 预填

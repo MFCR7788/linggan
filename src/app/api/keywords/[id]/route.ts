@@ -16,7 +16,7 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
     .select('*')
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!existing) {
     return createApiError('关键词不存在', 404);
@@ -36,9 +36,9 @@ export const PATCH = withAuth(async ({ request, user, params }) => {
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) throw error;
+  if (error || !data) throw error || new Error('更新失败');
   return createApiResponse(data, '更新成功');
 });
 

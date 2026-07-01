@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       .from('click_captchas')
       .select('*')
       .eq('token', token)
-      .single();
+      .maybeSingle();
 
     if (error || !data) return NextResponse.json({ error: '验证码无效' }, { status: 400 });
     if (data.used) return NextResponse.json({ error: '验证码已使用' }, { status: 400 });

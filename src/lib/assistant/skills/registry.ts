@@ -193,10 +193,10 @@ export class SkillRegistry {
           visibility: skill.visibility,
         })
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.warn('[SkillRegistry] 创建失败:', error.message);
+      if (error || !data) {
+        console.warn('[SkillRegistry] 创建失败:', error?.message || '无返回数据');
         return null;
       }
 
@@ -230,10 +230,10 @@ export class SkillRegistry {
         .update(updates)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.warn('[SkillRegistry] 更新失败:', error.message);
+      if (error || !data) {
+        console.warn('[SkillRegistry] 更新失败:', error?.message || '无返回数据');
         return null;
       }
 

@@ -75,6 +75,7 @@ function AdsContent() {
       setReferenceImage(params.imageUrl);
       setReferenceSource('handoff');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 有意省略依赖
   }, []);
 
   // 工作流：从 session.accumulated_handoff 预填

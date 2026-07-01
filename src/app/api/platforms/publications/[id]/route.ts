@@ -20,8 +20,8 @@ export const GET = withAuth(async ({ params, user }) => {
     `)
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
-  if (error) return createApiError('发布不存在或已删除', 404);
+    .maybeSingle();
+  if (error || !data) return createApiError('发布不存在或已删除', 404);
   return createApiResponse({ publication: data });
 });
 
@@ -44,8 +44,8 @@ export const PATCH = withAuth(async ({ request, params, user }) => {
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
-    .single();
-  if (error) return createApiError(error.message, 500);
+    .maybeSingle();
+  if (error || !data) return createApiError(error?.message || '更新失败', 500);
   return createApiResponse({ publication: data }, '已更新');
 });
 

@@ -33,10 +33,10 @@ export const GET = withAuth(async ({ user, params }) => {
     `)
     .eq('id', id)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (error || !data) {
+    if (!data || error?.code === 'PGRST116') {
       return createApiError('灵感不存在', 404);
     }
     return createApiError('获取灵感详情失败', 500);
@@ -70,10 +70,10 @@ export const PUT = withAuth(async ({ request, user, params }) => {
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (error || !data) {
+    if (!data || error?.code === 'PGRST116') {
       return createApiError('灵感不存在', 404);
     }
     return createApiError('更新灵感失败', 500);
@@ -105,10 +105,10 @@ export const DELETE = withAuth(async ({ user, params }) => {
     .eq('id', id)
     .eq('user_id', user.id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116') {
+  if (error || !data) {
+    if (!data || error?.code === 'PGRST116') {
       return createApiError('灵感不存在', 404);
     }
     return createApiError('删除灵感失败', 500);
